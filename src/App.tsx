@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import TestRunSelector from './components/TestRunSelector';
 import TemplateSelector from './components/TemplateSelector';
 import InteractiveChart from './components/InteractiveChart';

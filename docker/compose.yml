@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend:/app/backend
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - fio-network
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    networks:
+      - fio-network
+
+networks:
+  fio-network:
+    driver: bridge 

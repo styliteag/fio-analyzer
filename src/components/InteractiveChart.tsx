@@ -14,7 +14,7 @@ import {
 import { Bar, Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import { ChartTemplate, PerformanceData } from '../types';
-import { Download, Eye, EyeOff, ZoomIn, ZoomOut, BarChart3 } from 'lucide-react';
+import { Download, Eye, EyeOff, BarChart3 } from 'lucide-react';
 
 ChartJS.register(
   CategoryScale,
@@ -301,7 +301,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
     plugins: {
       legend: {
         position: 'top' as const,
-        onClick: (e: any, legendItem: any) => {
+        onClick: (_e: any, legendItem: any) => {
           toggleSeriesVisibility(legendItem.text);
         },
       },
