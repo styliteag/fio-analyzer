@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import sqlite3
@@ -8,6 +8,8 @@ import random
 import uvicorn
 from typing import List, Optional
 from pydantic import BaseModel
+
+DB_PATH = "db/storage_performance.db"
 
 app = FastAPI(title="Storage Performance API")
 
@@ -40,7 +42,7 @@ class PerformanceMetric(BaseModel):
 
 # Initialize database
 def init_db():
-    conn = sqlite3.connect('db/storage_performance.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Create tables
@@ -189,7 +191,7 @@ async def startup_event():
 
 @app.get("/api/test-runs")
 async def get_test_runs():
-    conn = sqlite3.connect('storage_performance.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -218,7 +220,7 @@ async def get_test_runs():
 
 @app.get("/api/performance-data")
 async def get_performance_data(test_run_ids: str, metric_types: str = "iops,avg_latency,throughput"):
-    conn = sqlite3.connect('storage_performance.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     run_ids = [int(id.strip()) for id in test_run_ids.split(',')]
@@ -264,7 +266,7 @@ async def get_performance_data(test_run_ids: str, metric_types: str = "iops,avg_
 
 @app.get("/api/filters")
 async def get_filters():
-    conn = sqlite3.connect('storage_performance.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Get unique drive types
@@ -290,6 +292,105 @@ async def get_filters():
         "patterns": patterns,
         "block_sizes": block_sizes
     }
+
+
+@app.post("/api/import")
+async def import_fio_results(
+    file: UploadFile = File(...),
+    drive_model: str = "Unknown",
+    drive_type: str = "Unknown",
+):
+    try:
+        contents = await file.read()
+        fio_data = json.loads(contents)
+
+        # Assume first job contains the relevant metrics
+        job = fio_data.get("jobs", [{}])[0]
+        opts = job.get("job options", {})
+        global_opts = fio_data.get("global options", {})
+
+        bs = opts.get("bs") or global_opts.get("bs", "4k")
+        block_size = int(str(bs).rstrip("k"))
+
+        rw = opts.get("rw") or global_opts.get("rw", "read")
+
+        iodepth = opts.get("iodepth") or global_opts.get("iodepth", 1)
+        queue_depth = int(iodepth)
+
+        duration = job.get("runtime", 0)
+        test_name = job.get("jobname", "fio_test")
+
+        read_metrics = job.get("read", {})
+        write_metrics = job.get("write", {})
+        metrics_source = read_metrics if read_metrics else write_metrics
+
+        iops = metrics_source.get("iops", 0)
+        bw_kib = metrics_source.get("bw", 0)
+        throughput = bw_kib / 1024  # Convert to MB/s
+
+        clat = metrics_source.get("clat_ns", {}) or metrics_source.get("clat_us", {})
+        latency = clat.get("mean", 0)
+        if "clat_us" in metrics_source:
+            latency = latency / 1000.0
+        else:
+            latency = latency / 1_000_000.0
+
+        percentiles = clat.get("percentile", {})
+        p95 = percentiles.get("95.000000", 0)
+        p99 = percentiles.get("99.000000", 0)
+        if "clat_us" in metrics_source:
+            p95 /= 1000.0
+            p99 /= 1000.0
+        else:
+            p95 /= 1_000_000.0
+            p99 /= 1_000_000.0
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO test_runs
+            (timestamp, drive_model, drive_type, test_name, block_size,
+             read_write_pattern, queue_depth, duration)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                datetime.now().isoformat(),
+                drive_model,
+                drive_type,
+                test_name,
+                block_size,
+                rw,
+                queue_depth,
+                duration,
+            ),
+        )
+        test_run_id = cursor.lastrowid
+
+        metrics = [
+            (test_run_id, "iops", iops, "IOPS"),
+            (test_run_id, "avg_latency", latency, "ms"),
+            (test_run_id, "throughput", throughput, "MB/s"),
+            (test_run_id, "p95_latency", p95, "ms"),
+            (test_run_id, "p99_latency", p99, "ms"),
+        ]
+
+        for m in metrics:
+            cursor.execute(
+                """
+                INSERT INTO performance_metrics
+                (test_run_id, metric_type, value, unit)
+                VALUES (?, ?, ?, ?)
+            """,
+                m,
+            )
+
+        conn.commit()
+        conn.close()
+
+        return {"message": "FIO results imported", "test_run_id": test_run_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
