@@ -40,7 +40,7 @@ class PerformanceMetric(BaseModel):
 
 # Initialize database
 def init_db():
-    conn = sqlite3.connect('storage_performance.db')
+    conn = sqlite3.connect('db/storage_performance.db')
     cursor = conn.cursor()
     
     # Create tables

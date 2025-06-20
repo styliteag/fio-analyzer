@@ -11,17 +11,17 @@ This directory contains Docker configuration for running the FIO Analyzer applic
 
 1. **Build and run all services:**
    ```bash
-   docker-compose up --build
+   docker compose up --build
    ```
 
 2. **Run in background:**
    ```bash
-   docker-compose up -d --build
+   docker compose up -d --build
    ```
 
 3. **Stop services:**
    ```bash
-   docker-compose down
+   docker compose down
    ```
 
 ## Access Points
@@ -36,17 +36,19 @@ For development with hot reloading:
 
 1. **Backend only:**
    ```bash
-   docker-compose up backend
+   docker compose up backend
    ```
 
 2. **Frontend only:**
    ```bash
-   docker-compose up frontend
+   docker compose up frontend
    ```
 
 ## Volumes
 
 The backend service mounts the `backend/` directory as a volume for development, allowing code changes without rebuilding the container.
+
+**Database Persistence**: The SQLite database (`storage_performance.db`) is stored in a Docker volume (`docker_sqlite_data`) to persist data between container restarts.
 
 ## Environment Variables
 

@@ -2,19 +2,22 @@ version: '3.8'
 
 services:
   backend:
+    container_name: backend
     build:
       context: ..
       dockerfile: docker/backend/Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      - ../backend:/app/backend
+      #- ../backend:/app/backend
+      - ./data/sqlite_data:/app/db
     environment:
       - PYTHONPATH=/app
     networks:
       - fio-network
 
   frontend:
+    container_name: frontend
     build:
       context: ..
       dockerfile: docker/frontend/Dockerfile
@@ -26,6 +29,9 @@ services:
       - VITE_API_URL=http://localhost:8000
     networks:
       - fio-network
+
+volumes:
+  sqlite_data:
 
 networks:
   fio-network:
