@@ -26,3 +26,6 @@ storage_performance.db
 
 # Vite
 .vite
+
+# Backend database
+db/
