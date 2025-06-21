@@ -59,8 +59,8 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="lg:flex lg:space-x-6">
-          <div className="lg:w-1/3 lg:max-w-sm space-y-6">
+        <div className="grid lg:grid-cols-4 lg:gap-6">
+          <div className="lg:col-span-1 space-y-6">
             {/* Test Run Selection */}
             <TestRunSelector
               selectedRuns={selectedRuns}
@@ -74,7 +74,7 @@ function App() {
             />
           </div>
 
-          <div className="mt-6 lg:mt-0 lg:flex-1">
+          <div className="mt-6 lg:mt-0 lg:col-span-3">
             {/* Chart Display */}
             {selectedTemplate && (
               <div className="relative">
