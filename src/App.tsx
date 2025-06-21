@@ -59,41 +59,35 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="lg:flex lg:space-x-6">
-          <div className="lg:w-1/3 lg:max-w-sm space-y-6">
-            {/* Test Run Selection */}
-            <TestRunSelector
-              selectedRuns={selectedRuns}
-              onSelectionChange={setSelectedRuns}
-            />
+        {/* Test Run Selection */}
+        <TestRunSelector
+          selectedRuns={selectedRuns}
+          onSelectionChange={setSelectedRuns}
+        />
 
-            {/* Template Selection */}
-            <TemplateSelector
-              selectedTemplate={selectedTemplate}
-              onTemplateSelect={setSelectedTemplate}
-            />
-          </div>
+        {/* Template Selection */}
+        <TemplateSelector
+          selectedTemplate={selectedTemplate}
+          onTemplateSelect={setSelectedTemplate}
+        />
 
-          <div className="mt-6 lg:mt-0 lg:flex-1">
-            {/* Chart Display */}
-            {selectedTemplate && (
-              <div className="relative">
-                {loading && (
-                  <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
-                      <span className="text-gray-600">Loading performance data...</span>
-                    </div>
-                  </div>
-                )}
-                <InteractiveChart
-                  template={selectedTemplate}
-                  data={performanceData}
-                />
+        {/* Chart Display */}
+        {selectedTemplate && (
+          <div className="relative">
+            {loading && (
+              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+                  <span className="text-gray-600">Loading performance data...</span>
+                </div>
               </div>
             )}
+            <InteractiveChart
+              template={selectedTemplate}
+              data={performanceData}
+            />
           </div>
-        </div>
+        )}
 
         {/* Instructions */}
         {selectedRuns.length === 0 && (
