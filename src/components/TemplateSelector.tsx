@@ -92,7 +92,7 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
         Visualization Templates
       </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {chartTemplates.map((template) => (
           <div
             key={template.id}

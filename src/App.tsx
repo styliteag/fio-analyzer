@@ -57,60 +57,80 @@ function App() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Test Run Selection */}
-        <TestRunSelector
-          selectedRuns={selectedRuns}
-          onSelectionChange={setSelectedRuns}
-        />
+      {/* Main Content - Full Width */}
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
+        {/* Test Run Selection - Full Width */}
+        <div className="max-w-7xl mx-auto mb-8">
+          <TestRunSelector
+            selectedRuns={selectedRuns}
+            onSelectionChange={setSelectedRuns}
+          />
+        </div>
 
-        {/* Template Selection */}
-        <TemplateSelector
-          selectedTemplate={selectedTemplate}
-          onTemplateSelect={setSelectedTemplate}
-        />
+        {/* Two Column Layout for Templates and Graphs - Full Width */}
+        <div className="w-full grid grid-cols-10 gap-8">
+          {/* Left Column - Templates (30%) */}
+          <div className="col-span-3 bg-white rounded-lg shadow-sm border p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Templates</h2>
+            <TemplateSelector
+              selectedTemplate={selectedTemplate}
+              onTemplateSelect={setSelectedTemplate}
+            />
+          </div>
 
-        {/* Chart Display */}
-        {selectedTemplate && (
-          <div className="relative">
-            {loading && (
-              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
-                  <span className="text-gray-600">Loading performance data...</span>
+          {/* Right Column - Graphs (70%) */}
+          <div className="col-span-7 bg-white rounded-lg shadow-sm border p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Graphs</h2>
+            {selectedTemplate ? (
+              <div className="relative">
+                {loading && (
+                  <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mr-3"></div>
+                      <span className="text-gray-600">Loading performance data...</span>
+                    </div>
+                  </div>
+                )}
+                <InteractiveChart
+                  template={selectedTemplate}
+                  data={performanceData}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                <div className="text-center">
+                  <Activity className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <p>Select a template to view charts</p>
                 </div>
               </div>
             )}
-            <InteractiveChart
-              template={selectedTemplate}
-              data={performanceData}
-            />
           </div>
-        )}
+        </div>
 
-        {/* Instructions */}
+        {/* Instructions - Full Width */}
         {selectedRuns.length === 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-            <Activity className="h-12 w-12 text-blue-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-blue-900 mb-2">
-              Get Started with Performance Analysis
-            </h3>
-            <p className="text-blue-700 mb-4">
-              Select test runs from the dropdown above to begin visualizing your storage performance data.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="bg-white p-4 rounded border border-blue-200">
-                <div className="font-medium text-blue-900 mb-1">1. Select Test Runs</div>
-                <div className="text-blue-700">Choose benchmark results to compare</div>
-              </div>
-              <div className="bg-white p-4 rounded border border-blue-200">
-                <div className="font-medium text-blue-900 mb-1">2. Pick a Template</div>
-                <div className="text-blue-700">Select visualization type for your analysis</div>
-              </div>
-              <div className="bg-white p-4 rounded border border-blue-200">
-                <div className="font-medium text-blue-900 mb-1">3. Analyze Results</div>
-                <div className="text-blue-700">Interactive charts with export options</div>
+          <div className="max-w-7xl mx-auto mt-8">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+              <Activity className="h-12 w-12 text-blue-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-blue-900 mb-2">
+                Get Started with Performance Analysis
+              </h3>
+              <p className="text-blue-700 mb-4">
+                Select test runs from the dropdown above to begin visualizing your storage performance data.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="bg-white p-4 rounded border border-blue-200">
+                  <div className="font-medium text-blue-900 mb-1">1. Select Test Runs</div>
+                  <div className="text-blue-700">Choose benchmark results to compare</div>
+                </div>
+                <div className="bg-white p-4 rounded border border-blue-200">
+                  <div className="font-medium text-blue-900 mb-1">2. Pick a Template</div>
+                  <div className="text-blue-700">Select visualization type for your analysis</div>
+                </div>
+                <div className="bg-white p-4 rounded border border-blue-200">
+                  <div className="font-medium text-blue-900 mb-1">3. Analyze Results</div>
+                  <div className="text-blue-700">Interactive charts with export options</div>
+                </div>
               </div>
             </div>
           </div>
