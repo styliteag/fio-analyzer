@@ -1,0 +1,69 @@
+# Cursor Rules for FIO Analyzer Project
+
+## Code Style & Quality
+- Prefer concise, readable code over verbose implementations
+- Follow TypeScript best practices with proper typing
+- Use modern React patterns (hooks, functional components)
+- Maintain consistent code formatting
+- Write self-documenting code with clear variable/function names
+
+## Project Structure
+- Frontend: React + TypeScript + Vite + Tailwind CSS
+- Backend: Python (FastAPI/Flask)
+- Database: SQLite/PostgreSQL
+- Docker containerization for deployment
+
+## File Editing Guidelines
+- Always read the target file first to understand current implementation
+- Preserve existing code structure and patterns when possible
+- Make minimal, focused changes that solve the specific problem
+- Don't rewrite working code unless explicitly requested
+- Maintain existing imports and dependencies
+- Follow the established naming conventions in each file
+- Test changes incrementally rather than making large modifications
+- Keep existing comments and add new ones for complex logic
+
+## Development Workflow
+- Start with uncertainty and gradually build confidence in solutions
+- Provide reasoning before implementing changes
+- Break large changes into minimal necessary steps
+- Test thoroughly before considering complete
+- Preserve existing comments and documentation
+
+## Communication
+- Give concise, direct answers
+- Provide TL;DR summaries of search results
+- Avoid red herrings and focus on relevant information
+- Present multiple solutions when appropriate, then recommend the best one
+- Summarize current state before proceeding with changes
+
+## Technical Preferences
+- Prefer functional programming patterns
+- Use semantic HTML and accessible components
+- Implement responsive design principles
+- Follow RESTful API conventions
+- Use environment variables for configuration
+
+## Error Handling
+- Implement graceful error handling
+- Provide meaningful error messages
+- Log errors appropriately for debugging
+- Fail fast and fail clearly
+
+## Performance
+- Optimize for performance from the start
+- Use lazy loading where appropriate
+- Minimize bundle size
+- Implement efficient data fetching patterns
+
+## Testing
+- Write tests for critical functionality
+- Use meaningful test descriptions
+- Test edge cases and error conditions
+- Maintain good test coverage
+
+## Documentation
+- Keep README files updated
+- Document complex algorithms and business logic
+- Use clear commit messages
+- Maintain API documentation 
