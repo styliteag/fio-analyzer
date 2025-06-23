@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { TestRun, FilterOptions } from '../types';
-import { Calendar, HardDrive, Settings, Edit2, Trash2 } from 'lucide-react';
+import { Calendar, HardDrive, Settings, Edit2, Trash2, Plus } from 'lucide-react';
 import EditTestRunModal from './EditTestRunModal';
 import { getSelectStyles } from '../hooks/useThemeColors';
 
@@ -16,6 +16,15 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   onSelectionChange,
   refreshTrigger = 0,
 }) => {
+  // Configuration
+  const SELECTED_RUNS_COLUMNS = {
+    sm: 2,     // 2 columns on small screens (mobile)
+    md: 3,     // 3 columns on medium screens (tablet)  
+    lg: 4,     // 4 columns on large screens (laptop)
+    xl: 5,     // 5 columns on extra large screens (desktop)
+    '2xl': 6   // 6 columns on 2xl screens (wide desktop)
+  };
+
   const [testRuns, setTestRuns] = useState<TestRun[]>([]);
   const [filteredRuns, setFilteredRuns] = useState<TestRun[]>([]);
   const [filters, setFilters] = useState<FilterOptions>({
@@ -91,6 +100,30 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     }
 
     setFilteredRuns(filtered);
+  };
+
+  const handleSelectAllMatching = () => {
+    // Get all filtered runs that aren't already selected
+    const newRuns = filteredRuns.filter(run => 
+      !selectedRuns.some(selected => selected.id === run.id)
+    );
+    
+    // Add them to the current selection
+    const updatedSelectedRuns = [...selectedRuns, ...newRuns];
+    onSelectionChange(updatedSelectedRuns);
+  };
+
+  const hasActiveFilters = () => {
+    return activeFilters.drive_types.length > 0 || 
+           activeFilters.drive_models.length > 0 || 
+           activeFilters.patterns.length > 0 || 
+           activeFilters.block_sizes.length > 0;
+  };
+
+  const getUnselectedMatchingCount = () => {
+    return filteredRuns.filter(run => 
+      !selectedRuns.some(selected => selected.id === run.id)
+    ).length;
   };
 
   const handleRunSelection = (selectedOptions: any) => {
@@ -254,10 +287,22 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 
       {/* Test Run Selection */}
       <div>
-        <label className="block text-xs font-medium theme-text-secondary mb-1">
-          <Calendar size={14} className="inline mr-1 theme-text-tertiary" />
-          Select Test Runs ({filteredRuns.length} available)
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-xs font-medium theme-text-secondary">
+            <Calendar size={14} className="inline mr-1 theme-text-tertiary" />
+            Select Test Runs ({filteredRuns.length} available)
+          </label>
+          {hasActiveFilters() && getUnselectedMatchingCount() > 0 && (
+            <button
+              onClick={handleSelectAllMatching}
+              className="inline-flex items-center px-2 py-1 text-xs theme-btn-primary rounded transition-colors"
+              title={`Add all ${getUnselectedMatchingCount()} matching test runs`}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add All ({getUnselectedMatchingCount()})
+            </button>
+          )}
+        </div>
         <Select
           isMulti
           options={runOptions}
@@ -265,8 +310,27 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           onChange={handleRunSelection}
           placeholder="Select test runs to compare..."
           className="text-sm"
-          maxMenuHeight={200}
-          styles={getSelectStyles()}
+          maxMenuHeight={150}
+          menuPlacement="auto"
+          menuShouldScrollIntoView={true}
+          styles={{
+            ...getSelectStyles(),
+            control: (base) => ({
+              ...getSelectStyles().control(base),
+              maxHeight: '120px',
+              overflowY: 'auto'
+            }),
+            valueContainer: (base) => ({
+              ...base,
+              maxHeight: '100px',
+              overflowY: 'auto'
+            }),
+            multiValue: (base) => ({
+              ...getSelectStyles().multiValue(base),
+              fontSize: '0.75rem',
+              margin: '1px'
+            })
+          }}
         />
       </div>
 
@@ -276,7 +340,8 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           <h3 className="text-xs font-medium theme-text-secondary mb-1">
             Selected Runs ({selectedRuns.length}):
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+          <div className="max-h-48 overflow-y-auto border theme-border-secondary rounded-md p-2 theme-bg-tertiary">
+            <div className={`grid gap-2 grid-cols-${SELECTED_RUNS_COLUMNS.sm} md:grid-cols-${SELECTED_RUNS_COLUMNS.md} lg:grid-cols-${SELECTED_RUNS_COLUMNS.lg} xl:grid-cols-${SELECTED_RUNS_COLUMNS.xl} 2xl:grid-cols-${SELECTED_RUNS_COLUMNS['2xl']}`}>
             {selectedRuns.map(run => (
               <div key={run.id} className="theme-bg-secondary p-2 rounded text-xs relative group border theme-border-primary">
                 <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-0.5">
@@ -311,6 +376,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
                 </div>
               </div>
             ))}
+            </div>
           </div>
         </div>
       )}
