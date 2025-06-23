@@ -44,6 +44,22 @@ function App() {
     }
   };
 
+  const handleRetryConnection = async () => {
+    setRetryingConnection(true);
+    try {
+      const isBackendAvailable = await apiService.forceBackendCheck();
+
+      if (isBackendAvailable && selectedRuns.length > 0 && selectedTemplate) {
+        // If backend is now available and we have selections, refetch data
+        await fetchPerformanceData();
+      }
+    } catch (error) {
+      console.error("Error retrying connection:", error);
+    } finally {
+      setRetryingConnection(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
