@@ -9,10 +9,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      #- ../backend:/app/backend
-      - ./data/sqlite_data:/app/db
-    environment:
-      - PYTHONPATH=/app
+      - ../backend:/usr/src/app
+      - sqlite_data:/usr/src/app/db
     networks:
       - fio-network
 
@@ -26,7 +24,7 @@ services:
     depends_on:
       - backend
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://backend:8000
     networks:
       - fio-network
 

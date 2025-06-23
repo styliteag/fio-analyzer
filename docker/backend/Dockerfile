@@ -1,21 +1,18 @@
-FROM python:3.11-slim
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+COPY backend/package*.json ./
 
-# Copy requirements first for better caching
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies
+RUN npm ci
 
-# Copy backend code
-COPY backend/main.py ./backend/main.py
+# Copy source code but not the node_modules
+COPY backend/index.js ./
 
-# Expose port
+# Build the application
+RUN npm run build
+
 EXPOSE 8000
 
-# Run the application
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD [ "npm", "start" ] 
