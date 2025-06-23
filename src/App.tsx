@@ -3,7 +3,7 @@ import TestRunSelector from "./components/TestRunSelector";
 import TemplateSelector from "./components/TemplateSelector";
 import InteractiveChart from "./components/InteractiveChart";
 import { TestRun, ChartTemplate, PerformanceData } from "./types";
-import { Activity, Database, Wifi, WifiOff } from "lucide-react";
+import { Activity, Database, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { apiService } from "./services/apiService";
 
 function App() {
