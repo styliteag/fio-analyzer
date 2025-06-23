@@ -129,17 +129,17 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   }));
 
   return (
-    <div className="theme-card rounded-lg shadow-md p-6 mb-6 border">
-      <h2 className="text-xl font-semibold mb-4 flex items-center theme-text-primary">
-        <Settings className="mr-2 theme-text-secondary" size={20} />
+    <div className="theme-card rounded-lg shadow-md p-4 mb-4 border">
+      <h2 className="text-lg font-semibold mb-3 flex items-center theme-text-primary">
+        <Settings className="mr-2 theme-text-secondary" size={18} />
         Test Run Selection
       </h2>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <div>
-          <label className="block text-sm font-medium theme-text-secondary mb-2">
-            <HardDrive size={16} className="inline mr-1 theme-text-tertiary" />
+          <label className="block text-xs font-medium theme-text-secondary mb-1">
+            <HardDrive size={14} className="inline mr-1 theme-text-tertiary" />
             Drive Types
           </label>
           <Select
@@ -152,13 +152,13 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
               }))
             }
             placeholder="All drive types"
-            className="text-sm"
+            className="text-xs"
             styles={getSelectStyles()}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium theme-text-secondary mb-2">
+          <label className="block text-xs font-medium theme-text-secondary mb-1">
             Drive Models
           </label>
           <Select
@@ -171,13 +171,13 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
               }))
             }
             placeholder="All models"
-            className="text-sm"
+            className="text-xs"
             styles={getSelectStyles()}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium theme-text-secondary mb-2">
+          <label className="block text-xs font-medium theme-text-secondary mb-1">
             Test Patterns
           </label>
           <Select
@@ -193,13 +193,13 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
               }))
             }
             placeholder="All patterns"
-            className="text-sm"
+            className="text-xs"
             styles={getSelectStyles()}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium theme-text-secondary mb-2">
+          <label className="block text-xs font-medium theme-text-secondary mb-1">
             Block Sizes (KB)
           </label>
           <Select
@@ -212,7 +212,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
               }))
             }
             placeholder="All sizes"
-            className="text-sm"
+            className="text-xs"
             styles={getSelectStyles()}
           />
         </div>
@@ -220,8 +220,8 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 
       {/* Test Run Selection */}
       <div>
-        <label className="block text-sm font-medium theme-text-secondary mb-2">
-          <Calendar size={16} className="inline mr-1 theme-text-tertiary" />
+        <label className="block text-xs font-medium theme-text-secondary mb-1">
+          <Calendar size={14} className="inline mr-1 theme-text-tertiary" />
           Select Test Runs ({filteredRuns.length} available)
         </label>
         <Select
@@ -239,27 +239,27 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
       {/* Selected Runs Preview */}
       {selectedRuns.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-sm font-medium theme-text-secondary mb-2">
+          <h3 className="text-xs font-medium theme-text-secondary mb-1">
             Selected Runs ({selectedRuns.length}):
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
             {selectedRuns.map(run => (
-              <div key={run.id} className="theme-bg-secondary p-3 rounded text-xs relative group border theme-border-primary">
+              <div key={run.id} className="theme-bg-secondary p-2 rounded text-xs relative group border theme-border-primary">
                 <button
                   onClick={() => handleEditTestRun(run)}
-                  className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded theme-hover"
+                  className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded theme-hover"
                   title="Edit drive info"
                 >
-                  <Edit2 className="h-3 w-3 theme-text-secondary" />
+                  <Edit2 className="h-2.5 w-2.5 theme-text-secondary" />
                 </button>
-                <div className="pl-6">
-                  <div className="font-medium theme-text-primary">{run.drive_model}</div>
-                  <div className="theme-text-secondary">{run.test_name}</div>
-                  <div className="theme-text-tertiary">
+                <div className="pl-4">
+                  <div className="font-medium theme-text-primary text-xs truncate">{run.drive_model}</div>
+                  <div className="theme-text-secondary text-xs truncate">{run.test_name}</div>
+                  <div className="theme-text-tertiary text-xs">
                     {run.block_size}KB, QD{run.queue_depth}
                   </div>
-                  <div className="theme-text-tertiary mt-1">
-                    <span className="inline-block px-1.5 py-0.5 theme-bg-accent theme-text-accent rounded text-xs">
+                  <div className="theme-text-tertiary mt-0.5">
+                    <span className="inline-block px-1 py-0.5 theme-bg-accent theme-text-accent rounded text-xs">
                       {run.drive_type}
                     </span>
                   </div>
