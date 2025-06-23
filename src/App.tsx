@@ -21,6 +21,21 @@ function App() {
     }
   }, [selectedRuns, selectedTemplate]);
 
+  // Check backend status on initial load
+  useEffect(() => {
+    const checkInitialBackendStatus = async () => {
+      try {
+        const result = await apiService.getTestRuns();
+        setIsUsingMockData(result.isUsingMockData);
+      } catch (error) {
+        console.error("Error checking initial backend status:", error);
+        setIsUsingMockData(true);
+      }
+    };
+
+    checkInitialBackendStatus();
+  }, []);
+
   const fetchPerformanceData = async () => {
     if (selectedRuns.length === 0) return;
 
