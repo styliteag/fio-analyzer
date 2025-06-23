@@ -55,9 +55,23 @@ function App() {
                 Storage Performance Visualizer
               </h1>
             </div>
-            <div className="flex items-center text-sm text-gray-600">
-              <Database className="h-4 w-4 mr-1" />
-              FIO Benchmark Analysis
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center text-sm text-gray-600">
+                <Database className="h-4 w-4 mr-1" />
+                FIO Benchmark Analysis
+              </div>
+              {isUsingMockData && (
+                <div className="flex items-center text-sm text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-200">
+                  <WifiOff className="h-4 w-4 mr-1" />
+                  Demo Mode
+                </div>
+              )}
+              {!isUsingMockData && performanceData.length > 0 && (
+                <div className="flex items-center text-sm text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-200">
+                  <Wifi className="h-4 w-4 mr-1" />
+                  Live Data
+                </div>
+              )}
             </div>
           </div>
         </div>
