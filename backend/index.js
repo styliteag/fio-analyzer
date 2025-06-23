@@ -337,6 +337,40 @@ app.put('/api/test-runs/:id', (req, res) => {
     });
 });
 
+// DELETE endpoint for test runs
+app.delete('/api/test-runs/:id', (req, res) => {
+    const { id } = req.params;
+    
+    // Start a transaction to delete from both tables
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        
+        // First delete related performance metrics
+        db.run('DELETE FROM performance_metrics WHERE test_run_id = ?', [parseInt(id)], function(err) {
+            if (err) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: err.message });
+            }
+            
+            // Then delete the test run
+            db.run('DELETE FROM test_runs WHERE id = ?', [parseInt(id)], function(err) {
+                if (err) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: err.message });
+                }
+                
+                if (this.changes === 0) {
+                    db.run('ROLLBACK');
+                    return res.status(404).json({ error: 'Test run not found' });
+                }
+                
+                db.run('COMMIT');
+                res.json({ message: 'Test run deleted successfully', changes: this.changes });
+            });
+        });
+    });
+});
+
 // FIO JSON import endpoint
 app.post('/api/import', upload.single('file'), (req, res) => {
     try {

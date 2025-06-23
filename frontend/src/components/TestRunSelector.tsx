@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { TestRun, FilterOptions } from '../types';
-import { Calendar, HardDrive, Settings, Edit2 } from 'lucide-react';
+import { Calendar, HardDrive, Settings, Edit2, Trash2 } from 'lucide-react';
 import EditTestRunModal from './EditTestRunModal';
 import { getSelectStyles } from '../hooks/useThemeColors';
 
@@ -32,6 +32,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   });
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [testRunToEdit, setTestRunToEdit] = useState<TestRun | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
 
   useEffect(() => {
     fetchTestRuns();
@@ -116,6 +117,39 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     
     // Refresh filters to include any new drive types/models
     fetchFilters();
+  };
+
+  const handleDeleteTestRun = async (testRun: TestRun) => {
+    if (!confirm(`Are you sure you want to delete the test run "${testRun.test_name}" for ${testRun.drive_model}?`)) {
+      return;
+    }
+
+    setDeleting(testRun.id);
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/test-runs/${testRun.id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Remove from test runs list
+        setTestRuns(prev => prev.filter(run => run.id !== testRun.id));
+        
+        // Remove from selected runs if it was selected
+        const updatedSelectedRuns = selectedRuns.filter(run => run.id !== testRun.id);
+        onSelectionChange(updatedSelectedRuns);
+        
+        // Refresh filters
+        fetchFilters();
+      } else {
+        const result = await response.json();
+        alert(result.error || 'Failed to delete test run');
+      }
+    } catch (err) {
+      alert('Network error occurred while deleting test run');
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const runOptions = filteredRuns.map(run => ({
@@ -245,14 +279,25 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
             {selectedRuns.map(run => (
               <div key={run.id} className="theme-bg-secondary p-2 rounded text-xs relative group border theme-border-primary">
-                <button
-                  onClick={() => handleEditTestRun(run)}
-                  className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded theme-hover"
-                  title="Edit drive info"
-                >
-                  <Edit2 className="h-2.5 w-2.5 theme-text-secondary" />
-                </button>
-                <div className="pl-4">
+                <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-0.5">
+                  <button
+                    onClick={() => handleEditTestRun(run)}
+                    className="p-0.5 rounded theme-hover"
+                    title="Edit drive info"
+                    disabled={deleting === run.id}
+                  >
+                    <Edit2 className="h-2.5 w-2.5 theme-text-secondary" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTestRun(run)}
+                    className="p-0.5 rounded theme-hover"
+                    title="Delete test run"
+                    disabled={deleting === run.id}
+                  >
+                    <Trash2 className="h-2.5 w-2.5 theme-text-error" />
+                  </button>
+                </div>
+                <div className="pl-6">
                   <div className="font-medium theme-text-primary text-xs truncate">{run.drive_model}</div>
                   <div className="theme-text-secondary text-xs truncate">{run.test_name}</div>
                   <div className="theme-text-tertiary text-xs">
