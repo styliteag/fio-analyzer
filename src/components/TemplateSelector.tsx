@@ -1,6 +1,13 @@
-import React from 'react';
-import { ChartTemplate } from '../types';
-import { BarChart3, TrendingUp, ScatterChart as Scatter3D, Zap } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { ChartTemplate } from "../types";
+import {
+  BarChart3,
+  TrendingUp,
+  ScatterChart as Scatter3D,
+  Zap,
+  WifiOff,
+} from "lucide-react";
+import { apiService } from "../services/apiService";
 
 interface TemplateSelectorProps {
   selectedTemplate: ChartTemplate | null;
@@ -9,72 +16,73 @@ interface TemplateSelectorProps {
 
 const chartTemplates: ChartTemplate[] = [
   {
-    id: 'iops-comparison',
-    name: 'IOPS Comparison',
-    description: 'Compare IOPS performance across different drives and configurations',
-    chartType: 'bar',
-    xAxis: 'drive_model',
-    yAxis: 'iops',
-    groupBy: 'read_write_pattern',
-    metrics: ['iops']
+    id: "iops-comparison",
+    name: "IOPS Comparison",
+    description:
+      "Compare IOPS performance across different drives and configurations",
+    chartType: "bar",
+    xAxis: "drive_model",
+    yAxis: "iops",
+    groupBy: "read_write_pattern",
+    metrics: ["iops"],
   },
   {
-    id: 'latency-distribution',
-    name: 'Latency Distribution',
-    description: 'View latency percentiles (avg, p95, p99) across test runs',
-    chartType: 'bar',
-    xAxis: 'drive_model',
-    yAxis: 'latency',
-    metrics: ['avg_latency', 'p95_latency', 'p99_latency']
+    id: "latency-distribution",
+    name: "Latency Distribution",
+    description: "View latency percentiles (avg, p95, p99) across test runs",
+    chartType: "bar",
+    xAxis: "drive_model",
+    yAxis: "latency",
+    metrics: ["avg_latency", "p95_latency", "p99_latency"],
   },
   {
-    id: 'throughput-blocksize',
-    name: 'Throughput vs Block Size',
-    description: 'Analyze how throughput varies with different block sizes',
-    chartType: 'line',
-    xAxis: 'block_size',
-    yAxis: 'throughput',
-    groupBy: 'drive_model',
-    metrics: ['throughput']
+    id: "throughput-blocksize",
+    name: "Throughput vs Block Size",
+    description: "Analyze how throughput varies with different block sizes",
+    chartType: "line",
+    xAxis: "block_size",
+    yAxis: "throughput",
+    groupBy: "drive_model",
+    metrics: ["throughput"],
   },
   {
-    id: 'read-write-performance',
-    name: 'Read vs Write Performance',
-    description: 'Compare read and write performance patterns',
-    chartType: 'scatter',
-    xAxis: 'read_performance',
-    yAxis: 'write_performance',
-    metrics: ['iops', 'throughput']
+    id: "read-write-performance",
+    name: "Read vs Write Performance",
+    description: "Compare read and write performance patterns",
+    chartType: "scatter",
+    xAxis: "read_performance",
+    yAxis: "write_performance",
+    metrics: ["iops", "throughput"],
   },
   {
-    id: 'performance-over-time',
-    name: 'Performance Over Time',
-    description: 'Track performance trends across different test dates',
-    chartType: 'line',
-    xAxis: 'timestamp',
-    yAxis: 'performance',
-    groupBy: 'drive_model',
-    metrics: ['iops', 'throughput', 'avg_latency']
+    id: "performance-over-time",
+    name: "Performance Over Time",
+    description: "Track performance trends across different test dates",
+    chartType: "line",
+    xAxis: "timestamp",
+    yAxis: "performance",
+    groupBy: "drive_model",
+    metrics: ["iops", "throughput", "avg_latency"],
   },
   {
-    id: 'queue-depth-impact',
-    name: 'Queue Depth Impact',
-    description: 'Analyze how queue depth affects performance metrics',
-    chartType: 'line',
-    xAxis: 'queue_depth',
-    yAxis: 'performance',
-    groupBy: 'drive_type',
-    metrics: ['iops', 'avg_latency']
-  }
+    id: "queue-depth-impact",
+    name: "Queue Depth Impact",
+    description: "Analyze how queue depth affects performance metrics",
+    chartType: "line",
+    xAxis: "queue_depth",
+    yAxis: "performance",
+    groupBy: "drive_type",
+    metrics: ["iops", "avg_latency"],
+  },
 ];
 
 const getTemplateIcon = (chartType: string) => {
   switch (chartType) {
-    case 'bar':
+    case "bar":
       return <BarChart3 size={20} />;
-    case 'line':
+    case "line":
       return <TrendingUp size={20} />;
-    case 'scatter':
+    case "scatter":
       return <Scatter3D size={20} />;
     default:
       return <Zap size={20} />;
@@ -98,33 +106,37 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             key={template.id}
             className={`border rounded-lg p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
               selectedTemplate?.id === template.id
-                ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 hover:border-gray-300'
+                ? "border-blue-500 bg-blue-50"
+                : "border-gray-200 hover:border-gray-300"
             }`}
             onClick={() => onTemplateSelect(template)}
           >
             <div className="flex items-center mb-2">
-              <div className={`mr-3 ${
-                selectedTemplate?.id === template.id ? 'text-blue-600' : 'text-gray-600'
-              }`}>
+              <div
+                className={`mr-3 ${
+                  selectedTemplate?.id === template.id
+                    ? "text-blue-600"
+                    : "text-gray-600"
+                }`}
+              >
                 {getTemplateIcon(template.chartType)}
               </div>
               <h3 className="font-medium text-gray-900">{template.name}</h3>
             </div>
-            
+
             <p className="text-sm text-gray-600 mb-3">{template.description}</p>
-            
+
             <div className="flex flex-wrap gap-1">
               {template.metrics.map((metric) => (
                 <span
                   key={metric}
                   className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded"
                 >
-                  {metric.replace(/_/g, ' ').toUpperCase()}
+                  {metric.replace(/_/g, " ").toUpperCase()}
                 </span>
               ))}
             </div>
-            
+
             <div className="mt-2 text-xs text-gray-500">
               Chart Type: {template.chartType.toUpperCase()}
             </div>
@@ -134,21 +146,27 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 
       {selectedTemplate && (
         <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <h3 className="font-medium text-blue-900 mb-2">Selected Template: {selectedTemplate.name}</h3>
+          <h3 className="font-medium text-blue-900 mb-2">
+            Selected Template: {selectedTemplate.name}
+          </h3>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="font-medium text-blue-800">X-Axis:</span> {selectedTemplate.xAxis.replace(/_/g, ' ')}
+              <span className="font-medium text-blue-800">X-Axis:</span>{" "}
+              {selectedTemplate.xAxis.replace(/_/g, " ")}
             </div>
             <div>
-              <span className="font-medium text-blue-800">Y-Axis:</span> {selectedTemplate.yAxis.replace(/_/g, ' ')}
+              <span className="font-medium text-blue-800">Y-Axis:</span>{" "}
+              {selectedTemplate.yAxis.replace(/_/g, " ")}
             </div>
             {selectedTemplate.groupBy && (
               <div>
-                <span className="font-medium text-blue-800">Group By:</span> {selectedTemplate.groupBy.replace(/_/g, ' ')}
+                <span className="font-medium text-blue-800">Group By:</span>{" "}
+                {selectedTemplate.groupBy.replace(/_/g, " ")}
               </div>
             )}
             <div>
-              <span className="font-medium text-blue-800">Metrics:</span> {selectedTemplate.metrics.join(', ')}
+              <span className="font-medium text-blue-800">Metrics:</span>{" "}
+              {selectedTemplate.metrics.join(", ")}
             </div>
           </div>
         </div>
