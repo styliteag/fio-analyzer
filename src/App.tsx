@@ -78,9 +78,22 @@ function App() {
                 FIO Benchmark Analysis
               </div>
               {isUsingMockData && (
-                <div className="flex items-center text-sm text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-200">
-                  <WifiOff className="h-4 w-4 mr-1" />
-                  Demo Mode
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-center text-sm text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-200">
+                    <WifiOff className="h-4 w-4 mr-1" />
+                    Demo Mode
+                  </div>
+                  <button
+                    onClick={handleRetryConnection}
+                    disabled={retryingConnection}
+                    className="flex items-center text-sm text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md border border-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Try to reconnect to backend"
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 mr-1 ${retryingConnection ? "animate-spin" : ""}`}
+                    />
+                    {retryingConnection ? "Connecting..." : "Retry Connection"}
+                  </button>
                 </div>
               )}
               {!isUsingMockData && performanceData.length > 0 && (
