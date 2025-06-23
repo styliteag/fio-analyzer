@@ -7,6 +7,8 @@ export default function Upload() {
   const [file, setFile] = useState<File | null>(null);
   const [driveModel, setDriveModel] = useState('');
   const [driveType, setDriveType] = useState('');
+  const [customDriveType, setCustomDriveType] = useState('');
+  const [showCustomType, setShowCustomType] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -15,6 +17,17 @@ export default function Upload() {
     if (selectedFile) {
       setFile(selectedFile);
       setMessage(null);
+    }
+  };
+
+  const handleDriveTypeChange = (value: string) => {
+    if (value === 'custom') {
+      setShowCustomType(true);
+      setDriveType('');
+    } else {
+      setShowCustomType(false);
+      setDriveType(value);
+      setCustomDriveType('');
     }
   };
 
@@ -28,11 +41,13 @@ export default function Upload() {
 
     setUploading(true);
     
+    const finalDriveType = showCustomType ? customDriveType : driveType;
+    
     try {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('drive_model', driveModel || 'Unknown');
-      formData.append('drive_type', driveType || 'Unknown');
+      formData.append('drive_type', finalDriveType || 'Unknown');
 
       const response = await fetch('http://localhost:8000/api/import', {
         method: 'POST',
@@ -46,6 +61,8 @@ export default function Upload() {
         setFile(null);
         setDriveModel('');
         setDriveType('');
+        setCustomDriveType('');
+        setShowCustomType(false);
         
         // Reset file input
         const fileInput = document.getElementById('file-input') as HTMLInputElement;
@@ -174,19 +191,45 @@ export default function Upload() {
                 <label htmlFor="drive-type" className="block text-sm font-medium text-gray-700 mb-2">
                   Drive Type
                 </label>
-                <select
-                  id="drive-type"
-                  value={driveType}
-                  onChange={(e) => setDriveType(e.target.value)}
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">Select type</option>
-                  <option value="NVMe SSD">NVMe SSD</option>
-                  <option value="SATA SSD">SATA SSD</option>
-                  <option value="HDD">HDD</option>
-                  <option value="Optane">Optane</option>
-                  <option value="Other">Other</option>
-                </select>
+                {!showCustomType ? (
+                  <select
+                    id="drive-type"
+                    value={driveType}
+                    onChange={(e) => handleDriveTypeChange(e.target.value)}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  >
+                    <option value="">Select type</option>
+                    <option value="NVMe SSD">NVMe SSD</option>
+                    <option value="SATA SSD">SATA SSD</option>
+                    <option value="HDD">HDD</option>
+                    <option value="Optane">Optane</option>
+                    <option value="eUFS">eUFS</option>
+                    <option value="eMMC">eMMC</option>
+                    <option value="SD Card">SD Card</option>
+                    <option value="custom">+ Add Custom Type</option>
+                  </select>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customDriveType}
+                      onChange={(e) => setCustomDriveType(e.target.value)}
+                      placeholder="Enter custom drive type"
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomType(false);
+                        setCustomDriveType('');
+                        setDriveType('');
+                      }}
+                      className="px-3 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 <p className="mt-1 text-xs text-gray-500">Optional: Categorize the storage device</p>
               </div>
             </div>

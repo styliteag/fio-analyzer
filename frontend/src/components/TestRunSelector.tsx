@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { TestRun, FilterOptions } from '../types';
-import { Calendar, HardDrive, Settings } from 'lucide-react';
+import { Calendar, HardDrive, Settings, Edit2 } from 'lucide-react';
+import EditTestRunModal from './EditTestRunModal';
 
 interface TestRunSelectorProps {
   selectedRuns: TestRun[];
@@ -28,6 +29,8 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     patterns: [] as string[],
     block_sizes: [] as number[],
   });
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [testRunToEdit, setTestRunToEdit] = useState<TestRun | null>(null);
 
   useEffect(() => {
     fetchTestRuns();
@@ -91,6 +94,27 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   const handleRunSelection = (selectedOptions: any) => {
     const selected = selectedOptions ? selectedOptions.map((option: any) => option.value) : [];
     onSelectionChange(selected);
+  };
+
+  const handleEditTestRun = (testRun: TestRun) => {
+    setTestRunToEdit(testRun);
+    setEditModalOpen(true);
+  };
+
+  const handleSaveTestRun = (updatedTestRun: TestRun) => {
+    // Update the test runs list
+    setTestRuns(prev => prev.map(run => 
+      run.id === updatedTestRun.id ? updatedTestRun : run
+    ));
+    
+    // Update selected runs if this run is selected
+    const updatedSelectedRuns = selectedRuns.map(run =>
+      run.id === updatedTestRun.id ? updatedTestRun : run
+    );
+    onSelectionChange(updatedSelectedRuns);
+    
+    // Refresh filters to include any new drive types/models
+    fetchFilters();
   };
 
   const runOptions = filteredRuns.map(run => ({
@@ -214,17 +238,39 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {selectedRuns.map(run => (
-              <div key={run.id} className="bg-gray-50 p-3 rounded text-xs">
+              <div key={run.id} className="bg-gray-50 p-3 rounded text-xs relative group">
+                <button
+                  onClick={() => handleEditTestRun(run)}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200"
+                  title="Edit drive info"
+                >
+                  <Edit2 className="h-3 w-3 text-gray-600" />
+                </button>
                 <div className="font-medium">{run.drive_model}</div>
                 <div className="text-gray-600">{run.test_name}</div>
                 <div className="text-gray-500">
                   {run.block_size}KB, QD{run.queue_depth}
+                </div>
+                <div className="text-gray-500 mt-1">
+                  <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+                    {run.drive_type}
+                  </span>
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
+      
+      <EditTestRunModal
+        testRun={testRunToEdit}
+        isOpen={editModalOpen}
+        onClose={() => {
+          setEditModalOpen(false);
+          setTestRunToEdit(null);
+        }}
+        onSave={handleSaveTestRun}
+      />
     </div>
   );
 };

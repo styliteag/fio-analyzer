@@ -298,6 +298,45 @@ app.get('/api/filters', (req, res) => {
     });
 });
 
+// Update test run endpoint
+app.put('/api/test-runs/:id', (req, res) => {
+    const { id } = req.params;
+    const { drive_model, drive_type } = req.body;
+    
+    if (!drive_model && !drive_type) {
+        return res.status(400).json({ error: 'At least one field (drive_model or drive_type) is required' });
+    }
+    
+    const updates = [];
+    const values = [];
+    
+    if (drive_model) {
+        updates.push('drive_model = ?');
+        values.push(drive_model);
+    }
+    
+    if (drive_type) {
+        updates.push('drive_type = ?');
+        values.push(drive_type);
+    }
+    
+    values.push(parseInt(id));
+    
+    const query = `UPDATE test_runs SET ${updates.join(', ')} WHERE id = ?`;
+    
+    db.run(query, values, function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Test run not found' });
+        }
+        
+        res.json({ message: 'Test run updated successfully', changes: this.changes });
+    });
+});
+
 // FIO JSON import endpoint
 app.post('/api/import', upload.single('file'), (req, res) => {
     try {
