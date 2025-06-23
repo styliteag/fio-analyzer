@@ -14,68 +14,6 @@ interface TemplateSelectorProps {
   onTemplateSelect: (template: ChartTemplate) => void;
 }
 
-const chartTemplates: ChartTemplate[] = [
-  {
-    id: "iops-comparison",
-    name: "IOPS Comparison",
-    description:
-      "Compare IOPS performance across different drives and configurations",
-    chartType: "bar",
-    xAxis: "drive_model",
-    yAxis: "iops",
-    groupBy: "read_write_pattern",
-    metrics: ["iops"],
-  },
-  {
-    id: "latency-distribution",
-    name: "Latency Distribution",
-    description: "View latency percentiles (avg, p95, p99) across test runs",
-    chartType: "bar",
-    xAxis: "drive_model",
-    yAxis: "latency",
-    metrics: ["avg_latency", "p95_latency", "p99_latency"],
-  },
-  {
-    id: "throughput-blocksize",
-    name: "Throughput vs Block Size",
-    description: "Analyze how throughput varies with different block sizes",
-    chartType: "line",
-    xAxis: "block_size",
-    yAxis: "throughput",
-    groupBy: "drive_model",
-    metrics: ["throughput"],
-  },
-  {
-    id: "read-write-performance",
-    name: "Read vs Write Performance",
-    description: "Compare read and write performance patterns",
-    chartType: "scatter",
-    xAxis: "read_performance",
-    yAxis: "write_performance",
-    metrics: ["iops", "throughput"],
-  },
-  {
-    id: "performance-over-time",
-    name: "Performance Over Time",
-    description: "Track performance trends across different test dates",
-    chartType: "line",
-    xAxis: "timestamp",
-    yAxis: "performance",
-    groupBy: "drive_model",
-    metrics: ["iops", "throughput", "avg_latency"],
-  },
-  {
-    id: "queue-depth-impact",
-    name: "Queue Depth Impact",
-    description: "Analyze how queue depth affects performance metrics",
-    chartType: "line",
-    xAxis: "queue_depth",
-    yAxis: "performance",
-    groupBy: "drive_type",
-    metrics: ["iops", "avg_latency"],
-  },
-];
-
 const getTemplateIcon = (chartType: string) => {
   switch (chartType) {
     case "bar":
