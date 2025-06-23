@@ -12,6 +12,7 @@ function App() {
     useState<ChartTemplate | null>(null);
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isUsingMockData, setIsUsingMockData] = useState(false);
 
   useEffect(() => {
     if (selectedRuns.length > 0 && selectedTemplate) {
