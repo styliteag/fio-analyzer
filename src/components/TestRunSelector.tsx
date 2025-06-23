@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import Select from 'react-select';
-import { TestRun, FilterOptions } from '../types';
-import { Calendar, HardDrive, Settings } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import Select from "react-select";
+import { TestRun, FilterOptions } from "../types";
+import { Calendar, HardDrive, Settings, WifiOff } from "lucide-react";
+import { apiService } from "../services/apiService";
 
 interface TestRunSelectorProps {
   selectedRuns: TestRun[];
@@ -38,21 +39,21 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 
   const fetchTestRuns = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/test-runs');
+      const response = await fetch("http://localhost:8000/api/test-runs");
       const data = await response.json();
       setTestRuns(data);
     } catch (error) {
-      console.error('Error fetching test runs:', error);
+      console.error("Error fetching test runs:", error);
     }
   };
 
   const fetchFilters = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/filters');
+      const response = await fetch("http://localhost:8000/api/filters");
       const data = await response.json();
       setFilters(data);
     } catch (error) {
-      console.error('Error fetching filters:', error);
+      console.error("Error fetching filters:", error);
     }
   };
 
@@ -60,26 +61,26 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     let filtered = testRuns;
 
     if (activeFilters.drive_types.length > 0) {
-      filtered = filtered.filter(run => 
-        activeFilters.drive_types.includes(run.drive_type)
+      filtered = filtered.filter((run) =>
+        activeFilters.drive_types.includes(run.drive_type),
       );
     }
 
     if (activeFilters.drive_models.length > 0) {
-      filtered = filtered.filter(run => 
-        activeFilters.drive_models.includes(run.drive_model)
+      filtered = filtered.filter((run) =>
+        activeFilters.drive_models.includes(run.drive_model),
       );
     }
 
     if (activeFilters.patterns.length > 0) {
-      filtered = filtered.filter(run => 
-        activeFilters.patterns.includes(run.read_write_pattern)
+      filtered = filtered.filter((run) =>
+        activeFilters.patterns.includes(run.read_write_pattern),
       );
     }
 
     if (activeFilters.block_sizes.length > 0) {
-      filtered = filtered.filter(run => 
-        activeFilters.block_sizes.includes(run.block_size)
+      filtered = filtered.filter((run) =>
+        activeFilters.block_sizes.includes(run.block_size),
       );
     }
 
@@ -87,16 +88,18 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   };
 
   const handleRunSelection = (selectedOptions: any) => {
-    const selected = selectedOptions ? selectedOptions.map((option: any) => option.value) : [];
+    const selected = selectedOptions
+      ? selectedOptions.map((option: any) => option.value)
+      : [];
     onSelectionChange(selected);
   };
 
-  const runOptions = filteredRuns.map(run => ({
+  const runOptions = filteredRuns.map((run) => ({
     value: run,
     label: `${run.drive_model} - ${run.test_name} (${new Date(run.timestamp).toLocaleDateString()})`,
   }));
 
-  const selectedOptions = selectedRuns.map(run => ({
+  const selectedOptions = selectedRuns.map((run) => ({
     value: run,
     label: `${run.drive_model} - ${run.test_name} (${new Date(run.timestamp).toLocaleDateString()})`,
   }));
@@ -117,11 +120,14 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           </label>
           <Select
             isMulti
-            options={filters.drive_types.map(type => ({ value: type, label: type }))}
-            onChange={(selected) => 
-              setActiveFilters(prev => ({
+            options={filters.drive_types.map((type) => ({
+              value: type,
+              label: type,
+            }))}
+            onChange={(selected) =>
+              setActiveFilters((prev) => ({
                 ...prev,
-                drive_types: selected ? selected.map(s => s.value) : []
+                drive_types: selected ? selected.map((s) => s.value) : [],
               }))
             }
             placeholder="All drive types"
@@ -135,11 +141,14 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           </label>
           <Select
             isMulti
-            options={filters.drive_models.map(model => ({ value: model, label: model }))}
-            onChange={(selected) => 
-              setActiveFilters(prev => ({
+            options={filters.drive_models.map((model) => ({
+              value: model,
+              label: model,
+            }))}
+            onChange={(selected) =>
+              setActiveFilters((prev) => ({
                 ...prev,
-                drive_models: selected ? selected.map(s => s.value) : []
+                drive_models: selected ? selected.map((s) => s.value) : [],
               }))
             }
             placeholder="All models"
@@ -153,14 +162,14 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           </label>
           <Select
             isMulti
-            options={filters.patterns.map(pattern => ({ 
-              value: pattern, 
-              label: pattern.replace(/_/g, ' ').toUpperCase() 
+            options={filters.patterns.map((pattern) => ({
+              value: pattern,
+              label: pattern.replace(/_/g, " ").toUpperCase(),
             }))}
-            onChange={(selected) => 
-              setActiveFilters(prev => ({
+            onChange={(selected) =>
+              setActiveFilters((prev) => ({
                 ...prev,
-                patterns: selected ? selected.map(s => s.value) : []
+                patterns: selected ? selected.map((s) => s.value) : [],
               }))
             }
             placeholder="All patterns"
@@ -174,11 +183,14 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           </label>
           <Select
             isMulti
-            options={filters.block_sizes.map(size => ({ value: size, label: `${size}KB` }))}
-            onChange={(selected) => 
-              setActiveFilters(prev => ({
+            options={filters.block_sizes.map((size) => ({
+              value: size,
+              label: `${size}KB`,
+            }))}
+            onChange={(selected) =>
+              setActiveFilters((prev) => ({
                 ...prev,
-                block_sizes: selected ? selected.map(s => s.value) : []
+                block_sizes: selected ? selected.map((s) => s.value) : [],
               }))
             }
             placeholder="All sizes"
@@ -211,7 +223,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
             Selected Runs ({selectedRuns.length}):
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {selectedRuns.map(run => (
+            {selectedRuns.map((run) => (
               <div key={run.id} className="bg-gray-50 p-3 rounded text-xs">
                 <div className="font-medium">{run.drive_model}</div>
                 <div className="text-gray-600">{run.test_name}</div>
