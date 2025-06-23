@@ -9,6 +9,10 @@ const port = 8000;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
+
+const multer = require('multer');
+const upload = multer();
 
 const db = new sqlite3.Database(DB_PATH, (err) => {
     if (err) {
@@ -46,7 +50,14 @@ function initDb() {
                 block_size INTEGER NOT NULL,
                 read_write_pattern TEXT NOT NULL,
                 queue_depth INTEGER NOT NULL,
-                duration INTEGER NOT NULL
+                duration INTEGER NOT NULL,
+                fio_version TEXT,
+                job_runtime INTEGER,
+                rwmixread INTEGER,
+                total_ios_read INTEGER,
+                total_ios_write INTEGER,
+                usr_cpu REAL,
+                sys_cpu REAL
             )
         `);
 
@@ -57,6 +68,18 @@ function initDb() {
                 metric_type TEXT NOT NULL,
                 value REAL NOT NULL,
                 unit TEXT NOT NULL,
+                operation_type TEXT,
+                FOREIGN KEY (test_run_id) REFERENCES test_runs (id)
+            )
+        `);
+
+        db.run(`
+            CREATE TABLE IF NOT EXISTS latency_percentiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_run_id INTEGER NOT NULL,
+                operation_type TEXT NOT NULL,
+                percentile REAL NOT NULL,
+                latency_ns INTEGER NOT NULL,
                 FOREIGN KEY (test_run_id) REFERENCES test_runs (id)
             )
         `);
@@ -177,7 +200,9 @@ function getBaseThroughput(drive_type, pattern, block_size) {
 app.get('/api/test-runs', (req, res) => {
     db.all(`
         SELECT id, timestamp, drive_model, drive_type, test_name, 
-               block_size, read_write_pattern, queue_depth, duration
+               block_size, read_write_pattern, queue_depth, duration,
+               fio_version, job_runtime, rwmixread, total_ios_read, 
+               total_ios_write, usr_cpu, sys_cpu
         FROM test_runs
         ORDER BY timestamp DESC
     `, [], (err, rows) => {
@@ -245,6 +270,143 @@ app.get('/api/performance-data', (req, res) => {
     });
 });
 
+// Get filter options
+app.get('/api/filters', (req, res) => {
+    const queries = [
+        'SELECT DISTINCT drive_type FROM test_runs ORDER BY drive_type',
+        'SELECT DISTINCT drive_model FROM test_runs ORDER BY drive_model', 
+        'SELECT DISTINCT read_write_pattern FROM test_runs ORDER BY read_write_pattern',
+        'SELECT DISTINCT block_size FROM test_runs ORDER BY block_size'
+    ];
+
+    Promise.all(queries.map(query => 
+        new Promise((resolve, reject) => {
+            db.all(query, [], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows);
+            });
+        })
+    )).then(([driveTypes, driveModels, patterns, blockSizes]) => {
+        res.json({
+            drive_types: driveTypes.map(row => row.drive_type),
+            drive_models: driveModels.map(row => row.drive_model),
+            patterns: patterns.map(row => row.read_write_pattern),
+            block_sizes: blockSizes.map(row => row.block_size)
+        });
+    }).catch(err => {
+        res.status(500).json({ error: err.message });
+    });
+});
+
+// FIO JSON import endpoint
+app.post('/api/import', upload.single('file'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const fioData = JSON.parse(req.file.buffer.toString());
+        const { drive_model = 'Unknown', drive_type = 'Unknown' } = req.body;
+
+        // Process first job from FIO output
+        const job = fioData.jobs?.[0];
+        if (!job) {
+            return res.status(400).json({ error: 'No job data found in FIO output' });
+        }
+
+        const opts = job['job options'] || {};
+        const globalOpts = fioData['global options'] || {};
+
+        // Extract test parameters
+        const bs = opts.bs || globalOpts.bs || '4k';
+        const block_size = parseInt(bs.toString().replace('k', ''));
+        const rw = opts.rw || globalOpts.rw || 'read';
+        const iodepth = parseInt(opts.iodepth || globalOpts.iodepth || '1');
+        const duration = job.runtime || 0;
+        const test_name = job.jobname || 'fio_test';
+        const rwmixread = parseInt(opts.rwmixread || '100');
+
+        // Insert test run
+        const insertTestRun = `
+            INSERT INTO test_runs 
+            (timestamp, drive_model, drive_type, test_name, block_size, 
+             read_write_pattern, queue_depth, duration, fio_version, 
+             job_runtime, rwmixread, total_ios_read, total_ios_write, 
+             usr_cpu, sys_cpu)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        db.run(insertTestRun, [
+            new Date().toISOString(),
+            drive_model,
+            drive_type,
+            test_name,
+            block_size,
+            rw,
+            iodepth,
+            duration,
+            fioData['fio version'],
+            job.job_runtime,
+            rwmixread,
+            job.read?.total_ios || 0,
+            job.write?.total_ios || 0,
+            job.usr_cpu,
+            job.sys_cpu
+        ], function(err) {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+
+            const testRunId = this.lastID;
+
+            // Insert performance metrics for read operations
+            if (job.read && job.read.iops > 0) {
+                insertMetrics(testRunId, job.read, 'read');
+            }
+
+            // Insert performance metrics for write operations  
+            if (job.write && job.write.iops > 0) {
+                insertMetrics(testRunId, job.write, 'write');
+            }
+
+            // Insert latency percentiles
+            if (job.read?.clat_ns?.percentile) {
+                insertLatencyPercentiles(testRunId, job.read.clat_ns.percentile, 'read');
+            }
+            if (job.write?.clat_ns?.percentile) {
+                insertLatencyPercentiles(testRunId, job.write.clat_ns.percentile, 'write');
+            }
+
+            res.json({ message: 'FIO results imported successfully', test_run_id: testRunId });
+        });
+
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+function insertMetrics(testRunId, data, operationType) {
+    const metrics = [
+        [testRunId, 'iops', data.iops, 'IOPS', operationType],
+        [testRunId, 'bandwidth', data.bw, 'KB/s', operationType],
+        [testRunId, 'avg_latency', data.clat_ns?.mean / 1000000 || 0, 'ms', operationType]
+    ];
+
+    const stmt = db.prepare('INSERT INTO performance_metrics (test_run_id, metric_type, value, unit, operation_type) VALUES (?, ?, ?, ?, ?)');
+    for (const metric of metrics) {
+        stmt.run(metric);
+    }
+    stmt.finalize();
+}
+
+function insertLatencyPercentiles(testRunId, percentiles, operationType) {
+    const stmt = db.prepare('INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)');
+    
+    for (const [percentile, latencyNs] of Object.entries(percentiles)) {
+        stmt.run([testRunId, operationType, parseFloat(percentile), parseInt(latencyNs)]);
+    }
+    stmt.finalize();
+}
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);

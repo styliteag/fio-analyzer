@@ -6,11 +6,13 @@ import { Calendar, HardDrive, Settings } from 'lucide-react';
 interface TestRunSelectorProps {
   selectedRuns: TestRun[];
   onSelectionChange: (runs: TestRun[]) => void;
+  refreshTrigger?: number;
 }
 
 const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   selectedRuns,
   onSelectionChange,
+  refreshTrigger = 0,
 }) => {
   const [testRuns, setTestRuns] = useState<TestRun[]>([]);
   const [filteredRuns, setFilteredRuns] = useState<TestRun[]>([]);
@@ -30,7 +32,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   useEffect(() => {
     fetchTestRuns();
     fetchFilters();
-  }, []);
+  }, [refreshTrigger]);
 
   useEffect(() => {
     applyFilters();

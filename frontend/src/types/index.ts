@@ -8,11 +8,19 @@ export interface TestRun {
   read_write_pattern: string;
   queue_depth: number;
   duration: number;
+  fio_version?: string;
+  job_runtime?: number;
+  rwmixread?: number;
+  total_ios_read?: number;
+  total_ios_write?: number;
+  usr_cpu?: number;
+  sys_cpu?: number;
 }
 
 export interface PerformanceMetric {
   value: number;
   unit: string;
+  operation_type?: string;
 }
 
 export interface PerformanceData {
@@ -43,4 +51,12 @@ export interface ChartTemplate {
   yAxis: string;
   groupBy?: string;
   metrics: string[];
+}
+
+export interface LatencyPercentile {
+  id: number;
+  test_run_id: number;
+  operation_type: string;
+  percentile: number;
+  latency_ns: number;
 }

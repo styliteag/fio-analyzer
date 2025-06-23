@@ -29,3 +29,6 @@ storage_performance.db
 
 # Backend database
 db/
+
+# Example Data
+example-data/
