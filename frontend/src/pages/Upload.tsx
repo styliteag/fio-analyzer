@@ -84,14 +84,14 @@ export default function Upload() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen theme-bg-secondary transition-colors">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <header className="theme-header shadow-sm">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <button
               onClick={() => navigate('/')}
-              className="flex items-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="flex items-center theme-nav-link transition-colors"
             >
               <ArrowLeft className="h-5 w-5 mr-2" />
               Back to Dashboard
@@ -99,8 +99,8 @@ export default function Upload() {
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <div className="flex items-center">
-                <UploadIcon className="h-8 w-8 text-blue-600 dark:text-blue-400 mr-3" />
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Upload FIO Results</h1>
+                <UploadIcon className="h-8 w-8 theme-text-accent mr-3" />
+                <h1 className="text-2xl font-bold theme-text-primary">Upload FIO Results</h1>
               </div>
             </div>
           </div>
@@ -109,28 +109,28 @@ export default function Upload() {
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+        <div className="theme-card rounded-lg shadow-lg p-8 border">
           {/* Instructions */}
           <div className="mb-8">
             <div className="flex items-center mb-4">
-              <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Import Benchmark Data</h2>
+              <FileText className="h-6 w-6 theme-text-accent mr-3" />
+              <h2 className="text-xl font-semibold theme-text-primary">Import Benchmark Data</h2>
             </div>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
+            <p className="theme-text-secondary mb-4">
               Upload FIO JSON output files to analyze storage performance metrics. The system will automatically 
               extract IOPS, latency, throughput, and detailed percentile data from your benchmark results.
             </p>
             
             {/* FIO Command Examples */}
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
-              <h3 className="font-medium text-gray-900 dark:text-white mb-2">Generate FIO JSON files with these commands:</h3>
-              <div className="space-y-2 text-sm font-mono text-gray-700 dark:text-gray-300">
-                <div className="bg-white dark:bg-gray-800 p-2 rounded border dark:border-gray-600">
-                  <div className="text-gray-500 dark:text-gray-400 text-xs mb-1"># Sequential read test</div>
+            <div className="theme-bg-secondary rounded-lg p-4 mb-6 border theme-border-secondary">
+              <h3 className="font-medium theme-text-primary mb-2">Generate FIO JSON files with these commands:</h3>
+              <div className="space-y-2 text-sm font-mono theme-text-secondary">
+                <div className="theme-bg-card p-2 rounded border theme-border-primary">
+                  <div className="theme-text-tertiary text-xs mb-1"># Sequential read test</div>
                   <div>fio --name=seqread --rw=read --bs=64k --iodepth=16 --runtime=60 --time_based --output-format=json --output=results.json</div>
                 </div>
-                <div className="bg-white dark:bg-gray-800 p-2 rounded border dark:border-gray-600">
-                  <div className="text-gray-500 dark:text-gray-400 text-xs mb-1"># Random mixed workload</div>
+                <div className="theme-bg-card p-2 rounded border theme-border-primary">
+                  <div className="theme-text-tertiary text-xs mb-1"># Random mixed workload</div>
                   <div>fio --name=randtest --rw=randrw --rwmixread=70 --bs=4k --iodepth=32 --runtime=120 --time_based --output-format=json --output=results.json</div>
                 </div>
               </div>
@@ -146,11 +146,11 @@ export default function Upload() {
               </label>
               <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-lg hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
                 <div className="space-y-1 text-center">
-                  <UploadIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-                  <div className="flex text-sm text-gray-600 dark:text-gray-300">
+                  <UploadIcon className="mx-auto h-12 w-12 theme-text-quaternary" />
+                  <div className="flex text-sm theme-text-secondary">
                     <label
                       htmlFor="file-input"
-                      className="relative cursor-pointer bg-white dark:bg-gray-800 rounded-md font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+                      className="relative cursor-pointer theme-bg-card rounded-md font-medium theme-text-accent hover:theme-text-accent focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 theme-focus"
                     >
                       <span>Upload a file</span>
                       <input
@@ -164,11 +164,11 @@ export default function Upload() {
                     </label>
                     <p className="pl-1">or drag and drop</p>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">JSON files only</p>
+                  <p className="text-xs theme-text-tertiary">JSON files only</p>
                 </div>
               </div>
               {file && (
-                <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                <div className="mt-2 text-sm theme-text-secondary">
                   Selected: <span className="font-medium">{file.name}</span>
                 </div>
               )}
@@ -176,8 +176,8 @@ export default function Upload() {
 
             {/* Drive Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="drive-model" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <div className="theme-form-group">
+                <label htmlFor="drive-model" className="theme-form-label">
                   Drive Model
                 </label>
                 <input
@@ -186,13 +186,13 @@ export default function Upload() {
                   value={driveModel}
                   onChange={(e) => setDriveModel(e.target.value)}
                   placeholder="e.g., Samsung 980 PRO"
-                  className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  className="theme-form-input"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Optional: Specify the storage device model</p>
+                <p className="theme-form-help">Optional: Specify the storage device model</p>
               </div>
 
-              <div>
-                <label htmlFor="drive-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <div className="theme-form-group">
+                <label htmlFor="drive-type" className="theme-form-label">
                   Drive Type
                 </label>
                 {!showCustomType ? (
@@ -200,7 +200,7 @@ export default function Upload() {
                     id="drive-type"
                     value={driveType}
                     onChange={(e) => handleDriveTypeChange(e.target.value)}
-                    className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    className="theme-form-select"
                   >
                     <option value="">Select type</option>
                     <option value="NVMe SSD">NVMe SSD</option>
@@ -219,7 +219,7 @@ export default function Upload() {
                       value={customDriveType}
                       onChange={(e) => setCustomDriveType(e.target.value)}
                       placeholder="Enter custom drive type"
-                      className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      className="theme-form-input"
                     />
                     <button
                       type="button"
@@ -228,13 +228,13 @@ export default function Upload() {
                         setCustomDriveType('');
                         setDriveType('');
                       }}
-                      className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-500"
+                      className="px-3 py-2 text-sm theme-btn-secondary rounded-md transition-colors"
                     >
                       Cancel
                     </button>
                   </div>
                 )}
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Optional: Categorize the storage device</p>
+                <p className="theme-form-help">Optional: Categorize the storage device</p>
               </div>
             </div>
 
@@ -243,7 +243,7 @@ export default function Upload() {
               <button
                 type="submit"
                 disabled={!file || uploading}
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm theme-btn-primary disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
                 {uploading ? (
                   <>
@@ -259,7 +259,7 @@ export default function Upload() {
               </button>
 
               {message && (
-                <div className={`flex items-center ${message.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                <div className={`flex items-center ${message.type === 'success' ? 'theme-text-success' : 'theme-text-error'}`}>
                   {message.type === 'success' ? (
                     <Check className="h-5 w-5 mr-2" />
                   ) : (
@@ -273,12 +273,12 @@ export default function Upload() {
 
           {/* Success Message */}
           {message?.type === 'success' && (
-            <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="mt-6 theme-success rounded-lg p-4 border">
               <div className="flex">
-                <Check className="h-5 w-5 text-green-400 mr-3 mt-0.5" />
+                <Check className="h-5 w-5 theme-text-success mr-3 mt-0.5" />
                 <div>
-                  <h3 className="text-sm font-medium text-green-800">Import Successful!</h3>
-                  <p className="text-sm text-green-700 mt-1">
+                  <h3 className="text-sm font-medium theme-text-success">Import Successful!</h3>
+                  <p className="text-sm theme-text-success mt-1">
                     Your FIO results have been processed and stored. Redirecting to dashboard...
                   </p>
                 </div>

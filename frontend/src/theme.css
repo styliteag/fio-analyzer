@@ -128,16 +128,25 @@
 .theme-bg-accent { background-color: var(--bg-accent); }
 .theme-bg-card { background-color: var(--card-bg); }
 .theme-bg-panel { background-color: var(--panel-bg); }
+.theme-bg-error { background-color: var(--bg-error); }
+.theme-bg-success { background-color: var(--bg-success); }
 
 .theme-text-primary { color: var(--text-primary); }
 .theme-text-secondary { color: var(--text-secondary); }
 .theme-text-tertiary { color: var(--text-tertiary); }
+.theme-text-quaternary { color: var(--text-quaternary); }
 .theme-text-accent { color: var(--text-accent); }
+.theme-text-error { color: var(--text-error); }
+.theme-text-success { color: var(--text-success); }
+.theme-text-on-accent { color: var(--text-on-accent); }
 
 .theme-border-primary { border-color: var(--border-primary); }
 .theme-border-secondary { border-color: var(--border-secondary); }
 .theme-border-accent { border-color: var(--border-accent); }
+.theme-border-error { border-color: var(--border-error); }
+.theme-border-success { border-color: var(--border-success); }
 
+/* Input components */
 .theme-input {
   background-color: var(--input-bg);
   border-color: var(--input-border);
@@ -153,6 +162,18 @@
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
+.theme-select {
+  background-color: var(--select-bg);
+  border-color: var(--select-border);
+  color: var(--text-primary);
+}
+
+.theme-select:focus {
+  border-color: var(--btn-primary-bg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* Button components */
 .theme-btn-primary {
   background-color: var(--btn-primary-bg);
   color: var(--text-on-accent);
@@ -172,11 +193,147 @@
   background-color: var(--btn-secondary-hover);
 }
 
+.theme-btn-success {
+  background-color: #10b981;
+  color: var(--text-on-accent);
+}
+
+.theme-btn-success:hover {
+  background-color: #059669;
+}
+
+/* Layout components */
 .theme-card {
   background-color: var(--card-bg);
   border-color: var(--card-border);
 }
 
+.theme-panel {
+  background-color: var(--panel-bg);
+  border-color: var(--border-secondary);
+}
+
+.theme-modal {
+  background-color: var(--card-bg);
+  border-color: var(--card-border);
+}
+
+.theme-overlay {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Interactive states */
 .theme-hover:hover {
   background-color: var(--hover-bg);
+}
+
+.theme-focus:focus {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* Message components */
+.theme-error {
+  background-color: var(--bg-error);
+  color: var(--text-error);
+  border-color: var(--border-error);
+}
+
+.theme-success {
+  background-color: var(--bg-success);
+  color: var(--text-success);
+  border-color: var(--border-success);
+}
+
+/* Form groups - complete form styling */
+.theme-form-group {
+  margin-bottom: 1rem;
+}
+
+.theme-form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.theme-form-input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid;
+  background-color: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--text-primary);
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.theme-form-input::placeholder {
+  color: var(--input-placeholder);
+}
+
+.theme-form-input:focus {
+  outline: none;
+  border-color: var(--btn-primary-bg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.theme-form-select {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid;
+  background-color: var(--select-bg);
+  border-color: var(--select-border);
+  color: var(--text-primary);
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.theme-form-select:focus {
+  outline: none;
+  border-color: var(--btn-primary-bg);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.theme-form-help {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 0.25rem;
+}
+
+/* Stats/metric cards */
+.theme-stat-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.theme-stat-label {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.theme-stat-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Navigation/header */
+.theme-header {
+  background-color: var(--card-bg);
+  border-bottom: 1px solid var(--card-border);
+}
+
+.theme-nav-link {
+  color: var(--text-secondary);
+  transition: color 0.15s ease-in-out;
+}
+
+.theme-nav-link:hover {
+  color: var(--text-primary);
 }

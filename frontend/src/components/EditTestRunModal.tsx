@@ -83,15 +83,15 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
   if (!isOpen || !testRun) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-gray-700">
+    <div className="fixed inset-0 theme-overlay flex items-center justify-center p-4 z-50">
+      <div className="theme-modal rounded-lg shadow-xl max-w-md w-full border">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Edit Test Run</h3>
+        <div className="flex items-center justify-between p-6 border-b theme-border-primary">
+          <h3 className="text-lg font-medium theme-text-primary">Edit Test Run</h3>
           <button
             onClick={handleClose}
             disabled={saving}
-            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-50"
+            className="theme-text-tertiary hover:theme-text-secondary disabled:opacity-50 transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
@@ -100,8 +100,8 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
         {/* Content */}
         <div className="p-6 space-y-4">
           {/* Test Run Info */}
-          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-sm">
-            <div className="grid grid-cols-2 gap-2 text-gray-900 dark:text-white">
+          <div className="theme-bg-secondary rounded-lg p-4 text-sm border theme-border-secondary">
+            <div className="grid grid-cols-2 gap-2 theme-text-primary">
               <div><span className="font-medium">Test:</span> {testRun.test_name}</div>
               <div><span className="font-medium">Block Size:</span> {testRun.block_size}k</div>
               <div><span className="font-medium">Pattern:</span> {testRun.read_write_pattern}</div>
@@ -110,8 +110,8 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
           </div>
 
           {/* Drive Model */}
-          <div>
-            <label htmlFor="drive-model" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <div className="theme-form-group">
+            <label htmlFor="drive-model" className="theme-form-label">
               Drive Model
             </label>
             <input
@@ -120,14 +120,14 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
               value={driveModel}
               onChange={(e) => setDriveModel(e.target.value)}
               placeholder="e.g., Samsung 980 PRO"
-              className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              className="theme-form-input"
               disabled={saving}
             />
           </div>
 
           {/* Drive Type */}
-          <div>
-            <label htmlFor="drive-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <div className="theme-form-group">
+            <label htmlFor="drive-type" className="theme-form-label">
               Drive Type
             </label>
             {!showCustomType ? (
@@ -135,7 +135,7 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
                 id="drive-type"
                 value={driveType}
                 onChange={(e) => handleDriveTypeChange(e.target.value)}
-                className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                className="theme-form-select"
                 disabled={saving}
               >
                 <option value="">Select type</option>
@@ -155,7 +155,7 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
                   value={customDriveType}
                   onChange={(e) => setCustomDriveType(e.target.value)}
                   placeholder="Enter custom drive type"
-                  className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  className="theme-form-input"
                   disabled={saving}
                 />
                 <button
@@ -165,7 +165,7 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
                     setCustomDriveType('');
                     setDriveType('');
                   }}
-                  className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-500"
+                  className="px-3 py-2 text-sm theme-btn-secondary rounded-md transition-colors"
                   disabled={saving}
                 >
                   Cancel
@@ -176,7 +176,7 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
 
           {/* Error Message */}
           {error && (
-            <div className="flex items-center p-3 text-sm text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+            <div className="flex items-center p-3 text-sm theme-error rounded-md border">
               <AlertCircle className="h-4 w-4 mr-2" />
               {error}
             </div>
@@ -184,18 +184,18 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <div className="flex items-center justify-end gap-3 p-6 border-t theme-border-primary theme-bg-secondary">
           <button
             onClick={handleClose}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium theme-btn-secondary border rounded-md transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving || (!driveModel && !driveType && !customDriveType)}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium theme-btn-primary border border-transparent rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? (
               <>
