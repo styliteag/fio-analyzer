@@ -128,17 +128,17 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   }));
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4 flex items-center">
-        <Settings className="mr-2" size={20} />
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6 border border-gray-200 dark:border-gray-700">
+      <h2 className="text-xl font-semibold mb-4 flex items-center text-gray-900 dark:text-white">
+        <Settings className="mr-2 text-gray-600 dark:text-gray-300" size={20} />
         Test Run Selection
       </h2>
 
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            <HardDrive size={16} className="inline mr-1" />
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <HardDrive size={16} className="inline mr-1 text-gray-600 dark:text-gray-400" />
             Drive Types
           </label>
           <Select
@@ -152,11 +152,53 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
             }
             placeholder="All drive types"
             className="text-sm"
+            styles={{
+              control: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)',
+                color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)',
+                '&:hover': {
+                  borderColor: document.documentElement.classList.contains('dark') ? 'rgb(107 114 128)' : 'rgb(156 163 175)'
+                }
+              }),
+              menu: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)'
+              }),
+              option: (base, state) => ({
+                ...base,
+                backgroundColor: state.isSelected
+                  ? 'rgb(59 130 246)'
+                  : state.isFocused
+                  ? (document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)')
+                  : (document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)'),
+                color: state.isSelected
+                  ? 'rgb(255 255 255)'
+                  : (document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)')
+              }),
+              multiValue: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)'
+              }),
+              multiValueLabel: (base) => ({
+                ...base,
+                color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)'
+              }),
+              multiValueRemove: (base) => ({
+                ...base,
+                ':hover': {
+                  backgroundColor: 'rgb(239 68 68)',
+                  color: 'rgb(255 255 255)'
+                }
+              })
+            }}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Drive Models
           </label>
           <Select
@@ -170,11 +212,53 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
             }
             placeholder="All models"
             className="text-sm"
+            styles={{
+              control: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)',
+                color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)',
+                '&:hover': {
+                  borderColor: document.documentElement.classList.contains('dark') ? 'rgb(107 114 128)' : 'rgb(156 163 175)'
+                }
+              }),
+              menu: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)'
+              }),
+              option: (base, state) => ({
+                ...base,
+                backgroundColor: state.isSelected
+                  ? 'rgb(59 130 246)'
+                  : state.isFocused
+                  ? (document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)')
+                  : (document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)'),
+                color: state.isSelected
+                  ? 'rgb(255 255 255)'
+                  : (document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)')
+              }),
+              multiValue: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)'
+              }),
+              multiValueLabel: (base) => ({
+                ...base,
+                color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)'
+              }),
+              multiValueRemove: (base) => ({
+                ...base,
+                ':hover': {
+                  backgroundColor: 'rgb(239 68 68)',
+                  color: 'rgb(255 255 255)'
+                }
+              })
+            }}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Test Patterns
           </label>
           <Select
@@ -191,11 +275,53 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
             }
             placeholder="All patterns"
             className="text-sm"
+            styles={{
+              control: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)',
+                color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)',
+                '&:hover': {
+                  borderColor: document.documentElement.classList.contains('dark') ? 'rgb(107 114 128)' : 'rgb(156 163 175)'
+                }
+              }),
+              menu: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)'
+              }),
+              option: (base, state) => ({
+                ...base,
+                backgroundColor: state.isSelected
+                  ? 'rgb(59 130 246)'
+                  : state.isFocused
+                  ? (document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)')
+                  : (document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)'),
+                color: state.isSelected
+                  ? 'rgb(255 255 255)'
+                  : (document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)')
+              }),
+              multiValue: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)'
+              }),
+              multiValueLabel: (base) => ({
+                ...base,
+                color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)'
+              }),
+              multiValueRemove: (base) => ({
+                ...base,
+                ':hover': {
+                  backgroundColor: 'rgb(239 68 68)',
+                  color: 'rgb(255 255 255)'
+                }
+              })
+            }}
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Block Sizes (KB)
           </label>
           <Select
@@ -209,14 +335,56 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
             }
             placeholder="All sizes"
             className="text-sm"
+            styles={{
+              control: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)',
+                color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)',
+                '&:hover': {
+                  borderColor: document.documentElement.classList.contains('dark') ? 'rgb(107 114 128)' : 'rgb(156 163 175)'
+                }
+              }),
+              menu: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)'
+              }),
+              option: (base, state) => ({
+                ...base,
+                backgroundColor: state.isSelected
+                  ? 'rgb(59 130 246)'
+                  : state.isFocused
+                  ? (document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)')
+                  : (document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)'),
+                color: state.isSelected
+                  ? 'rgb(255 255 255)'
+                  : (document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)')
+              }),
+              multiValue: (base) => ({
+                ...base,
+                backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)'
+              }),
+              multiValueLabel: (base) => ({
+                ...base,
+                color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)'
+              }),
+              multiValueRemove: (base) => ({
+                ...base,
+                ':hover': {
+                  backgroundColor: 'rgb(239 68 68)',
+                  color: 'rgb(255 255 255)'
+                }
+              })
+            }}
           />
         </div>
       </div>
 
       {/* Test Run Selection */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          <Calendar size={16} className="inline mr-1" />
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <Calendar size={16} className="inline mr-1 text-gray-600 dark:text-gray-400" />
           Select Test Runs ({filteredRuns.length} available)
         </label>
         <Select
@@ -227,32 +395,74 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           placeholder="Select test runs to compare..."
           className="text-sm"
           maxMenuHeight={200}
+          styles={{
+            control: (base) => ({
+              ...base,
+              backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+              borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)',
+              color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)',
+              '&:hover': {
+                borderColor: document.documentElement.classList.contains('dark') ? 'rgb(107 114 128)' : 'rgb(156 163 175)'
+              }
+            }),
+            menu: (base) => ({
+              ...base,
+              backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)',
+              borderColor: document.documentElement.classList.contains('dark') ? 'rgb(75 85 99)' : 'rgb(209 213 219)'
+            }),
+            option: (base, state) => ({
+              ...base,
+              backgroundColor: state.isSelected
+                ? 'rgb(59 130 246)'
+                : state.isFocused
+                ? (document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)')
+                : (document.documentElement.classList.contains('dark') ? 'rgb(31 41 55)' : 'rgb(255 255 255)'),
+              color: state.isSelected
+                ? 'rgb(255 255 255)'
+                : (document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)')
+            }),
+            multiValue: (base) => ({
+              ...base,
+              backgroundColor: document.documentElement.classList.contains('dark') ? 'rgb(55 65 81)' : 'rgb(243 244 246)'
+            }),
+            multiValueLabel: (base) => ({
+              ...base,
+              color: document.documentElement.classList.contains('dark') ? 'rgb(255 255 255)' : 'rgb(17 24 39)'
+            }),
+            multiValueRemove: (base) => ({
+              ...base,
+              ':hover': {
+                backgroundColor: 'rgb(239 68 68)',
+                color: 'rgb(255 255 255)'
+              }
+            })
+          }}
         />
       </div>
 
       {/* Selected Runs Preview */}
       {selectedRuns.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Selected Runs ({selectedRuns.length}):
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {selectedRuns.map(run => (
-              <div key={run.id} className="bg-gray-50 p-3 rounded text-xs relative group">
+              <div key={run.id} className="bg-gray-50 dark:bg-gray-700 p-3 rounded text-xs relative group border border-gray-200 dark:border-gray-600">
                 <button
                   onClick={() => handleEditTestRun(run)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200"
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
                   title="Edit drive info"
                 >
-                  <Edit2 className="h-3 w-3 text-gray-600" />
+                  <Edit2 className="h-3 w-3 text-gray-600 dark:text-gray-300" />
                 </button>
-                <div className="font-medium">{run.drive_model}</div>
-                <div className="text-gray-600">{run.test_name}</div>
-                <div className="text-gray-500">
+                <div className="font-medium text-gray-900 dark:text-white">{run.drive_model}</div>
+                <div className="text-gray-600 dark:text-gray-300">{run.test_name}</div>
+                <div className="text-gray-500 dark:text-gray-400">
                   {run.block_size}KB, QD{run.queue_depth}
                 </div>
-                <div className="text-gray-500 mt-1">
-                  <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">
+                <div className="text-gray-500 dark:text-gray-400 mt-1">
+                  <span className="inline-block px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs">
                     {run.drive_type}
                   </span>
                 </div>

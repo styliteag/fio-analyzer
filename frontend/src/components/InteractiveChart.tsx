@@ -295,6 +295,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
     return csvRows.join('\n');
   };
 
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -304,6 +306,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         onClick: (_e: any, legendItem: any) => {
           toggleSeriesVisibility(legendItem.text);
         },
+        labels: {
+          color: isDarkMode ? 'rgb(255 255 255)' : 'rgb(55 65 81)',
+        },
       },
       title: {
         display: true,
@@ -312,10 +317,16 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
           size: 16,
           weight: 'bold' as 'bold',
         },
+        color: isDarkMode ? 'rgb(255 255 255)' : 'rgb(55 65 81)',
       },
       tooltip: {
         mode: 'index' as const,
         intersect: false,
+        backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+        titleColor: isDarkMode ? 'rgb(255 255 255)' : 'rgb(17 24 39)',
+        bodyColor: isDarkMode ? 'rgb(209 213 219)' : 'rgb(55 65 81)',
+        borderColor: isDarkMode ? 'rgb(75 85 99)' : 'rgb(209 213 219)',
+        borderWidth: 1,
         callbacks: {
           afterLabel: (context: any) => {
             const dataIndex = context.dataIndex;
@@ -339,6 +350,13 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         title: {
           display: true,
           text: 'Queue Depth',
+          color: isDarkMode ? 'rgb(255 255 255)' : 'rgb(55 65 81)',
+        },
+        ticks: {
+          color: isDarkMode ? 'rgb(209 213 219)' : 'rgb(107 114 128)',
+        },
+        grid: {
+          color: isDarkMode ? 'rgb(75 85 99)' : 'rgb(229 231 235)',
         },
       },
       y: {
@@ -348,6 +366,13 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         title: {
           display: true,
           text: 'IOPS',
+          color: isDarkMode ? 'rgb(255 255 255)' : 'rgb(55 65 81)',
+        },
+        ticks: {
+          color: isDarkMode ? 'rgb(209 213 219)' : 'rgb(107 114 128)',
+        },
+        grid: {
+          color: isDarkMode ? 'rgb(75 85 99)' : 'rgb(229 231 235)',
         },
       },
       y1: {
@@ -357,6 +382,10 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         title: {
           display: true,
           text: 'Latency (ms)',
+          color: isDarkMode ? 'rgb(255 255 255)' : 'rgb(55 65 81)',
+        },
+        ticks: {
+          color: isDarkMode ? 'rgb(209 213 219)' : 'rgb(107 114 128)',
         },
         grid: {
           drawOnChartArea: false,
@@ -369,6 +398,13 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         title: {
           display: true,
           text: 'Date',
+          color: isDarkMode ? 'rgb(255 255 255)' : 'rgb(55 65 81)',
+        },
+        ticks: {
+          color: isDarkMode ? 'rgb(209 213 219)' : 'rgb(107 114 128)',
+        },
+        grid: {
+          color: isDarkMode ? 'rgb(75 85 99)' : 'rgb(229 231 235)',
         },
       },
       y: {
@@ -376,6 +412,13 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         title: {
           display: true,
           text: 'IOPS',
+          color: isDarkMode ? 'rgb(255 255 255)' : 'rgb(55 65 81)',
+        },
+        ticks: {
+          color: isDarkMode ? 'rgb(209 213 219)' : 'rgb(107 114 128)',
+        },
+        grid: {
+          color: isDarkMode ? 'rgb(75 85 99)' : 'rgb(229 231 235)',
         },
       },
     } : {
@@ -384,6 +427,13 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         title: {
           display: true,
           text: template.xAxis.replace(/_/g, ' ').toUpperCase(),
+          color: isDarkMode ? 'rgb(255 255 255)' : 'rgb(55 65 81)',
+        },
+        ticks: {
+          color: isDarkMode ? 'rgb(209 213 219)' : 'rgb(107 114 128)',
+        },
+        grid: {
+          color: isDarkMode ? 'rgb(75 85 99)' : 'rgb(229 231 235)',
         },
       },
       y: {
@@ -391,6 +441,13 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         title: {
           display: true,
           text: template.yAxis.replace(/_/g, ' ').toUpperCase(),
+          color: isDarkMode ? 'rgb(255 255 255)' : 'rgb(55 65 81)',
+        },
+        ticks: {
+          color: isDarkMode ? 'rgb(209 213 219)' : 'rgb(107 114 128)',
+        },
+        grid: {
+          color: isDarkMode ? 'rgb(75 85 99)' : 'rgb(229 231 235)',
         },
       },
     },
@@ -403,12 +460,12 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
 
   if (!chartData || data.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
         <div className="text-center py-12">
-          <div className="text-gray-400 mb-4">
+          <div className="text-gray-400 dark:text-gray-500 mb-4">
             <BarChart3 size={48} className="mx-auto" />
           </div>
-          <p className="text-gray-600">Select test runs to view performance data</p>
+          <p className="text-gray-600 dark:text-gray-300">Select test runs to view performance data</p>
         </div>
       </div>
     );
@@ -419,21 +476,21 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
                          ? Line : Bar;
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">{template.name}</h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{template.name}</h2>
         
         <div className="flex space-x-2">
           <button
             onClick={() => exportChart('png')}
-            className="flex items-center px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            className="flex items-center px-3 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
           >
             <Download size={16} className="mr-1" />
             PNG
           </button>
           <button
             onClick={() => exportChart('csv')}
-            className="flex items-center px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+            className="flex items-center px-3 py-2 bg-green-600 dark:bg-green-500 text-white rounded hover:bg-green-700 dark:hover:bg-green-600 transition-colors"
           >
             <Download size={16} className="mr-1" />
             CSV
@@ -451,8 +508,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
                 onClick={() => toggleSeriesVisibility(dataset.label)}
                 className={`flex items-center px-3 py-1 rounded text-sm transition-colors ${
                   visibleSeries.has(dataset.label)
-                    ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                    : 'bg-gray-100 text-gray-600 border border-gray-300'
+                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-600'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
                 }`}
               >
                 {visibleSeries.has(dataset.label) ? (
@@ -477,21 +534,21 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
 
       {/* Chart Statistics */}
       <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-        <div className="bg-gray-50 p-3 rounded">
-          <div className="font-medium text-gray-700">Data Points</div>
-          <div className="text-lg font-semibold">{data.length}</div>
+        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded border border-gray-200 dark:border-gray-600">
+          <div className="font-medium text-gray-700 dark:text-gray-300">Data Points</div>
+          <div className="text-lg font-semibold text-gray-900 dark:text-white">{data.length}</div>
         </div>
-        <div className="bg-gray-50 p-3 rounded">
-          <div className="font-medium text-gray-700">Series</div>
-          <div className="text-lg font-semibold">{chartData.datasets.length}</div>
+        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded border border-gray-200 dark:border-gray-600">
+          <div className="font-medium text-gray-700 dark:text-gray-300">Series</div>
+          <div className="text-lg font-semibold text-gray-900 dark:text-white">{chartData.datasets.length}</div>
         </div>
-        <div className="bg-gray-50 p-3 rounded">
-          <div className="font-medium text-gray-700">Visible</div>
-          <div className="text-lg font-semibold">{visibleSeries.size}</div>
+        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded border border-gray-200 dark:border-gray-600">
+          <div className="font-medium text-gray-700 dark:text-gray-300">Visible</div>
+          <div className="text-lg font-semibold text-gray-900 dark:text-white">{visibleSeries.size}</div>
         </div>
-        <div className="bg-gray-50 p-3 rounded">
-          <div className="font-medium text-gray-700">Chart Type</div>
-          <div className="text-lg font-semibold capitalize">{template.chartType}</div>
+        <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded border border-gray-200 dark:border-gray-600">
+          <div className="font-medium text-gray-700 dark:text-gray-300">Chart Type</div>
+          <div className="text-lg font-semibold capitalize text-gray-900 dark:text-white">{template.chartType}</div>
         </div>
       </div>
     </div>
