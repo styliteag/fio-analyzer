@@ -247,20 +247,22 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
               <div key={run.id} className="theme-bg-secondary p-3 rounded text-xs relative group border theme-border-primary">
                 <button
                   onClick={() => handleEditTestRun(run)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded theme-hover"
+                  className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded theme-hover"
                   title="Edit drive info"
                 >
                   <Edit2 className="h-3 w-3 theme-text-secondary" />
                 </button>
-                <div className="font-medium theme-text-primary">{run.drive_model}</div>
-                <div className="theme-text-secondary">{run.test_name}</div>
-                <div className="theme-text-tertiary">
-                  {run.block_size}KB, QD{run.queue_depth}
-                </div>
-                <div className="theme-text-tertiary mt-1">
-                  <span className="inline-block px-1.5 py-0.5 theme-bg-accent theme-text-accent rounded text-xs">
-                    {run.drive_type}
-                  </span>
+                <div className="pl-6">
+                  <div className="font-medium theme-text-primary">{run.drive_model}</div>
+                  <div className="theme-text-secondary">{run.test_name}</div>
+                  <div className="theme-text-tertiary">
+                    {run.block_size}KB, QD{run.queue_depth}
+                  </div>
+                  <div className="theme-text-tertiary mt-1">
+                    <span className="inline-block px-1.5 py-0.5 theme-bg-accent theme-text-accent rounded text-xs">
+                      {run.drive_type}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
