@@ -60,7 +60,7 @@ function App() {
       {/* Main Content - Full Width */}
       <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
         {/* Test Run Selection - Full Width */}
-        <div className="max-w-7xl mx-auto mb-8">
+        <div className="w-full mb-8">
           <TestRunSelector
             selectedRuns={selectedRuns}
             onSelectionChange={setSelectedRuns}
