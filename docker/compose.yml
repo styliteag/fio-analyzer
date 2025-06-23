@@ -8,9 +8,8 @@ services:
       dockerfile: docker/backend/Dockerfile
     ports:
       - "8000:8000"
-    volumes:
-      - ../backend:/usr/src/app
-      - sqlite_data:/usr/src/app/db
+    volumes:      
+      - ./data/backend/db:/app/db
     networks:
       - fio-network
 
@@ -27,9 +26,6 @@ services:
       - VITE_API_URL=http://backend:8000
     networks:
       - fio-network
-
-volumes:
-  sqlite_data:
 
 networks:
   fio-network:

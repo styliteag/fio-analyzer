@@ -3,7 +3,7 @@ const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const DB_PATH = path.resolve(__dirname, '../db/storage_performance.db');
+const DB_PATH = path.resolve(__dirname, './db/storage_performance.db');
 const app = express();
 const port = 8000;
 

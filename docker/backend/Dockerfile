@@ -8,10 +8,10 @@ COPY backend/package*.json ./
 RUN npm ci
 
 # Copy source code but not the node_modules
-COPY backend/index.js ./
+COPY backend/ ./
 
 # Build the application
-RUN npm run build
+RUN npm install
 
 EXPOSE 8000
 
