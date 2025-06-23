@@ -40,11 +40,12 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 
   const fetchTestRuns = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/test-runs");
-      const data = await response.json();
-      setTestRuns(data);
+      const result = await apiService.getTestRuns();
+      setTestRuns(result.data);
+      setIsUsingMockData(result.isUsingMockData);
     } catch (error) {
       console.error("Error fetching test runs:", error);
+      setTestRuns([]);
     }
   };
 
