@@ -31,12 +31,42 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   selectedTemplate,
   onTemplateSelect,
 }) => {
+  const [templates, setTemplates] = useState<ChartTemplate[]>([]);
+  const [isUsingMockData, setIsUsingMockData] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
+
+  const fetchTemplates = async () => {
+    try {
+      setLoading(true);
+      const result = await apiService.getChartTemplates();
+      setTemplates(result.data);
+      setIsUsingMockData(result.isUsingMockData);
+    } catch (error) {
+      console.error("Error fetching chart templates:", error);
+      setTemplates([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4 flex items-center">
-        <BarChart3 className="mr-2" size={20} />
-        Visualization Templates
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold flex items-center">
+          <BarChart3 className="mr-2" size={20} />
+          Visualization Templates
+        </h2>
+        {isUsingMockData && (
+          <div className="flex items-center text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-md border border-amber-200">
+            <WifiOff className="h-4 w-4 mr-1" />
+            Demo Templates
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {chartTemplates.map((template) => (
