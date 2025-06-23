@@ -51,11 +51,16 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 
   const fetchFilters = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/filters");
-      const data = await response.json();
-      setFilters(data);
+      const result = await apiService.getFilters();
+      setFilters(result.data);
     } catch (error) {
       console.error("Error fetching filters:", error);
+      setFilters({
+        drive_types: [],
+        drive_models: [],
+        patterns: [],
+        block_sizes: [],
+      });
     }
   };
 
