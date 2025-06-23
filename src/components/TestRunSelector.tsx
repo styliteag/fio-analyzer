@@ -27,6 +27,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     patterns: [] as string[],
     block_sizes: [] as number[],
   });
+  const [isUsingMockData, setIsUsingMockData] = useState(false);
 
   useEffect(() => {
     fetchTestRuns();
