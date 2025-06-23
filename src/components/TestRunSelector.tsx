@@ -113,10 +113,18 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-xl font-semibold mb-4 flex items-center">
-        <Settings className="mr-2" size={20} />
-        Test Run Selection
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold flex items-center">
+          <Settings className="mr-2" size={20} />
+          Test Run Selection
+        </h2>
+        {isUsingMockData && (
+          <div className="flex items-center text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-md border border-amber-200">
+            <WifiOff className="h-4 w-4 mr-1" />
+            Using Demo Data
+          </div>
+        )}
+      </div>
 
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
