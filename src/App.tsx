@@ -25,17 +25,19 @@ function App() {
 
     setLoading(true);
     try {
-      const runIds = selectedRuns.map((run) => run.id).join(",");
-      const metrics =
-        selectedTemplate?.metrics.join(",") || "iops,avg_latency,throughput";
+      const runIds = selectedRuns.map((run) => run.id);
+      const metrics = selectedTemplate?.metrics || [
+        "iops",
+        "avg_latency",
+        "throughput",
+      ];
 
-      const response = await fetch(
-        `http://localhost:8000/api/performance-data?test_run_ids=${runIds}&metric_types=${metrics}`,
-      );
-      const data = await response.json();
-      setPerformanceData(data);
+      const result = await apiService.getPerformanceData(runIds, metrics);
+      setPerformanceData(result.data);
+      setIsUsingMockData(result.isUsingMockData);
     } catch (error) {
       console.error("Error fetching performance data:", error);
+      setPerformanceData([]);
     } finally {
       setLoading(false);
     }
