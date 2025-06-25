@@ -623,6 +623,48 @@ function insertLatencyPercentiles(testRunId, percentiles, operationType) {
     stmt.finalize();
 }
 
+// Clear database endpoint (for development/testing)
+app.delete('/api/clear-database', (req, res) => {
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        
+        // Delete all data from tables in proper order (child tables first)
+        db.run('DELETE FROM latency_percentiles', (err) => {
+            if (err) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: 'Failed to clear latency_percentiles: ' + err.message });
+            }
+            
+            db.run('DELETE FROM performance_metrics', (err) => {
+                if (err) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: 'Failed to clear performance_metrics: ' + err.message });
+                }
+                
+                db.run('DELETE FROM test_runs', (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ error: 'Failed to clear test_runs: ' + err.message });
+                    }
+                    
+                    // Reset auto-increment counters
+                    db.run('DELETE FROM sqlite_sequence WHERE name IN ("test_runs", "performance_metrics", "latency_percentiles")', (err) => {
+                        if (err) {
+                            console.warn('Could not reset auto-increment counters:', err.message);
+                        }
+                        
+                        db.run('COMMIT');
+                        res.json({ 
+                            message: 'Database cleared successfully',
+                            tables_cleared: ['test_runs', 'performance_metrics', 'latency_percentiles']
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
+
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
