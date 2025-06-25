@@ -8,7 +8,44 @@ interface TemplateSelectorProps {
 }
 
 const chartTemplates: ChartTemplate[] = [
-  // We'll add new focused chart templates here
+  {
+    id: 'performance-overview',
+    name: '📊 Performance Overview',
+    description: 'Compare IOPS, Latency, and Throughput across selected test runs',
+    chartType: 'bar',
+    xAxis: 'test_runs',
+    yAxis: 'performance_metrics',
+    metrics: ['iops', 'avg_latency', 'throughput']
+  },
+  {
+    id: 'block-size-impact',
+    name: '📈 Block Size Impact',
+    description: 'Show how performance changes with different block sizes',
+    chartType: 'line',
+    xAxis: 'block_size',
+    yAxis: 'performance',
+    groupBy: 'drive_model',
+    metrics: ['iops', 'throughput']
+  },
+  {
+    id: 'read-write-comparison',
+    name: '⚖️ Read vs Write',
+    description: 'Side-by-side comparison of read and write performance',
+    chartType: 'bar',
+    xAxis: 'test_runs',
+    yAxis: 'iops',
+    groupBy: 'operation_type',
+    metrics: ['iops']
+  },
+  {
+    id: 'iops-latency-dual',
+    name: '🎯 IOPS vs Latency',
+    description: 'Dual-axis chart showing both IOPS and latency metrics together',
+    chartType: 'bar',
+    xAxis: 'test_runs',
+    yAxis: 'dual_metrics',
+    metrics: ['iops', 'avg_latency']
+  }
 ];
 
 const getTemplateIcon = (chartType: string) => {

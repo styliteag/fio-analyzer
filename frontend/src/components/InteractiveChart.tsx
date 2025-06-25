@@ -58,6 +58,18 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
     ];
 
     switch (template.id) {
+      case 'performance-overview':
+        return processPerformanceOverview(data, colors);
+      
+      case 'block-size-impact':
+        return processBlockSizeImpact(data, colors);
+      
+      case 'read-write-comparison':
+        return processReadWriteComparison(data, colors);
+      
+      case 'iops-latency-dual':
+        return processIOPSLatencyDual(data, colors);
+      
       default:
         return processDefaultChart(data, colors);
     }
@@ -98,6 +110,227 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
     }];
 
     return { labels, datasets };
+  };
+
+  const processPerformanceOverview = (data: PerformanceData[], colors: string[]) => {
+    // Show IOPS, Latency, and Throughput for each test run
+    const labels = data.map(item => `${item.test_name}\n${item.drive_model}\n${item.block_size}KB`);
+    
+    const datasets = [
+      {
+        label: 'IOPS',
+        data: data.map(item => getMetricValue(item.metrics, 'iops')),
+        backgroundColor: colors[0],
+        borderColor: colors[0],
+        borderWidth: 1,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Avg Latency (ms)',
+        data: data.map(item => getMetricValue(item.metrics, 'avg_latency')),
+        backgroundColor: colors[1],
+        borderColor: colors[1],
+        borderWidth: 1,
+        yAxisID: 'y1',
+      },
+      {
+        label: 'Throughput (MB/s)',
+        data: data.map(item => getMetricValue(item.metrics, 'throughput') || getMetricValue(item.metrics, 'bandwidth')),
+        backgroundColor: colors[2],
+        borderColor: colors[2],
+        borderWidth: 1,
+        yAxisID: 'y2',
+      }
+    ];
+
+    return { labels, datasets };
+  };
+
+  const processBlockSizeImpact = (data: PerformanceData[], colors: string[]) => {
+    // Group by drive model and show performance across block sizes
+    const groupedData = new Map<string, Map<number, {iops: number, throughput: number}>>();
+    
+    data.forEach(item => {
+      const driveKey = item.drive_model;
+      const blockSize = item.block_size;
+      
+      if (!groupedData.has(driveKey)) {
+        groupedData.set(driveKey, new Map());
+      }
+      
+      const iopsValue = getMetricValue(item.metrics, 'iops');
+      const throughputValue = getMetricValue(item.metrics, 'throughput') || getMetricValue(item.metrics, 'bandwidth');
+      
+      groupedData.get(driveKey)!.set(blockSize, { iops: iopsValue, throughput: throughputValue });
+    });
+
+    const blockSizes = Array.from(new Set(data.map(item => item.block_size))).sort((a, b) => a - b);
+    const drives = Array.from(groupedData.keys());
+
+    const datasets = drives.map((drive, index) => ({
+      label: drive,
+      data: blockSizes.map(size => groupedData.get(drive)?.get(size)?.iops || 0),
+      borderColor: colors[index % colors.length],
+      backgroundColor: colors[index % colors.length] + '20',
+      tension: 0.1,
+    }));
+
+    return { 
+      labels: blockSizes.map(size => `${size}KB`), 
+      datasets 
+    };
+  };
+
+  const processReadWriteComparison = (data: PerformanceData[], colors: string[]) => {
+    // Compare read vs write operations side by side
+    const groupedData = new Map<string, {read: number, write: number}>();
+    
+    data.forEach(item => {
+      const testKey = `${item.test_name}\n${item.drive_model}`;
+      
+      const readIOPS = getMetricValue(item.metrics, 'iops', 'read');
+      const writeIOPS = getMetricValue(item.metrics, 'iops', 'write');
+      
+      // If no operation-specific data, infer from pattern
+      let inferredRead = readIOPS;
+      let inferredWrite = writeIOPS;
+      
+      if (readIOPS === 0 && writeIOPS === 0) {
+        const totalIOPS = getMetricValue(item.metrics, 'iops');
+        if (item.read_write_pattern.includes('read')) {
+          inferredRead = totalIOPS;
+        } else if (item.read_write_pattern.includes('write')) {
+          inferredWrite = totalIOPS;
+        } else {
+          // Mixed workload - split evenly
+          inferredRead = totalIOPS * 0.5;
+          inferredWrite = totalIOPS * 0.5;
+        }
+      }
+      
+      groupedData.set(testKey, { read: inferredRead, write: inferredWrite });
+    });
+
+    const labels = Array.from(groupedData.keys());
+    const datasets = [
+      {
+        label: 'Read IOPS',
+        data: labels.map(label => groupedData.get(label)?.read || 0),
+        backgroundColor: colors[0],
+        borderColor: colors[0],
+        borderWidth: 1,
+      },
+      {
+        label: 'Write IOPS',
+        data: labels.map(label => groupedData.get(label)?.write || 0),
+        backgroundColor: colors[1],
+        borderColor: colors[1],
+        borderWidth: 1,
+      }
+    ];
+
+    return { labels, datasets };
+  };
+
+  const processIOPSLatencyDual = (data: PerformanceData[], colors: string[]) => {
+    // Dual-axis chart with IOPS and Latency
+    const labels = data.map(item => `${item.test_name}\n${item.drive_model}`);
+    
+    const datasets = [
+      {
+        label: 'IOPS',
+        data: data.map(item => getMetricValue(item.metrics, 'iops')),
+        backgroundColor: colors[0],
+        borderColor: colors[0],
+        borderWidth: 1,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Avg Latency (ms)',
+        data: data.map(item => getMetricValue(item.metrics, 'avg_latency')),
+        backgroundColor: colors[1] + '80', // Semi-transparent
+        borderColor: colors[1],
+        borderWidth: 2,
+        yAxisID: 'y1',
+      }
+    ];
+
+    return { labels, datasets };
+  };
+
+  const getScalesForTemplate = (template: ChartTemplate, themeColors: any) => {
+    const baseXAxis = {
+      display: true,
+      title: {
+        display: true,
+        text: template.xAxis.replace(/_/g, ' ').toUpperCase(),
+        color: themeColors.chart.text,
+      },
+      ticks: {
+        color: themeColors.chart.axis,
+      },
+      grid: {
+        color: themeColors.chart.grid,
+      },
+    };
+
+    const baseYAxis = {
+      display: true,
+      title: {
+        display: true,
+        text: 'IOPS',
+        color: themeColors.chart.text,
+      },
+      ticks: {
+        color: themeColors.chart.axis,
+      },
+      grid: {
+        color: themeColors.chart.grid,
+      },
+    };
+
+    // Multi-axis charts
+    if (template.id === 'performance-overview') {
+      return {
+        x: baseXAxis,
+        y: { ...baseYAxis, title: { ...baseYAxis.title, text: 'IOPS' } },
+        y1: {
+          ...baseYAxis,
+          position: 'right' as const,
+          title: { ...baseYAxis.title, text: 'Latency (ms)' },
+          grid: { drawOnChartArea: false },
+        },
+        y2: {
+          ...baseYAxis,
+          display: false, // Hide third axis to avoid clutter
+        },
+      };
+    }
+
+    if (template.id === 'iops-latency-dual') {
+      return {
+        x: baseXAxis,
+        y: { ...baseYAxis, title: { ...baseYAxis.title, text: 'IOPS' } },
+        y1: {
+          ...baseYAxis,
+          position: 'right' as const,
+          title: { ...baseYAxis.title, text: 'Latency (ms)' },
+          grid: { drawOnChartArea: false },
+        },
+      };
+    }
+
+    // Single axis charts
+    return {
+      x: baseXAxis,
+      y: {
+        ...baseYAxis,
+        title: {
+          ...baseYAxis.title,
+          text: template.yAxis.replace(/_/g, ' ').toUpperCase(),
+        },
+      },
+    };
   };
 
 
@@ -214,36 +447,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         },
       },
     },
-    scales: {
-      x: {
-        display: true,
-        title: {
-          display: true,
-          text: template.xAxis.replace(/_/g, ' ').toUpperCase(),
-          color: themeColors.chart.text,
-        },
-        ticks: {
-          color: themeColors.chart.axis,
-        },
-        grid: {
-          color: themeColors.chart.grid,
-        },
-      },
-      y: {
-        display: true,
-        title: {
-          display: true,
-          text: template.yAxis.replace(/_/g, ' ').toUpperCase(),
-          color: themeColors.chart.text,
-        },
-        ticks: {
-          color: themeColors.chart.axis,
-        },
-        grid: {
-          color: themeColors.chart.grid,
-        },
-      },
-    },
+    scales: getScalesForTemplate(template, themeColors),
     interaction: {
       mode: 'nearest' as const,
       axis: 'x' as const,
