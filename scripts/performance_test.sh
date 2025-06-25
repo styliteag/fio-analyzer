@@ -5,11 +5,11 @@
 
 # Configuration Variables
 HOSTNAME="${HOSTNAME:-$(hostname)}"
-PROTOCOL="${PROTOCOL:-NFS}"
-DESCRIPTION="${DESCRIPTION:-Automated performance test}"
-TEST_SIZE="${TEST_SIZE:-1G}"
+PROTOCOL="${PROTOCOL:-unknown}"
+DESCRIPTION="${DESCRIPTION:-script_test}"
+TEST_SIZE="${TEST_SIZE:-10M}"
 NUM_JOBS="${NUM_JOBS:-4}"
-RUNTIME="${RUNTIME:-60}"
+RUNTIME="${RUNTIME:-30}"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
 TARGET_DIR="${TARGET_DIR:-/tmp/fio_test}"
 
@@ -92,9 +92,11 @@ run_fio_test() {
         --ioengine=psync \
         --norandommap \
         --randrepeat=0 \
-        --gtod_reduce=1 \
         --thread 2>/dev/null
-    
+    echo "FIO test completed: ${pattern} with ${block_size}"
+    # delete the file
+    rm "${TARGET_DIR}/fio_test_${pattern}_${block_size}" || true
+
     if [ $? -eq 0 ]; then
         print_success "FIO test completed: ${pattern} with ${block_size}"
         return 0
@@ -114,8 +116,8 @@ upload_results() {
     response=$(curl -s -w "%{http_code}" \
         -X POST \
         -F "file=@$json_file" \
-        -F "drive_model=Storage Array" \
-        -F "drive_type=Network Storage" \
+        -F "drive_model=unknown" \
+        -F "drive_type=unknown" \
         -F "hostname=$HOSTNAME" \
         -F "protocol=$PROTOCOL" \
         -F "description=$DESCRIPTION" \
