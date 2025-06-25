@@ -31,6 +31,10 @@ npm start                     # Start Express server (http://localhost:8000)
 docker-compose up --build     # Run full stack in containers (from docker/ directory)
 ```
 
+### Run the Server
+
+if the backend and frontend server need to be run you can ask the User to start them. He Maybe will start ./start-frontend-backend.sh to run the servers
+
 ### Database
 - SQLite database auto-initializes with sample data on first run
 - Database path: `backend/db/storage_performance.db` 
