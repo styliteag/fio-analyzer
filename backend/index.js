@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
 const DB_PATH = path.resolve(__dirname, './db/storage_performance.db');
 const app = express();
@@ -57,9 +58,34 @@ function initDb() {
                 total_ios_read INTEGER,
                 total_ios_write INTEGER,
                 usr_cpu REAL,
-                sys_cpu REAL
+                sys_cpu REAL,
+                hostname TEXT,
+                protocol TEXT,
+                description TEXT,
+                uploaded_file_path TEXT
             )
         `);
+
+        // Add new columns if they don't exist (for existing databases)
+        db.run(`ALTER TABLE test_runs ADD COLUMN hostname TEXT`, (err) => {
+            // Ignore error if column already exists
+        });
+        
+        db.run(`ALTER TABLE test_runs ADD COLUMN protocol TEXT`, (err) => {
+            // Ignore error if column already exists
+        });
+        
+        db.run(`ALTER TABLE test_runs ADD COLUMN description TEXT`, (err) => {
+            // Ignore error if column already exists
+        });
+        
+        db.run(`ALTER TABLE test_runs ADD COLUMN uploaded_file_path TEXT`, (err) => {
+            // Ignore error if column already exists
+        });
+        
+        db.run(`ALTER TABLE test_runs ADD COLUMN uploaded_file_path TEXT`, (err) => {
+            // Ignore error if column already exists
+        });
 
         db.run(`
             CREATE TABLE IF NOT EXISTS performance_metrics (
@@ -230,11 +256,20 @@ app.get('/api/performance-data', (req, res) => {
     const query = `
         SELECT tr.id, tr.drive_model, tr.drive_type, tr.test_name, 
                tr.block_size, tr.read_write_pattern, tr.timestamp,
-               pm.metric_type, pm.value, pm.unit
+               tr.hostname, tr.protocol, tr.description,
+               pm.metric_type, pm.value, pm.unit, pm.operation_type
         FROM test_runs tr
         JOIN performance_metrics pm ON tr.id = pm.test_run_id
         WHERE tr.id IN (${placeholders}) AND pm.metric_type IN (${metric_placeholders})
-        ORDER BY tr.timestamp, pm.metric_type
+        ORDER BY tr.timestamp, pm.metric_type, pm.operation_type
+    `;
+
+    // Query for latency percentiles
+    const percentileQuery = `
+        SELECT test_run_id, operation_type, percentile, latency_ns
+        FROM latency_percentiles
+        WHERE test_run_id IN (${placeholders})
+        ORDER BY test_run_id, operation_type, percentile
     `;
 
     db.all(query, [...run_ids, ...metrics], (err, rows) => {
@@ -243,30 +278,67 @@ app.get('/api/performance-data', (req, res) => {
             return;
         }
 
-        const data = {};
-        for (const row of rows) {
-            const run_id = row.id;
-            if (!data[run_id]) {
-                data[run_id] = {
-                    id: run_id,
-                    drive_model: row.drive_model,
-                    drive_type: row.drive_type,
-                    test_name: row.test_name,
-                    block_size: row.block_size,
-                    read_write_pattern: row.read_write_pattern,
-                    timestamp: row.timestamp,
-                    metrics: {}
+        // Get latency percentiles
+        db.all(percentileQuery, run_ids, (err, percentileRows) => {
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+            }
+
+            const data = {};
+            
+            // Process performance metrics
+            for (const row of rows) {
+                const run_id = row.id;
+                if (!data[run_id]) {
+                    data[run_id] = {
+                        id: run_id,
+                        drive_model: row.drive_model,
+                        drive_type: row.drive_type,
+                        test_name: row.test_name,
+                        block_size: row.block_size,
+                        read_write_pattern: row.read_write_pattern,
+                        timestamp: row.timestamp,
+                        hostname: row.hostname,
+                        protocol: row.protocol,
+                        description: row.description,
+                        metrics: {},
+                        latency_percentiles: {}
+                    };
+                }
+                
+                // Group metrics by operation type
+                const operation = row.operation_type || 'combined';
+                if (!data[run_id].metrics[operation]) {
+                    data[run_id].metrics[operation] = {};
+                }
+                
+                data[run_id].metrics[operation][row.metric_type] = {
+                    value: row.value,
+                    unit: row.unit
                 };
             }
-            data[run_id].metrics[row.metric_type] = {
-                value: row.value,
-                unit: row.unit
-            };
-        }
-        
-        // The frontend expects an array of objects, not an object with keys as ids
-        const responseData = Object.values(data);
-        res.json(responseData);
+            
+            // Process latency percentiles
+            for (const row of percentileRows) {
+                const run_id = row.test_run_id;
+                if (data[run_id]) {
+                    const operation = row.operation_type;
+                    if (!data[run_id].latency_percentiles[operation]) {
+                        data[run_id].latency_percentiles[operation] = {};
+                    }
+                    
+                    data[run_id].latency_percentiles[operation][`p${row.percentile}`] = {
+                        value: row.latency_ns / 1000000, // Convert to milliseconds
+                        unit: 'ms'
+                    };
+                }
+            }
+            
+            // The frontend expects an array of objects, not an object with keys as ids
+            const responseData = Object.values(data);
+            res.json(responseData);
+        });
     });
 });
 
@@ -379,78 +451,144 @@ app.post('/api/import', upload.single('file'), (req, res) => {
         }
 
         const fioData = JSON.parse(req.file.buffer.toString());
-        const { drive_model = 'Unknown', drive_type = 'Unknown' } = req.body;
+        const { 
+            drive_model = 'Unknown', 
+            drive_type = 'Unknown',
+            hostname = 'Unknown',
+            protocol = 'Unknown', 
+            description = 'Imported FIO test'
+        } = req.body;
 
-        // Process first job from FIO output
-        const job = fioData.jobs?.[0];
-        if (!job) {
+        // Create filename based on form data and date
+        const uploadDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const safeHostname = hostname.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const safeProtocol = protocol.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const safeDescription = description.replace(/[^a-zA-Z0-9-_\s]/g, '_').replace(/\s+/g, '_');
+        const timestamp = Date.now();
+        
+        const filename = `${uploadDate}_${safeHostname}_${safeProtocol}_${safeDescription}_${timestamp}.json`;
+        const uploadsDir = path.join(__dirname, 'uploads');
+        const filePath = path.join(uploadsDir, filename);
+        
+        // Ensure uploads directory exists
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        
+        // Save the uploaded file
+        fs.writeFileSync(filePath, req.file.buffer);
+        const relativeFilePath = `uploads/${filename}`;
+
+        // Process all jobs from FIO output
+        const jobs = fioData.jobs;
+        if (!jobs || jobs.length === 0) {
             return res.status(400).json({ error: 'No job data found in FIO output' });
         }
 
-        const opts = job['job options'] || {};
         const globalOpts = fioData['global options'] || {};
+        const importedTestRuns = [];
+        let completedJobs = 0;
 
-        // Extract test parameters
-        const bs = opts.bs || globalOpts.bs || '4k';
-        const block_size = parseInt(bs.toString().replace('k', ''));
-        const rw = opts.rw || globalOpts.rw || 'read';
-        const iodepth = parseInt(opts.iodepth || globalOpts.iodepth || '1');
-        const duration = job.runtime || 0;
-        const test_name = job.jobname || 'fio_test';
-        const rwmixread = parseInt(opts.rwmixread || '100');
-
-        // Insert test run
-        const insertTestRun = `
-            INSERT INTO test_runs 
-            (timestamp, drive_model, drive_type, test_name, block_size, 
-             read_write_pattern, queue_depth, duration, fio_version, 
-             job_runtime, rwmixread, total_ios_read, total_ios_write, 
-             usr_cpu, sys_cpu)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-
-        db.run(insertTestRun, [
-            new Date().toISOString(),
-            drive_model,
-            drive_type,
-            test_name,
-            block_size,
-            rw,
-            iodepth,
-            duration,
-            fioData['fio version'],
-            job.job_runtime,
-            rwmixread,
-            job.read?.total_ios || 0,
-            job.write?.total_ios || 0,
-            job.usr_cpu,
-            job.sys_cpu
-        ], function(err) {
-            if (err) {
-                return res.status(500).json({ error: err.message });
+        // Process each job
+        jobs.forEach((job, jobIndex) => {
+            // Skip jobs with errors or no valid data
+            if (job.error && job.error !== 0) {
+                completedJobs++;
+                if (completedJobs === jobs.length) {
+                    res.json({ 
+                        message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
+                        test_run_ids: importedTestRuns,
+                        skipped_jobs: jobs.length - importedTestRuns.length
+                    });
+                }
+                return;
             }
 
-            const testRunId = this.lastID;
+            const opts = job['job options'] || {};
 
-            // Insert performance metrics for read operations
-            if (job.read && job.read.iops > 0) {
-                insertMetrics(testRunId, job.read, 'read');
-            }
+            // Extract test parameters
+            const bs = opts.bs || globalOpts.bs || '4k';
+            const block_size = parseInt(bs.toString().replace('k', ''));
+            const rw = opts.rw || globalOpts.rw || 'read';
+            const iodepth = parseInt(opts.iodepth || globalOpts.iodepth || '1');
+            const duration = job.runtime || parseInt(globalOpts.runtime || '0');
+            const test_name = job.jobname || `fio_job_${jobIndex + 1}`;
+            const rwmixread = parseInt(opts.rwmixread || '100');
 
-            // Insert performance metrics for write operations  
-            if (job.write && job.write.iops > 0) {
-                insertMetrics(testRunId, job.write, 'write');
-            }
+            // Insert test run
+            const insertTestRun = `
+                INSERT INTO test_runs 
+                (timestamp, drive_model, drive_type, test_name, block_size, 
+                 read_write_pattern, queue_depth, duration, fio_version, 
+                 job_runtime, rwmixread, total_ios_read, total_ios_write, 
+                 usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
 
-            // Insert latency percentiles
-            if (job.read?.clat_ns?.percentile) {
-                insertLatencyPercentiles(testRunId, job.read.clat_ns.percentile, 'read');
-            }
-            if (job.write?.clat_ns?.percentile) {
-                insertLatencyPercentiles(testRunId, job.write.clat_ns.percentile, 'write');
-            }
+            db.run(insertTestRun, [
+                new Date().toISOString(),
+                drive_model,
+                drive_type,
+                test_name,
+                block_size,
+                rw,
+                iodepth,
+                duration,
+                fioData['fio version'],
+                job.job_runtime,
+                rwmixread,
+                job.read?.total_ios || 0,
+                job.write?.total_ios || 0,
+                job.usr_cpu,
+                job.sys_cpu,
+                hostname,
+                protocol,
+                description,
+                relativeFilePath
+            ], function(err) {
+                if (err) {
+                    console.error(`Error importing job ${test_name}:`, err.message);
+                    completedJobs++;
+                    if (completedJobs === jobs.length) {
+                        res.json({ 
+                            message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
+                            test_run_ids: importedTestRuns,
+                            skipped_jobs: jobs.length - importedTestRuns.length
+                        });
+                    }
+                    return;
+                }
 
-            res.json({ message: 'FIO results imported successfully', test_run_id: testRunId });
+                const testRunId = this.lastID;
+                importedTestRuns.push(testRunId);
+
+                // Insert performance metrics for read operations
+                if (job.read && job.read.iops > 0) {
+                    insertMetrics(testRunId, job.read, 'read');
+                }
+
+                // Insert performance metrics for write operations  
+                if (job.write && job.write.iops > 0) {
+                    insertMetrics(testRunId, job.write, 'write');
+                }
+
+                // Insert latency percentiles
+                if (job.read?.clat_ns?.percentile) {
+                    insertLatencyPercentiles(testRunId, job.read.clat_ns.percentile, 'read');
+                }
+                if (job.write?.clat_ns?.percentile) {
+                    insertLatencyPercentiles(testRunId, job.write.clat_ns.percentile, 'write');
+                }
+
+                completedJobs++;
+                if (completedJobs === jobs.length) {
+                    res.json({ 
+                        message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
+                        test_run_ids: importedTestRuns,
+                        skipped_jobs: jobs.length - importedTestRuns.length
+                    });
+                }
+            });
         });
 
     } catch (error) {

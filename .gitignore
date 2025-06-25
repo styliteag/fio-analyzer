@@ -4,6 +4,7 @@ node_modules/
 # Logs
 logs
 *.log
+*.tmp
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -29,6 +30,8 @@ storage_performance.db
 
 # Backend database
 db/
+uploads/
 
 # Example Data
 example-data/
+backend/uploads/
