@@ -34,6 +34,8 @@ export interface PerformanceData {
   read_write_pattern: string;
   timestamp: string;
   queue_depth: number;
+  hostname?: string;
+  protocol?: string;
   metrics: Record<string, PerformanceMetric>;
 }
 

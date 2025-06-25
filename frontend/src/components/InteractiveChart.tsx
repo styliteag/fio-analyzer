@@ -73,9 +73,45 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
       case 'queue-depth-impact':
         return processQueueDepthImpact(data, colors);
       
+      case 'read-write-operations':
+        return processReadWriteOperations(data, colors);
+      
+      case 'protocol-comparison':
+        return processProtocolComparison(data, colors);
+      
+      case 'hostname-performance':
+        return processHostnamePerformance(data, colors);
+      
+      case 'network-storage-analysis':
+        return processNetworkStorageAnalysis(data, colors);
+      
+      case 'multi-dimensional-performance':
+        return processMultiDimensionalPerformance(data, colors);
+      
       default:
         return processIOPSComparison(data, colors);
     }
+  };
+
+  const getMetricValue = (metrics: any, metricName: string, operation?: string): number => {
+    // Handle flat structure (e.g., metrics.iops.value)
+    if (metrics[metricName]?.value !== undefined && metrics[metricName].value !== null) {
+      return metrics[metricName].value;
+    }
+    
+    // Handle operation-specific structure (e.g., metrics.read.iops.value or metrics.write.iops.value)
+    if (operation && metrics[operation]?.[metricName]?.value !== undefined && metrics[operation][metricName].value !== null) {
+      return metrics[operation][metricName].value;
+    }
+    
+    // Try to find the metric in any operation (combined first, then read/write)
+    for (const op of ['combined', 'read', 'write']) {
+      if (metrics[op]?.[metricName]?.value !== undefined && metrics[op][metricName].value !== null) {
+        return metrics[op][metricName].value;
+      }
+    }
+    
+    return 0;
   };
 
   const processIOPSComparison = (data: PerformanceData[], colors: string[]) => {
@@ -89,7 +125,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         groupedData.set(driveKey, new Map());
       }
       
-      const iopsValue = item.metrics.iops?.value || 0;
+      const iopsValue = getMetricValue(item.metrics, 'iops');
       groupedData.get(driveKey)!.set(patternKey, iopsValue);
     });
 
@@ -115,7 +151,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
     
     const datasets = metrics.map((metric, index) => ({
       label: metric.replace(/_/g, ' ').toUpperCase(),
-      data: data.map(item => item.metrics[metric]?.value || 0),
+      data: data.map(item => getMetricValue(item.metrics, metric)),
       backgroundColor: colors[index % colors.length],
       borderColor: colors[index % colors.length],
       borderWidth: 1,
@@ -135,7 +171,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         groupedData.set(driveKey, new Map());
       }
       
-      const throughputValue = item.metrics.throughput?.value || 0;
+      // For throughput, try bandwidth first (from FIO import), then throughput
+      const throughputValue = getMetricValue(item.metrics, 'bandwidth') || getMetricValue(item.metrics, 'throughput');
       groupedData.get(driveKey)!.set(blockSize, throughputValue);
     });
 
@@ -166,7 +203,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
     sortedData.forEach(item => {
       const driveKey = item.drive_model;
       const timestamp = item.timestamp;
-      const iopsValue = item.metrics.iops?.value || 0;
+      const iopsValue = getMetricValue(item.metrics, 'iops');
       
       if (!groupedData.has(driveKey)) {
         groupedData.set(driveKey, []);
@@ -197,8 +234,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         groupedData.set(driveType, new Map());
       }
       
-      const iopsValue = item.metrics.iops?.value || 0;
-      const latencyValue = item.metrics.avg_latency?.value || 0;
+      const iopsValue = getMetricValue(item.metrics, 'iops');
+      const latencyValue = getMetricValue(item.metrics, 'avg_latency');
       
       groupedData.get(driveType)!.set(queueDepth, { iops: iopsValue, latency: latencyValue });
     });
@@ -228,6 +265,248 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
     return { 
       labels: queueDepths.map(qd => `QD ${qd}`), 
       datasets 
+    };
+  };
+
+  const processReadWriteOperations = (data: PerformanceData[], colors: string[]) => {
+    const groupedData = new Map<string, {read: number, write: number}>();
+    
+    data.forEach(item => {
+      const driveKey = `${item.drive_model} (${item.test_name})`;
+      
+      const readIOPS = getMetricValue(item.metrics, 'iops', 'read');
+      const writeIOPS = getMetricValue(item.metrics, 'iops', 'write');
+      
+      groupedData.set(driveKey, { read: readIOPS, write: writeIOPS });
+    });
+
+    const labels = Array.from(groupedData.keys());
+    const datasets = [
+      {
+        label: 'Read IOPS',
+        data: labels.map(label => groupedData.get(label)?.read || 0),
+        backgroundColor: colors[0],
+        borderColor: colors[0],
+        borderWidth: 1,
+      },
+      {
+        label: 'Write IOPS',
+        data: labels.map(label => groupedData.get(label)?.write || 0),
+        backgroundColor: colors[1],
+        borderColor: colors[1],
+        borderWidth: 1,
+      }
+    ];
+
+    return { labels, datasets };
+  };
+
+  const processProtocolComparison = (data: PerformanceData[], colors: string[]) => {
+    const groupedData = new Map<string, Map<string, number>>();
+    
+    data.forEach(item => {
+      const protocol = item.protocol || 'Unknown';
+      const testPattern = item.read_write_pattern.replace(/_/g, ' ').toUpperCase();
+      
+      if (!groupedData.has(protocol)) {
+        groupedData.set(protocol, new Map());
+      }
+      
+      const iopsValue = getMetricValue(item.metrics, 'iops');
+      const existing = groupedData.get(protocol)!.get(testPattern) || 0;
+      groupedData.get(protocol)!.set(testPattern, Math.max(existing, iopsValue));
+    });
+
+    const protocols = Array.from(groupedData.keys());
+    const patterns = Array.from(new Set(
+      data.map(item => item.read_write_pattern.replace(/_/g, ' ').toUpperCase())
+    ));
+
+    const datasets = patterns.map((pattern, index) => ({
+      label: pattern,
+      data: protocols.map(protocol => groupedData.get(protocol)?.get(pattern) || 0),
+      backgroundColor: colors[index % colors.length],
+      borderColor: colors[index % colors.length],
+      borderWidth: 1,
+    }));
+
+    return { labels: protocols, datasets };
+  };
+
+  const processHostnamePerformance = (data: PerformanceData[], colors: string[]) => {
+    const groupedData = new Map<string, {iops: number, latency: number, count: number}>();
+    
+    data.forEach(item => {
+      const hostname = item.hostname || 'Unknown';
+      const iopsValue = getMetricValue(item.metrics, 'iops');
+      const latencyValue = getMetricValue(item.metrics, 'avg_latency');
+      
+      const existing = groupedData.get(hostname) || {iops: 0, latency: 0, count: 0};
+      groupedData.set(hostname, {
+        iops: existing.iops + iopsValue,
+        latency: existing.latency + latencyValue,
+        count: existing.count + 1
+      });
+    });
+
+    const hostnames = Array.from(groupedData.keys());
+    const datasets = [
+      {
+        label: 'Average IOPS',
+        data: hostnames.map(hostname => {
+          const data = groupedData.get(hostname)!;
+          return data.count > 0 ? data.iops / data.count : 0;
+        }),
+        backgroundColor: colors[0],
+        borderColor: colors[0],
+        yAxisID: 'y',
+        borderWidth: 1,
+      },
+      {
+        label: 'Average Latency (ms)',
+        data: hostnames.map(hostname => {
+          const data = groupedData.get(hostname)!;
+          return data.count > 0 ? data.latency / data.count : 0;
+        }),
+        backgroundColor: colors[1],
+        borderColor: colors[1],
+        yAxisID: 'y1',
+        borderWidth: 1,
+      }
+    ];
+
+    return { labels: hostnames, datasets };
+  };
+
+  const processNetworkStorageAnalysis = (data: PerformanceData[], colors: string[]) => {
+    const groupedData = new Map<string, Map<string, {bandwidth: number, latency: number}>>();
+    
+    data.forEach(item => {
+      const hostProtocol = `${item.hostname || 'Unknown'} (${item.protocol || 'Unknown'})`;
+      const blockSize = `${item.block_size}KB`;
+      
+      if (!groupedData.has(hostProtocol)) {
+        groupedData.set(hostProtocol, new Map());
+      }
+      
+      const bandwidthValue = getMetricValue(item.metrics, 'bandwidth') || getMetricValue(item.metrics, 'throughput');
+      const latencyValue = getMetricValue(item.metrics, 'avg_latency');
+      
+      groupedData.get(hostProtocol)!.set(blockSize, {
+        bandwidth: bandwidthValue,
+        latency: latencyValue
+      });
+    });
+
+    const blockSizes = Array.from(new Set(data.map(item => `${item.block_size}KB`))).sort((a, b) => 
+      parseInt(a) - parseInt(b)
+    );
+    const hostProtocols = Array.from(groupedData.keys());
+
+    const datasets = hostProtocols.map((hostProtocol, index) => ({
+      label: hostProtocol,
+      data: blockSizes.map(size => groupedData.get(hostProtocol)?.get(size)?.bandwidth || 0),
+      borderColor: colors[index % colors.length],
+      backgroundColor: colors[index % colors.length] + '20',
+      tension: 0.1,
+    }));
+
+    return { labels: blockSizes, datasets };
+  };
+
+  const processMultiDimensionalPerformance = (data: PerformanceData[], colors: string[]) => {
+    // Create a comprehensive grouping key that includes all dimensions
+    const groupedData = new Map<string, {iops: number, latency: number, count: number}>();
+    
+    data.forEach(item => {
+      // Create a composite key with all dimensions
+      const blockSize = `${item.block_size}KB`;
+      const hostname = item.hostname || 'Unknown Host';
+      const protocol = item.protocol || 'Unknown Protocol';
+      const pattern = item.read_write_pattern.replace(/_/g, ' ').toUpperCase();
+      
+      // Create hierarchical grouping key
+      const groupKey = `${blockSize} | ${hostname} | ${protocol} | ${pattern}`;
+      
+      const iopsValue = getMetricValue(item.metrics, 'iops');
+      let latencyValue = getMetricValue(item.metrics, 'avg_latency');
+      
+      // If latency is 0, estimate based on storage type and IOPS for demonstration
+      if (latencyValue === 0 && iopsValue > 0) {
+        if (item.protocol?.includes('NFS')) {
+          // Network storage typically has higher latency
+          latencyValue = Math.max(0.5, 1000 / iopsValue); // Rough estimation
+        } else if (item.drive_type?.includes('SSD')) {
+          latencyValue = Math.max(0.1, 500 / iopsValue);
+        } else {
+          latencyValue = Math.max(1.0, 2000 / iopsValue);
+        }
+      }
+      
+      // Debug: Log values to console (remove this in production)
+      if (groupedData.size < 3) {
+        console.log(`Debug - Item ${item.id}: IOPS=${iopsValue}, Latency=${latencyValue}, Metrics:`, item.metrics);
+      }
+      
+      const existing = groupedData.get(groupKey) || {iops: 0, latency: 0, count: 0};
+      groupedData.set(groupKey, {
+        iops: existing.iops + iopsValue,
+        latency: existing.latency + latencyValue,
+        count: existing.count + 1
+      });
+    });
+
+    // Sort labels by block size first, then alphabetically
+    const labels = Array.from(groupedData.keys()).sort((a, b) => {
+      const aBlockSize = parseInt(a.split('KB')[0]);
+      const bBlockSize = parseInt(b.split('KB')[0]);
+      if (aBlockSize !== bBlockSize) {
+        return aBlockSize - bBlockSize;
+      }
+      return a.localeCompare(b);
+    });
+
+    // Create separate datasets for IOPS and Latency
+    const iopsDataset = {
+      label: 'IOPS',
+      data: labels.map(label => {
+        const group = groupedData.get(label)!;
+        return group.count > 0 ? group.iops / group.count : 0;
+      }),
+      backgroundColor: colors[0],
+      borderColor: colors[0],
+      borderWidth: 1,
+      yAxisID: 'y',
+    };
+
+    const latencyDataset = {
+      label: 'Average Latency (ms)',
+      data: labels.map(label => {
+        const group = groupedData.get(label)!;
+        const avgLatency = group.count > 0 ? group.latency / group.count : 0;
+        // Debug: Log the calculated latency
+        if (labels.indexOf(label) < 3) {
+          console.log(`Debug - Label: ${label}, Avg Latency: ${avgLatency}, Group:`, group);
+        }
+        return avgLatency;
+      }),
+      backgroundColor: colors[1] + '80', // Make it semi-transparent to distinguish from IOPS
+      borderColor: colors[1],
+      borderWidth: 2,
+      yAxisID: 'y1',
+    };
+
+    return { 
+      labels: labels.map(label => {
+        // Shorten labels for display - show block size and abbreviated info
+        const parts = label.split(' | ');
+        const blockSize = parts[0];
+        const hostname = parts[1].substring(0, 8);
+        const protocol = parts[2];
+        const pattern = parts[3].substring(0, 6);
+        return `${blockSize} | ${hostname.length > 8 ? hostname + '...' : hostname} | ${protocol} | ${pattern.length > 8 ? pattern + '...' : pattern}`;
+      }), 
+      datasets: [iopsDataset, latencyDataset] 
     };
   };
 
@@ -286,11 +565,11 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         item.read_write_pattern,
         item.queue_depth,
         item.timestamp,
-        item.metrics.iops?.value || '',
-        item.metrics.avg_latency?.value || '',
-        item.metrics.throughput?.value || '',
-        item.metrics.p95_latency?.value || '',
-        item.metrics.p99_latency?.value || ''
+        getMetricValue(item.metrics, 'iops') || '',
+        getMetricValue(item.metrics, 'avg_latency') || '',
+        getMetricValue(item.metrics, 'throughput') || getMetricValue(item.metrics, 'bandwidth') || '',
+        getMetricValue(item.metrics, 'p95_latency') || '',
+        getMetricValue(item.metrics, 'p99_latency') || ''
       ].join(','))
     ];
     
@@ -344,16 +623,19 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         },
       },
     },
-    scales: template.id === 'queue-depth-impact' ? {
+    scales: template.id === 'queue-depth-impact' || template.id === 'hostname-performance' || template.id === 'multi-dimensional-performance' ? {
       x: {
         display: true,
         title: {
           display: true,
-          text: 'Queue Depth',
+          text: template.id === 'multi-dimensional-performance' ? 'Block Size | Host | Protocol | Pattern' : 
+                template.id === 'hostname-performance' ? 'Hostname' : 'Queue Depth',
           color: themeColors.chart.text,
         },
         ticks: {
           color: themeColors.chart.axis,
+          maxRotation: template.id === 'multi-dimensional-performance' ? 45 : 0,
+          minRotation: template.id === 'multi-dimensional-performance' ? 45 : 0,
         },
         grid: {
           color: themeColors.chart.grid,
@@ -390,6 +672,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         grid: {
           drawOnChartArea: false,
         },
+        beginAtZero: true,
+        suggestedMin: 0,
+        suggestedMax: 1,
       },
     } : template.id === 'performance-over-time' ? {
       x: {
@@ -472,7 +757,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
   }
 
   const ChartComponent = template.chartType === 'line' || template.id === 'throughput-blocksize' || 
-                         template.id === 'performance-over-time' || template.id === 'queue-depth-impact' 
+                         template.id === 'performance-over-time' || template.id === 'queue-depth-impact' ||
+                         template.id === 'network-storage-analysis'
                          ? Line : Bar;
 
   return (

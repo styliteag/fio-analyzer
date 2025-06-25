@@ -65,6 +65,55 @@ const chartTemplates: ChartTemplate[] = [
     yAxis: 'performance',
     groupBy: 'drive_type',
     metrics: ['iops', 'avg_latency']
+  },
+  {
+    id: 'read-write-operations',
+    name: 'Read vs Write Operations',
+    description: 'Compare read and write operation performance side by side',
+    chartType: 'bar',
+    xAxis: 'test_runs',
+    yAxis: 'iops',
+    groupBy: 'operation_type',
+    metrics: ['iops']
+  },
+  {
+    id: 'protocol-comparison',
+    name: 'Protocol Performance',
+    description: 'Compare performance across different storage protocols (NFS, iSCSI, etc.)',
+    chartType: 'bar',
+    xAxis: 'protocol',
+    yAxis: 'iops',
+    groupBy: 'read_write_pattern',
+    metrics: ['iops']
+  },
+  {
+    id: 'hostname-performance',
+    name: 'Host Performance Analysis',
+    description: 'Analyze performance metrics grouped by hostname',
+    chartType: 'bar',
+    xAxis: 'hostname',
+    yAxis: 'performance',
+    metrics: ['iops', 'avg_latency']
+  },
+  {
+    id: 'network-storage-analysis',
+    name: 'Network Storage Bandwidth',
+    description: 'Analyze bandwidth performance across block sizes for network storage',
+    chartType: 'line',
+    xAxis: 'block_size',
+    yAxis: 'bandwidth',
+    groupBy: 'hostname_protocol',
+    metrics: ['bandwidth', 'throughput']
+  },
+  {
+    id: 'multi-dimensional-performance',
+    name: 'Multi-Dimensional IOPS & Latency',
+    description: 'Comprehensive view of IOPS and Latency grouped by block size, hostname, protocol, and pattern',
+    chartType: 'bar',
+    xAxis: 'multi_group',
+    yAxis: 'dual_metrics',
+    groupBy: 'block_size_hostname_protocol_pattern',
+    metrics: ['iops', 'avg_latency']
   }
 ];
 
@@ -92,7 +141,7 @@ const TemplateSelector: React.FC<TemplateSelectorProps> = ({
         Visualization Templates
       </h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {chartTemplates.map((template) => (
           <div
             key={template.id}
