@@ -32,12 +32,16 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     drive_models: [],
     patterns: [],
     block_sizes: [],
+    hostnames: [],
+    protocols: [],
   });
   const [activeFilters, setActiveFilters] = useState({
     drive_types: [] as string[],
     drive_models: [] as string[],
     patterns: [] as string[],
     block_sizes: [] as number[],
+    hostnames: [] as string[],
+    protocols: [] as string[],
   });
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [testRunToEdit, setTestRunToEdit] = useState<TestRun | null>(null);
@@ -99,6 +103,18 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
       );
     }
 
+    if (activeFilters.hostnames.length > 0) {
+      filtered = filtered.filter(run => 
+        run.hostname && activeFilters.hostnames.includes(run.hostname)
+      );
+    }
+
+    if (activeFilters.protocols.length > 0) {
+      filtered = filtered.filter(run => 
+        run.protocol && activeFilters.protocols.includes(run.protocol)
+      );
+    }
+
     setFilteredRuns(filtered);
   };
 
@@ -117,7 +133,9 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     return activeFilters.drive_types.length > 0 || 
            activeFilters.drive_models.length > 0 || 
            activeFilters.patterns.length > 0 || 
-           activeFilters.block_sizes.length > 0;
+           activeFilters.block_sizes.length > 0 ||
+           activeFilters.hostnames.length > 0 ||
+           activeFilters.protocols.length > 0;
   };
 
   const getUnselectedMatchingCount = () => {
@@ -203,7 +221,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
       </h2>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
         <div>
           <label className="block text-xs font-medium theme-text-secondary mb-1">
             <HardDrive size={14} className="inline mr-1 theme-text-tertiary" />
@@ -279,6 +297,44 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
               }))
             }
             placeholder="All sizes"
+            className="text-xs"
+            styles={getSelectStyles()}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium theme-text-secondary mb-1">
+            Hostnames
+          </label>
+          <Select
+            isMulti
+            options={filters.hostnames.map(hostname => ({ value: hostname, label: hostname }))}
+            onChange={(selected) => 
+              setActiveFilters(prev => ({
+                ...prev,
+                hostnames: selected ? selected.map(s => s.value) : []
+              }))
+            }
+            placeholder="All hosts"
+            className="text-xs"
+            styles={getSelectStyles()}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium theme-text-secondary mb-1">
+            Protocols
+          </label>
+          <Select
+            isMulti
+            options={filters.protocols.map(protocol => ({ value: protocol, label: protocol }))}
+            onChange={(selected) => 
+              setActiveFilters(prev => ({
+                ...prev,
+                protocols: selected ? selected.map(s => s.value) : []
+              }))
+            }
+            placeholder="All protocols"
             className="text-xs"
             styles={getSelectStyles()}
           />

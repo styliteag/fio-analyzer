@@ -228,7 +228,7 @@ app.get('/api/test-runs', (req, res) => {
         SELECT id, timestamp, drive_model, drive_type, test_name, 
                block_size, read_write_pattern, queue_depth, duration,
                fio_version, job_runtime, rwmixread, total_ios_read, 
-               total_ios_write, usr_cpu, sys_cpu
+               total_ios_write, usr_cpu, sys_cpu, hostname, protocol
         FROM test_runs
         ORDER BY timestamp DESC
     `, [], (err, rows) => {
@@ -348,7 +348,9 @@ app.get('/api/filters', (req, res) => {
         'SELECT DISTINCT drive_type FROM test_runs ORDER BY drive_type',
         'SELECT DISTINCT drive_model FROM test_runs ORDER BY drive_model', 
         'SELECT DISTINCT read_write_pattern FROM test_runs ORDER BY read_write_pattern',
-        'SELECT DISTINCT block_size FROM test_runs ORDER BY block_size'
+        'SELECT DISTINCT block_size FROM test_runs ORDER BY block_size',
+        'SELECT DISTINCT hostname FROM test_runs WHERE hostname IS NOT NULL ORDER BY hostname',
+        'SELECT DISTINCT protocol FROM test_runs WHERE protocol IS NOT NULL ORDER BY protocol'
     ];
 
     Promise.all(queries.map(query => 
@@ -358,12 +360,14 @@ app.get('/api/filters', (req, res) => {
                 else resolve(rows);
             });
         })
-    )).then(([driveTypes, driveModels, patterns, blockSizes]) => {
+    )).then(([driveTypes, driveModels, patterns, blockSizes, hostnames, protocols]) => {
         res.json({
             drive_types: driveTypes.map(row => row.drive_type),
             drive_models: driveModels.map(row => row.drive_model),
             patterns: patterns.map(row => row.read_write_pattern),
-            block_sizes: blockSizes.map(row => row.block_size)
+            block_sizes: blockSizes.map(row => row.block_size),
+            hostnames: hostnames.map(row => row.hostname),
+            protocols: protocols.map(row => row.protocol)
         });
     }).catch(err => {
         res.status(500).json({ error: err.message });

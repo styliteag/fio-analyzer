@@ -15,6 +15,8 @@ export interface TestRun {
   total_ios_write?: number;
   usr_cpu?: number;
   sys_cpu?: number;
+  hostname?: string;
+  protocol?: string;
 }
 
 export interface PerformanceMetric {
@@ -40,6 +42,8 @@ export interface FilterOptions {
   drive_models: string[];
   patterns: string[];
   block_sizes: number[];
+  hostnames: string[];
+  protocols: string[];
 }
 
 export interface ChartTemplate {
