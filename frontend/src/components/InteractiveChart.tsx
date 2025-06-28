@@ -42,7 +42,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
   const [chartData, setChartData] = useState<any>(null);
   const themeColors = useThemeColors();
   
-  // Performance Overview interactive controls
+  // Interactive controls for all chart templates
   const [sortBy, setSortBy] = useState<'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [groupBy, setGroupBy] = useState<'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname'>('none');
@@ -58,27 +58,81 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
     }
   }, [template, data, sortBy, sortOrder, groupBy]);
 
+  // Common sorting and grouping logic for all templates
+  const applySortingAndGrouping = (data: PerformanceData[]) => {
+    // Apply sorting
+    let sortedData = [...data];
+    sortedData.sort((a, b) => {
+      let aValue: any, bValue: any;
+      
+      switch (sortBy) {
+        case 'name':
+          aValue = `${a.test_name}_${a.drive_model}_${a.block_size}`;
+          bValue = `${b.test_name}_${b.drive_model}_${b.block_size}`;
+          break;
+        case 'iops':
+          aValue = getMetricValue(a.metrics, 'iops');
+          bValue = getMetricValue(b.metrics, 'iops');
+          break;
+        case 'latency':
+          aValue = getMetricValue(a.metrics, 'avg_latency');
+          bValue = getMetricValue(b.metrics, 'avg_latency');
+          break;
+        case 'throughput':
+          aValue = getMetricValue(a.metrics, 'throughput') || getMetricValue(a.metrics, 'bandwidth');
+          bValue = getMetricValue(b.metrics, 'throughput') || getMetricValue(b.metrics, 'bandwidth');
+          break;
+        case 'blocksize':
+          aValue = a.block_size;
+          bValue = b.block_size;
+          break;
+        case 'drivemodel':
+          aValue = a.drive_model;
+          bValue = b.drive_model;
+          break;
+        case 'protocol':
+          aValue = a.protocol || '';
+          bValue = b.protocol || '';
+          break;
+        case 'hostname':
+          aValue = a.hostname || '';
+          bValue = b.hostname || '';
+          break;
+        default:
+          aValue = a.test_name;
+          bValue = b.test_name;
+      }
+      
+      const comparison = typeof aValue === 'string' ? aValue.localeCompare(bValue) : aValue - bValue;
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+    
+    return sortedData;
+  };
+
   const processDataForTemplate = (template: ChartTemplate, data: PerformanceData[]) => {
     const colors = [
       '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
       '#06B6D4', '#F97316', '#84CC16', '#EC4899', '#6B7280'
     ];
 
+    const options = { sortBy, sortOrder, groupBy };
+
     switch (template.id) {
       case 'performance-overview':
-        return processPerformanceOverview(data, colors, { sortBy, sortOrder, groupBy });
+        return processPerformanceOverview(data, colors, options);
       
       case 'block-size-impact':
-        return processBlockSizeImpact(data, colors);
+        return processBlockSizeImpact(data, colors, options);
       
       case 'read-write-comparison':
-        return processReadWriteComparison(data, colors);
+        return processReadWriteComparison(data, colors, options);
       
       case 'iops-latency-dual':
-        return processIOPSLatencyDual(data, colors);
+        return processIOPSLatencyDual(data, colors, options);
       
       default:
-        return processDefaultChart(data, colors);
+        return processDefaultChart(data, colors, options);
     }
   };
 
@@ -103,10 +157,21 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
     return 0;
   };
 
-  const processDefaultChart = (data: PerformanceData[], colors: string[]) => {
+  const processDefaultChart = (data: PerformanceData[], colors: string[], options?: {
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortOrder: 'asc' | 'desc';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+  }) => {
+    const sortedData = applySortingAndGrouping(data);
+    
+    // Apply grouping
+    if (options?.groupBy && options.groupBy !== 'none') {
+      return processGroupedData(sortedData, colors, options.groupBy);
+    }
+
     // Simple default chart showing IOPS by hostname, model, protocol, pattern, and block size
-    const labels = data.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
-    const iopsValues = data.map(item => getMetricValue(item.metrics, 'iops'));
+    const labels = sortedData.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
+    const iopsValues = sortedData.map(item => getMetricValue(item.metrics, 'iops'));
 
     const datasets = [{
       label: 'IOPS',
@@ -124,54 +189,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
     sortOrder: 'asc' | 'desc';
     groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
   }) => {
-    // Apply sorting
-    let sortedData = [...data];
-    if (options) {
-      sortedData.sort((a, b) => {
-        let aValue: any, bValue: any;
-        
-        switch (options.sortBy) {
-          case 'name':
-            aValue = `${a.test_name}_${a.drive_model}_${a.block_size}`;
-            bValue = `${b.test_name}_${b.drive_model}_${b.block_size}`;
-            break;
-          case 'iops':
-            aValue = getMetricValue(a.metrics, 'iops');
-            bValue = getMetricValue(b.metrics, 'iops');
-            break;
-          case 'latency':
-            aValue = getMetricValue(a.metrics, 'avg_latency');
-            bValue = getMetricValue(b.metrics, 'avg_latency');
-            break;
-          case 'throughput':
-            aValue = getMetricValue(a.metrics, 'throughput') || getMetricValue(a.metrics, 'bandwidth');
-            bValue = getMetricValue(b.metrics, 'throughput') || getMetricValue(b.metrics, 'bandwidth');
-            break;
-          case 'blocksize':
-            aValue = a.block_size;
-            bValue = b.block_size;
-            break;
-          case 'drivemodel':
-            aValue = a.drive_model;
-            bValue = b.drive_model;
-            break;
-          case 'protocol':
-            aValue = a.protocol || '';
-            bValue = b.protocol || '';
-            break;
-          case 'hostname':
-            aValue = a.hostname || '';
-            bValue = b.hostname || '';
-            break;
-          default:
-            aValue = a.test_name;
-            bValue = b.test_name;
-        }
-        
-        const comparison = typeof aValue === 'string' ? aValue.localeCompare(bValue) : aValue - bValue;
-        return options.sortOrder === 'asc' ? comparison : -comparison;
-      });
-    }
+    const sortedData = applySortingAndGrouping(data);
 
     // Apply grouping
     if (options?.groupBy && options.groupBy !== 'none') {
@@ -287,11 +305,22 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
     return { labels, datasets };
   };
 
-  const processBlockSizeImpact = (data: PerformanceData[], colors: string[]) => {
+  const processBlockSizeImpact = (data: PerformanceData[], colors: string[], options?: {
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortOrder: 'asc' | 'desc';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+  }) => {
+    const sortedData = applySortingAndGrouping(data);
+
+    // Apply grouping if requested
+    if (options?.groupBy && options.groupBy !== 'none') {
+      return processGroupedData(sortedData, colors, options.groupBy);
+    }
+
     // Group by drive model and show performance across block sizes
     const groupedData = new Map<string, Map<number, {iops: number, throughput: number}>>();
     
-    data.forEach(item => {
+    sortedData.forEach(item => {
       const driveKey = item.drive_model;
       const blockSize = item.block_size;
       
@@ -305,7 +334,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
       groupedData.get(driveKey)!.set(blockSize, { iops: iopsValue, throughput: throughputValue });
     });
 
-    const blockSizes = Array.from(new Set(data.map(item => item.block_size))).sort((a, b) => a - b);
+    const blockSizes = Array.from(new Set(sortedData.map(item => item.block_size))).sort((a, b) => a - b);
     const drives = Array.from(groupedData.keys());
 
     const datasets = drives.map((drive, index) => ({
@@ -322,11 +351,22 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
     };
   };
 
-  const processReadWriteComparison = (data: PerformanceData[], colors: string[]) => {
+  const processReadWriteComparison = (data: PerformanceData[], colors: string[], options?: {
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortOrder: 'asc' | 'desc';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+  }) => {
+    const sortedData = applySortingAndGrouping(data);
+
+    // Apply grouping if requested
+    if (options?.groupBy && options.groupBy !== 'none') {
+      return processGroupedData(sortedData, colors, options.groupBy);
+    }
+
     // Compare read vs write operations side by side
     const groupedData = new Map<string, {read: number, write: number}>();
     
-    data.forEach(item => {
+    sortedData.forEach(item => {
       const testKey = `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`;
       
       const readIOPS = getMetricValue(item.metrics, 'iops', 'read');
@@ -373,14 +413,25 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
     return { labels, datasets };
   };
 
-  const processIOPSLatencyDual = (data: PerformanceData[], colors: string[]) => {
+  const processIOPSLatencyDual = (data: PerformanceData[], colors: string[], options?: {
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortOrder: 'asc' | 'desc';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+  }) => {
+    const sortedData = applySortingAndGrouping(data);
+
+    // Apply grouping if requested
+    if (options?.groupBy && options.groupBy !== 'none') {
+      return processGroupedData(sortedData, colors, options.groupBy);
+    }
+
     // Dual-axis chart with IOPS and Latency
-    const labels = data.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
+    const labels = sortedData.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
     
     const datasets = [
       {
         label: 'IOPS',
-        data: data.map(item => getMetricValue(item.metrics, 'iops')),
+        data: sortedData.map(item => getMetricValue(item.metrics, 'iops')),
         backgroundColor: colors[0],
         borderColor: colors[0],
         borderWidth: 1,
@@ -388,7 +439,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
       },
       {
         label: 'Avg Latency (ms)',
-        data: data.map(item => getMetricValue(item.metrics, 'avg_latency')),
+        data: sortedData.map(item => getMetricValue(item.metrics, 'avg_latency')),
         backgroundColor: colors[1] + '80', // Semi-transparent
         borderColor: colors[1],
         borderWidth: 2,
@@ -643,8 +694,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
         </div>
       </div>
 
-      {/* Performance Overview Interactive Controls */}
-      {template.id === 'performance-overview' && (
+      {/* Interactive Controls for All Chart Templates */}
+      {(
         <div className="mb-4 p-4 theme-bg-secondary rounded-lg border theme-border-primary">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Reset Controls */}
