@@ -85,6 +85,30 @@ The frontend will automatically use `${EXTERNAL_URL}/api` as the backend endpoin
 
 - Database: `./data/backend/db/storage_performance.db`
 - Uploads: `./data/backend/uploads/`
+- Authentication: `./data/auth/.htpasswd`
+
+## Authentication Management
+
+### Default Credentials
+- **Username**: `admin`
+- **Password**: `fio-analyzer`
+
+### Change Password
+```bash
+# Interactive password change
+docker exec -it fio-backend npm run change-password
+
+# Follow the prompts to set new username/password
+```
+
+### Manual .htpasswd Management
+```bash
+# View current users
+docker exec fio-backend cat /app/.htpasswd
+
+# Generate password hash (if needed)
+docker exec fio-backend node -e "console.log(require('bcryptjs').hashSync('newpassword', 10))"
+```
 
 ## Scaling
 

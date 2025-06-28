@@ -23,6 +23,7 @@ services:
     volumes:      
       - ./data/backend/db:/app/db
       - ./data/backend/uploads:/app/uploads
+      - ./data/auth/.htpasswd:/app/.htpasswd
     networks:
       - fio-network
     restart: unless-stopped
