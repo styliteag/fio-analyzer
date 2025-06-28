@@ -1,56 +1,122 @@
-# Docker Setup for FIO Analyzer
+# FIO Analyzer Production Deployment
 
-This directory contains Docker configuration for running the FIO Analyzer application.
+This directory contains Docker configuration for production deployment with Nginx reverse proxy.
 
-## Services
+## Architecture
 
-- **Backend**: FastAPI Python server running on port 8000
-- **Frontend**: React TypeScript application running on port 3000
+```
+Internet -> Nginx (Port 80) -> Frontend (Port 3000) & Backend (Port 8000)
+```
+
+- **Nginx**: Reverse proxy serving the application on port 80
+- **Frontend**: React SPA served by Nginx (optimized static files)
+- **Backend**: Node.js/Express API server
+- **Database**: SQLite with persistent volume
 
 ## Quick Start
 
-1. **Build and run all services:**
-   ```bash
-   docker compose up --build
-   ```
+## Manual Deployment
 
-2. **Run in background:**
-   ```bash
-   docker compose up -d --build
-   ```
+If you prefer manual deployment:
 
-3. **Stop services:**
-   ```bash
-   docker compose down
-   ```
+```bash
+cd docker
 
-## Access Points
+# Create data directories
+mkdir -p data/backend/db data/backend/uploads
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
+# Build and start services
+dokcer compose up --build -d
 
-## Development
+# Check status
+dokcer compose ps
 
-For development with hot reloading:
+# View logs
+dokcer compose logs -f
+```
 
-1. **Backend only:**
-   ```bash
-   docker compose up backend
-   ```
+## Service Management
 
-2. **Frontend only:**
-   ```bash
-   docker compose up frontend
-   ```
+```bash
+# Stop services
+dokcer compose down
 
-## Volumes
+# Restart services
+dokcer compose restart
 
-The backend service mounts the `backend/` directory as a volume for development, allowing code changes without rebuilding the container.
+# View logs
+dokcer compose logs -f [service_name]
 
-**Database Persistence**: The SQLite database (`storage_performance.db`) is stored in a Docker volume (`docker_sqlite_data`) to persist data between container restarts.
+# Update services
+dokcer compose up --build -d
+```
+
 
 ## Environment Variables
 
-- `VITE_API_URL`: API endpoint for frontend (default: http://localhost:8000)
-- `PYTHONPATH`: Python path for backend (default: /app) 
+1. **Copy the sample configuration:**
+   ```bash
+   cp docker/.env.example docker/.env
+   ```
+
+2. **Edit for your environment:**
+   ```bash
+   nano docker/.env
+   ```
+
+3. **Sample configurations:**
+   ```bash
+   # Local development
+   EXTERNAL_URL=http://localhost
+   
+   # Production server
+   EXTERNAL_URL=http://fio-analyzer.company.com
+   
+   # Custom port
+   EXTERNAL_URL=http://server.local:8080
+   
+   # HTTPS
+   EXTERNAL_URL=https://fio-analyzer.company.com
+   ```
+
+The frontend will automatically use `${EXTERNAL_URL}/api` as the backend endpoint.
+
+## Persistent Data
+
+- Database: `./data/backend/db/storage_performance.db`
+- Uploads: `./data/backend/uploads/`
+
+## Scaling
+
+To scale the backend:
+```bash
+dokcer compose up --scale backend=3 -d
+```
+
+## Troubleshooting
+
+1. **Port 80 already in use:**
+   ```bash
+   # Change port in compose.yml
+   ports:
+     - "8080:80"  # Use port 8080 instead
+   ```
+
+2. **Permission issues:**
+   ```bash
+   sudo chown -R $USER:$USER data/
+   ```
+
+3. **Check service health:**
+   ```bash
+   curl http://localhost/health
+   ```
+
+## Production Checklist
+
+- [ ] Update default credentials
+- [ ] Configure backup for database
+- [ ] Set up monitoring
+- [ ] Configure log rotation
+- [ ] Review security settings
+- [ ] Test file upload limits 
