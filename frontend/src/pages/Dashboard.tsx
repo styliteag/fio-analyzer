@@ -44,7 +44,17 @@ export default function Dashboard() {
       const metrics = selectedTemplate?.metrics || ['iops', 'avg_latency', 'throughput'];
       
       const data = await apiFetchPerformanceData(runIds, metrics);
-      setPerformanceData(data);
+      
+      // Enhance performance data with queue_depth from selected runs
+      const enhancedData = data.map((perfData: any) => {
+        const correspondingRun = selectedRuns.find(run => run.id === perfData.id);
+        return {
+          ...perfData,
+          queue_depth: correspondingRun?.queue_depth || 1
+        };
+      });
+      
+      setPerformanceData(enhancedData);
     } catch (error) {
       console.error('Error fetching performance data:', error);
     } finally {

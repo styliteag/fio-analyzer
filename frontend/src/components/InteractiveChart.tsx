@@ -43,9 +43,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
   const themeColors = useThemeColors();
   
   // Interactive controls for all chart templates
-  const [sortBy, setSortBy] = useState<'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname' | 'queuedepth'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [groupBy, setGroupBy] = useState<'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname'>('none');
+  const [groupBy, setGroupBy] = useState<'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname' | 'queuedepth'>('none');
 
   useEffect(() => {
     if (data.length > 0) {
@@ -97,6 +97,10 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
         case 'hostname':
           aValue = a.hostname || '';
           bValue = b.hostname || '';
+          break;
+        case 'queuedepth':
+          aValue = a.queue_depth || 0;
+          bValue = b.queue_depth || 0;
           break;
         default:
           aValue = a.test_name;
@@ -158,9 +162,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
   };
 
   const processDefaultChart = (data: PerformanceData[], colors: string[], options?: {
-    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname' | 'queuedepth';
     sortOrder: 'asc' | 'desc';
-    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname' | 'queuedepth';
   }) => {
     const sortedData = applySortingAndGrouping(data);
     
@@ -169,8 +173,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
       return processGroupedData(sortedData, colors, options.groupBy);
     }
 
-    // Simple default chart showing IOPS by hostname, model, protocol, pattern, and block size
-    const labels = sortedData.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
+    // Simple default chart showing IOPS by hostname, model, protocol, pattern, block size, and queue depth
+    const labels = sortedData.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB\nQD${item.queue_depth || 'N/A'}`);
     const iopsValues = sortedData.map(item => getMetricValue(item.metrics, 'iops'));
 
     const datasets = [{
@@ -185,9 +189,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
   };
 
   const processPerformanceOverview = (data: PerformanceData[], colors: string[], options?: {
-    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname' | 'queuedepth';
     sortOrder: 'asc' | 'desc';
-    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname' | 'queuedepth';
   }) => {
     const sortedData = applySortingAndGrouping(data);
 
@@ -197,7 +201,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
     }
 
     // Default ungrouped view
-    const labels = sortedData.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
+    const labels = sortedData.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB\nQD${item.queue_depth ?? 'N/A'}`);
     
     const datasets = [
       {
@@ -250,6 +254,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
           break;
         case 'hostname':
           key = item.hostname || 'Unknown Host';
+          break;
+        case 'queuedepth':
+          key = `QD${item.queue_depth || 'N/A'}`;
           break;
         default:
           key = 'default';
@@ -306,9 +313,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
   };
 
   const processBlockSizeImpact = (data: PerformanceData[], colors: string[], options?: {
-    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname' | 'queuedepth';
     sortOrder: 'asc' | 'desc';
-    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname' | 'queuedepth';
   }) => {
     const sortedData = applySortingAndGrouping(data);
 
@@ -352,9 +359,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
   };
 
   const processReadWriteComparison = (data: PerformanceData[], colors: string[], options?: {
-    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname' | 'queuedepth';
     sortOrder: 'asc' | 'desc';
-    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname' | 'queuedepth';
   }) => {
     const sortedData = applySortingAndGrouping(data);
 
@@ -367,7 +374,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
     const groupedData = new Map<string, {read: number, write: number}>();
     
     sortedData.forEach(item => {
-      const testKey = `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`;
+      const testKey = `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB\nQD${item.queue_depth || 'N/A'}`;
       
       const readIOPS = getMetricValue(item.metrics, 'iops', 'read');
       const writeIOPS = getMetricValue(item.metrics, 'iops', 'write');
@@ -414,9 +421,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
   };
 
   const processIOPSLatencyDual = (data: PerformanceData[], colors: string[], options?: {
-    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname' | 'queuedepth';
     sortOrder: 'asc' | 'desc';
-    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname' | 'queuedepth';
   }) => {
     const sortedData = applySortingAndGrouping(data);
 
@@ -426,7 +433,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
     }
 
     // Dual-axis chart with IOPS and Latency
-    const labels = sortedData.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
+    const labels = sortedData.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB\nQD${item.queue_depth || 'N/A'}`);
     
     const datasets = [
       {
@@ -736,6 +743,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
                   <option value="drivemodel">Drive Model</option>
                   <option value="protocol">Protocol</option>
                   <option value="hostname">Hostname</option>
+                  <option value="queuedepth">Queue Depth</option>
                 </select>
                 <button
                   onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
@@ -764,6 +772,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
                 <option value="blocksize">Block Size</option>
                 <option value="protocol">Protocol</option>
                 <option value="hostname">Hostname</option>
+                <option value="queuedepth">Queue Depth</option>
               </select>
             </div>
           </div>
