@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isChartMaximized, setIsChartMaximized] = useState(false);
 
   useEffect(() => {
     if (selectedRuns.length > 0 && selectedTemplate) {
@@ -105,7 +106,7 @@ export default function Dashboard() {
         </div>
 
         {/* Two Column Layout for Templates and Graphs */}
-        <div className="w-full grid grid-cols-10 gap-8">
+        <div className={`w-full ${isChartMaximized ? 'hidden' : 'grid grid-cols-10 gap-8'}`}>
           {/* Left Column - Templates (30%) */}
           <div className="col-span-3">
             <TemplateSelector
@@ -129,14 +130,26 @@ export default function Dashboard() {
                 <InteractiveChart
                   template={selectedTemplate}
                   data={performanceData}
+                  isMaximized={isChartMaximized}
+                  onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
                 />
               </div>
             )}
           </div>
         </div>
 
+        {/* Maximized Chart */}
+        {isChartMaximized && selectedTemplate && (
+          <InteractiveChart
+            template={selectedTemplate}
+            data={performanceData}
+            isMaximized={isChartMaximized}
+            onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+          />
+        )}
+
         {/* Instructions */}
-        {selectedRuns.length === 0 && (
+        {selectedRuns.length === 0 && !isChartMaximized && (
           <div className="theme-bg-accent border theme-border-accent rounded-lg p-6 text-center mt-8">
             <Activity className="h-12 w-12 theme-text-accent mx-auto mb-4" />
             <h3 className="text-lg font-medium theme-text-accent mb-2">

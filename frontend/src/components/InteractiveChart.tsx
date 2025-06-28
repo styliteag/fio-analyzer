@@ -14,7 +14,7 @@ import {
 import { Bar, Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import { ChartTemplate, PerformanceData } from '../types';
-import { Download, Eye, EyeOff, BarChart3 } from 'lucide-react';
+import { Download, Eye, EyeOff, BarChart3, Maximize, Minimize, ArrowUpDown, Layers, Filter } from 'lucide-react';
 import { useThemeColors } from '../hooks/useThemeColors';
 
 ChartJS.register(
@@ -32,13 +32,20 @@ ChartJS.register(
 interface InteractiveChartProps {
   template: ChartTemplate;
   data: PerformanceData[];
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
 }
 
-const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) => {
+const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isMaximized, onToggleMaximize }) => {
   const chartRef = useRef<any>(null);
   const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set());
   const [chartData, setChartData] = useState<any>(null);
   const themeColors = useThemeColors();
+  
+  // Performance Overview interactive controls
+  const [sortBy, setSortBy] = useState<'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname'>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [groupBy, setGroupBy] = useState<'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname'>('none');
 
   useEffect(() => {
     if (data.length > 0) {
@@ -49,7 +56,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
       const allSeries = new Set(processedData.datasets.map((d: any) => d.label));
       setVisibleSeries(allSeries);
     }
-  }, [template, data]);
+  }, [template, data, sortBy, sortOrder, groupBy]);
 
   const processDataForTemplate = (template: ChartTemplate, data: PerformanceData[]) => {
     const colors = [
@@ -59,7 +66,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
 
     switch (template.id) {
       case 'performance-overview':
-        return processPerformanceOverview(data, colors);
+        return processPerformanceOverview(data, colors, { sortBy, sortOrder, groupBy });
       
       case 'block-size-impact':
         return processBlockSizeImpact(data, colors);
@@ -97,8 +104,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
   };
 
   const processDefaultChart = (data: PerformanceData[], colors: string[]) => {
-    // Simple default chart showing IOPS by test name
-    const labels = data.map(item => `${item.test_name} (${item.drive_model})`);
+    // Simple default chart showing IOPS by hostname, model, protocol, pattern, and block size
+    const labels = data.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
     const iopsValues = data.map(item => getMetricValue(item.metrics, 'iops'));
 
     const datasets = [{
@@ -112,14 +119,72 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
     return { labels, datasets };
   };
 
-  const processPerformanceOverview = (data: PerformanceData[], colors: string[]) => {
-    // Show IOPS, Latency, and Throughput for each test run
-    const labels = data.map(item => `${item.test_name}\n${item.drive_model}\n${item.block_size}KB`);
+  const processPerformanceOverview = (data: PerformanceData[], colors: string[], options?: {
+    sortBy: 'name' | 'iops' | 'latency' | 'throughput' | 'blocksize' | 'drivemodel' | 'protocol' | 'hostname';
+    sortOrder: 'asc' | 'desc';
+    groupBy: 'none' | 'drive' | 'test' | 'blocksize' | 'protocol' | 'hostname';
+  }) => {
+    // Apply sorting
+    let sortedData = [...data];
+    if (options) {
+      sortedData.sort((a, b) => {
+        let aValue: any, bValue: any;
+        
+        switch (options.sortBy) {
+          case 'name':
+            aValue = `${a.test_name}_${a.drive_model}_${a.block_size}`;
+            bValue = `${b.test_name}_${b.drive_model}_${b.block_size}`;
+            break;
+          case 'iops':
+            aValue = getMetricValue(a.metrics, 'iops');
+            bValue = getMetricValue(b.metrics, 'iops');
+            break;
+          case 'latency':
+            aValue = getMetricValue(a.metrics, 'avg_latency');
+            bValue = getMetricValue(b.metrics, 'avg_latency');
+            break;
+          case 'throughput':
+            aValue = getMetricValue(a.metrics, 'throughput') || getMetricValue(a.metrics, 'bandwidth');
+            bValue = getMetricValue(b.metrics, 'throughput') || getMetricValue(b.metrics, 'bandwidth');
+            break;
+          case 'blocksize':
+            aValue = a.block_size;
+            bValue = b.block_size;
+            break;
+          case 'drivemodel':
+            aValue = a.drive_model;
+            bValue = b.drive_model;
+            break;
+          case 'protocol':
+            aValue = a.protocol || '';
+            bValue = b.protocol || '';
+            break;
+          case 'hostname':
+            aValue = a.hostname || '';
+            bValue = b.hostname || '';
+            break;
+          default:
+            aValue = a.test_name;
+            bValue = b.test_name;
+        }
+        
+        const comparison = typeof aValue === 'string' ? aValue.localeCompare(bValue) : aValue - bValue;
+        return options.sortOrder === 'asc' ? comparison : -comparison;
+      });
+    }
+
+    // Apply grouping
+    if (options?.groupBy && options.groupBy !== 'none') {
+      return processGroupedData(sortedData, colors, options.groupBy);
+    }
+
+    // Default ungrouped view
+    const labels = sortedData.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
     
     const datasets = [
       {
         label: 'IOPS',
-        data: data.map(item => getMetricValue(item.metrics, 'iops')),
+        data: sortedData.map(item => getMetricValue(item.metrics, 'iops')),
         backgroundColor: colors[0],
         borderColor: colors[0],
         borderWidth: 1,
@@ -127,7 +192,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
       },
       {
         label: 'Avg Latency (ms)',
-        data: data.map(item => getMetricValue(item.metrics, 'avg_latency')),
+        data: sortedData.map(item => getMetricValue(item.metrics, 'avg_latency')),
         backgroundColor: colors[1],
         borderColor: colors[1],
         borderWidth: 1,
@@ -135,7 +200,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
       },
       {
         label: 'Throughput (MB/s)',
-        data: data.map(item => getMetricValue(item.metrics, 'throughput') || getMetricValue(item.metrics, 'bandwidth')),
+        data: sortedData.map(item => getMetricValue(item.metrics, 'throughput') || getMetricValue(item.metrics, 'bandwidth')),
         backgroundColor: colors[2],
         borderColor: colors[2],
         borderWidth: 1,
@@ -143,6 +208,82 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
       }
     ];
 
+    return { labels, datasets };
+  };
+
+  const processGroupedData = (data: PerformanceData[], colors: string[], groupBy: string) => {
+    // Group data based on groupBy parameter
+    const groups = new Map<string, PerformanceData[]>();
+    
+    data.forEach(item => {
+      let key: string;
+      switch (groupBy) {
+        case 'drive':
+          key = item.drive_model;
+          break;
+        case 'test':
+          key = item.test_name;
+          break;
+        case 'blocksize':
+          key = `${item.block_size}KB`;
+          break;
+        case 'protocol':
+          key = item.protocol || 'Unknown Protocol';
+          break;
+        case 'hostname':
+          key = item.hostname || 'Unknown Host';
+          break;
+        default:
+          key = 'default';
+      }
+      
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(item);
+    });
+
+    // Create labels and datasets for grouped data
+    const groupKeys = Array.from(groups.keys());
+    const labels = groupKeys;
+    
+    // Grouped view - show average values for each metric per group
+    const datasets = [
+      {
+        label: 'Avg IOPS',
+        data: groupKeys.map(key => {
+          const groupData = groups.get(key)!;
+          return groupData.reduce((sum, item) => sum + getMetricValue(item.metrics, 'iops'), 0) / groupData.length;
+        }),
+        backgroundColor: colors[0],
+        borderColor: colors[0],
+        borderWidth: 1,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Avg Latency (ms)',
+        data: groupKeys.map(key => {
+          const groupData = groups.get(key)!;
+          return groupData.reduce((sum, item) => sum + getMetricValue(item.metrics, 'avg_latency'), 0) / groupData.length;
+        }),
+        backgroundColor: colors[1],
+        borderColor: colors[1],
+        borderWidth: 1,
+        yAxisID: 'y1',
+      },
+      {
+        label: 'Avg Throughput (MB/s)',
+        data: groupKeys.map(key => {
+          const groupData = groups.get(key)!;
+          return groupData.reduce((sum, item) => sum + (getMetricValue(item.metrics, 'throughput') || getMetricValue(item.metrics, 'bandwidth')), 0) / groupData.length;
+        }),
+        backgroundColor: colors[2],
+        borderColor: colors[2],
+        borderWidth: 1,
+        yAxisID: 'y2',
+      }
+    ];
+    
     return { labels, datasets };
   };
 
@@ -186,7 +327,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
     const groupedData = new Map<string, {read: number, write: number}>();
     
     data.forEach(item => {
-      const testKey = `${item.test_name}\n${item.drive_model}`;
+      const testKey = `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`;
       
       const readIOPS = getMetricValue(item.metrics, 'iops', 'read');
       const writeIOPS = getMetricValue(item.metrics, 'iops', 'write');
@@ -234,7 +375,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
 
   const processIOPSLatencyDual = (data: PerformanceData[], colors: string[]) => {
     // Dual-axis chart with IOPS and Latency
-    const labels = data.map(item => `${item.test_name}\n${item.drive_model}`);
+    const labels = data.map(item => `${item.hostname || 'N/A'}\n${item.drive_model}\n${item.protocol || 'N/A'}\n${item.read_write_pattern}\n${item.block_size}KB`);
     
     const datasets = [
       {
@@ -457,7 +598,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
 
   if (!chartData || data.length === 0) {
     return (
-      <div className="theme-card rounded-lg shadow-md p-6 border">
+      <div className={`theme-card rounded-lg shadow-md p-6 border ${isMaximized ? 'fixed inset-0 z-50 bg-white dark:bg-gray-900' : ''}`}>
         <div className="text-center py-12">
           <div className="theme-text-tertiary mb-4">
             <BarChart3 size={48} className="mx-auto" />
@@ -471,11 +612,20 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
   const ChartComponent = template.chartType === 'line' ? Line : Bar;
 
   return (
-    <div className="theme-card rounded-lg shadow-md p-6 border">
+    <div className={`theme-card rounded-lg shadow-md p-6 border ${isMaximized ? 'fixed inset-0 z-50 bg-white dark:bg-gray-900 overflow-auto' : ''}`}>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold theme-text-primary">{template.name}</h2>
         
         <div className="flex space-x-2">
+          {onToggleMaximize && (
+            <button
+              onClick={onToggleMaximize}
+              className="flex items-center px-3 py-2 theme-btn-secondary rounded transition-colors"
+              title={isMaximized ? 'Exit fullscreen' : 'Enter fullscreen'}
+            >
+              {isMaximized ? <Minimize size={16} /> : <Maximize size={16} />}
+            </button>
+          )}
           <button
             onClick={() => exportChart('png')}
             className="flex items-center px-3 py-2 theme-btn-primary rounded transition-colors"
@@ -492,6 +642,82 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
           </button>
         </div>
       </div>
+
+      {/* Performance Overview Interactive Controls */}
+      {template.id === 'performance-overview' && (
+        <div className="mb-4 p-4 theme-bg-secondary rounded-lg border theme-border-primary">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Reset Controls */}
+            <div>
+              <label className="block text-sm font-medium theme-text-secondary mb-2">
+                <Filter size={14} className="inline mr-1" />
+                Reset
+              </label>
+              <button
+                onClick={() => {
+                  setSortBy('name');
+                  setSortOrder('asc');
+                  setGroupBy('none');
+                }}
+                className="w-full px-3 py-1 text-sm theme-btn-secondary rounded transition-colors"
+              >
+                Reset All
+              </button>
+            </div>
+
+            {/* Sort Controls */}
+            <div>
+              <label className="block text-sm font-medium theme-text-secondary mb-2">
+                <ArrowUpDown size={14} className="inline mr-1" />
+                Sort By
+              </label>
+              <div className="flex space-x-2">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="flex-1 px-3 py-1 text-sm border theme-border-primary rounded theme-bg-card theme-text-primary"
+                >
+                  <option value="name">Name</option>
+                  <option value="iops">IOPS</option>
+                  <option value="latency">Latency</option>
+                  <option value="throughput">Throughput</option>
+                  <option value="blocksize">Block Size</option>
+                  <option value="drivemodel">Drive Model</option>
+                  <option value="protocol">Protocol</option>
+                  <option value="hostname">Hostname</option>
+                </select>
+                <button
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  className="px-3 py-1 text-sm theme-btn-secondary rounded transition-colors"
+                  title={`Sort ${sortOrder === 'asc' ? 'Descending' : 'Ascending'}`}
+                >
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                </button>
+              </div>
+            </div>
+
+            {/* Group Controls */}
+            <div>
+              <label className="block text-sm font-medium theme-text-secondary mb-2">
+                <Layers size={14} className="inline mr-1" />
+                Group By
+              </label>
+              <select
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as any)}
+                className="w-full px-3 py-1 text-sm border theme-border-primary rounded theme-bg-card theme-text-primary"
+              >
+                <option value="none">No Grouping</option>
+                <option value="drive">Drive Model</option>
+                <option value="test">Test Type</option>
+                <option value="blocksize">Block Size</option>
+                <option value="protocol">Protocol</option>
+                <option value="hostname">Hostname</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Series Toggle Controls */}
       {chartData.datasets.length > 1 && (
@@ -519,7 +745,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data }) =
         </div>
       )}
 
-      <div className="h-96">
+      <div className={isMaximized ? 'h-[calc(100vh-280px)]' : 'h-[600px]'}>
         <ChartComponent
           ref={chartRef}
           data={chartData}

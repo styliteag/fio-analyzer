@@ -408,19 +408,21 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
       {selectedRuns.length > 0 && (
         <div className="mt-4">
           <div className="flex items-center justify-between mb-1">
-            <h3 className="text-xs font-medium theme-text-secondary">
-              Selected Runs ({selectedRuns.length}):
-            </h3>
-            {selectedRuns.length > 1 && (
-              <button
-                onClick={handleBulkEdit}
-                className="inline-flex items-center px-2 py-1 text-xs theme-btn-secondary border rounded transition-colors"
-                title="Edit all selected test runs at once"
-              >
-                <Users className="h-3 w-3 mr-1" />
-                Edit All
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-medium theme-text-secondary">
+                Selected Runs ({selectedRuns.length}):
+              </h3>
+              {selectedRuns.length > 1 && (
+                <button
+                  onClick={handleBulkEdit}
+                  className="inline-flex items-center px-2 py-1 text-xs theme-btn-secondary border rounded transition-colors"
+                  title="Edit all selected test runs at once"
+                >
+                  <Users className="h-3 w-3 mr-1" />
+                  Edit All
+                </button>
+              )}
+            </div>
           </div>
           <div className="max-h-48 overflow-y-auto border theme-border-secondary rounded-md p-2 theme-bg-tertiary">
             <div className={`grid gap-2 grid-cols-${SELECTED_RUNS_COLUMNS.sm} md:grid-cols-${SELECTED_RUNS_COLUMNS.md} lg:grid-cols-${SELECTED_RUNS_COLUMNS.lg} xl:grid-cols-${SELECTED_RUNS_COLUMNS.xl} 2xl:grid-cols-${SELECTED_RUNS_COLUMNS['2xl']}`}>
