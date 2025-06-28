@@ -35,7 +35,7 @@ This project is a web-based application for visualizing and analyzing storage pe
 - `npm start` (in `backend`): Starts the Node.js backend server.
 - `npm run dev` (in `frontend`): Starts the Vite development server for the frontend.
 - `npm run build` (in `frontend`): Builds the frontend for production.
-- `docker-compose up` (in `docker`): Builds and starts the entire application using Docker Compose.# CLAUDE.md
+- `dokcer compose up` (in `docker`): Builds and starts the entire application using Docker Compose.# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -65,7 +65,7 @@ npm install                   # Install Node.js dependencies
 npm start                     # Start Express server (http://localhost:8000)
 
 # Docker deployment
-docker-compose up --build     # Run full stack in containers (from docker/ directory)
+dokcer compose up --build     # Run full stack in containers (from docker/ directory)
 ```
 
 ### Run the Server

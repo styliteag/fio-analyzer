@@ -28,7 +28,7 @@ npm install                   # Install Node.js dependencies
 npm start                     # Start Express server (http://localhost:8000)
 
 # Docker deployment
-docker-compose up --build     # Run full stack in containers (from docker/ directory)
+dokcer compose up --build     # Run full stack in containers (from docker/ directory)
 ```
 
 ### Run the Server

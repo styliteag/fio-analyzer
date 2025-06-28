@@ -299,7 +299,7 @@ latency_percentiles (id, test_run_id, operation_type, percentile, latency_ns)
 You can also run the application using Docker Compose:
 
 ```bash
-docker-compose up --build
+dokcer compose up --build
 ```
 
 This will build and start the frontend and backend services.
