@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { TestRun, FilterOptions } from '../types';
-import { Calendar, HardDrive, Settings, Edit2, Trash2, Plus } from 'lucide-react';
+import { fetchTestRuns, fetchFilters, deleteTestRun } from '../utils/api';
+import { Calendar, HardDrive, Settings, Edit2, Trash2, Plus, Users } from 'lucide-react';
 import EditTestRunModal from './EditTestRunModal';
+import BulkEditModal from './BulkEditModal';
 import { getSelectStyles } from '../hooks/useThemeColors';
 
 interface TestRunSelectorProps {
@@ -45,31 +47,30 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   });
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [testRunToEdit, setTestRunToEdit] = useState<TestRun | null>(null);
+  const [bulkEditModalOpen, setBulkEditModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchTestRuns();
-    fetchFilters();
+    loadTestRuns();
+    loadFilters();
   }, [refreshTrigger]);
 
   useEffect(() => {
     applyFilters();
   }, [testRuns, activeFilters]);
 
-  const fetchTestRuns = async () => {
+  const loadTestRuns = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/test-runs');
-      const data = await response.json();
+      const data = await fetchTestRuns();
       setTestRuns(data);
     } catch (error) {
       console.error('Error fetching test runs:', error);
     }
   };
 
-  const fetchFilters = async () => {
+  const loadFilters = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/filters');
-      const data = await response.json();
+      const data = await fetchFilters();
       setFilters(data);
     } catch (error) {
       console.error('Error fetching filters:', error);
@@ -167,7 +168,27 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     onSelectionChange(updatedSelectedRuns);
     
     // Refresh filters to include any new drive types/models
-    fetchFilters();
+    loadFilters();
+  };
+
+  const handleBulkSave = (updatedRuns: TestRun[]) => {
+    // Update the test runs list with all updated runs
+    setTestRuns(prev => {
+      const updatedMap = new Map(updatedRuns.map(run => [run.id, run]));
+      return prev.map(run => updatedMap.get(run.id) || run);
+    });
+    
+    // Update selected runs with the updated data
+    const updatedMap = new Map(updatedRuns.map(run => [run.id, run]));
+    const updatedSelectedRuns = selectedRuns.map(run => updatedMap.get(run.id) || run);
+    onSelectionChange(updatedSelectedRuns);
+    
+    // Refresh filters to include any new drive types/models
+    loadFilters();
+  };
+
+  const handleBulkEdit = () => {
+    setBulkEditModalOpen(true);
   };
 
   const handleDeleteTestRun = async (testRun: TestRun) => {
@@ -178,24 +199,17 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     setDeleting(testRun.id);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/test-runs/${testRun.id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        // Remove from test runs list
-        setTestRuns(prev => prev.filter(run => run.id !== testRun.id));
-        
-        // Remove from selected runs if it was selected
-        const updatedSelectedRuns = selectedRuns.filter(run => run.id !== testRun.id);
-        onSelectionChange(updatedSelectedRuns);
-        
-        // Refresh filters
-        fetchFilters();
-      } else {
-        const result = await response.json();
-        alert(result.error || 'Failed to delete test run');
-      }
+      await deleteTestRun(testRun.id);
+      
+      // Remove from test runs list
+      setTestRuns(prev => prev.filter(run => run.id !== testRun.id));
+      
+      // Remove from selected runs if it was selected
+      const updatedSelectedRuns = selectedRuns.filter(run => run.id !== testRun.id);
+      onSelectionChange(updatedSelectedRuns);
+      
+      // Refresh filters
+      loadFilters();
     } catch (err) {
       alert('Network error occurred while deleting test run');
     } finally {
@@ -393,9 +407,21 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
       {/* Selected Runs Preview */}
       {selectedRuns.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-xs font-medium theme-text-secondary mb-1">
-            Selected Runs ({selectedRuns.length}):
-          </h3>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-xs font-medium theme-text-secondary">
+              Selected Runs ({selectedRuns.length}):
+            </h3>
+            {selectedRuns.length > 1 && (
+              <button
+                onClick={handleBulkEdit}
+                className="inline-flex items-center px-2 py-1 text-xs theme-btn-secondary border rounded transition-colors"
+                title="Edit all selected test runs at once"
+              >
+                <Users className="h-3 w-3 mr-1" />
+                Edit All
+              </button>
+            )}
+          </div>
           <div className="max-h-48 overflow-y-auto border theme-border-secondary rounded-md p-2 theme-bg-tertiary">
             <div className={`grid gap-2 grid-cols-${SELECTED_RUNS_COLUMNS.sm} md:grid-cols-${SELECTED_RUNS_COLUMNS.md} lg:grid-cols-${SELECTED_RUNS_COLUMNS.lg} xl:grid-cols-${SELECTED_RUNS_COLUMNS.xl} 2xl:grid-cols-${SELECTED_RUNS_COLUMNS['2xl']}`}>
             {selectedRuns.map(run => (
@@ -424,6 +450,13 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
                   <div className="theme-text-tertiary text-xs">
                     {run.block_size}KB, QD{run.queue_depth}
                   </div>
+                  {(run.hostname || run.protocol) && (
+                    <div className="theme-text-tertiary text-xs truncate mt-0.5">
+                      {run.hostname && <span>📡 {run.hostname}</span>}
+                      {run.hostname && run.protocol && <span className="mx-1">•</span>}
+                      {run.protocol && <span>🔗 {run.protocol}</span>}
+                    </div>
+                  )}
                   <div className="theme-text-tertiary mt-0.5">
                     <span className="inline-block px-1 py-0.5 theme-bg-accent theme-text-accent rounded text-xs">
                       {run.drive_type}
@@ -445,6 +478,13 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           setTestRunToEdit(null);
         }}
         onSave={handleSaveTestRun}
+      />
+      
+      <BulkEditModal
+        testRuns={selectedRuns}
+        isOpen={bulkEditModalOpen}
+        onClose={() => setBulkEditModalOpen(false)}
+        onSave={handleBulkSave}
       />
     </div>
   );

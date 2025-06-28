@@ -4,11 +4,14 @@ import TestRunSelector from '../components/TestRunSelector';
 import TemplateSelector from '../components/TemplateSelector';
 import InteractiveChart from '../components/InteractiveChart';
 import ThemeToggle from '../components/ThemeToggle';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchPerformanceData as apiFetchPerformanceData } from '../utils/api';
 import { TestRun, ChartTemplate, PerformanceData } from '../types';
-import { Activity, Database, Upload } from 'lucide-react';
+import { Activity, Database, Upload, LogOut } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { username, logout } = useAuth();
   const [selectedRuns, setSelectedRuns] = useState<TestRun[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<ChartTemplate | null>(null);
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
@@ -36,13 +39,10 @@ export default function Dashboard() {
 
     setLoading(true);
     try {
-      const runIds = selectedRuns.map(run => run.id).join(',');
-      const metrics = selectedTemplate?.metrics.join(',') || 'iops,avg_latency,throughput';
+      const runIds = selectedRuns.map(run => run.id);
+      const metrics = selectedTemplate?.metrics || ['iops', 'avg_latency', 'throughput'];
       
-      const response = await fetch(
-        `http://localhost:8000/api/performance-data?test_run_ids=${runIds}&metric_types=${metrics}`
-      );
-      const data = await response.json();
+      const data = await apiFetchPerformanceData(runIds, metrics);
       setPerformanceData(data);
     } catch (error) {
       console.error('Error fetching performance data:', error);
@@ -72,9 +72,21 @@ export default function Dashboard() {
                 <Upload className="h-4 w-4 mr-2" />
                 Upload
               </button>
-              <div className="flex items-center text-sm theme-text-secondary">
+              <div className="flex items-center text-sm theme-text-secondary mr-4">
                 <Database className="h-4 w-4 mr-1" />
                 FIO Benchmark Analysis
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm theme-text-secondary">
+                  Welcome, {username}
+                </span>
+                <button
+                  onClick={logout}
+                  className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md theme-text-secondary hover:theme-text-primary transition-colors"
+                  title="Logout"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
               </div>
             </div>
           </div>

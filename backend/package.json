@@ -12,8 +12,10 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "express-basic-auth": "^1.2.1",
     "multer": "^2.0.1",
     "sqlite3": "^5.1.7"
   }

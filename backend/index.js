@@ -3,12 +3,91 @@ const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const basicAuth = require('express-basic-auth');
+const bcrypt = require('bcryptjs');
 
 const DB_PATH = path.resolve(__dirname, './db/storage_performance.db');
+const HTPASSWD_PATH = path.resolve(__dirname, '.htpasswd');
 const app = express();
 const port = 8000;
 
+// Custom auth function that properly handles htpasswd hashes
+function customAuthChecker(username, password) {
+    const htpasswdUsers = parseHtpasswd(HTPASSWD_PATH);
+    if (!htpasswdUsers || !htpasswdUsers[username]) {
+        return false;
+    }
+    
+    const hash = htpasswdUsers[username];
+    
+    // Handle different hash formats
+    if (hash.startsWith('$2y$') || hash.startsWith('$2a$') || hash.startsWith('$2b$')) {
+        // Bcrypt format
+        return bcrypt.compareSync(password, hash);
+    } else if (hash.startsWith('$apr1$')) {
+        // Apache MD5 - not implemented, use bcrypt instead
+        console.warn('Apache MD5 format not supported, please recreate .htpasswd with bcrypt (-B flag)');
+        return false;
+    } else {
+        // Plain text (insecure)
+        return password === hash;
+    }
+}
+
+// Parse htpasswd file
+function parseHtpasswd(filePath) {
+    if (!fs.existsSync(filePath)) {
+        console.warn(`Warning: .htpasswd file not found at ${filePath}. Authentication disabled.`);
+        return null;
+    }
+    
+    try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const users = {};
+        content.split('\n').forEach(line => {
+            const trimmedLine = line.trim();
+            if (trimmedLine) {
+                const [username, hash] = trimmedLine.split(':');
+                if (username && hash) {
+                    users[username] = hash;
+                }
+            }
+        });
+        return Object.keys(users).length > 0 ? users : null;
+    } catch (error) {
+        console.error(`Error reading .htpasswd file: ${error.message}`);
+        return null;
+    }
+}
+
 app.use(cors());
+
+// Allow OPTIONS requests to bypass authentication for CORS preflight
+app.use((req, res, next) => {
+    if (req.method === 'OPTIONS') {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.sendStatus(200);
+    } else {
+        next();
+    }
+});
+
+// Setup basic authentication if .htpasswd exists (after CORS preflight handler)
+const htpasswdUsers = parseHtpasswd(HTPASSWD_PATH);
+if (htpasswdUsers) {
+    app.use(basicAuth({
+        authorizer: customAuthChecker,
+        authorizeAsync: false,
+        challenge: true,
+        realm: 'FIO Analyzer - Storage Performance Visualizer'
+    }));
+    console.log('Basic authentication enabled');
+} else {
+    console.log('Basic authentication disabled - no valid .htpasswd file found');
+}
+
 app.use(express.json());
 app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
 
@@ -377,10 +456,10 @@ app.get('/api/filters', (req, res) => {
 // Update test run endpoint
 app.put('/api/test-runs/:id', (req, res) => {
     const { id } = req.params;
-    const { drive_model, drive_type } = req.body;
+    const { drive_model, drive_type, hostname, protocol } = req.body;
     
-    if (!drive_model && !drive_type) {
-        return res.status(400).json({ error: 'At least one field (drive_model or drive_type) is required' });
+    if (!drive_model && !drive_type && !hostname && !protocol) {
+        return res.status(400).json({ error: 'At least one field (drive_model, drive_type, hostname, or protocol) is required' });
     }
     
     const updates = [];
@@ -394,6 +473,16 @@ app.put('/api/test-runs/:id', (req, res) => {
     if (drive_type) {
         updates.push('drive_type = ?');
         values.push(drive_type);
+    }
+    
+    if (hostname) {
+        updates.push('hostname = ?');
+        values.push(hostname);
+    }
+    
+    if (protocol) {
+        updates.push('protocol = ?');
+        values.push(protocol);
     }
     
     values.push(parseInt(id));

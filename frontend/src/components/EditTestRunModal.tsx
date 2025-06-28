@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TestRun } from '../types';
+import { updateTestRun } from '../utils/api';
 import { X, Save, AlertCircle } from 'lucide-react';
 
 interface EditTestRunModalProps {
@@ -14,6 +15,8 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
   const [driveType, setDriveType] = useState('');
   const [customDriveType, setCustomDriveType] = useState('');
   const [showCustomType, setShowCustomType] = useState(false);
+  const [hostname, setHostname] = useState('');
+  const [protocol, setProtocol] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,6 +26,8 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
       setDriveType(testRun.drive_type);
       setCustomDriveType('');
       setShowCustomType(false);
+      setHostname(testRun.hostname || '');
+      setProtocol(testRun.protocol || '');
       setError(null);
     }
   }, [testRun]);
@@ -36,25 +41,22 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
     const finalDriveType = showCustomType ? customDriveType : driveType;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/test-runs/${testRun.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          drive_model: driveModel,
-          drive_type: finalDriveType,
-        }),
+      await updateTestRun(testRun.id, {
+        drive_model: driveModel,
+        drive_type: finalDriveType,
+        hostname: hostname,
+        protocol: protocol,
       });
 
-      if (response.ok) {
-        const updatedTestRun = { ...testRun, drive_model: driveModel, drive_type: finalDriveType };
-        onSave(updatedTestRun);
-        onClose();
-      } else {
-        const result = await response.json();
-        setError(result.error || 'Failed to update test run');
-      }
+      const updatedTestRun = { 
+        ...testRun, 
+        drive_model: driveModel, 
+        drive_type: finalDriveType,
+        hostname: hostname,
+        protocol: protocol
+      };
+      onSave(updatedTestRun);
+      onClose();
     } catch (err) {
       setError('Network error occurred');
     } finally {
@@ -106,6 +108,8 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
               <div><span className="font-medium">Block Size:</span> {testRun.block_size}k</div>
               <div><span className="font-medium">Pattern:</span> {testRun.read_write_pattern}</div>
               <div><span className="font-medium">Queue Depth:</span> {testRun.queue_depth}</div>
+              {testRun.hostname && <div><span className="font-medium">📡 Host:</span> {testRun.hostname}</div>}
+              {testRun.protocol && <div><span className="font-medium">🔗 Protocol:</span> {testRun.protocol}</div>}
             </div>
           </div>
 
@@ -172,6 +176,49 @@ export default function EditTestRunModal({ testRun, isOpen, onClose, onSave }: E
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Hostname */}
+          <div className="theme-form-group">
+            <label htmlFor="hostname" className="theme-form-label">
+              📡 Hostname
+            </label>
+            <input
+              id="hostname"
+              type="text"
+              value={hostname}
+              onChange={(e) => setHostname(e.target.value)}
+              placeholder="e.g., web-server-01"
+              className="theme-form-input"
+              disabled={saving}
+            />
+          </div>
+
+          {/* Protocol */}
+          <div className="theme-form-group">
+            <label htmlFor="protocol" className="theme-form-label">
+              🔗 Protocol
+            </label>
+            <select
+              id="protocol"
+              value={protocol}
+              onChange={(e) => setProtocol(e.target.value)}
+              className="theme-form-select"
+              disabled={saving}
+            >
+              <option value="">Select protocol</option>
+              <option value="NFS">NFS</option>
+              <option value="SMB">SMB</option>
+              <option value="iSCSI">iSCSI</option>
+              <option value="FC">Fibre Channel</option>
+              <option value="SAS">SAS</option>
+              <option value="SATA">SATA</option>
+              <option value="NVMe">NVMe</option>
+              <option value="USB">USB</option>
+              <option value="Thunderbolt">Thunderbolt</option>
+              <option value="Local">Local</option>
+              <option value="Unknown">Unknown</option>
+            </select>
           </div>
 
           {/* Error Message */}

@@ -12,6 +12,8 @@ NUM_JOBS="${NUM_JOBS:-4}"
 RUNTIME="${RUNTIME:-30}"
 BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
 TARGET_DIR="${TARGET_DIR:-/tmp/fio_test}"
+USERNAME="${USERNAME:-admin}"
+PASSWORD="${PASSWORD:-admin}"
 
 # Test Configuration
 BLOCK_SIZES=("4k" "64k" "1M")
@@ -115,6 +117,7 @@ upload_results() {
     
     response=$(curl -s -w "%{http_code}" \
         -X POST \
+        -u "$USERNAME:$PASSWORD" \
         -F "file=@$json_file" \
         -F "drive_model=unknown" \
         -F "drive_type=unknown" \
@@ -156,6 +159,7 @@ show_config() {
     echo "Runtime:      ${RUNTIME}s"
     echo "Backend URL:  $BACKEND_URL"
     echo "Target Dir:   $TARGET_DIR"
+    echo "Username:     $USERNAME"
     echo "Block Sizes:  ${BLOCK_SIZES[*]}"
     echo "Patterns:     ${TEST_PATTERNS[*]}"
     echo "========================================="
@@ -253,13 +257,15 @@ Usage: $0 [options]
 
 Environment Variables:
   HOSTNAME     - Server hostname (default: current hostname)
-  PROTOCOL     - Storage protocol (default: NFS)
-  DESCRIPTION  - Test description (default: "Automated performance test")
-  TEST_SIZE    - Size of test file (default: 1G)
+  PROTOCOL     - Storage protocol (default: unknown)
+  DESCRIPTION  - Test description (default: "script_test")
+  TEST_SIZE    - Size of test file (default: 10M)
   NUM_JOBS     - Number of parallel jobs (default: 4)
-  RUNTIME      - Test runtime in seconds (default: 60)
+  RUNTIME      - Test runtime in seconds (default: 30)
   BACKEND_URL  - Backend API URL (default: http://localhost:8000)
   TARGET_DIR   - Directory for test files (default: /tmp/fio_test)
+  USERNAME     - Authentication username (default: admin)
+  PASSWORD     - Authentication password (default: admin)
 
 Examples:
   # Basic usage

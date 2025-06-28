@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
-import { Upload as UploadIcon, Check, AlertCircle, ArrowLeft, FileText } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { importFioData, clearDatabase } from '../utils/api';
+import { Upload as UploadIcon, Check, AlertCircle, ArrowLeft, FileText, LogOut } from 'lucide-react';
 
 export default function Upload() {
   const navigate = useNavigate();
+  const { username, logout } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [driveModel, setDriveModel] = useState('');
   const [driveType, setDriveType] = useState('');
@@ -12,6 +15,9 @@ export default function Upload() {
   const [showCustomType, setShowCustomType] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [hostname, setHostname] = useState('');
+  const [protocol, setProtocol] = useState('');
+  const [description, setDescription] = useState('');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -45,37 +51,32 @@ export default function Upload() {
     const finalDriveType = showCustomType ? customDriveType : driveType;
     
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('drive_model', driveModel || 'Unknown');
-      formData.append('drive_type', finalDriveType || 'Unknown');
-
-      const response = await fetch('http://localhost:8000/api/import', {
-        method: 'POST',
-        body: formData,
+      const result = await importFioData(file, {
+        drive_model: driveModel || 'Unknown',
+        drive_type: finalDriveType || 'Unknown',
+        hostname: hostname || 'Unknown',
+        protocol: protocol || 'Unknown',
+        description: description || 'Imported FIO test'
       });
 
-      const result = await response.json();
+      setMessage({ type: 'success', text: 'FIO results imported successfully!' });
+      setFile(null);
+      setDriveModel('');
+      setDriveType('');
+      setCustomDriveType('');
+      setShowCustomType(false);
+      setHostname('');
+      setProtocol('');
+      setDescription('');
+      
+      // Reset file input
+      const fileInput = document.getElementById('file-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
 
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'FIO results imported successfully!' });
-        setFile(null);
-        setDriveModel('');
-        setDriveType('');
-        setCustomDriveType('');
-        setShowCustomType(false);
-        
-        // Reset file input
-        const fileInput = document.getElementById('file-input') as HTMLInputElement;
-        if (fileInput) fileInput.value = '';
-
-        // Navigate back to home after 2 seconds
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
-      } else {
-        setMessage({ type: 'error', text: result.error || 'Import failed' });
-      }
+      // Navigate back to home after 2 seconds
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
     } catch (error) {
       setMessage({ type: 'error', text: 'Network error occurred' });
     } finally {
@@ -97,10 +98,22 @@ export default function Upload() {
               Back to Dashboard
             </button>
             <div className="flex items-center space-x-4">
-              <ThemeToggle />
               <div className="flex items-center">
                 <UploadIcon className="h-8 w-8 theme-text-accent mr-3" />
                 <h1 className="text-2xl font-bold theme-text-primary">Upload FIO Results</h1>
+              </div>
+              <ThemeToggle />
+              <div className="flex items-center space-x-2">
+                <span className="text-sm theme-text-secondary">
+                  Welcome, {username}
+                </span>
+                <button
+                  onClick={logout}
+                  className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md theme-text-secondary hover:theme-text-primary transition-colors"
+                  title="Logout"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
               </div>
             </div>
           </div>
