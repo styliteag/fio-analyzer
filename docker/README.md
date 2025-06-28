@@ -136,6 +136,65 @@ dokcer compose up --scale backend=3 -d
    curl http://localhost/health
    ```
 
+## Container Registry
+
+### Push Images to Registry
+
+1. **Configure registry settings:**
+   ```bash
+   export DOCKER_REGISTRY=docker.io              # or your private registry
+   export DOCKER_NAMESPACE=yourusername          # your Docker Hub username
+   export IMAGE_TAG=v1.0.0                      # version tag
+   ```
+
+2. **Login to registry:**
+   ```bash
+   docker login                                  # Docker Hub
+   # or
+   docker login your-private-registry.com       # Private registry
+   ```
+
+3. **Build and push:**
+   ```bash
+   ./push-to-registry.sh
+   ```
+
+### Deploy from Registry
+
+1. **Create production environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your settings
+   ```
+
+2. **Deploy using pre-built images:**
+   ```bash
+   DOCKER_NAMESPACE=yourusername IMAGE_TAG=v1.0.0 docker compose -f compose.prod.yml up -d
+   ```
+
+### Registry Examples
+
+**Docker Hub:**
+```bash
+export DOCKER_REGISTRY=docker.io
+export DOCKER_NAMESPACE=mycompany
+./push-to-registry.sh
+```
+
+**AWS ECR:**
+```bash
+export DOCKER_REGISTRY=123456789012.dkr.ecr.us-east-1.amazonaws.com
+export DOCKER_NAMESPACE=fio-analyzer
+./push-to-registry.sh
+```
+
+**GitHub Container Registry:**
+```bash
+export DOCKER_REGISTRY=ghcr.io
+export DOCKER_NAMESPACE=mycompany
+./push-to-registry.sh
+```
+
 ## Production Checklist
 
 - [ ] Update default credentials
@@ -143,4 +202,6 @@ dokcer compose up --scale backend=3 -d
 - [ ] Set up monitoring
 - [ ] Configure log rotation
 - [ ] Review security settings
-- [ ] Test file upload limits 
+- [ ] Test file upload limits
+- [ ] Push images to registry
+- [ ] Test deployment from registry 

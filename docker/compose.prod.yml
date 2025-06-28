@@ -1,11 +1,12 @@
+version: '3.8'
+
+# Production Docker Compose using pre-built images from registry
+# Usage: docker compose -f compose.prod.yml up -d
+
 services:
   nginx:
     container_name: fio-nginx
-    build:
-      context: ..
-      dockerfile: docker/nginx/Dockerfile
-      tags:
-        - fio-analyzer_nginx
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_NAMESPACE:-yourusername}/fio-analyzer-nginx:${IMAGE_TAG:-latest}
     ports:
       - "80:80"
     depends_on:
@@ -17,11 +18,7 @@ services:
 
   backend:
     container_name: fio-backend
-    build:
-      context: ..
-      dockerfile: docker/backend/Dockerfile
-      tags:
-        - fio-analyzer_backend
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_NAMESPACE:-yourusername}/fio-analyzer-backend:${IMAGE_TAG:-latest}
     volumes:      
       - ./data/backend/db:/app/db
       - ./data/backend/uploads:/app/uploads
@@ -37,11 +34,7 @@ services:
 
   frontend:
     container_name: fio-frontend
-    build:
-      context: ..
-      dockerfile: docker/frontend/Dockerfile
-      tags:
-        - fio-analyzer_frontend
+    image: ${DOCKER_REGISTRY:-docker.io}/${DOCKER_NAMESPACE:-yourusername}/fio-analyzer-frontend:${IMAGE_TAG:-latest}
     depends_on:
       - backend
     environment:
@@ -52,4 +45,4 @@ services:
 
 networks:
   fio-network:
-    driver: bridge 
+    driver: bridge
