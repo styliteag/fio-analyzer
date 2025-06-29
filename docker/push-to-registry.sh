@@ -11,9 +11,9 @@ NAMESPACE="${DOCKER_NAMESPACE:-styliteag}"  # Change this to your username/organ
 # Read version from VERSION file
 if [ -f "../VERSION" ]; then
     VERSION=$(cat "../VERSION")
-    IMAGE_TAG="${IMAGE_TAG:-v${VERSION}}"
+    VERSION_TAG="v${VERSION}"
 else
-    IMAGE_TAG="${IMAGE_TAG:-latest}"
+    VERSION_TAG="latest"
 fi
 
 echo "🚀 Pushing FIO Analyzer images to registry..."
@@ -41,12 +41,12 @@ fi
 
 # Tag images for registry
 echo "🏷️  Tagging images..."
-docker tag fio-analyzer_app ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:${IMAGE_TAG}
+docker tag fio-analyzer_app ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:${VERSION_TAG}
 docker tag fio-analyzer_app ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:latest
 
 # Push images
 echo "📤 Pushing images to registry..."
-docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:${IMAGE_TAG}
+docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:${VERSION_TAG}
 docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:latest
 
 echo ""
