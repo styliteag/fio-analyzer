@@ -1,132 +1,153 @@
 # FIO Analyzer Production Deployment
 
-This directory contains Docker configuration for production deployment with Nginx reverse proxy.
+This directory contains Docker configuration for production deployment in a single consolidated container.
 
 ## Architecture
 
 ```
-Internet -> Nginx (Port 80) -> Frontend (Port 3000) & Backend (Port 8000)
+Internet -> Single Container (Port 80) -> Nginx -> Frontend (Static) + Backend (Port 8000)
 ```
 
-- **Nginx**: Reverse proxy serving the application on port 80
-- **Frontend**: React SPA served by Nginx (optimized static files)
-- **Backend**: Node.js/Express API server
+- **Single Container**: Consolidated architecture with nginx and Node.js
+- **Nginx**: Serves static files and reverse proxies `/api/*` to backend
+- **Frontend**: React SPA served as optimized static files
+- **Backend**: Node.js/Express API server with authentication
 - **Database**: SQLite with persistent volume
+- **Authentication**: Role-based access control with external user management
 
 ## Quick Start
 
 ```bash
 cd docker
 
-# Copy and configure environment
-cp .env.example .env
-# Edit .env file with your settings
+# Create required directories
+mkdir -p data/backend/db data/backend/uploads data/auth
 
-# Deploy with automatic version detection
-./deploy.sh
+# Build and start the application
+docker compose up --build -d
+
+# Setup authentication (first time only)
+# Admin users (full access)
+docker exec -it fio-app node scripts/manage-users.js
+
+# Upload-only users (restricted access)  
+docker exec -it fio-app node scripts/manage-uploaders.js
+
+# Download testing script
+wget http://localhost/fio-analyzer-tests.sh
+wget http://localhost/.env.example
 ```
 
-## Manual Deployment
+## Production Deployment
 
-If you prefer manual deployment:
+For production deployment using pre-built registry images:
 
 ```bash
 cd docker
 
 # Create data directories
-mkdir -p data/backend/db data/backend/uploads
+mkdir -p data/backend/db data/backend/uploads data/auth
 
-# Build and start services
-dokcer compose up --build -d
+# Deploy using production compose file
+docker compose -f compose.prod.yml up -d
 
 # Check status
-dokcer compose ps
+docker compose -f compose.prod.yml ps
 
 # View logs
-dokcer compose logs -f
+docker compose -f compose.prod.yml logs -f
 ```
 
 ## Service Management
 
 ```bash
 # Stop services
-dokcer compose down
+docker compose down
 
 # Restart services
-dokcer compose restart
+docker compose restart
 
 # View logs
-dokcer compose logs -f [service_name]
+docker compose logs -f
 
-# Update services
-dokcer compose up --build -d
+# Update services (rebuild)
+docker compose up --build -d
+
+# Production service management
+docker compose -f compose.prod.yml down
+docker compose -f compose.prod.yml restart
 ```
 
+## Downloaded Files & Static Content
 
-## Environment Variables
+The application serves static files directly via nginx:
 
-1. **Copy the sample configuration:**
-   ```bash
-   cp docker/.env.example docker/.env
-   ```
+```bash
+# Download testing script and configuration
+wget http://your-server/fio-analyzer-tests.sh
+wget http://your-server/.env.example
 
-2. **Edit for your environment:**
-   ```bash
-   nano docker/.env
-   ```
-
-3. **Sample configurations:**
-   ```bash
-   # Local development
-   EXTERNAL_URL=http://localhost
-   
-   # Production server
-   EXTERNAL_URL=http://fio-analyzer.company.com
-   
-   # Custom port
-   EXTERNAL_URL=http://server.local:8080
-   
-   # HTTPS
-   EXTERNAL_URL=https://fio-analyzer.company.com
-   ```
-
-The frontend will automatically use `${EXTERNAL_URL}/api` as the backend endpoint.
+# Setup and use
+chmod +x fio-analyzer-tests.sh
+cp .env.example .env
+# Edit .env with your server settings
+./fio-analyzer-tests.sh
+```
 
 ## Persistent Data
 
-- Database: `./data/backend/db/storage_performance.db`
-- Uploads: `./data/backend/uploads/`
-- Authentication: `./data/auth/.htpasswd`
+All data is stored in Docker volumes for persistence:
+
+```yaml
+volumes:
+  - ./data/backend/db:/app/db                    # SQLite database
+  - ./data/backend/uploads:/app/uploads          # Uploaded FIO files
+  - ./data/auth/.htpasswd:/app/.htpasswd         # Admin users
+  - ./data/auth/.htuploaders:/app/.htuploaders   # Upload-only users
+```
 
 ## Authentication Management
 
-### Default Credentials
-- **Username**: `admin`
-- **Password**: `fio-analyzer`
+### User Roles
+- **Admin Users** (`.htpasswd`): Full access - view data, upload tests, manage system
+- **Upload-Only Users** (`.htuploaders`): Restricted access - upload FIO test results only
 
-### Change Password
+### User Management
 ```bash
-# Interactive password change
-docker exec -it fio-backend npm run change-password
+# Manage admin users (full access)
+docker exec -it fio-app node scripts/manage-users.js
 
-# Follow the prompts to set new username/password
-```
+# Manage upload-only users (restricted access)
+docker exec -it fio-app node scripts/manage-uploaders.js
 
-### Manual .htpasswd Management
-```bash
 # View current users
-docker exec fio-backend cat /app/.htpasswd
-
-# Generate password hash (if needed)
-docker exec fio-backend node -e "console.log(require('bcryptjs').hashSync('newpassword', 10))"
+docker exec fio-app cat /app/.htpasswd          # Admin users
+docker exec fio-app cat /app/.htuploaders       # Upload-only users
 ```
 
-## Scaling
+### Security Features
+- bcrypt password hashing with salt rounds
+- Role-based API endpoint protection  
+- Custom authentication forms (no browser popups)
+- Comprehensive request logging and user activity tracking
 
-To scale the backend:
-```bash
-dokcer compose up --scale backend=3 -d
-```
+## Interactive Chart Features
+
+The web interface includes advanced interactive chart controls:
+
+### Available Features
+- **Sorting**: By name, IOPS, latency, throughput, block size, drive model, protocol, hostname, queue depth
+- **Grouping**: By drive model, test type, block size, protocol, hostname, queue depth 
+- **Series Controls**: Toggle individual data series visibility
+- **Export**: PNG image download and CSV data export
+- **Fullscreen**: Dedicated fullscreen chart viewing mode
+- **Reset**: Restore default sorting and grouping settings
+
+### Chart Templates
+- **Performance Overview**: Bar chart with IOPS, latency, and throughput
+- **Block Size Impact**: Line chart showing performance changes across block sizes
+- **Read vs Write**: Side-by-side comparison of read/write IOPS performance
+- **IOPS vs Latency**: Dual-axis chart showing both IOPS and latency metrics
 
 ## Troubleshooting
 
@@ -142,9 +163,38 @@ dokcer compose up --scale backend=3 -d
    sudo chown -R $USER:$USER data/
    ```
 
-3. **Check service health:**
+3. **Check application health:**
    ```bash
-   curl http://localhost/health
+   # Test web interface
+   curl http://localhost/
+   
+   # Test API (requires authentication)
+   curl -u admin:password http://localhost/api/test-runs
+   ```
+
+4. **Authentication issues:**
+   ```bash
+   # Check if user files exist
+   ls -la data/auth/
+   
+   # Reset admin user
+   docker exec -it fio-app node scripts/manage-users.js
+   ```
+
+5. **Script download issues:**
+   ```bash
+   # Test static file serving
+   curl -I http://localhost/fio-analyzer-tests.sh
+   curl -I http://localhost/.env.example
+   ```
+
+6. **View application logs:**
+   ```bash
+   # Real-time logs with user activity
+   docker compose logs -f
+   
+   # Nginx access logs
+   docker exec fio-app tail -f /var/log/nginx/access.log
    ```
 
 ## Container Registry

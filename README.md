@@ -5,10 +5,12 @@ A full-stack web application that analyzes and visualizes FIO (Flexible I/O Test
 ## Features
 
 ### 📊 **Performance Visualization**
-- Interactive charts powered by Chart.js
+- Interactive charts powered by Chart.js with advanced controls
 - Support for IOPS, bandwidth, latency, and latency percentiles
 - Separate visualization of read and write operations
-- Multiple chart templates and visualization options
+- Multiple chart templates with sorting, grouping, and filtering
+- Export capabilities (PNG/CSV) and fullscreen mode
+- Series visibility toggles and real-time chart manipulation
 
 ### 🔧 **FIO Integration**
 - Import FIO JSON results directly through web interface
@@ -22,10 +24,12 @@ A full-stack web application that analyzes and visualizes FIO (Flexible I/O Test
 - Filter and organize tests by infrastructure details
 
 ### 🚀 **Automated Testing**
-- Production-ready shell script for automated FIO testing
+- Production-ready shell script with .env file configuration
 - Multiple block sizes (4k, 64k, 1M) and I/O patterns
 - Configurable test parameters and automatic upload
 - Comprehensive error handling and progress reporting
+- Environment variable override support
+- Direct download from application server
 
 ### 🗄️ **Data Management**
 - SQLite database with comprehensive schema
@@ -33,53 +37,109 @@ A full-stack web application that analyzes and visualizes FIO (Flexible I/O Test
 - Performance metrics with operation-type separation
 - Detailed latency percentile storage
 
+### 🔐 **Authentication & Security**
+- Role-based access control (admin vs upload-only users)
+- bcrypt password hashing with secure credential storage
+- Custom authentication forms (no browser popups)
+- Comprehensive request logging and user activity tracking
+- External authentication file management via Docker volumes
+
 ## Prerequisites
 
+### For Development
 - **Node.js** (v16+) and npm
 - **SQLite3** 
 - **FIO** (for performance testing)
 - **curl** (for script uploads)
 
+### For Production (Docker)
+- **Docker** and Docker Compose
+- **FIO** (on client machines for testing)
+- **curl** or **wget** (for script downloads)
+
 ## Setup
 
-### Frontend
+### 🐳 Production Setup (Docker - Recommended)
+
+The application runs in a single consolidated Docker container:
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd fio-analyzer
+
+# Build and run with Docker Compose
+cd docker
+docker compose up --build
+
+# For production deployment
+docker compose -f compose.prod.yml up -d
+```
+
+The application will be available at `http://localhost:80`.
+
+#### Authentication Setup
+```bash
+# Create authentication directories
+mkdir -p docker/data/auth
+
+# Setup admin users (full access)
+docker exec -it fio-app node scripts/manage-users.js
+
+# Setup upload-only users (restricted access)
+docker exec -it fio-app node scripts/manage-uploaders.js
+```
+
+#### Download Testing Script
+```bash
+# Download from your running application
+wget http://your-server/fio-analyzer-tests.sh
+wget http://your-server/.env.example
+
+# Setup configuration
+cp .env.example .env
+# Edit .env with your settings
+chmod +x fio-analyzer-tests.sh
+```
+
+### 🛠️ Development Setup
+
+For local development with separate frontend/backend:
+
+#### Frontend
 
 1. **Navigate to the frontend directory**:
    ```bash
    cd frontend
    ```
 
-2. **Install Dependencies**: Run the following command to install the necessary Node.js packages:
-
+2. **Install Dependencies**:
    ```bash
    npm install
    ```
 
-3. **Start the Development Server**: Use the following command to start the Vite development server:
-
+3. **Start the Development Server**:
    ```bash
    npm run dev
    ```
-
    The application will be available at `http://localhost:5173`.
 
-### Backend
+#### Backend
 
 1. **Navigate to the backend directory**:
    ```bash
    cd backend
    ```
 
-2. **Install Dependencies**: Run the following command to install the necessary Node.js packages:
+2. **Install Dependencies**:
    ```bash
    npm install
    ```
 
-3. **Run the Backend Server**: Start the Express server with:
+3. **Run the Backend Server**:
    ```bash
    npm start
    ```
-
    The API will be available at `http://localhost:8000`.
 
 ### Database Setup
@@ -101,44 +161,56 @@ Sample data is populated automatically if the database is empty.
 
 ### Automated Testing Script
 
-The performance testing script is located at `scripts/performance_test.sh` and provides automated FIO testing with upload to the backend.
+The FIO testing script is available for download directly from your application server and provides automated testing with configurable parameters.
 
-#### Prerequisites
-- **FIO** installed on the target server
-- **curl** for API uploads
-- **Executable permissions** on the script
-
-#### Installation
+#### Download and Setup
 ```bash
-# Make the script executable
-chmod +x scripts/performance_test.sh
+# Download script and configuration template
+wget http://your-server/fio-analyzer-tests.sh
+wget http://your-server/.env.example
 
-# Copy to target servers (optional)
-scp scripts/performance_test.sh user@server:/path/to/script/
+# Make executable and setup configuration
+chmod +x fio-analyzer-tests.sh
+cp .env.example .env
+# Edit .env with your specific settings
 ```
 
-#### Basic Usage
+#### Configuration with .env File
+Create a `.env` file for persistent configuration:
 ```bash
-# Run from project root directory
-./scripts/performance_test.sh
+# Server Information
+HOSTNAME=myserver
+PROTOCOL=NVMe
+DESCRIPTION=Production performance test
 
-# Or run from any location with full path
-/path/to/fio-analyzer/scripts/performance_test.sh
+# Test Parameters  
+TEST_SIZE=10M
+NUM_JOBS=4
+RUNTIME=30
 
-# View help and configuration options
-./scripts/performance_test.sh --help
+# Backend Configuration
+BACKEND_URL=http://your-server
+USERNAME=admin
+PASSWORD=admin
+
+# Advanced Options
+BLOCK_SIZES=4k,64k,1M
+TEST_PATTERNS=read,write,randread,randwrite
 ```
 
-#### Configuration Examples
+#### Usage Examples
 ```bash
+# Basic usage (uses .env configuration)
+./fio-analyzer-tests.sh
+
+# Override specific parameters
+TEST_SIZE="1M" RUNTIME="5" ./fio-analyzer-tests.sh
+
 # Custom configuration with environment variables
-HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" ./scripts/performance_test.sh
+HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" ./fio-analyzer-tests.sh
 
-# Advanced configuration
-TEST_SIZE="10G" RUNTIME="300" NUM_JOBS="8" BACKEND_URL="http://your-server:8000" ./scripts/performance_test.sh
-
-# Quick test for development
-TEST_SIZE="1M" RUNTIME="10" NUM_JOBS="1" ./scripts/performance_test.sh
+# View help and all configuration options
+./fio-analyzer-tests.sh --help
 ```
 
 #### Script Configuration Variables
@@ -204,22 +276,30 @@ curl -X POST -F "file=@result.json" \
 
 ## API Endpoints
 
-### Test Runs
+### Authentication
+All API endpoints require authentication. Use basic authentication with username/password.
+
+### Test Runs (Admin Only)
 - **GET /api/test-runs** - Retrieve all test runs with metadata
 - **PUT /api/test-runs/:id** - Update test run drive information
 - **DELETE /api/test-runs/:id** - Delete test run and associated data
 
-### Performance Data
+### Performance Data (Admin Only)
 - **GET /api/performance-data** - Retrieve performance data for specific test runs
   - Query params: `test_run_ids` (comma-separated), `metric_types` (optional)
   - Returns: Test metadata, separated read/write metrics, latency percentiles
 
-### Data Import
+### Data Import (Admin + Upload Users)
 - **POST /api/import** - Import FIO JSON results with metadata
   - Form data: `file` (FIO JSON), `drive_model`, `drive_type`, `hostname`, `protocol`, `description`
+  - Available to both admin users and upload-only users
 
-### Filters
+### Filters (Admin Only)
 - **GET /api/filters** - Get available filter options for drive types, models, patterns, and block sizes
+
+### Static Downloads (Public)
+- **GET /fio-analyzer-tests.sh** - Download the FIO testing script
+- **GET /.env.example** - Download the configuration template
 
 ## Performance Testing Examples
 
@@ -294,17 +374,37 @@ performance_metrics (id, test_run_id, metric_type, value, unit, operation_type)
 latency_percentiles (id, test_run_id, operation_type, percentile, latency_ns)
 ```
 
-## Running with Docker
+## Docker Architecture
 
-You can also run the application using Docker Compose:
+The application uses a consolidated single-container architecture:
 
-```bash
-dokcer compose up --build
+### Container Structure
+- **Frontend**: React app served by nginx on port 80
+- **Backend**: Express.js API running internally on port 8000  
+- **Reverse Proxy**: nginx proxies `/api/*` requests to backend
+- **Static Files**: Testing script and config served by nginx
+- **Build**: Multi-stage Docker build for optimized production deployment
+
+### Volume Mounts
+```yaml
+volumes:
+  - ./data/backend/db:/app/db                    # Database persistence
+  - ./data/backend/uploads:/app/uploads          # Uploaded files
+  - ./data/auth/.htpasswd:/app/.htpasswd         # Admin users
+  - ./data/auth/.htuploaders:/app/.htuploaders   # Upload-only users
 ```
 
-This will build and start the frontend and backend services.
-- Frontend will be available at `http://localhost:3000`
-- Backend will be available at `http://localhost:8000`
+### Deployment Options
+```bash
+# Development build
+docker compose up --build
+
+# Production deployment  
+docker compose -f compose.prod.yml up -d
+
+# Using pre-built registry images
+IMAGE_TAG=latest docker compose -f compose.prod.yml up -d
+```
 
 ## Contributing
 
