@@ -115,38 +115,36 @@ function requireAuth(req, res, next) {
 
 // Logging utility functions
 function logInfo(message, details = {}) {
-    const timestamp = new Date().toISOString();
-    const logEntry = {
-        timestamp,
-        level: 'INFO',
-        message,
-        ...details
-    };
-    console.log(JSON.stringify(logEntry));
+    const timestamp = new Date().toISOString().replace('T', ' ').replace('Z', ' UTC');
+    const detailsStr = Object.entries(details)
+        .filter(([key, value]) => value !== undefined && value !== null)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(' ');
+    
+    console.log(`[${timestamp}] INFO  ${message}${detailsStr ? ' | ' + detailsStr : ''}`);
 }
 
 function logError(message, error = null, details = {}) {
-    const timestamp = new Date().toISOString();
-    const logEntry = {
-        timestamp,
-        level: 'ERROR',
-        message,
-        error: error ? error.message : null,
-        stack: error ? error.stack : null,
-        ...details
-    };
-    console.error(JSON.stringify(logEntry));
+    const timestamp = new Date().toISOString().replace('T', ' ').replace('Z', ' UTC');
+    const detailsStr = Object.entries(details)
+        .filter(([key, value]) => value !== undefined && value !== null)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(' ');
+    
+    console.error(`[${timestamp}] ERROR ${message}${detailsStr ? ' | ' + detailsStr : ''}`);
+    if (error) {
+        console.error(`[${timestamp}] ERROR Stack: ${error.stack || error.message}`);
+    }
 }
 
 function logWarning(message, details = {}) {
-    const timestamp = new Date().toISOString();
-    const logEntry = {
-        timestamp,
-        level: 'WARN',
-        message,
-        ...details
-    };
-    console.warn(JSON.stringify(logEntry));
+    const timestamp = new Date().toISOString().replace('T', ' ').replace('Z', ' UTC');
+    const detailsStr = Object.entries(details)
+        .filter(([key, value]) => value !== undefined && value !== null)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(' ');
+    
+    console.warn(`[${timestamp}] WARN  ${message}${detailsStr ? ' | ' + detailsStr : ''}`);
 }
 
 // Request logging middleware
