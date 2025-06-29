@@ -78,6 +78,12 @@ app.use((req, res, next) => {
 function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Basic ')) {
+        logWarning('Authentication failed - no credentials provided', {
+            requestId: req.requestId,
+            method: req.method,
+            url: req.url,
+            ip: req.ip || req.connection.remoteAddress
+        });
         return res.status(401).json({ error: 'Authentication required' });
     }
     
@@ -85,12 +91,114 @@ function requireAuth(req, res, next) {
     const [username, password] = credentials.split(':');
     
     if (!customAuthChecker(username, password)) {
+        logWarning('Authentication failed - invalid credentials', {
+            requestId: req.requestId,
+            method: req.method,
+            url: req.url,
+            username,
+            ip: req.ip || req.connection.remoteAddress
+        });
         return res.status(401).json({ error: 'Invalid credentials' });
     }
+    
+    logInfo('User authenticated successfully', {
+        requestId: req.requestId,
+        username,
+        method: req.method,
+        url: req.url,
+        ip: req.ip || req.connection.remoteAddress
+    });
     
     req.user = { username };
     next();
 }
+
+// Logging utility functions
+function logInfo(message, details = {}) {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+        timestamp,
+        level: 'INFO',
+        message,
+        ...details
+    };
+    console.log(JSON.stringify(logEntry));
+}
+
+function logError(message, error = null, details = {}) {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+        timestamp,
+        level: 'ERROR',
+        message,
+        error: error ? error.message : null,
+        stack: error ? error.stack : null,
+        ...details
+    };
+    console.error(JSON.stringify(logEntry));
+}
+
+function logWarning(message, details = {}) {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+        timestamp,
+        level: 'WARN',
+        message,
+        ...details
+    };
+    console.warn(JSON.stringify(logEntry));
+}
+
+// Request logging middleware
+app.use((req, res, next) => {
+    const startTime = Date.now();
+    const requestId = Math.random().toString(36).substr(2, 9);
+    
+    req.requestId = requestId;
+    req.startTime = startTime;
+    
+    // Log incoming request
+    logInfo('Incoming request', {
+        requestId,
+        method: req.method,
+        url: req.url,
+        userAgent: req.get('User-Agent'),
+        ip: req.ip || req.connection.remoteAddress,
+        contentLength: req.get('Content-Length') || 0
+    });
+    
+    // Override res.json to log responses
+    const originalJson = res.json;
+    res.json = function(data) {
+        const duration = Date.now() - startTime;
+        const username = req.user ? req.user.username : 'anonymous';
+        
+        if (res.statusCode >= 400) {
+            logError('Request failed', null, {
+                requestId,
+                method: req.method,
+                url: req.url,
+                username,
+                statusCode: res.statusCode,
+                duration,
+                responseData: data
+            });
+        } else {
+            logInfo('Request completed', {
+                requestId,
+                method: req.method,
+                url: req.url,
+                username,
+                statusCode: res.statusCode,
+                duration
+            });
+        }
+        
+        return originalJson.call(this, data);
+    };
+    
+    next();
+});
 
 app.use(express.json());
 app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
@@ -307,6 +415,12 @@ function getBaseThroughput(drive_type, pattern, block_size) {
 
 
 app.get('/api/test-runs', requireAuth, (req, res) => {
+    logInfo('User requesting test runs list', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'LIST_TEST_RUNS'
+    });
+    
     db.all(`
         SELECT id, timestamp, drive_model, drive_type, test_name, 
                block_size, read_write_pattern, queue_depth, duration,
@@ -316,9 +430,22 @@ app.get('/api/test-runs', requireAuth, (req, res) => {
         ORDER BY timestamp DESC
     `, [], (err, rows) => {
         if (err) {
+            logError('Database error fetching test runs', err, {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'LIST_TEST_RUNS'
+            });
             res.status(500).json({ error: err.message });
             return;
         }
+        
+        logInfo('Test runs list retrieved successfully', {
+            requestId: req.requestId,
+            username: req.user.username,
+            action: 'LIST_TEST_RUNS',
+            resultCount: rows.length
+        });
+        
         res.json(rows);
     });
 });
@@ -510,6 +637,13 @@ app.put('/api/test-runs/:id', requireAuth, (req, res) => {
 app.delete('/api/test-runs/:id', requireAuth, (req, res) => {
     const { id } = req.params;
     
+    logInfo('User attempting to delete test run', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'DELETE_TEST_RUN',
+        testRunId: id
+    });
+    
     // Start a transaction to delete from both tables
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
@@ -518,6 +652,12 @@ app.delete('/api/test-runs/:id', requireAuth, (req, res) => {
         db.run('DELETE FROM performance_metrics WHERE test_run_id = ?', [parseInt(id)], function(err) {
             if (err) {
                 db.run('ROLLBACK');
+                logError('Failed to delete performance metrics', err, {
+                    requestId: req.requestId,
+                    username: req.user.username,
+                    action: 'DELETE_TEST_RUN',
+                    testRunId: id
+                });
                 return res.status(500).json({ error: err.message });
             }
             
@@ -525,15 +665,34 @@ app.delete('/api/test-runs/:id', requireAuth, (req, res) => {
             db.run('DELETE FROM test_runs WHERE id = ?', [parseInt(id)], function(err) {
                 if (err) {
                     db.run('ROLLBACK');
+                    logError('Failed to delete test run', err, {
+                        requestId: req.requestId,
+                        username: req.user.username,
+                        action: 'DELETE_TEST_RUN',
+                        testRunId: id
+                    });
                     return res.status(500).json({ error: err.message });
                 }
                 
                 if (this.changes === 0) {
                     db.run('ROLLBACK');
+                    logWarning('Test run not found for deletion', {
+                        requestId: req.requestId,
+                        username: req.user.username,
+                        action: 'DELETE_TEST_RUN',
+                        testRunId: id
+                    });
                     return res.status(404).json({ error: 'Test run not found' });
                 }
                 
                 db.run('COMMIT');
+                logInfo('Test run deleted successfully', {
+                    requestId: req.requestId,
+                    username: req.user.username,
+                    action: 'DELETE_TEST_RUN',
+                    testRunId: id,
+                    deletedRecords: this.changes
+                });
                 res.json({ message: 'Test run deleted successfully', changes: this.changes });
             });
         });
@@ -758,6 +917,39 @@ app.delete('/api/clear-database', requireAuth, (req, res) => {
     });
 });
 
+// Server startup
 app.listen(port, () => {
+    logInfo('FIO Analyzer Backend Server started', {
+        port,
+        nodeVersion: process.version,
+        platform: process.platform,
+        processId: process.pid,
+        environment: process.env.NODE_ENV || 'development'
+    });
     console.log(`Server running at http://localhost:${port}`);
+});
+
+// Graceful shutdown handling
+process.on('SIGINT', () => {
+    logInfo('Received SIGINT, shutting down gracefully');
+    db.close((err) => {
+        if (err) {
+            logError('Error closing database', err);
+        } else {
+            logInfo('Database connection closed');
+        }
+        process.exit(0);
+    });
+});
+
+process.on('SIGTERM', () => {
+    logInfo('Received SIGTERM, shutting down gracefully');
+    db.close((err) => {
+        if (err) {
+            logError('Error closing database', err);
+        } else {
+            logInfo('Database connection closed');
+        }
+        process.exit(0);
+    });
 });
