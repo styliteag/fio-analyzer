@@ -4,25 +4,17 @@ version: '3.8'
 # Usage: docker compose -f compose.prod.yml up -d
 
 services:
-  nginx:
-    container_name: fio-nginx
-    image: docker.io/styliteag/fio-analyzer-nginx:${IMAGE_TAG:-latest}
+  app:
+    container_name: fio-app
+    image: docker.io/styliteag/fio-analyzer-app:${IMAGE_TAG:-latest}
     ports:
       - "80:80"
-    depends_on:
-      - backend
-      - frontend
-    networks:
-      - fio-network
-    restart: unless-stopped
-
-  backend:
-    container_name: fio-backend
-    image: docker.io/styliteag/fio-analyzer-backend:${IMAGE_TAG:-latest}
     volumes:      
       - ./data/backend/db:/app/db
       - ./data/backend/uploads:/app/uploads
       - ./data/auth/.htpasswd:/app/.htpasswd
+    environment:
+      - VITE_API_URL=${EXTERNAL_URL}/api
     networks:
       - fio-network
     restart: unless-stopped
@@ -31,17 +23,6 @@ services:
       timeout: 30s
       interval: 30s
       retries: 3
-
-  frontend:
-    container_name: fio-frontend
-    image: docker.io/styliteag/fio-analyzer-frontend:${IMAGE_TAG:-latest}
-    depends_on:
-      - backend
-    environment:
-      - VITE_API_URL=${EXTERNAL_URL}/api
-    networks:
-      - fio-network
-    restart: unless-stopped
 
 networks:
   fio-network:
