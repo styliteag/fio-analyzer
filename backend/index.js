@@ -8,18 +8,49 @@ const bcrypt = require('bcryptjs');
 
 const DB_PATH = path.resolve(__dirname, './db/storage_performance.db');
 const HTPASSWD_PATH = path.resolve(__dirname, '.htpasswd');
+const HTUPLOADERS_PATH = path.resolve(__dirname, '.htuploaders');
 const app = express();
 const port = 8000;
 
-// Custom auth function that properly handles htpasswd hashes
-function customAuthChecker(username, password) {
+// Check if user has admin privileges
+function isAdminUser(username, password) {
     const htpasswdUsers = parseHtpasswd(HTPASSWD_PATH);
     if (!htpasswdUsers || !htpasswdUsers[username]) {
         return false;
     }
     
     const hash = htpasswdUsers[username];
+    return verifyPassword(password, hash);
+}
+
+// Check if user has upload-only privileges
+function isUploaderUser(username, password) {
+    const htuploadersUsers = parseHtpasswd(HTUPLOADERS_PATH);
+    if (!htuploadersUsers || !htuploadersUsers[username]) {
+        return false;
+    }
     
+    const hash = htuploadersUsers[username];
+    return verifyPassword(password, hash);
+}
+
+// Combined auth checker that works for any valid user
+function customAuthChecker(username, password) {
+    return isAdminUser(username, password) || isUploaderUser(username, password);
+}
+
+// Get user role
+function getUserRole(username, password) {
+    if (isAdminUser(username, password)) {
+        return 'admin';
+    } else if (isUploaderUser(username, password)) {
+        return 'uploader';
+    }
+    return null;
+}
+
+// Verify password against hash
+function verifyPassword(password, hash) {
     // Handle different hash formats
     if (hash.startsWith('$2y$') || hash.startsWith('$2a$') || hash.startsWith('$2b$')) {
         // Bcrypt format
@@ -74,7 +105,7 @@ app.use((req, res, next) => {
     }
 });
 
-// Authentication middleware for protected routes
+// Authentication middleware for any valid user (admin or uploader)
 function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Basic ')) {
@@ -90,7 +121,8 @@ function requireAuth(req, res, next) {
     const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('ascii');
     const [username, password] = credentials.split(':');
     
-    if (!customAuthChecker(username, password)) {
+    const userRole = getUserRole(username, password);
+    if (!userRole) {
         logWarning('Authentication failed - invalid credentials', {
             requestId: req.requestId,
             method: req.method,
@@ -104,12 +136,53 @@ function requireAuth(req, res, next) {
     logInfo('User authenticated successfully', {
         requestId: req.requestId,
         username,
+        role: userRole,
         method: req.method,
         url: req.url,
         ip: req.ip || req.connection.remoteAddress
     });
     
-    req.user = { username };
+    req.user = { username, role: userRole };
+    next();
+}
+
+// Authentication middleware for admin-only routes
+function requireAdmin(req, res, next) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Basic ')) {
+        logWarning('Authentication failed - no credentials provided', {
+            requestId: req.requestId,
+            method: req.method,
+            url: req.url,
+            ip: req.ip || req.connection.remoteAddress
+        });
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('ascii');
+    const [username, password] = credentials.split(':');
+    
+    if (!isAdminUser(username, password)) {
+        logWarning('Access denied - admin privileges required', {
+            requestId: req.requestId,
+            method: req.method,
+            url: req.url,
+            username,
+            ip: req.ip || req.connection.remoteAddress
+        });
+        return res.status(403).json({ error: 'Admin privileges required' });
+    }
+    
+    logInfo('Admin user authenticated successfully', {
+        requestId: req.requestId,
+        username,
+        role: 'admin',
+        method: req.method,
+        url: req.url,
+        ip: req.ip || req.connection.remoteAddress
+    });
+    
+    req.user = { username, role: 'admin' };
     next();
 }
 
@@ -412,7 +485,7 @@ function getBaseThroughput(drive_type, pattern, block_size) {
 }
 
 
-app.get('/api/test-runs', requireAuth, (req, res) => {
+app.get('/api/test-runs', requireAdmin, (req, res) => {
     logInfo('User requesting test runs list', {
         requestId: req.requestId,
         username: req.user.username,
@@ -448,7 +521,7 @@ app.get('/api/test-runs', requireAuth, (req, res) => {
     });
 });
 
-app.get('/api/performance-data', requireAuth, (req, res) => {
+app.get('/api/performance-data', requireAdmin, (req, res) => {
     const { test_run_ids, metric_types } = req.query;
 
     if (!test_run_ids) {
@@ -551,7 +624,7 @@ app.get('/api/performance-data', requireAuth, (req, res) => {
 });
 
 // Get filter options
-app.get('/api/filters', requireAuth, (req, res) => {
+app.get('/api/filters', requireAdmin, (req, res) => {
     const queries = [
         'SELECT DISTINCT drive_type FROM test_runs ORDER BY drive_type',
         'SELECT DISTINCT drive_model FROM test_runs ORDER BY drive_model', 
@@ -583,7 +656,7 @@ app.get('/api/filters', requireAuth, (req, res) => {
 });
 
 // Update test run endpoint
-app.put('/api/test-runs/:id', requireAuth, (req, res) => {
+app.put('/api/test-runs/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
     const { drive_model, drive_type, hostname, protocol } = req.body;
     
@@ -632,7 +705,7 @@ app.put('/api/test-runs/:id', requireAuth, (req, res) => {
 });
 
 // DELETE endpoint for test runs
-app.delete('/api/test-runs/:id', requireAuth, (req, res) => {
+app.delete('/api/test-runs/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
     
     logInfo('User attempting to delete test run', {
@@ -874,7 +947,7 @@ function insertLatencyPercentiles(testRunId, percentiles, operationType) {
 }
 
 // Clear database endpoint (for development/testing)
-app.delete('/api/clear-database', requireAuth, (req, res) => {
+app.delete('/api/clear-database', requireAdmin, (req, res) => {
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
         

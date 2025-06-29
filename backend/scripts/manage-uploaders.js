@@ -4,10 +4,10 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const readline = require('readline');
 
-const HTPASSWD_FILE = '/app/.htpasswd';
+const HTUPLOADERS_FILE = '.htuploaders';
 
-console.log('🔐 FIO Analyzer Password Change Tool');
-console.log('=====================================\n');
+console.log('🔐 FIO Analyzer Uploader User Management Tool');
+console.log('=============================================\n');
 
 // Hidden password input function
 function getHiddenPassword(prompt) {
@@ -54,8 +54,8 @@ function getHiddenPassword(prompt) {
     } else {
       // Fallback for non-TTY environments
       console.log('\n⚠️  Warning: Running in non-TTY mode - password will be visible!');
-      console.log('💡 For secure password input, use: docker exec -it fio-app npm run change-password');
-      console.log('💡 Or use non-interactive mode: node scripts/change-password.js username password\n');
+      console.log('💡 For secure password input, use: docker exec -it fio-app npm run manage-uploaders');
+      console.log('💡 Or use non-interactive mode: node scripts/manage-uploaders.js username password\n');
       
       const rl = readline.createInterface({
         input: process.stdin,
@@ -91,10 +91,15 @@ async function main() {
 
       // Get username
       username = await new Promise((resolve) => {
-        rl.question('Username (default: admin): ', (answer) => {
-          resolve(answer.trim() || 'admin');
+        rl.question('Uploader username: ', (answer) => {
+          resolve(answer.trim());
         });
       });
+
+      if (!username) {
+        console.log('❌ Username is required');
+        process.exit(1);
+      }
 
       rl.close();
 
@@ -120,12 +125,12 @@ async function main() {
     console.log('🔨 Hashing password...');
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Update .htpasswd file while preserving other users
-    console.log('📝 Updating .htpasswd file...');
+    // Update .htuploaders file while preserving other users
+    console.log('📝 Updating .htuploaders file...');
     
     let existingContent = '';
-    if (fs.existsSync(HTPASSWD_FILE)) {
-      existingContent = fs.readFileSync(HTPASSWD_FILE, 'utf8');
+    if (fs.existsSync(HTUPLOADERS_FILE)) {
+      existingContent = fs.readFileSync(HTUPLOADERS_FILE, 'utf8');
     }
     
     const lines = existingContent.split('\n').filter(line => line.trim() && !line.startsWith('#'));
@@ -134,23 +139,24 @@ async function main() {
     if (userExists !== -1) {
       // Update existing user
       lines[userExists] = `${username}:${hashedPassword}`;
-      console.log(`👤 Updated existing user '${username}'`);
+      console.log(`👤 Updated existing uploader '${username}'`);
     } else {
       // Add new user
       lines.push(`${username}:${hashedPassword}`);
-      console.log(`👤 Added new user '${username}'`);
+      console.log(`👤 Added new uploader '${username}'`);
     }
     
     // Write back to file with preserved structure
     const newContent = lines.join('\n') + '\n';
-    fs.writeFileSync(HTPASSWD_FILE, newContent, 'utf8');
+    fs.writeFileSync(HTUPLOADERS_FILE, newContent, 'utf8');
 
-    console.log('✅ Password updated successfully!');
+    console.log('✅ Uploader user updated successfully!');
     console.log(`👤 Username: ${username}`);
+    console.log('📁 Role: Upload-only (can only upload FIO test data)');
     console.log('🔄 Restart the application to apply changes.');
     
   } catch (error) {
-    console.error('❌ Error changing password:', error.message);
+    console.error('❌ Error managing uploader user:', error.message);
     process.exit(1);
   }
 }
@@ -158,21 +164,24 @@ async function main() {
 // Usage information
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.log('Usage:');
-  console.log('  Interactive mode:     docker exec -it fio-app npm run change-password');
-  console.log('  Non-interactive mode: docker exec fio-app node scripts/change-password.js username password');
-  console.log('  Help:                 npm run change-password --help');
+  console.log('  Interactive mode:     docker exec -it fio-app npm run manage-uploaders');
+  console.log('  Non-interactive mode: docker exec fio-app node scripts/manage-uploaders.js username password');
+  console.log('  Help:                 npm run manage-uploaders --help');
   console.log('');
   console.log('Examples:');
-  console.log('  docker exec fio-app node scripts/change-password.js admin newpassword');
-  console.log('  docker exec fio-app node scripts/change-password.js user123 secretpass');
+  console.log('  docker exec fio-app node scripts/manage-uploaders.js testuser testpass');
+  console.log('  docker exec fio-app node scripts/manage-uploaders.js uploader1 secretpass');
+  console.log('');
+  console.log('Note: Uploader users can only upload FIO test data via /api/import');
+  console.log('      They cannot view, edit, or delete existing test data.');
   process.exit(0);
 }
 
 // Check if running in Docker container
 if (!fs.existsSync('/app')) {
   console.error('❌ This script should be run inside the Docker container');
-  console.error('💡 Use: docker exec -it fio-app npm run change-password');
-  console.error('💡 Or:   docker exec fio-app node scripts/change-password.js username password');
+  console.error('💡 Use: docker exec -it fio-app npm run manage-uploaders');
+  console.error('💡 Or:   docker exec fio-app node scripts/manage-uploaders.js username password');
   process.exit(1);
 }
 

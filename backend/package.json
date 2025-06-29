@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "change-password": "node scripts/change-password.js",
+    "manage-users": "node scripts/manage-users.js",
+    "manage-uploaders": "node scripts/manage-uploaders.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
