@@ -1,31 +1,34 @@
-FROM node:18-alpine
-
-# Add version label
-COPY VERSION /app/VERSION
-LABEL version="$(cat /app/VERSION)"
+# Multi-stage build for smaller final image
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-# COPY frontend/package*.json ./
+# Copy package files first for better caching
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
 
 # Copy source code
 COPY frontend/. .
 
-# Check if node_modules exists and quit if it does (It should be ignored by .dockerignore)
-RUN if [ -d "node_modules" ]; then echo "node_modules directory exists"; exit 1; fi
-
 # Install dependencies
-RUN npm ci
+RUN npm install
 
-# Build the application (skip TypeScript checking)
+# Build the application
 RUN npm run build:prod
 
-# Install serve to run the built app
-RUN npm install -g serve
+# Runtime stage - use nginx-alpine for serving static files
+FROM nginx:alpine
 
-# Expose port
-EXPOSE 3000
+# Copy built application from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Serve the built application
-CMD ["serve", "-s", "dist", "-l", "3000"] 
+# Copy custom nginx configuration if needed
+# COPY nginx.conf /etc/nginx/nginx.conf
+
+# Expose port 80 (nginx default)
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"] 
