@@ -43,6 +43,10 @@ docker tag fio-analyzer_nginx ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-nginx:${
 docker tag fio-analyzer_backend ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-backend:${IMAGE_TAG}
 docker tag fio-analyzer_frontend ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-frontend:${IMAGE_TAG}
 
+docker tag fio-analyzer_nginx ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-nginx:latest
+docker tag fio-analyzer_backend ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-backend:latest
+docker tag fio-analyzer_frontend ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-frontend:latest
+
 # Push images
 echo "📤 Pushing images to registry..."
 docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-nginx:${IMAGE_TAG}
