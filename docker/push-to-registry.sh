@@ -30,6 +30,10 @@ docker compose build
 # Get the image ID
 IMAGE_TAG=$(docker images -q fio-analyzer_app)
 
+# Set the external URL for the app so the coantainer will be able to access the API behind a reverse proxy
+EXTERNAL_URL=/api
+export EXTERNAL_URL
+
 if [ -z "$IMAGE_TAG" ]; then
     echo "❌ Image not found. Make sure to build it first with 'docker compose build'"
     exit 1

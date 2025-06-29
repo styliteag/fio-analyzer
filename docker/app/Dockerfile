@@ -1,8 +1,8 @@
 # Multi-stage build combining frontend and backend
 FROM node:18-alpine AS frontend-builder
 
-# Accept build arguments
-ARG VITE_API_URL=/api
+# Accept build arguments  
+ARG VITE_API_URL=""
 
 WORKDIR /app
 
@@ -30,20 +30,20 @@ WORKDIR /app
 # Install nginx for serving frontend static files
 RUN apk add --no-cache nginx
 
-# Copy frontend build from builder stage
-COPY --from=frontend-builder /app/dist /usr/share/nginx/html
-
 # Copy backend package files
 COPY backend/package*.json ./
 
 # Install backend dependencies
-RUN npm ci --only=production --no-audit --no-fund
+RUN EXTERNAL_URL=/api npm ci --only=production --no-audit --no-fund
 
 # Copy backend source
 COPY backend/ ./
 
 # Copy nginx configuration
 COPY docker/app/nginx-main.conf /etc/nginx/nginx.conf
+
+# Copy frontend build from builder stage
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
 # Create nginx cache directory and startup script
 RUN mkdir -p /var/cache/nginx && \

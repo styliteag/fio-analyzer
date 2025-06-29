@@ -74,18 +74,22 @@ app.use((req, res, next) => {
     }
 });
 
-// Setup basic authentication if .htpasswd exists (after CORS preflight handler)
-const htpasswdUsers = parseHtpasswd(HTPASSWD_PATH);
-if (htpasswdUsers) {
-    app.use(basicAuth({
-        authorizer: customAuthChecker,
-        authorizeAsync: false,
-        challenge: true,
-        realm: 'FIO Analyzer - Storage Performance Visualizer'
-    }));
-    console.log('Basic authentication enabled');
-} else {
-    console.log('Basic authentication disabled - no valid .htpasswd file found');
+// Authentication middleware for protected routes
+function requireAuth(req, res, next) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Basic ')) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const credentials = Buffer.from(authHeader.slice(6), 'base64').toString('ascii');
+    const [username, password] = credentials.split(':');
+    
+    if (!customAuthChecker(username, password)) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    req.user = { username };
+    next();
 }
 
 app.use(express.json());
@@ -302,7 +306,7 @@ function getBaseThroughput(drive_type, pattern, block_size) {
 }
 
 
-app.get('/api/test-runs', (req, res) => {
+app.get('/api/test-runs', requireAuth, (req, res) => {
     db.all(`
         SELECT id, timestamp, drive_model, drive_type, test_name, 
                block_size, read_write_pattern, queue_depth, duration,
@@ -319,7 +323,7 @@ app.get('/api/test-runs', (req, res) => {
     });
 });
 
-app.get('/api/performance-data', (req, res) => {
+app.get('/api/performance-data', requireAuth, (req, res) => {
     const { test_run_ids, metric_types } = req.query;
 
     if (!test_run_ids) {
@@ -422,7 +426,7 @@ app.get('/api/performance-data', (req, res) => {
 });
 
 // Get filter options
-app.get('/api/filters', (req, res) => {
+app.get('/api/filters', requireAuth, (req, res) => {
     const queries = [
         'SELECT DISTINCT drive_type FROM test_runs ORDER BY drive_type',
         'SELECT DISTINCT drive_model FROM test_runs ORDER BY drive_model', 
@@ -454,7 +458,7 @@ app.get('/api/filters', (req, res) => {
 });
 
 // Update test run endpoint
-app.put('/api/test-runs/:id', (req, res) => {
+app.put('/api/test-runs/:id', requireAuth, (req, res) => {
     const { id } = req.params;
     const { drive_model, drive_type, hostname, protocol } = req.body;
     
@@ -503,7 +507,7 @@ app.put('/api/test-runs/:id', (req, res) => {
 });
 
 // DELETE endpoint for test runs
-app.delete('/api/test-runs/:id', (req, res) => {
+app.delete('/api/test-runs/:id', requireAuth, (req, res) => {
     const { id } = req.params;
     
     // Start a transaction to delete from both tables
@@ -537,7 +541,7 @@ app.delete('/api/test-runs/:id', (req, res) => {
 });
 
 // FIO JSON import endpoint
-app.post('/api/import', upload.single('file'), (req, res) => {
+app.post('/api/import', requireAuth, upload.single('file'), (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
@@ -713,7 +717,7 @@ function insertLatencyPercentiles(testRunId, percentiles, operationType) {
 }
 
 // Clear database endpoint (for development/testing)
-app.delete('/api/clear-database', (req, res) => {
+app.delete('/api/clear-database', requireAuth, (req, res) => {
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
         

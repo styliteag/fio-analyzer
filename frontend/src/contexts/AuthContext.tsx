@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const verifyCredentials = async (credentials: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/test-runs`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || '.'}/api/test-runs`, {
         headers: {
           'Authorization': `Basic ${credentials}`
         }
@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const credentials = btoa(`${username}:${password}`);
       
       // Test the credentials
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/test-runs`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || '.'}/api/test-runs`, {
         headers: {
           'Authorization': `Basic ${credentials}`
         }
@@ -106,7 +106,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (err) {
       console.error('Login network error:', err);
-      setError('Cannot connect to server. Please check if the backend is running on http://localhost:8000');
+      setError('Cannot connect to server. Please check if the backend is running.');
       setLoading(false);
       return false;
     }
