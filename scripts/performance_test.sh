@@ -3,22 +3,6 @@
 # FIO Performance Testing Script
 # This script runs FIO tests with multiple block sizes and uploads results to the backend
 
-# Configuration Variables
-HOSTNAME="${HOSTNAME:-$(hostname)}"
-PROTOCOL="${PROTOCOL:-unknown}"
-DESCRIPTION="${DESCRIPTION:-script_test}"
-TEST_SIZE="${TEST_SIZE:-10M}"
-NUM_JOBS="${NUM_JOBS:-4}"
-RUNTIME="${RUNTIME:-30}"
-BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
-TARGET_DIR="${TARGET_DIR:-/tmp/fio_test}"
-USERNAME="${USERNAME:-admin}"
-PASSWORD="${PASSWORD:-admin}"
-
-# Test Configuration
-BLOCK_SIZES=("4k" "64k" "1M")
-TEST_PATTERNS=("read" "write" "randread" "randwrite")
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -41,6 +25,52 @@ print_warning() {
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to load .env file
+load_env() {
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local env_file="$script_dir/.env"
+    
+    if [ -f "$env_file" ]; then
+        print_status "Loading configuration from $env_file"
+        # Export variables from .env file
+        set -a
+        source "$env_file"
+        set +a
+    else
+        print_status "No .env file found at $env_file, using defaults and environment variables"
+    fi
+}
+
+# Configuration Variables with defaults
+set_defaults() {
+    HOSTNAME="${HOSTNAME:-$(hostname)}"
+    PROTOCOL="${PROTOCOL:-unknown}"
+    DESCRIPTION="${DESCRIPTION:-script_test}"
+    TEST_SIZE="${TEST_SIZE:-10M}"
+    NUM_JOBS="${NUM_JOBS:-4}"
+    RUNTIME="${RUNTIME:-30}"
+    BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
+    TARGET_DIR="${TARGET_DIR:-/tmp/fio_test}"
+    USERNAME="${USERNAME:-admin}"
+    PASSWORD="${PASSWORD:-admin}"
+    
+    # Parse BLOCK_SIZES from comma-separated string if provided
+    if [ -n "$BLOCK_SIZES" ] && [ "$BLOCK_SIZES" != "4k,64k,1M" ]; then
+        IFS=',' read -ra BLOCK_SIZES_ARRAY <<< "$BLOCK_SIZES"
+        BLOCK_SIZES=("${BLOCK_SIZES_ARRAY[@]}")
+    else
+        BLOCK_SIZES=("4k" "64k" "1M")
+    fi
+    
+    # Parse TEST_PATTERNS from comma-separated string if provided
+    if [ -n "$TEST_PATTERNS" ] && [ "$TEST_PATTERNS" != "read,write,randread,randwrite" ]; then
+        IFS=',' read -ra TEST_PATTERNS_ARRAY <<< "$TEST_PATTERNS"
+        TEST_PATTERNS=("${TEST_PATTERNS_ARRAY[@]}")
+    else
+        TEST_PATTERNS=("read" "write" "randread" "randwrite")
+    fi
 }
 
 # Function to check if fio is installed
@@ -221,6 +251,10 @@ main() {
     echo "============================="
     echo
     
+    # Load configuration
+    load_env
+    set_defaults
+    
     # Check prerequisites
     check_fio
     check_curl
@@ -255,27 +289,36 @@ FIO Performance Testing Script
 
 Usage: $0 [options]
 
-Environment Variables:
-  HOSTNAME     - Server hostname (default: current hostname)
-  PROTOCOL     - Storage protocol (default: unknown)
-  DESCRIPTION  - Test description (default: "script_test")
-  TEST_SIZE    - Size of test file (default: 10M)
-  NUM_JOBS     - Number of parallel jobs (default: 4)
-  RUNTIME      - Test runtime in seconds (default: 30)
-  BACKEND_URL  - Backend API URL (default: http://localhost:8000)
-  TARGET_DIR   - Directory for test files (default: /tmp/fio_test)
-  USERNAME     - Authentication username (default: admin)
-  PASSWORD     - Authentication password (default: admin)
+Configuration:
+  The script loads configuration from a .env file in the same directory.
+  Copy .env.example to .env and customize the values.
+  Environment variables override .env file settings.
+
+Configuration Variables:
+  HOSTNAME       - Server hostname (default: current hostname)
+  PROTOCOL       - Storage protocol (default: unknown)
+  DESCRIPTION    - Test description (default: "script_test")
+  TEST_SIZE      - Size of test file (default: 10M)
+  NUM_JOBS       - Number of parallel jobs (default: 4)
+  RUNTIME        - Test runtime in seconds (default: 30)
+  BACKEND_URL    - Backend API URL (default: http://localhost:8000)
+  TARGET_DIR     - Directory for test files (default: /tmp/fio_test)
+  USERNAME       - Authentication username (default: admin)
+  PASSWORD       - Authentication password (default: admin)
+  BLOCK_SIZES    - Comma-separated block sizes (default: 4k,64k,1M)
+  TEST_PATTERNS  - Comma-separated test patterns (default: read,write,randread,randwrite)
 
 Examples:
-  # Basic usage
+  # Setup configuration file
+  cp .env.example .env
+  # Edit .env with your settings, then:
   $0
   
-  # Custom configuration
+  # Override with environment variables
   HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" $0
   
-  # Large test
-  TEST_SIZE="10G" RUNTIME="300" NUM_JOBS="8" $0
+  # Large test with custom patterns
+  TEST_SIZE="10G" RUNTIME="300" NUM_JOBS="8" TEST_PATTERNS="read,write" $0
 
 EOF
     exit 0
