@@ -15,6 +15,17 @@ Internet -> Nginx (Port 80) -> Frontend (Port 3000) & Backend (Port 8000)
 
 ## Quick Start
 
+```bash
+cd docker
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env file with your settings
+
+# Deploy with automatic version detection
+./deploy.sh
+```
+
 ## Manual Deployment
 
 If you prefer manual deployment:
@@ -167,9 +178,13 @@ dokcer compose up --scale backend=3 -d
    # Edit .env with your settings
    ```
 
-2. **Deploy using pre-built images:**
+2. **Deploy using versioned images:**
    ```bash
-   DOCKER_NAMESPACE=yourusername IMAGE_TAG=v1.0.0 docker compose -f compose.prod.yml up -d
+   # Automatic version detection from VERSION file
+   ./deploy.sh
+   
+   # Or manually specify version
+   IMAGE_TAG=v1.0.0 docker compose -f compose.prod.yml up -d
    ```
 
 ### Registry Examples

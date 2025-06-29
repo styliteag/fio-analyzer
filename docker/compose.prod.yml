@@ -6,7 +6,7 @@ version: '3.8'
 services:
   nginx:
     container_name: fio-nginx
-    image: docker.io/styliteag/fio-analyzer-nginx:latest
+    image: docker.io/styliteag/fio-analyzer-nginx:${IMAGE_TAG:-latest}
     ports:
       - "80:80"
     depends_on:
@@ -18,7 +18,7 @@ services:
 
   backend:
     container_name: fio-backend
-    image: docker.io/styliteag/fio-analyzer-backend:latest
+    image: docker.io/styliteag/fio-analyzer-backend:${IMAGE_TAG:-latest}
     volumes:      
       - ./data/backend/db:/app/db
       - ./data/backend/uploads:/app/uploads
@@ -34,7 +34,7 @@ services:
 
   frontend:
     container_name: fio-frontend
-    image: docker.io/styliteag/fio-analyzer-frontend:latest
+    image: docker.io/styliteag/fio-analyzer-frontend:${IMAGE_TAG:-latest}
     depends_on:
       - backend
     environment:

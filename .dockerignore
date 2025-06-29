@@ -1,21 +1,13 @@
+# Backend
+backend/node_modules
+backend/npm-debug.log*
+backend/.npm
+backend/db/storage_performance.db
+backend/uploads/*
+# Frontend
+frontend/node_modules
+frontend/dist
+frontend/npm-debug.log*
+frontend/.npm
+# Common
 node_modules
-uploads
-npm-debug.log
-.git
-.gitignore
-README.md
-.env
-.nyc_output
-coverage
-.DS_Store
-*.log
-dist
-build
-.cache
-.parcel-cache
-.vscode
-.idea
-*.swp
-*.swo
-*.tmp
-*~ 

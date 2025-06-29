@@ -1,17 +1,24 @@
 FROM node:18-alpine
 
+# Add version label
+COPY VERSION /app/VERSION
+LABEL version="$(cat /app/VERSION)"
+
+# Install build dependencies for native modules
+# RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
-COPY backend/package*.json ./
+# COPY backend/package*.json ./
 
-# Install dependencies
-RUN npm ci
-
-# Copy source code but not the node_modules
+# Copy source code (node_modules excluded by .dockerignore)
 COPY backend/ ./
 
-# Build the application
-RUN npm install
+# Check if node_modules exists and quit if it does (It should be ignored by .dockerignore)
+RUN if [ -d "node_modules" ]; then echo "node_modules directory exists"; exit 1; fi
+
+# Install dependencies with clean compilation
+RUN npm ci --only=production
 
 EXPOSE 8000
 

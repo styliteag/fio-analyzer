@@ -7,7 +7,14 @@ set -e
 # Configuration
 REGISTRY_URL="${DOCKER_REGISTRY:-docker.io}"  # Default to Docker Hub
 NAMESPACE="${DOCKER_NAMESPACE:-styliteag}"  # Change this to your username/organization
-IMAGE_TAG="${IMAGE_TAG:-latest}"
+
+# Read version from VERSION file
+if [ -f "../VERSION" ]; then
+    VERSION=$(cat "../VERSION")
+    IMAGE_TAG="${IMAGE_TAG:-v${VERSION}}"
+else
+    IMAGE_TAG="${IMAGE_TAG:-latest}"
+fi
 
 echo "🚀 Pushing FIO Analyzer images to registry..."
 echo "Registry: ${REGISTRY_URL}"
@@ -41,6 +48,10 @@ echo "📤 Pushing images to registry..."
 docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-nginx:${IMAGE_TAG}
 docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-backend:${IMAGE_TAG}
 docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-frontend:${IMAGE_TAG}
+
+docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-nginx:latest
+docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-backend:latest
+docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-frontend:latest
 
 echo ""
 echo "✅ Images pushed successfully!"
