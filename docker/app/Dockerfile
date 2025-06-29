@@ -45,6 +45,10 @@ COPY docker/app/nginx-main.conf /etc/nginx/nginx.conf
 # Copy frontend build from builder stage
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
+# Copy scripts for download
+COPY scripts/fio-analyzer-tests.sh /usr/share/nginx/html/fio-analyzer-tests.sh
+COPY scripts/.env.example /usr/share/nginx/html/.env.example
+
 # Create nginx cache directory and startup script
 RUN mkdir -p /var/cache/nginx && \
     echo '#!/bin/sh' > /app/start.sh && \
