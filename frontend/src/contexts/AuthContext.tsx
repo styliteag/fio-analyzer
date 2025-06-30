@@ -1,133 +1,147 @@
-import type React from 'react';
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import type React from "react";
+import {
+	createContext,
+	type ReactNode,
+	useContext,
+	useEffect,
+	useState,
+} from "react";
 
 interface AuthContextType {
-  isAuthenticated: boolean;
-  username: string | null;
-  login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
-  loading: boolean;
-  error: string | null;
+	isAuthenticated: boolean;
+	username: string | null;
+	login: (username: string, password: string) => Promise<void>;
+	logout: () => void;
+	loading: boolean;
+	error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+	const context = useContext(AuthContext);
+	if (context === undefined) {
+		throw new Error("useAuth must be used within an AuthProvider");
+	}
+	return context;
 };
 
 interface AuthProviderProps {
-  children: ReactNode;
+	children: ReactNode;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [username, setUsername] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+	const [isAuthenticated, setIsAuthenticated] = useState(false);
+	const [username, setUsername] = useState<string | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 
-  const verifyCredentials = async (credentials: string): Promise<boolean> => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || '.'}/api/test-runs`, {
-        headers: {
-          'Authorization': `Basic ${credentials}`
-        }
-      });
-      return response.ok;
-    } catch (error) {
-      console.warn('Network error during credential verification:', error);
-      return false;
-    }
-  };
+	const verifyCredentials = async (credentials: string): Promise<boolean> => {
+		try {
+			const response = await fetch(
+				`${import.meta.env.VITE_API_URL || "."}/api/test-runs`,
+				{
+					headers: {
+						Authorization: `Basic ${credentials}`,
+					},
+				},
+			);
+			return response.ok;
+		} catch (error) {
+			console.warn("Network error during credential verification:", error);
+			return false;
+		}
+	};
 
-  // Check if user is already authenticated on app load
-  useEffect(() => {
-    const storedAuth = localStorage.getItem('fio-auth');
-    if (storedAuth) {
-      try {
-        const { username: storedUsername, credentials } = JSON.parse(storedAuth);
-        // Verify credentials are still valid by making a test API call
-        verifyCredentials(credentials)
-          .then((valid) => {
-            if (valid) {
-              setIsAuthenticated(true);
-              setUsername(storedUsername);
-            } else {
-              localStorage.removeItem('fio-auth');
-            }
-          })
-          .finally(() => setLoading(false));
-      } catch {
-        localStorage.removeItem('fio-auth');
-        setLoading(false);
-      }
-    } else {
-      setLoading(false);
-    }
-  }, [verifyCredentials]);
+	// Check if user is already authenticated on app load
+	useEffect(() => {
+		const storedAuth = localStorage.getItem("fio-auth");
+		if (storedAuth) {
+			try {
+				const { username: storedUsername, credentials } =
+					JSON.parse(storedAuth);
+				// Verify credentials are still valid by making a test API call
+				verifyCredentials(credentials)
+					.then((valid) => {
+						if (valid) {
+							setIsAuthenticated(true);
+							setUsername(storedUsername);
+						} else {
+							localStorage.removeItem("fio-auth");
+						}
+					})
+					.finally(() => setLoading(false));
+			} catch {
+				localStorage.removeItem("fio-auth");
+				setLoading(false);
+			}
+		} else {
+			setLoading(false);
+		}
+	}, [verifyCredentials]);
 
-  const login = async (username: string, password: string): Promise<void> => {
-    setLoading(true);
-    setError(null);
+	const login = async (username: string, password: string): Promise<void> => {
+		setLoading(true);
+		setError(null);
 
-    try {
-      // Create base64 encoded credentials
-      const credentials = btoa(`${username}:${password}`);
-      
-      // Test the credentials
-      const response = await fetch(`${import.meta.env.VITE_API_URL || '.'}/api/test-runs`, {
-        headers: {
-          'Authorization': `Basic ${credentials}`
-        }
-      });
+		try {
+			// Create base64 encoded credentials
+			const credentials = btoa(`${username}:${password}`);
 
-      if (response.ok) {
-        // Store credentials in localStorage
-        localStorage.setItem('fio-auth', JSON.stringify({
-          username,
-          credentials
-        }));
-        
-        setIsAuthenticated(true);
-        setUsername(username);
-        setLoading(false);
-      } else if (response.status === 401) {
-        setError('Invalid username or password');
-        setLoading(false);
-      } else {
-        setError('Login failed. Please try again.');
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error('Login network error:', err);
-      setError('Cannot connect to server. Please check if the backend is running.');
-      setLoading(false);
-    }
-  };
+			// Test the credentials
+			const response = await fetch(
+				`${import.meta.env.VITE_API_URL || "."}/api/test-runs`,
+				{
+					headers: {
+						Authorization: `Basic ${credentials}`,
+					},
+				},
+			);
 
-  const logout = () => {
-    localStorage.removeItem('fio-auth');
-    setIsAuthenticated(false);
-    setUsername(null);
-    setError(null);
-  };
+			if (response.ok) {
+				// Store credentials in localStorage
+				localStorage.setItem(
+					"fio-auth",
+					JSON.stringify({
+						username,
+						credentials,
+					}),
+				);
 
-  const value: AuthContextType = {
-    isAuthenticated,
-    username,
-    login,
-    logout,
-    loading,
-    error
-  };
+				setIsAuthenticated(true);
+				setUsername(username);
+				setLoading(false);
+			} else if (response.status === 401) {
+				setError("Invalid username or password");
+				setLoading(false);
+			} else {
+				setError("Login failed. Please try again.");
+				setLoading(false);
+			}
+		} catch (err) {
+			console.error("Login network error:", err);
+			setError(
+				"Cannot connect to server. Please check if the backend is running.",
+			);
+			setLoading(false);
+		}
+	};
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+	const logout = () => {
+		localStorage.removeItem("fio-auth");
+		setIsAuthenticated(false);
+		setUsername(null);
+		setError(null);
+	};
+
+	const value: AuthContextType = {
+		isAuthenticated,
+		username,
+		login,
+		logout,
+		loading,
+		error,
+	};
+
+	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

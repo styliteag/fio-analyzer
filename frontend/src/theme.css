@@ -1,339 +1,385 @@
 /* Theme CSS Custom Properties */
 :root {
-  /* Background colors */
-  --bg-primary: rgb(255 255 255);
-  --bg-secondary: rgb(249 250 251);
-  --bg-tertiary: rgb(243 244 246);
-  --bg-accent: rgb(239 246 255);
-  --bg-accent-hover: rgb(219 234 254);
-  --bg-error: rgb(254 242 242);
-  --bg-success: rgb(240 253 244);
-  
-  /* Text colors */
-  --text-primary: rgb(17 24 39);
-  --text-secondary: rgb(55 65 81);
-  --text-tertiary: rgb(107 114 128);
-  --text-quaternary: rgb(156 163 175);
-  --text-accent: rgb(37 99 235);
-  --text-error: rgb(220 38 38);
-  --text-success: rgb(22 163 74);
-  --text-on-accent: rgb(255 255 255);
-  
-  /* Border colors */
-  --border-primary: rgb(209 213 219);
-  --border-secondary: rgb(229 231 235);
-  --border-accent: rgb(147 197 253);
-  --border-error: rgb(252 165 165);
-  --border-success: rgb(134 239 172);
-  
-  /* Interactive states */
-  --hover-bg: rgb(243 244 246);
-  --focus-ring: rgb(147 197 253);
-  --disabled-bg: rgb(229 231 235);
-  --disabled-text: rgb(156 163 175);
-  
-  /* Form elements */
-  --input-bg: rgb(255 255 255);
-  --input-border: rgb(209 213 219);
-  --input-placeholder: rgb(156 163 175);
-  --select-bg: rgb(255 255 255);
-  --select-border: rgb(209 213 219);
-  
-  /* Chart colors */
-  --chart-bg: rgb(255 255 255);
-  --chart-text: rgb(55 65 81);
-  --chart-grid: rgb(229 231 235);
-  --chart-axis: rgb(107 114 128);
-  --chart-tooltip-bg: rgba(255, 255, 255, 0.95);
-  --chart-tooltip-border: rgb(209 213 219);
-  
-  /* Button colors */
-  --btn-primary-bg: rgb(37 99 235);
-  --btn-primary-hover: rgb(29 78 216);
-  --btn-secondary-bg: rgb(243 244 246);
-  --btn-secondary-text: rgb(55 65 81);
-  --btn-secondary-hover: rgb(229 231 235);
-  
-  /* Card/Panel colors */
-  --card-bg: rgb(255 255 255);
-  --card-border: rgb(229 231 235);
-  --panel-bg: rgb(249 250 251);
+	/* Background colors */
+	--bg-primary: rgb(255 255 255);
+	--bg-secondary: rgb(249 250 251);
+	--bg-tertiary: rgb(243 244 246);
+	--bg-accent: rgb(239 246 255);
+	--bg-accent-hover: rgb(219 234 254);
+	--bg-error: rgb(254 242 242);
+	--bg-success: rgb(240 253 244);
+
+	/* Text colors */
+	--text-primary: rgb(17 24 39);
+	--text-secondary: rgb(55 65 81);
+	--text-tertiary: rgb(107 114 128);
+	--text-quaternary: rgb(156 163 175);
+	--text-accent: rgb(37 99 235);
+	--text-error: rgb(220 38 38);
+	--text-success: rgb(22 163 74);
+	--text-on-accent: rgb(255 255 255);
+
+	/* Border colors */
+	--border-primary: rgb(209 213 219);
+	--border-secondary: rgb(229 231 235);
+	--border-accent: rgb(147 197 253);
+	--border-error: rgb(252 165 165);
+	--border-success: rgb(134 239 172);
+
+	/* Interactive states */
+	--hover-bg: rgb(243 244 246);
+	--focus-ring: rgb(147 197 253);
+	--disabled-bg: rgb(229 231 235);
+	--disabled-text: rgb(156 163 175);
+
+	/* Form elements */
+	--input-bg: rgb(255 255 255);
+	--input-border: rgb(209 213 219);
+	--input-placeholder: rgb(156 163 175);
+	--select-bg: rgb(255 255 255);
+	--select-border: rgb(209 213 219);
+
+	/* Chart colors */
+	--chart-bg: rgb(255 255 255);
+	--chart-text: rgb(55 65 81);
+	--chart-grid: rgb(229 231 235);
+	--chart-axis: rgb(107 114 128);
+	--chart-tooltip-bg: rgba(255, 255, 255, 0.95);
+	--chart-tooltip-border: rgb(209 213 219);
+
+	/* Button colors */
+	--btn-primary-bg: rgb(37 99 235);
+	--btn-primary-hover: rgb(29 78 216);
+	--btn-secondary-bg: rgb(243 244 246);
+	--btn-secondary-text: rgb(55 65 81);
+	--btn-secondary-hover: rgb(229 231 235);
+
+	/* Card/Panel colors */
+	--card-bg: rgb(255 255 255);
+	--card-border: rgb(229 231 235);
+	--panel-bg: rgb(249 250 251);
 }
 
 .dark {
-  /* Background colors */
-  --bg-primary: rgb(31 41 55);
-  --bg-secondary: rgb(17 24 39);
-  --bg-tertiary: rgb(55 65 81);
-  --bg-accent: rgb(30 58 138);
-  --bg-accent-hover: rgb(37 99 235);
-  --bg-error: rgb(127 29 29);
-  --bg-success: rgb(20 83 45);
-  
-  /* Text colors */
-  --text-primary: rgb(255 255 255);
-  --text-secondary: rgb(209 213 219);
-  --text-tertiary: rgb(156 163 175);
-  --text-quaternary: rgb(107 114 128);
-  --text-accent: rgb(147 197 253);
-  --text-error: rgb(248 113 113);
-  --text-success: rgb(74 222 128);
-  --text-on-accent: rgb(255 255 255);
-  
-  /* Border colors */
-  --border-primary: rgb(75 85 99);
-  --border-secondary: rgb(55 65 81);
-  --border-accent: rgb(59 130 246);
-  --border-error: rgb(185 28 28);
-  --border-success: rgb(34 197 94);
-  
-  /* Interactive states */
-  --hover-bg: rgb(55 65 81);
-  --focus-ring: rgb(59 130 246);
-  --disabled-bg: rgb(55 65 81);
-  --disabled-text: rgb(107 114 128);
-  
-  /* Form elements */
-  --input-bg: rgb(31 41 55);
-  --input-border: rgb(75 85 99);
-  --input-placeholder: rgb(107 114 128);
-  --select-bg: rgb(31 41 55);
-  --select-border: rgb(75 85 99);
-  
-  /* Chart colors */
-  --chart-bg: rgb(31 41 55);
-  --chart-text: rgb(255 255 255);
-  --chart-grid: rgb(75 85 99);
-  --chart-axis: rgb(209 213 219);
-  --chart-tooltip-bg: rgba(31, 41, 55, 0.95);
-  --chart-tooltip-border: rgb(75 85 99);
-  
-  /* Button colors */
-  --btn-primary-bg: rgb(37 99 235);
-  --btn-primary-hover: rgb(59 130 246);
-  --btn-secondary-bg: rgb(55 65 81);
-  --btn-secondary-text: rgb(209 213 219);
-  --btn-secondary-hover: rgb(75 85 99);
-  
-  /* Card/Panel colors */
-  --card-bg: rgb(31 41 55);
-  --card-border: rgb(75 85 99);
-  --panel-bg: rgb(17 24 39);
+	/* Background colors */
+	--bg-primary: rgb(31 41 55);
+	--bg-secondary: rgb(17 24 39);
+	--bg-tertiary: rgb(55 65 81);
+	--bg-accent: rgb(30 58 138);
+	--bg-accent-hover: rgb(37 99 235);
+	--bg-error: rgb(127 29 29);
+	--bg-success: rgb(20 83 45);
+
+	/* Text colors */
+	--text-primary: rgb(255 255 255);
+	--text-secondary: rgb(209 213 219);
+	--text-tertiary: rgb(156 163 175);
+	--text-quaternary: rgb(107 114 128);
+	--text-accent: rgb(147 197 253);
+	--text-error: rgb(248 113 113);
+	--text-success: rgb(74 222 128);
+	--text-on-accent: rgb(255 255 255);
+
+	/* Border colors */
+	--border-primary: rgb(75 85 99);
+	--border-secondary: rgb(55 65 81);
+	--border-accent: rgb(59 130 246);
+	--border-error: rgb(185 28 28);
+	--border-success: rgb(34 197 94);
+
+	/* Interactive states */
+	--hover-bg: rgb(55 65 81);
+	--focus-ring: rgb(59 130 246);
+	--disabled-bg: rgb(55 65 81);
+	--disabled-text: rgb(107 114 128);
+
+	/* Form elements */
+	--input-bg: rgb(31 41 55);
+	--input-border: rgb(75 85 99);
+	--input-placeholder: rgb(107 114 128);
+	--select-bg: rgb(31 41 55);
+	--select-border: rgb(75 85 99);
+
+	/* Chart colors */
+	--chart-bg: rgb(31 41 55);
+	--chart-text: rgb(255 255 255);
+	--chart-grid: rgb(75 85 99);
+	--chart-axis: rgb(209 213 219);
+	--chart-tooltip-bg: rgba(31, 41, 55, 0.95);
+	--chart-tooltip-border: rgb(75 85 99);
+
+	/* Button colors */
+	--btn-primary-bg: rgb(37 99 235);
+	--btn-primary-hover: rgb(59 130 246);
+	--btn-secondary-bg: rgb(55 65 81);
+	--btn-secondary-text: rgb(209 213 219);
+	--btn-secondary-hover: rgb(75 85 99);
+
+	/* Card/Panel colors */
+	--card-bg: rgb(31 41 55);
+	--card-border: rgb(75 85 99);
+	--panel-bg: rgb(17 24 39);
 }
 
 /* Base utility classes using custom properties */
-.theme-bg-primary { background-color: var(--bg-primary); }
-.theme-bg-secondary { background-color: var(--bg-secondary); }
-.theme-bg-tertiary { background-color: var(--bg-tertiary); }
-.theme-bg-accent { background-color: var(--bg-accent); }
-.theme-bg-card { background-color: var(--card-bg); }
-.theme-bg-panel { background-color: var(--panel-bg); }
-.theme-bg-error { background-color: var(--bg-error); }
-.theme-bg-success { background-color: var(--bg-success); }
+.theme-bg-primary {
+	background-color: var(--bg-primary);
+}
+.theme-bg-secondary {
+	background-color: var(--bg-secondary);
+}
+.theme-bg-tertiary {
+	background-color: var(--bg-tertiary);
+}
+.theme-bg-accent {
+	background-color: var(--bg-accent);
+}
+.theme-bg-card {
+	background-color: var(--card-bg);
+}
+.theme-bg-panel {
+	background-color: var(--panel-bg);
+}
+.theme-bg-error {
+	background-color: var(--bg-error);
+}
+.theme-bg-success {
+	background-color: var(--bg-success);
+}
 
-.theme-text-primary { color: var(--text-primary); }
-.theme-text-secondary { color: var(--text-secondary); }
-.theme-text-tertiary { color: var(--text-tertiary); }
-.theme-text-quaternary { color: var(--text-quaternary); }
-.theme-text-accent { color: var(--text-accent); }
-.theme-text-error { color: var(--text-error); }
-.theme-text-success { color: var(--text-success); }
-.theme-text-on-accent { color: var(--text-on-accent); }
+.theme-text-primary {
+	color: var(--text-primary);
+}
+.theme-text-secondary {
+	color: var(--text-secondary);
+}
+.theme-text-tertiary {
+	color: var(--text-tertiary);
+}
+.theme-text-quaternary {
+	color: var(--text-quaternary);
+}
+.theme-text-accent {
+	color: var(--text-accent);
+}
+.theme-text-error {
+	color: var(--text-error);
+}
+.theme-text-success {
+	color: var(--text-success);
+}
+.theme-text-on-accent {
+	color: var(--text-on-accent);
+}
 
-.theme-border-primary { border-color: var(--border-primary); }
-.theme-border-secondary { border-color: var(--border-secondary); }
-.theme-border-accent { border-color: var(--border-accent); }
-.theme-border-error { border-color: var(--border-error); }
-.theme-border-success { border-color: var(--border-success); }
+.theme-border-primary {
+	border-color: var(--border-primary);
+}
+.theme-border-secondary {
+	border-color: var(--border-secondary);
+}
+.theme-border-accent {
+	border-color: var(--border-accent);
+}
+.theme-border-error {
+	border-color: var(--border-error);
+}
+.theme-border-success {
+	border-color: var(--border-success);
+}
 
 /* Input components */
 .theme-input {
-  background-color: var(--input-bg);
-  border-color: var(--input-border);
-  color: var(--text-primary);
+	background-color: var(--input-bg);
+	border-color: var(--input-border);
+	color: var(--text-primary);
 }
 
 .theme-input::placeholder {
-  color: var(--input-placeholder);
+	color: var(--input-placeholder);
 }
 
 .theme-input:focus {
-  border-color: var(--btn-primary-bg);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+	border-color: var(--btn-primary-bg);
+	box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .theme-select {
-  background-color: var(--select-bg);
-  border-color: var(--select-border);
-  color: var(--text-primary);
+	background-color: var(--select-bg);
+	border-color: var(--select-border);
+	color: var(--text-primary);
 }
 
 .theme-select:focus {
-  border-color: var(--btn-primary-bg);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+	border-color: var(--btn-primary-bg);
+	box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 /* Button components */
 .theme-btn-primary {
-  background-color: var(--btn-primary-bg);
-  color: var(--text-on-accent);
+	background-color: var(--btn-primary-bg);
+	color: var(--text-on-accent);
 }
 
 .theme-btn-primary:hover {
-  background-color: var(--btn-primary-hover);
+	background-color: var(--btn-primary-hover);
 }
 
 .theme-btn-secondary {
-  background-color: var(--btn-secondary-bg);
-  color: var(--btn-secondary-text);
-  border-color: var(--border-primary);
+	background-color: var(--btn-secondary-bg);
+	color: var(--btn-secondary-text);
+	border-color: var(--border-primary);
 }
 
 .theme-btn-secondary:hover {
-  background-color: var(--btn-secondary-hover);
+	background-color: var(--btn-secondary-hover);
 }
 
 .theme-btn-success {
-  background-color: #10b981;
-  color: var(--text-on-accent);
+	background-color: #10b981;
+	color: var(--text-on-accent);
 }
 
 .theme-btn-success:hover {
-  background-color: #059669;
+	background-color: #059669;
 }
 
 /* Layout components */
 .theme-card {
-  background-color: var(--card-bg);
-  border-color: var(--card-border);
+	background-color: var(--card-bg);
+	border-color: var(--card-border);
 }
 
 .theme-panel {
-  background-color: var(--panel-bg);
-  border-color: var(--border-secondary);
+	background-color: var(--panel-bg);
+	border-color: var(--border-secondary);
 }
 
 .theme-modal {
-  background-color: var(--card-bg);
-  border-color: var(--card-border);
+	background-color: var(--card-bg);
+	border-color: var(--card-border);
 }
 
 .theme-overlay {
-  background-color: rgba(0, 0, 0, 0.5);
+	background-color: rgba(0, 0, 0, 0.5);
 }
 
 /* Interactive states */
 .theme-hover:hover {
-  background-color: var(--hover-bg);
+	background-color: var(--hover-bg);
 }
 
 .theme-focus:focus {
-  box-shadow: 0 0 0 3px var(--focus-ring);
+	box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 /* Message components */
 .theme-error {
-  background-color: var(--bg-error);
-  color: var(--text-error);
-  border-color: var(--border-error);
+	background-color: var(--bg-error);
+	color: var(--text-error);
+	border-color: var(--border-error);
 }
 
 .theme-success {
-  background-color: var(--bg-success);
-  color: var(--text-success);
-  border-color: var(--border-success);
+	background-color: var(--bg-success);
+	color: var(--text-success);
+	border-color: var(--border-success);
 }
 
 /* Form groups - complete form styling */
 .theme-form-group {
-  margin-bottom: 1rem;
+	margin-bottom: 1rem;
 }
 
 .theme-form-label {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin-bottom: 0.5rem;
+	display: block;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--text-secondary);
+	margin-bottom: 0.5rem;
 }
 
 .theme-form-input {
-  display: block;
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid;
-  background-color: var(--input-bg);
-  border-color: var(--input-border);
-  color: var(--text-primary);
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+	display: block;
+	width: 100%;
+	padding: 0.5rem 0.75rem;
+	border-radius: 0.375rem;
+	border: 1px solid;
+	background-color: var(--input-bg);
+	border-color: var(--input-border);
+	color: var(--text-primary);
+	transition:
+		border-color 0.15s ease-in-out,
+		box-shadow 0.15s ease-in-out;
 }
 
 .theme-form-input::placeholder {
-  color: var(--input-placeholder);
+	color: var(--input-placeholder);
 }
 
 .theme-form-input:focus {
-  outline: none;
-  border-color: var(--btn-primary-bg);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+	outline: none;
+	border-color: var(--btn-primary-bg);
+	box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .theme-form-select {
-  display: block;
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
-  border: 1px solid;
-  background-color: var(--select-bg);
-  border-color: var(--select-border);
-  color: var(--text-primary);
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+	display: block;
+	width: 100%;
+	padding: 0.5rem 0.75rem;
+	border-radius: 0.375rem;
+	border: 1px solid;
+	background-color: var(--select-bg);
+	border-color: var(--select-border);
+	color: var(--text-primary);
+	transition:
+		border-color 0.15s ease-in-out,
+		box-shadow 0.15s ease-in-out;
 }
 
 .theme-form-select:focus {
-  outline: none;
-  border-color: var(--btn-primary-bg);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+	outline: none;
+	border-color: var(--btn-primary-bg);
+	box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .theme-form-help {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  margin-top: 0.25rem;
+	font-size: 0.75rem;
+	color: var(--text-tertiary);
+	margin-top: 0.25rem;
 }
 
 /* Stats/metric cards */
 .theme-stat-card {
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-radius: 0.5rem;
-  padding: 0.75rem;
+	background-color: var(--bg-secondary);
+	border: 1px solid var(--border-primary);
+	border-radius: 0.5rem;
+	padding: 0.75rem;
 }
 
 .theme-stat-label {
-  font-weight: 500;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--text-secondary);
+	font-size: 0.875rem;
 }
 
 .theme-stat-value {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text-primary);
+	font-size: 1.125rem;
+	font-weight: 600;
+	color: var(--text-primary);
 }
 
 /* Navigation/header */
 .theme-header {
-  background-color: var(--card-bg);
-  border-bottom: 1px solid var(--card-border);
+	background-color: var(--card-bg);
+	border-bottom: 1px solid var(--card-border);
 }
 
 .theme-nav-link {
-  color: var(--text-secondary);
-  transition: color 0.15s ease-in-out;
+	color: var(--text-secondary);
+	transition: color 0.15s ease-in-out;
 }
 
 .theme-nav-link:hover {
-  color: var(--text-primary);
+	color: var(--text-primary);
 }
