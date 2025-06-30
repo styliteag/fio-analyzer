@@ -26,8 +26,8 @@ import {
 	Minimize,
 } from "lucide-react";
 import { useThemeColors } from "../hooks/useThemeColors";
-import type { ChartTemplate, PerformanceData } from "../types";
 import { sortBlockSizes } from "../utils/sorting";
+import type { ChartTemplate, PerformanceData } from "../types";
 
 ChartJS.register(
 	CategoryScale,
@@ -505,13 +505,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 				?.set(blockSize, { iops: iopsValue, bandwidth: bandwidthValue });
 		});
 
-		const blockSizes = Array.from(
-			new Set(sortedData.map((item) => item.block_size)),
-				).sort((a, b) => {
-			const aNum = typeof a === 'string' ? 0 : a;
-			const bNum = typeof b === 'string' ? 0 : b;
-			return aNum - bNum;
-		});
+		const blockSizes = sortBlockSizes(
+			Array.from(new Set(sortedData.map((item) => item.block_size)))
+		);
 		const drives = Array.from(groupedData.keys());
 
 		const datasets = drives.map((drive, index) => ({

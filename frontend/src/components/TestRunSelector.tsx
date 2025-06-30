@@ -7,13 +7,13 @@ import {
 	Trash2,
 	Users,
 } from "lucide-react";
+import { sortBlockSizes } from "../utils/sorting";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import Select from "react-select";
 import { getSelectStyles } from "../hooks/useThemeColors";
 import type { FilterOptions, TestRun } from "../types";
 import { deleteTestRun, fetchFilters, fetchTestRuns } from "../utils/api";
-import { sortBlockSizes } from "../utils/sorting";
 import BulkEditModal from "./BulkEditModal";
 import EditTestRunModal from "./EditTestRunModal";
 

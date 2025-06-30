@@ -677,11 +677,29 @@ app.get('/api/filters', requireAdmin, (req, res) => {
             });
         })
     )).then(([driveTypes, driveModels, patterns, blockSizes, hostnames, protocols]) => {
+        // Normalize block sizes to ensure consistent string format
+        const normalizedBlockSizes = blockSizes.map(row => {
+            const blockSize = row.block_size;
+            if (typeof blockSize === 'number') {
+                // Convert numeric values to proper format
+                if (blockSize >= 1024 * 1024 * 1024) {
+                    return `${Math.round(blockSize / (1024 * 1024 * 1024))}G`;
+                } else if (blockSize >= 1024 * 1024) {
+                    return `${Math.round(blockSize / (1024 * 1024))}M`;
+                } else if (blockSize >= 1024) {
+                    return `${Math.round(blockSize / 1024)}K`;
+                } else {
+                    return `${blockSize}`;
+                }
+            }
+            return blockSize; // Already a string
+        });
+
         res.json({
             drive_types: driveTypes.map(row => row.drive_type),
             drive_models: driveModels.map(row => row.drive_model),
             patterns: patterns.map(row => row.read_write_pattern),
-            block_sizes: blockSizes.map(row => row.block_size),
+            block_sizes: normalizedBlockSizes,
             hostnames: hostnames.map(row => row.hostname),
             protocols: protocols.map(row => row.protocol)
         });
