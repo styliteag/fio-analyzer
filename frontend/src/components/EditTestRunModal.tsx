@@ -116,7 +116,7 @@ export default function EditTestRunModal({
 							</div>
 							<div>
 								<span className="font-medium">Block Size:</span>{" "}
-								{testRun.block_size}k
+								{testRun.block_size}
 							</div>
 							<div>
 								<span className="font-medium">Pattern:</span>{" "}

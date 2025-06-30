@@ -395,7 +395,7 @@ function populateSampleData() {
         ["Intel Optane", "NVMe SSD"]
     ];
     
-    const block_sizes = ['4K', '8K', '16K', '32K', '64K', '128K','1M',"2G"]; // Text with uppercase suffix
+    const block_sizes = ['512', '1K', '4K', '8K', '16K', '32K', '64K', '128K', '1M', '2G']; // Text with uppercase suffix
     const patterns = ["sequential_read", "sequential_write", "random_read", "random_write", "mixed_70_30"];
     const queue_depths = [1, 4, 8, 16, 32];
     
@@ -415,7 +415,7 @@ function populateSampleData() {
                     for (const pattern of samplePatterns) {
                         const queue_depth = queue_depths[Math.floor(Math.random() * queue_depths.length)];
                         
-                        const test_name = `FIO_${pattern}_${block_size}k`;
+                        const test_name = `FIO_${pattern}_${block_size}`;
                         testRunsStmt.run(timestamp, drive_model, drive_type, test_name, block_size, pattern, queue_depth, 300);
                         
                         const base_iops = getBaseIops(drive_type, pattern, block_size);
@@ -448,6 +448,21 @@ function populateSampleData() {
     });
 }
 
+// Helper function to convert text block size back to numeric KB for calculations
+function parseBlockSizeToKB(blockSizeText) {
+    const bsStr = blockSizeText.toString().toLowerCase();
+    if (bsStr.includes('g')) {
+        return parseInt(bsStr.replace('g', '')) * 1024 * 1024; // GB to KB
+    } else if (bsStr.includes('m')) {
+        return parseInt(bsStr.replace('m', '')) * 1024; // MB to KB
+    } else if (bsStr.includes('k')) {
+        return parseInt(bsStr.replace('k', '')); // Already in KB
+    } else {
+        // Plain number, assume bytes and convert to KB
+        return Math.max(1, Math.round(parseInt(bsStr) / 1024));
+    }
+}
+
 function getBaseIops(drive_type, pattern, block_size) {
     const base_values = {
         "NVMe SSD": {"sequential": 100000, "random": 50000},
@@ -458,7 +473,9 @@ function getBaseIops(drive_type, pattern, block_size) {
     const pattern_type = pattern.includes("sequential") ? "sequential" : "random";
     const base = base_values[drive_type][pattern_type];
     
-    return base * Math.pow(64 / block_size, 0.5);
+    // Convert text block size to numeric KB value for calculation
+    const blockSizeKB = parseBlockSizeToKB(block_size);
+    return base * Math.pow(64 / blockSizeKB, 0.5);
 }
 
 function getBaseLatency(drive_type, pattern) {
@@ -482,7 +499,9 @@ function getBaseThroughput(drive_type, pattern, block_size) {
     const pattern_type = pattern.includes("sequential") ? "sequential" : "random";
     const base = base_values[drive_type][pattern_type];
     
-    return base * Math.pow(block_size / 64, 0.3);
+    // Convert text block size to numeric KB value for calculation
+    const blockSizeKB = parseBlockSizeToKB(block_size);
+    return base * Math.pow(blockSizeKB / 64, 0.3);
 }
 
 

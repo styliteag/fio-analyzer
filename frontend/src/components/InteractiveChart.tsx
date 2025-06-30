@@ -264,7 +264,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		// Simple default chart showing IOPS by hostname, model, protocol, pattern, block size, and queue depth
 		const labels = sortedData.map(
 			(item) =>
-				`${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}KB\nQD${item.queue_depth || "N/A"}`,
+				`${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}\nQD${item.queue_depth || "N/A"}`,
 		);
 		const iopsValues = sortedData.map((item) =>
 			getMetricValue(item.metrics, "iops"),
@@ -318,7 +318,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		// Default ungrouped view
 		const labels = sortedData.map(
 			(item) =>
-				`${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}KB\nQD${item.queue_depth ?? "N/A"}`,
+				`${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}\nQD${item.queue_depth ?? "N/A"}`,
 		);
 
 		const datasets = [
@@ -375,7 +375,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 					key = item.test_name;
 					break;
 				case "blocksize":
-					key = `${item.block_size}KB`;
+					key = item.block_size;
 					break;
 				case "protocol":
 					key = item.protocol || "Unknown Protocol";
@@ -530,7 +530,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		}));
 
 		return {
-			labels: blockSizes.map((size) => `${size}KB`),
+			labels: blockSizes.map((size) => size),
 			datasets,
 		};
 	};
@@ -571,7 +571,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		const groupedData = new Map<string, { read: number; write: number }>();
 
 		sortedData.forEach((item) => {
-			const testKey = `${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}KB\nQD${item.queue_depth || "N/A"}`;
+			const testKey = `${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}\nQD${item.queue_depth || "N/A"}`;
 
 			const readIOPS = getMetricValue(item.metrics, "iops", "read");
 			const writeIOPS = getMetricValue(item.metrics, "iops", "write");
@@ -652,7 +652,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		// Dual-axis chart with IOPS and Latency
 		const labels = sortedData.map(
 			(item) =>
-				`${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}KB\nQD${item.queue_depth || "N/A"}`,
+				`${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}\nQD${item.queue_depth || "N/A"}`,
 		);
 
 		const datasets = [
@@ -881,7 +881,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 							return [
 								`Drive: ${item.drive_model}`,
 								`Pattern: ${item.read_write_pattern}`,
-								`Block Size: ${item.block_size}KB`,
+								`Block Size: ${item.block_size}`,
 								`Queue Depth: ${item.queue_depth}`,
 							];
 						}

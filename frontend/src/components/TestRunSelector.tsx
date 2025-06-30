@@ -380,13 +380,13 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 
 				<div>
 					<label className="block text-xs font-medium theme-text-secondary mb-1">
-						Block Sizes (KB)
+						Block Sizes
 					</label>
 					<Select
 						isMulti
 						options={filters.block_sizes.map((size) => ({
 							value: size,
-							label: `${size}KB`,
+							label: size,
 						}))}
 						onChange={(selected) =>
 							setActiveFilters((prev) => ({
@@ -566,7 +566,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 											{run.test_name}
 										</div>
 										<div className="theme-text-tertiary text-xs">
-											{run.block_size}KB, QD{run.queue_depth}
+											{run.block_size}, QD{run.queue_depth}
 										</div>
 										{(run.hostname || run.protocol) && (
 											<div className="theme-text-tertiary text-xs truncate mt-0.5">
