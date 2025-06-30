@@ -203,7 +203,7 @@ run_fio_test() {
     
     print_status "Running FIO test: ${pattern} with ${block_size} block size"
     
-    fio --name="${DESCRIPTION},pattern:${pattern},block_size:${block_size}" \
+    fio --name="${DESCRIPTION},pattern:${pattern},block_size:${block_size},date:$(date +%Y-%m-%d-%H-%M-%S)" \
         --rw="$pattern" \
         --bs="$block_size" \
         --size="$TEST_SIZE" \
