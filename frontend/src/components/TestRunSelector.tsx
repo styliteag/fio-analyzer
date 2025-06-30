@@ -293,11 +293,13 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 	const runOptions = filteredRuns.map((run) => ({
 		value: run,
 		label: `${run.drive_model} - ${run.test_name} (${new Date(run.timestamp).toLocaleDateString()})`,
+		key: run.id, // Add unique key
 	}));
 
 	const selectedOptions = selectedRuns.map((run) => ({
 		value: run,
 		label: `${run.drive_model} - ${run.test_name} (${new Date(run.timestamp).toLocaleDateString()})`,
+		key: run.id, // Add unique key
 	}));
 
 	return (

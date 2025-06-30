@@ -81,6 +81,43 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		| "queuedepth"
 	>("none");
 
+	const processDataForTemplate = useCallback((
+		template: ChartTemplate,
+		data: PerformanceData[],
+	) => {
+		const colors = [
+			"#3B82F6",
+			"#EF4444",
+			"#10B981",
+			"#F59E0B",
+			"#8B5CF6",
+			"#06B6D4",
+			"#F97316",
+			"#84CC16",
+			"#EC4899",
+			"#6B7280",
+		];
+
+		const options = { sortBy, sortOrder, groupBy };
+
+		switch (template.id) {
+			case "performance-overview":
+				return processPerformanceOverview(data, colors, options);
+
+			case "block-size-impact":
+				return processBlockSizeImpact(data, colors, options);
+
+			case "read-write-comparison":
+				return processReadWriteComparison(data, colors, options);
+
+			case "iops-latency-dual":
+				return processIOPSLatencyDual(data, colors, options);
+
+			default:
+				return processDefaultChart(data, colors, options);
+		}
+	}, [sortBy, sortOrder, groupBy]); // eslint-disable-line react-hooks/exhaustive-deps
+
 	useEffect(() => {
 		if (data.length > 0) {
 			const processedData = processDataForTemplate(template, data);
@@ -156,43 +193,6 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 
 		return sortedData;
 	};
-
-	const processDataForTemplate = useCallback((
-		template: ChartTemplate,
-		data: PerformanceData[],
-	) => {
-		const colors = [
-			"#3B82F6",
-			"#EF4444",
-			"#10B981",
-			"#F59E0B",
-			"#8B5CF6",
-			"#06B6D4",
-			"#F97316",
-			"#84CC16",
-			"#EC4899",
-			"#6B7280",
-		];
-
-		const options = { sortBy, sortOrder, groupBy };
-
-		switch (template.id) {
-			case "performance-overview":
-				return processPerformanceOverview(data, colors, options);
-
-			case "block-size-impact":
-				return processBlockSizeImpact(data, colors, options);
-
-			case "read-write-comparison":
-				return processReadWriteComparison(data, colors, options);
-
-			case "iops-latency-dual":
-				return processIOPSLatencyDual(data, colors, options);
-
-			default:
-				return processDefaultChart(data, colors, options);
-		}
-	}, [sortBy, sortOrder, groupBy]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const getMetricValue = (
 		metrics: any,
