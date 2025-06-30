@@ -395,7 +395,7 @@ function populateSampleData() {
         ["Intel Optane", "NVMe SSD"]
     ];
     
-    const block_sizes = ['4K', '8K', '16K', '32K', '64K', '128K']; // Text with uppercase suffix
+    const block_sizes = ['4K', '8K', '16K', '32K', '64K', '128K','1M',"2G"]; // Text with uppercase suffix
     const patterns = ["sequential_read", "sequential_write", "random_read", "random_write", "mixed_70_30"];
     const queue_depths = [1, 4, 8, 16, 32];
     
