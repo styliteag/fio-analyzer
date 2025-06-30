@@ -784,13 +784,14 @@ app.post('/api/import', requireAuth, upload.single('file'), (req, res) => {
             drive_type = 'Unknown',
             hostname = 'Unknown',
             protocol = 'Unknown', 
-            description = 'Imported FIO test'
+            description = 'Imported FIO test',
+            date = ''
         } = req.body;
 
         // Create a structured directory path
-        const now = new Date();
-        const datePart = now.toISOString().split('T')[0]; // YYYY-MM-DD
-        const timePart = now.getTime(); // Milliseconds timestamp
+        const testDate = date ? new Date(date) : new Date();
+        const datePart = testDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        const timePart = testDate.getTime(); // Milliseconds timestamp
         const safeHostname = hostname.replace(/[^a-zA-Z0-9-_]/g, '_');
         
         const uploadPath = path.join(__dirname, 'uploads', safeHostname, datePart, timePart.toString());
@@ -811,7 +812,8 @@ drive_type: ${drive_type}
 hostname: ${hostname}
 protocol: ${protocol}
 description: ${description}
-upload_timestamp: ${now.toISOString()}
+upload_timestamp: ${new Date().toISOString()}
+test_date: ${testDate.toISOString()}
 original_filename: ${req.file.originalname}
 `;
         fs.writeFileSync(infoFilePath, infoContent);
@@ -857,15 +859,16 @@ original_filename: ${req.file.originalname}
             // Insert test run
             const insertTestRun = `
                 INSERT INTO test_runs 
-                (timestamp, drive_model, drive_type, test_name, block_size, 
+                (timestamp, test_date, drive_model, drive_type, test_name, block_size, 
                  read_write_pattern, queue_depth, duration, fio_version, 
                  job_runtime, rwmixread, total_ios_read, total_ios_write, 
                  usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             db.run(insertTestRun, [
                 new Date().toISOString(),
+                testDate.toISOString(),
                 drive_model,
                 drive_type,
                 test_name,

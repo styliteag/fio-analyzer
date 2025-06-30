@@ -300,6 +300,9 @@ export default function Upload() {
               <p className="theme-form-help">Optional: Add a description for this test run</p>
             </div>
 
+            {/* Hidden date field */}
+            <input type="hidden" name="date" value={new Date().toISOString()} />
+
             {/* Submit Button */}
             <div className="flex items-center justify-between pt-6">
               <button

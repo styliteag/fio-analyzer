@@ -104,6 +104,7 @@ export const importFioData = async (file: File, metadata: {
   hostname: string;
   protocol: string;
   description: string;
+  date?: string;
 }) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -112,6 +113,9 @@ export const importFioData = async (file: File, metadata: {
   formData.append('hostname', metadata.hostname);
   formData.append('protocol', metadata.protocol);
   formData.append('description', metadata.description);
+  if (metadata.date) {
+    formData.append('date', metadata.date);
+  }
 
   const storedAuth = localStorage.getItem('fio-auth');
   const headers: HeadersInit = {};

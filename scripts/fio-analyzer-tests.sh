@@ -249,6 +249,7 @@ upload_results() {
         -F "hostname=$HOSTNAME" \
         -F "protocol=$PROTOCOL" \
         -F "description=$DESCRIPTION" \
+        -F "date=$(date +%Y-%m-%d-%H-%M-%S)" \
         "$BACKEND_URL/api/import")
     
     http_code="${response: -3}"
