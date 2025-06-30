@@ -89,6 +89,79 @@ check_curl() {
     fi
 }
 
+# Function to check API connectivity
+check_api_connectivity() {
+    print_status "Checking API connectivity to $BACKEND_URL"
+    
+    # Test basic connectivity to the API endpoint
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$BACKEND_URL/api/test-runs" 2>/dev/null)
+    local curl_exit_code=$?
+    
+    if [ $curl_exit_code -ne 0 ]; then
+        print_error "Cannot connect to API server at $BACKEND_URL"
+        print_error "Please check:"
+        print_error "  - Server is running and accessible"
+        print_error "  - URL is correct (current: $BACKEND_URL)"
+        print_error "  - Network connectivity"
+        print_error "  - Firewall settings"
+        exit 1
+    fi
+    
+    # Check if we get a valid HTTP response (200, 401, etc. are all valid responses)
+    if [[ "$http_code" =~ ^[0-9]{3}$ ]]; then
+        print_success "API server is reachable (HTTP $http_code)"
+    else
+        print_error "Invalid response from API server: $http_code"
+        exit 1
+    fi
+}
+
+# Function to validate credentials
+check_credentials() {
+    print_status "Validating credentials for user '$USERNAME'"
+    
+    # Test credentials by making an authenticated request
+    local response
+    response=$(curl -s -w "%{http_code}" -u "$USERNAME:$PASSWORD" \
+        --connect-timeout 10 --max-time 30 \
+        "$BACKEND_URL/api/test-runs" 2>/dev/null)
+    
+    local curl_exit_code=$?
+    if [ $curl_exit_code -ne 0 ]; then
+        print_error "Network error while validating credentials"
+        exit 1
+    fi
+    
+    local http_code="${response: -3}"
+    local response_body="${response%???}"
+    
+    case "$http_code" in
+        200)
+            print_success "Credentials validated successfully"
+            print_status "User '$USERNAME' has access to the API"
+            ;;
+        401)
+            print_error "Authentication failed: Invalid username or password"
+            print_error "Please check your credentials:"
+            print_error "  - Username: $USERNAME"
+            print_error "  - Password: [hidden]"
+            print_error "  - Verify credentials are correct in your .env file"
+            exit 1
+            ;;
+        403)
+            print_error "Access denied: User '$USERNAME' does not have sufficient permissions"
+            print_error "This user may be an upload-only user. Upload-only users can only access /api/import"
+            print_warning "Continuing anyway - upload-only users can still upload test results"
+            ;;
+        *)
+            print_error "Unexpected response while validating credentials (HTTP $http_code)"
+            print_error "Response: $response_body"
+            exit 1
+            ;;
+    esac
+}
+
 # Function to create target directory
 setup_target_dir() {
     if [ ! -d "$TARGET_DIR" ]; then
@@ -262,6 +335,41 @@ main() {
     # Show configuration
     show_config
     
+    # Validate API connectivity and credentials
+    check_api_connectivity
+    check_credentials
+    
+    # Confirm before starting tests (unless --yes flag is used)
+    echo
+    print_status "All checks passed! Ready to start FIO performance testing."
+    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]}))
+    print_status "This will run $total_tests tests with the following configuration:"
+    print_status "  Block sizes: ${BLOCK_SIZES[*]}"
+    print_status "  Test patterns: ${TEST_PATTERNS[*]}"
+    print_status "  Test duration: ${RUNTIME}s per test"
+    print_status "  Estimated total time: $((total_tests * RUNTIME / 60)) minutes"
+    echo
+    
+    # Check for --yes flag to skip confirmation
+    local skip_confirmation=false
+    for arg in "$@"; do
+        if [ "$arg" = "--yes" ] || [ "$arg" = "-y" ]; then
+            skip_confirmation=true
+            break
+        fi
+    done
+    
+    if [ "$skip_confirmation" = false ]; then
+        read -p "Do you want to proceed? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_warning "Test cancelled by user"
+            exit 0
+        fi
+    else
+        print_status "Auto-confirmed with --yes flag"
+    fi
+    
     # Setup
     setup_target_dir
     
@@ -289,10 +397,21 @@ FIO Performance Testing Script
 
 Usage: $0 [options]
 
+Options:
+  -h, --help    Show this help message
+  -y, --yes     Skip confirmation prompt and start tests automatically
+
 Configuration:
   The script loads configuration from a .env file in the same directory.
   Copy .env.example to .env and customize the values.
   Environment variables override .env file settings.
+
+Pre-flight Checks:
+  The script performs the following checks before starting tests:
+  1. Verifies FIO and curl are installed
+  2. Tests API connectivity to the backend server
+  3. Validates authentication credentials
+  4. Confirms test configuration with user (unless --yes is used)
 
 Configuration Variables:
   HOSTNAME       - Server hostname (default: current hostname)
