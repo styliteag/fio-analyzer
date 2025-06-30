@@ -413,7 +413,8 @@ function populateSampleData(callback) {
     let testRunId = 1;
 
     const testRunsStmt = db.prepare('INSERT INTO test_runs (timestamp, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    const metricsStmt = db.prepare('INSERT INTO performance_metrics (test_run_id, metric_type, value, unit) VALUES (?, ?, ?, ?)');
+    const metricsStmt = db.prepare('INSERT INTO performance_metrics (test_run_id, metric_type, value, unit, operation_type) VALUES (?, ?, ?, ?, ?)');
+    const percentilesStmt = db.prepare('INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)');
 
     db.serialize(() => {
         for (const [drive_model, drive_type] of drives) {
@@ -439,16 +440,28 @@ function populateSampleData(callback) {
                         const latency = base_latency * (0.7 + Math.random() * 0.6);
                         const bandwidth = base_bandwidth * (0.85 + Math.random() * 0.3);
                         
+                        // Store core metrics with 'combined' operation type to match FIO import structure
                         const metrics = [
-                            [testRunId, "iops", iops, "IOPS"],
-                            [testRunId, "avg_latency", latency, "ms"],
-                            [testRunId, "bandwidth", bandwidth, "MB/s"],
-                            [testRunId, "p95_latency", latency * 1.5, "ms"],
-                            [testRunId, "p99_latency", latency * 2.2, "ms"]
+                            [testRunId, "iops", iops, "IOPS", "combined"],
+                            [testRunId, "avg_latency", latency, "ms", "combined"],
+                            [testRunId, "bandwidth", bandwidth, "MB/s", "combined"]
                         ];
                         
                         for (const metric of metrics) {
                             metricsStmt.run(metric);
+                        }
+                        
+                        // Store percentiles in latency_percentiles table like FIO import
+                        const p95_latency_ns = latency * 1.5 * 1000000; // Convert ms to ns
+                        const p99_latency_ns = latency * 2.2 * 1000000; // Convert ms to ns
+                        
+                        const percentiles = [
+                            [testRunId, "combined", 95.0, p95_latency_ns],
+                            [testRunId, "combined", 99.0, p99_latency_ns]
+                        ];
+                        
+                        for (const percentile of percentiles) {
+                            percentilesStmt.run(percentile);
                         }
                         
                         testRunId++;
@@ -458,6 +471,7 @@ function populateSampleData(callback) {
         }
         testRunsStmt.finalize();
         metricsStmt.finalize();
+        percentilesStmt.finalize();
         console.log('Sample data population completed!');
         if (callback) callback();
     });
