@@ -27,24 +27,7 @@ import {
 } from "lucide-react";
 import { useThemeColors } from "../hooks/useThemeColors";
 import type { ChartTemplate, PerformanceData } from "../types";
-
-const sortBlockSizes = (blockSizes: (string | number)[]) => {
-	const order = ["none", "k", "M", "G"];
-	const getOrder = (size: string) => {
-		const lastChar = size.slice(-1);
-		const numericValue = parseInt(size.slice(0, -1), 10);
-		if (lastChar === "k") return numericValue;
-		if (lastChar === "M") return numericValue * 1000;
-		if (lastChar === "G") return numericValue * 1000 * 1000;
-		return 0;
-	};
-
-	return blockSizes.sort((a, b) => {
-		const aStr = String(a);
-		const bStr = String(b);
-		return getOrder(aStr) - getOrder(bStr);
-	});
-};
+import { sortBlockSizes } from "../utils/sorting";
 
 ChartJS.register(
 	CategoryScale,
@@ -393,7 +376,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 					key = item.test_name;
 					break;
 				case "blocksize":
-					key = item.block_size;
+					key = String(item.block_size);
 					break;
 				case "protocol":
 					key = item.protocol || "Unknown Protocol";
@@ -534,7 +517,11 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 
 		const blockSizes = Array.from(
 			new Set(sortedData.map((item) => item.block_size)),
-		).sort((a, b) => a - b);
+				).sort((a, b) => {
+			const aNum = typeof a === 'string' ? 0 : a;
+			const bNum = typeof b === 'string' ? 0 : b;
+			return aNum - bNum;
+		});
 		const drives = Array.from(groupedData.keys());
 
 		const datasets = drives.map((drive, index) => ({

@@ -13,26 +13,9 @@ import Select from "react-select";
 import { getSelectStyles } from "../hooks/useThemeColors";
 import type { FilterOptions, TestRun } from "../types";
 import { deleteTestRun, fetchFilters, fetchTestRuns } from "../utils/api";
+import { sortBlockSizes } from "../utils/sorting";
 import BulkEditModal from "./BulkEditModal";
 import EditTestRunModal from "./EditTestRunModal";
-
-const sortBlockSizes = (blockSizes: (string | number)[]) => {
-	const order = ["none", "k", "M", "G"];
-	const getOrder = (size: string) => {
-		const lastChar = size.slice(-1);
-		const numericValue = parseInt(size.slice(0, -1), 10);
-		if (lastChar === "k") return numericValue;
-		if (lastChar === "M") return numericValue * 1000;
-		if (lastChar === "G") return numericValue * 1000 * 1000;
-		return 0;
-	};
-
-	return blockSizes.sort((a, b) => {
-		const aStr = String(a);
-		const bStr = String(b);
-		return getOrder(aStr) - getOrder(bStr);
-	});
-};
 
 interface TestRunSelectorProps {
 	selectedRuns: TestRun[];
@@ -406,12 +389,12 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 							value: size,
 							label: size,
 						}))}
-						onChange={(selected) =>
-							setActiveFilters((prev) => ({
-								...prev,
-								block_sizes: selected ? selected.map((s) => s.value) : [],
-							}))
-						}
+													onChange={(selected) =>
+								setActiveFilters((prev) => ({
+									...prev,
+									block_sizes: selected ? selected.map((s) => s.value) : [],
+								}))
+							}
 						placeholder="All sizes"
 						className="text-xs"
 						styles={getSelectStyles()}
