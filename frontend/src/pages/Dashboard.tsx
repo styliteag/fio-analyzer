@@ -7,7 +7,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchPerformanceData as apiFetchPerformanceData } from '../utils/api';
 import { TestRun, ChartTemplate, PerformanceData } from '../types';
-import { Activity, Database, Upload, LogOut } from 'lucide-react';
+import { Activity, Database, Upload, LogOut, Download } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -199,9 +199,38 @@ export default function Dashboard() {
       {/* Footer */}
       <footer className="theme-header mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="text-center text-sm theme-text-secondary">
-            <p>Storage Performance Visualizer - Analyze FIO benchmark results with interactive charts</p>
-            <p className="mt-1">Features: Multi-drive comparison, latency analysis, throughput trends, and more</p>
+          <div className="text-center">
+            <div className="text-sm theme-text-secondary mb-4">
+              <p>Storage Performance Visualizer - Analyze FIO benchmark results with interactive charts</p>
+              <p className="mt-1">Features: Multi-drive comparison, latency analysis, throughput trends, and more</p>
+            </div>
+            
+            {/* Download Links */}
+            <div className="flex justify-center items-center space-x-6 text-sm">
+              <a
+                href="/fio-analyzer-tests.sh"
+                download
+                className="inline-flex items-center px-3 py-2 theme-text-secondary hover:theme-text-primary transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Download FIO testing script"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Testing Script
+              </a>
+              <span className="theme-text-secondary">•</span>
+              <a
+                href="/.env.example"
+                download
+                className="inline-flex items-center px-3 py-2 theme-text-secondary hover:theme-text-primary transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                title="Download configuration template"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Config Template
+              </a>
+            </div>
+            
+            <div className="mt-2 text-xs theme-text-secondary">
+              Download and configure these files to run automated FIO tests
+            </div>
           </div>
         </div>
       </footer>
