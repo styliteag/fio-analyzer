@@ -16,6 +16,24 @@ import { deleteTestRun, fetchFilters, fetchTestRuns } from "../utils/api";
 import BulkEditModal from "./BulkEditModal";
 import EditTestRunModal from "./EditTestRunModal";
 
+const sortBlockSizes = (blockSizes: (string | number)[]) => {
+	const order = ["none", "k", "M", "G"];
+	const getOrder = (size: string) => {
+		const lastChar = size.slice(-1);
+		const numericValue = parseInt(size.slice(0, -1), 10);
+		if (lastChar === "k") return numericValue;
+		if (lastChar === "M") return numericValue * 1000;
+		if (lastChar === "G") return numericValue * 1000 * 1000;
+		return 0;
+	};
+
+	return blockSizes.sort((a, b) => {
+		const aStr = String(a);
+		const bStr = String(b);
+		return getOrder(aStr) - getOrder(bStr);
+	});
+};
+
 interface TestRunSelectorProps {
 	selectedRuns: TestRun[];
 	onSelectionChange: (runs: TestRun[]) => void;
@@ -384,7 +402,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 					</label>
 					<Select
 						isMulti
-						options={filters.block_sizes.map((size) => ({
+						options={sortBlockSizes(filters.block_sizes).map((size) => ({
 							value: size,
 							label: size,
 						}))}

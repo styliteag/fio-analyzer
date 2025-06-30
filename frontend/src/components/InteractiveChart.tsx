@@ -28,6 +28,24 @@ import {
 import { useThemeColors } from "../hooks/useThemeColors";
 import type { ChartTemplate, PerformanceData } from "../types";
 
+const sortBlockSizes = (blockSizes: (string | number)[]) => {
+	const order = ["none", "k", "M", "G"];
+	const getOrder = (size: string) => {
+		const lastChar = size.slice(-1);
+		const numericValue = parseInt(size.slice(0, -1), 10);
+		if (lastChar === "k") return numericValue;
+		if (lastChar === "M") return numericValue * 1000;
+		if (lastChar === "G") return numericValue * 1000 * 1000;
+		return 0;
+	};
+
+	return blockSizes.sort((a, b) => {
+		const aStr = String(a);
+		const bStr = String(b);
+		return getOrder(aStr) - getOrder(bStr);
+	});
+};
+
 ChartJS.register(
 	CategoryScale,
 	LinearScale,
@@ -162,7 +180,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 				case "blocksize":
 					aValue = a.block_size;
 					bValue = b.block_size;
-					break;
+					return sortBlockSizes([aValue, bValue])[0] === aValue ? -1 : 1;
 				case "drivemodel":
 					aValue = a.drive_model;
 					bValue = b.drive_model;
