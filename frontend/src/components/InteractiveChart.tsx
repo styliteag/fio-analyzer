@@ -64,7 +64,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		| "name"
 		| "iops"
 		| "latency"
-		| "throughput"
+		| "bandwidth"
 		| "blocksize"
 		| "drivemodel"
 		| "protocol"
@@ -152,13 +152,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 					aValue = getMetricValue(a.metrics, "avg_latency");
 					bValue = getMetricValue(b.metrics, "avg_latency");
 					break;
-				case "throughput":
-					aValue =
-						getMetricValue(a.metrics, "throughput") ||
-						getMetricValue(a.metrics, "bandwidth");
-					bValue =
-						getMetricValue(b.metrics, "throughput") ||
-						getMetricValue(b.metrics, "bandwidth");
+				case "bandwidth":
+					aValue = getMetricValue(a.metrics, "bandwidth");
+					bValue = getMetricValue(b.metrics, "bandwidth");
 					break;
 				case "blocksize":
 					aValue = a.block_size;
@@ -238,7 +234,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 				| "name"
 				| "iops"
 				| "latency"
-				| "throughput"
+				| "bandwidth"
 				| "blocksize"
 				| "drivemodel"
 				| "protocol"
@@ -292,7 +288,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 				| "name"
 				| "iops"
 				| "latency"
-				| "throughput"
+				| "bandwidth"
 				| "blocksize"
 				| "drivemodel"
 				| "protocol"
@@ -343,10 +339,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 			},
 			{
 				label: "Throughput (MB/s)",
-				data: sortedData.map(
-					(item) =>
-						getMetricValue(item.metrics, "throughput") ||
-						getMetricValue(item.metrics, "bandwidth"),
+				data: sortedData.map((item) =>
+					getMetricValue(item.metrics, "bandwidth"),
 				),
 				backgroundColor: colors[2],
 				borderColor: colors[2],
@@ -442,9 +436,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 					return (
 						groupData.reduce(
 							(sum, item) =>
-								sum +
-								(getMetricValue(item.metrics, "throughput") ||
-									getMetricValue(item.metrics, "bandwidth")),
+								sum + getMetricValue(item.metrics, "bandwidth"),
 							0,
 						) / groupData.length
 					);
@@ -467,7 +459,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 				| "name"
 				| "iops"
 				| "latency"
-				| "throughput"
+				| "bandwidth"
 				| "blocksize"
 				| "drivemodel"
 				| "protocol"
@@ -506,13 +498,11 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 			}
 
 			const iopsValue = getMetricValue(item.metrics, "iops");
-			const throughputValue =
-				getMetricValue(item.metrics, "throughput") ||
-				getMetricValue(item.metrics, "bandwidth");
+			const bandwidthValue = getMetricValue(item.metrics, "bandwidth");
 
 			groupedData
 				.get(driveKey)
-				?.set(blockSize, { iops: iopsValue, throughput: throughputValue });
+				?.set(blockSize, { iops: iopsValue, bandwidth: bandwidthValue });
 		});
 
 		const blockSizes = Array.from(
@@ -548,7 +538,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 				| "name"
 				| "iops"
 				| "latency"
-				| "throughput"
+				| "bandwidth"
 				| "blocksize"
 				| "drivemodel"
 				| "protocol"
@@ -630,7 +620,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 				| "name"
 				| "iops"
 				| "latency"
-				| "throughput"
+				| "bandwidth"
 				| "blocksize"
 				| "drivemodel"
 				| "protocol"
@@ -836,8 +826,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 					item.timestamp,
 					getMetricValue(item.metrics, "iops") || "",
 					getMetricValue(item.metrics, "avg_latency") || "",
-					getMetricValue(item.metrics, "throughput") ||
-						getMetricValue(item.metrics, "bandwidth") ||
+					getMetricValue(item.metrics, "bandwidth") ||
 						"",
 					getMetricValue(item.metrics, "p95_latency") || "",
 					getMetricValue(item.metrics, "p99_latency") || "",
@@ -995,7 +984,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 									<option value="name">Name</option>
 									<option value="iops">IOPS</option>
 									<option value="latency">Latency</option>
-									<option value="throughput">Throughput</option>
+									<option value="bandwidth">Bandwidth</option>
 									<option value="blocksize">Block Size</option>
 									<option value="drivemodel">Drive Model</option>
 									<option value="protocol">Protocol</option>

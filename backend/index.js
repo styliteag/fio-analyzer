@@ -380,13 +380,24 @@ function initDb() {
             }
             if (row.count === 0) {
                 console.log('Populating sample data...');
-                populateSampleData();
+                console.log('Estimated data: ~60 test runs with ~300 metrics (reduced for faster startup)');
+                populateSampleData(() => {
+                    showServerReady();
+                });
+            } else {
+                showServerReady();
             }
         });
     });
 }
 
-function populateSampleData() {
+function showServerReady() {
+    console.log('\n🚀 Server running at http://localhost:' + port);
+    console.log('📊 FIO Analyzer Backend is ready to accept requests!');
+    console.log('💡 Default admin credentials: admin/admin\n');
+}
+
+function populateSampleData(callback) {
     const drives = [
         ["Samsung 980 PRO", "NVMe SSD"],
         ["WD Black SN850", "NVMe SSD"],
@@ -406,30 +417,32 @@ function populateSampleData() {
 
     db.serialize(() => {
         for (const [drive_model, drive_type] of drives) {
-            for (let i = 0; i < 10; i++) {
+            console.log(`Processing drive: ${drive_model} (${drive_type})`);
+            for (let i = 0; i < 3; i++) { // Reduced from 10 to 3 iterations
                 const timestamp = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString();
                 
-                const sampleBlockSizes = [...block_sizes].sort(() => 0.5 - Math.random()).slice(0, 3);
+                const sampleBlockSizes = [...block_sizes].sort(() => 0.5 - Math.random()).slice(0, 2); // Reduced from 3 to 2
                 for (const block_size of sampleBlockSizes) {
                     const samplePatterns = [...patterns].sort(() => 0.5 - Math.random()).slice(0, 2);
                     for (const pattern of samplePatterns) {
                         const queue_depth = queue_depths[Math.floor(Math.random() * queue_depths.length)];
                         
                         const test_name = `FIO_${pattern}_${block_size}`;
+                        console.log(`  Creating: ${test_name} (${drive_model}, ${block_size}, QD${queue_depth})`);
                         testRunsStmt.run(timestamp, drive_model, drive_type, test_name, block_size, pattern, queue_depth, 300);
                         
                         const base_iops = getBaseIops(drive_type, pattern, block_size);
                         const base_latency = getBaseLatency(drive_type, pattern);
-                        const base_throughput = getBaseThroughput(drive_type, pattern, block_size);
+                        const base_bandwidth = getBaseBandwidth(drive_type, pattern, block_size);
                         
                         const iops = base_iops * (0.8 + Math.random() * 0.4);
                         const latency = base_latency * (0.7 + Math.random() * 0.6);
-                        const throughput = base_throughput * (0.85 + Math.random() * 0.3);
+                        const bandwidth = base_bandwidth * (0.85 + Math.random() * 0.3);
                         
                         const metrics = [
                             [testRunId, "iops", iops, "IOPS"],
                             [testRunId, "avg_latency", latency, "ms"],
-                            [testRunId, "throughput", throughput, "MB/s"],
+                            [testRunId, "bandwidth", bandwidth, "MB/s"],
                             [testRunId, "p95_latency", latency * 1.5, "ms"],
                             [testRunId, "p99_latency", latency * 2.2, "ms"]
                         ];
@@ -445,6 +458,8 @@ function populateSampleData() {
         }
         testRunsStmt.finalize();
         metricsStmt.finalize();
+        console.log('Sample data population completed!');
+        if (callback) callback();
     });
 }
 
@@ -489,7 +504,7 @@ function getBaseLatency(drive_type, pattern) {
     return base_values[drive_type][pattern_type];
 }
 
-function getBaseThroughput(drive_type, pattern, block_size) {
+function getBaseBandwidth(drive_type, pattern, block_size) {
     const base_values = {
         "NVMe SSD": {"sequential": 3500, "random": 2000},
         "SATA SSD": {"sequential": 550, "random": 400},
@@ -549,7 +564,7 @@ app.get('/api/performance-data', requireAdmin, (req, res) => {
     }
 
     const run_ids = test_run_ids.split(',').map(id => parseInt(id.trim()));
-    const metrics = (metric_types || "iops,avg_latency,throughput").split(',').map(m => m.trim());
+    const metrics = (metric_types || "iops,avg_latency,bandwidth").split(',').map(m => m.trim());
     
     const placeholders = run_ids.map(() => '?').join(',');
     const metric_placeholders = metrics.map(() => '?').join(',');
@@ -964,7 +979,7 @@ original_filename: ${req.file.originalname}
 function insertMetrics(testRunId, data, operationType) {
     const metrics = [
         [testRunId, 'iops', data.iops, 'IOPS', operationType],
-        [testRunId, 'bandwidth', data.bw, 'KB/s', operationType],
+        [testRunId, 'bandwidth', data.bw / 1024, 'MB/s', operationType],
         [testRunId, 'avg_latency', data.clat_ns?.mean / 1000000 || 0, 'ms', operationType]
     ];
 
@@ -1026,7 +1041,7 @@ app.delete('/api/clear-database', requireAdmin, (req, res) => {
     });
 });
 
-// Server startup
+// Start server but don't show "ready" message until database is initialized
 app.listen(port, () => {
     logInfo('FIO Analyzer Backend Server started', {
         port,
@@ -1035,7 +1050,7 @@ app.listen(port, () => {
         processId: process.pid,
         environment: process.env.NODE_ENV || 'development'
     });
-    console.log(`Server running at http://localhost:${port}`);
+    // "Server running" message will be shown after database initialization
 });
 
 // Graceful shutdown handling

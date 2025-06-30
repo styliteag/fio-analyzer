@@ -21,7 +21,7 @@ const chartTemplates: ChartTemplate[] = [
 		chartType: "bar",
 		xAxis: "test_runs",
 		yAxis: "performance_metrics",
-		metrics: ["iops", "avg_latency", "throughput"],
+		metrics: ["iops", "avg_latency", "bandwidth"],
 	},
 	{
 		id: "block-size-impact",
@@ -31,7 +31,7 @@ const chartTemplates: ChartTemplate[] = [
 		xAxis: "block_size",
 		yAxis: "performance",
 		groupBy: "drive_model",
-		metrics: ["iops", "throughput"],
+		metrics: ["iops", "bandwidth"],
 	},
 	{
 		id: "read-write-comparison",
