@@ -11,7 +11,7 @@ import {
 	Tooltip,
 } from "chart.js";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bar, Line } from "react-chartjs-2";
 import "chartjs-adapter-date-fns";
 import {
@@ -57,6 +57,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 	const chartRef = useRef<any>(null);
 	const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set());
 	const [chartData, setChartData] = useState<any>(null);
+	const [processedData, setProcessedData] = useState<PerformanceData[]>([]);
 	const themeColors = useThemeColors();
 
 	// Interactive controls for all chart templates
@@ -121,12 +122,16 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 
 	useEffect(() => {
 		if (data.length > 0) {
-			const processedData = processDataForTemplate(template, data);
-			setChartData(processedData);
+			// Get the sorted data for tooltip use
+			const sortedData = applySortingAndGrouping(data);
+			setProcessedData(sortedData);
+			
+			const chartDataResult = processDataForTemplate(template, data);
+			setChartData(chartDataResult);
 
 			// Initialize all series as visible
 			const allSeries = new Set(
-				processedData.datasets.map((d: any) => d.label),
+				chartDataResult.datasets.map((d: any) => d.label),
 			);
 			setVisibleSeries(allSeries);
 		}
@@ -833,7 +838,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		return csvRows.join("\n");
 	};
 
-	const chartOptions = {
+	const chartOptions = useMemo(() => ({
 		responsive: true,
 		maintainAspectRatio: false,
 		plugins: {
@@ -866,7 +871,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 				callbacks: {
 					afterLabel: (context: any) => {
 						const dataIndex = context.dataIndex;
-						const item = data[dataIndex];
+						const item = processedData[dataIndex];
 						if (item) {
 							return [
 								`Drive: ${item.drive_model}`,
@@ -886,7 +891,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 			axis: "x" as const,
 			intersect: false,
 		},
-	};
+	}), [template, themeColors, processedData, toggleSeriesVisibility]);
 
 	if (!chartData || data.length === 0) {
 		return (
