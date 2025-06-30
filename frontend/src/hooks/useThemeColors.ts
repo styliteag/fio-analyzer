@@ -1,5 +1,14 @@
 import { useMemo } from 'react';
 
+// Types for react-select style functions
+type StyleState = {
+  isSelected: boolean;
+  isFocused: boolean;
+  isDisabled: boolean;
+};
+
+type BaseStyleObject = Record<string, unknown>;
+
 export const useThemeColors = () => {
   return useMemo(() => {
     const getCustomProperty = (property: string) => {
@@ -71,7 +80,7 @@ export const getSelectStyles = () => {
   };
   
   return {
-    control: (base: any) => ({
+    control: (base: BaseStyleObject) => ({
       ...base,
       backgroundColor: getCustomProperty('--input-bg'),
       borderColor: getCustomProperty('--input-border'),
@@ -80,12 +89,12 @@ export const getSelectStyles = () => {
         borderColor: getCustomProperty('--border-accent'),
       }
     }),
-    menu: (base: any) => ({
+    menu: (base: BaseStyleObject) => ({
       ...base,
       backgroundColor: getCustomProperty('--card-bg'),
       borderColor: getCustomProperty('--border-primary'),
     }),
-    option: (base: any, state: any) => ({
+    option: (base: BaseStyleObject, state: StyleState) => ({
       ...base,
       backgroundColor: state.isSelected
         ? getCustomProperty('--btn-primary-bg')
@@ -96,26 +105,26 @@ export const getSelectStyles = () => {
         ? getCustomProperty('--text-on-accent')
         : getCustomProperty('--text-primary'),
     }),
-    multiValue: (base: any) => ({
+    multiValue: (base: BaseStyleObject) => ({
       ...base,
       backgroundColor: getCustomProperty('--bg-tertiary'),
     }),
-    multiValueLabel: (base: any) => ({
+    multiValueLabel: (base: BaseStyleObject) => ({
       ...base,
       color: getCustomProperty('--text-primary'),
     }),
-    multiValueRemove: (base: any) => ({
+    multiValueRemove: (base: BaseStyleObject) => ({
       ...base,
       ':hover': {
         backgroundColor: 'rgb(239 68 68)',
         color: 'rgb(255 255 255)',
       }
     }),
-    placeholder: (base: any) => ({
+    placeholder: (base: BaseStyleObject) => ({
       ...base,
       color: getCustomProperty('--input-placeholder'),
     }),
-    singleValue: (base: any) => ({
+    singleValue: (base: BaseStyleObject) => ({
       ...base,
       color: getCustomProperty('--text-primary'),
     }),

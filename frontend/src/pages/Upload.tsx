@@ -91,6 +91,7 @@ export default function Upload() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <button
+              type="button"
               onClick={() => navigate('/')}
               className="flex items-center theme-nav-link transition-colors"
             >

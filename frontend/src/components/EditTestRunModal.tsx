@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TestRun } from '../types';
+import type { TestRun } from '../types';
 import { updateTestRun } from '../utils/api';
 import { X, Save, AlertCircle } from 'lucide-react';
 

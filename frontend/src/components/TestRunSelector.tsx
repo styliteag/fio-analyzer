@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import type React from 'react';
+import { useState, useEffect } from 'react';
 import Select from 'react-select';
-import { TestRun, FilterOptions } from '../types';
+import type { TestRun, FilterOptions } from '../types';
 import { fetchTestRuns, fetchFilters, deleteTestRun } from '../utils/api';
 import { Calendar, HardDrive, Settings, Edit2, Trash2, Plus, Users } from 'lucide-react';
 import EditTestRunModal from './EditTestRunModal';
@@ -49,15 +50,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
   const [testRunToEdit, setTestRunToEdit] = useState<TestRun | null>(null);
   const [bulkEditModalOpen, setBulkEditModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
-
-  useEffect(() => {
-    loadTestRuns();
-    loadFilters();
-  }, [refreshTrigger]);
-
-  useEffect(() => {
-    applyFilters();
-  }, [testRuns, activeFilters]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const loadTestRuns = async () => {
     try {
@@ -119,6 +112,15 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     setFilteredRuns(filtered);
   };
 
+  useEffect(() => {
+    loadTestRuns();
+    loadFilters();
+  }, [refreshTrigger]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [testRuns, activeFilters]);
+
   const handleSelectAllMatching = () => {
     // Get all filtered runs that aren't already selected
     const newRuns = filteredRuns.filter(run => 
@@ -145,8 +147,8 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     ).length;
   };
 
-  const handleRunSelection = (selectedOptions: any) => {
-    const selected = selectedOptions ? selectedOptions.map((option: any) => option.value) : [];
+  const handleRunSelection = (selectedOptions: readonly {value: TestRun; label: string}[] | null) => {
+    const selected = selectedOptions ? selectedOptions.map((option) => option.value) : [];
     onSelectionChange(selected);
   };
 
@@ -210,10 +212,53 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
       
       // Refresh filters
       loadFilters();
-    } catch (err) {
+    } catch (_err) {
       alert('Network error occurred while deleting test run');
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Are you sure you want to delete all ${selectedRuns.length} selected test runs? This action cannot be undone.`)) {
+      return;
+    }
+
+    setBulkDeleting(true);
+    let deletedCount = 0;
+    let failedCount = 0;
+
+    try {
+      // Delete each test run sequentially to avoid overwhelming the server
+      for (const testRun of selectedRuns) {
+        try {
+          await deleteTestRun(testRun.id);
+          deletedCount++;
+          
+          // Remove from test runs list immediately
+          setTestRuns(prev => prev.filter(run => run.id !== testRun.id));
+        } catch (err) {
+          console.error(`Failed to delete test run ${testRun.id}:`, err);
+          failedCount++;
+        }
+      }
+      
+      // Clear selected runs since they've been deleted
+      onSelectionChange([]);
+      
+      // Refresh filters
+      loadFilters();
+      
+      // Show summary
+      if (failedCount > 0) {
+        alert(`Bulk delete completed. ${deletedCount} test runs deleted successfully, ${failedCount} failed.`);
+      } else {
+        alert(`All ${deletedCount} test runs deleted successfully.`);
+      }
+    } catch (_err) {
+      alert('An unexpected error occurred during bulk delete');
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -364,6 +409,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
           </label>
           {hasActiveFilters() && getUnselectedMatchingCount() > 0 && (
             <button
+              type="button"
               onClick={handleSelectAllMatching}
               className="inline-flex items-center px-2 py-1 text-xs theme-btn-primary rounded transition-colors"
               title={`Add all ${getUnselectedMatchingCount()} matching test runs`}
@@ -413,14 +459,28 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
                 Selected Runs ({selectedRuns.length}):
               </h3>
               {selectedRuns.length > 1 && (
-                <button
-                  onClick={handleBulkEdit}
-                  className="inline-flex items-center px-2 py-1 text-xs theme-btn-secondary border rounded transition-colors"
-                  title="Edit all selected test runs at once"
-                >
-                  <Users className="h-3 w-3 mr-1" />
-                  Edit All
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleBulkEdit}
+                    className="inline-flex items-center px-2 py-1 text-xs theme-btn-secondary border rounded transition-colors"
+                    title="Edit all selected test runs at once"
+                    disabled={bulkDeleting}
+                  >
+                    <Users className="h-3 w-3 mr-1" />
+                    Edit All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    className="inline-flex items-center px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white border border-red-600 rounded transition-colors"
+                    title="Delete all selected test runs"
+                    disabled={bulkDeleting}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    {bulkDeleting ? 'Deleting...' : 'Delete All'}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -430,6 +490,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
               <div key={run.id} className="theme-bg-secondary p-2 rounded text-xs relative group border theme-border-primary">
                 <div className="absolute top-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-0.5">
                   <button
+                    type="button"
                     onClick={() => handleEditTestRun(run)}
                     className="p-0.5 rounded theme-hover"
                     title="Edit drive info"
@@ -438,6 +499,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
                     <Edit2 className="h-2.5 w-2.5 theme-text-secondary" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleDeleteTestRun(run)}
                     className="p-0.5 rounded theme-hover"
                     title="Delete test run"

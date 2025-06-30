@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -78,7 +78,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     applyTheme(resolved);
 
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
+  }, [theme, applyTheme, resolveTheme]);
 
   const value: ThemeContextType = {
     theme,

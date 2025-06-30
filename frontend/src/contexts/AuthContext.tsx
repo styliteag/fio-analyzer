@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import type React from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -29,6 +30,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const verifyCredentials = async (credentials: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || '.'}/api/test-runs`, {
+        headers: {
+          'Authorization': `Basic ${credentials}`
+        }
+      });
+      return response.ok;
+    } catch (error) {
+      console.warn('Network error during credential verification:', error);
+      return false;
+    }
+  };
+
   // Check if user is already authenticated on app load
   useEffect(() => {
     const storedAuth = localStorage.getItem('fio-auth');
@@ -53,21 +68,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } else {
       setLoading(false);
     }
-  }, []);
-
-  const verifyCredentials = async (credentials: string): Promise<boolean> => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || '.'}/api/test-runs`, {
-        headers: {
-          'Authorization': `Basic ${credentials}`
-        }
-      });
-      return response.ok;
-    } catch (error) {
-      console.warn('Network error during credential verification:', error);
-      return false;
-    }
-  };
+  }, [verifyCredentials]);
 
   const login = async (username: string, password: string): Promise<void> => {
     setLoading(true);

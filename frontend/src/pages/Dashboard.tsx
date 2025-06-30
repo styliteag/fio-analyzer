@@ -6,7 +6,7 @@ import InteractiveChart from '../components/InteractiveChart';
 import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchPerformanceData as apiFetchPerformanceData } from '../utils/api';
-import { TestRun, ChartTemplate, PerformanceData } from '../types';
+import type { TestRun, ChartTemplate, PerformanceData } from '../types';
 import { Activity, Database, Upload, LogOut, Download } from 'lucide-react';
 
 export default function Dashboard() {
@@ -18,22 +18,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isChartMaximized, setIsChartMaximized] = useState(false);
-
-  useEffect(() => {
-    if (selectedRuns.length > 0 && selectedTemplate) {
-      fetchPerformanceData();
-    }
-  }, [selectedRuns, selectedTemplate]);
-
-  useEffect(() => {
-    // Refresh data when navigating back to dashboard
-    const handleFocus = () => {
-      setRefreshTrigger(prev => prev + 1);
-    };
-    
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, []);
 
   const fetchPerformanceData = async () => {
     if (selectedRuns.length === 0) return;
@@ -62,6 +46,22 @@ export default function Dashboard() {
     }
   };
 
+  useEffect(() => {
+    if (selectedRuns.length > 0 && selectedTemplate) {
+      fetchPerformanceData();
+    }
+  }, [selectedRuns, selectedTemplate, fetchPerformanceData]);
+
+  useEffect(() => {
+    // Refresh data when navigating back to dashboard
+    const handleFocus = () => {
+      setRefreshTrigger(prev => prev + 1);
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
   return (
     <div className="min-h-screen theme-bg-secondary transition-colors">
       {/* Header */}
@@ -77,6 +77,7 @@ export default function Dashboard() {
             <div className="flex items-center space-x-4">
               <ThemeToggle />
               <button
+                type="button"
                 onClick={() => navigate('/upload')}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md theme-btn-primary transition-colors"
               >
@@ -92,6 +93,7 @@ export default function Dashboard() {
                   Welcome, {username}
                 </span>
                 <button
+                  type="button"
                   onClick={logout}
                   className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md theme-text-secondary hover:theme-text-primary transition-colors"
                   title="Logout"
@@ -185,6 +187,7 @@ export default function Dashboard() {
             
             <div className="mt-6">
               <button
+                type="button"
                 onClick={() => navigate('/upload')}
                 className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md theme-btn-primary transition-colors"
               >

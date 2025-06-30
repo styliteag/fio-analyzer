@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,7 +14,7 @@ import {
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
-import { ChartTemplate, PerformanceData } from '../types';
+import type { ChartTemplate, PerformanceData } from '../types';
 import { Download, Eye, EyeOff, BarChart3, Maximize, Minimize, ArrowUpDown, Layers, Filter } from 'lucide-react';
 import { useThemeColors } from '../hooks/useThemeColors';
 
@@ -61,7 +62,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ template, data, isM
   // Common sorting and grouping logic for all templates
   const applySortingAndGrouping = (data: PerformanceData[]) => {
     // Apply sorting
-    let sortedData = [...data];
+    const sortedData = [...data];
     sortedData.sort((a, b) => {
       let aValue: any, bValue: any;
       

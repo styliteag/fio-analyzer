@@ -1,5 +1,5 @@
-import React from 'react';
-import { ChartTemplate } from '../types';
+import type React from 'react';
+import type { ChartTemplate } from '../types';
 import { BarChart3, TrendingUp, ScatterChart as Scatter3D, Zap } from 'lucide-react';
 
 interface TemplateSelectorProps {
