@@ -307,6 +307,7 @@ function initDb() {
             CREATE TABLE IF NOT EXISTS test_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
+                test_date TEXT,
                 drive_model TEXT NOT NULL,
                 drive_type TEXT NOT NULL,
                 test_name TEXT NOT NULL,
@@ -345,7 +346,7 @@ function initDb() {
             // Ignore error if column already exists
         });
         
-        db.run(`ALTER TABLE test_runs ADD COLUMN uploaded_file_path TEXT`, (err) => {
+        db.run(`ALTER TABLE test_runs ADD COLUMN test_date TEXT`, (err) => {
             // Ignore error if column already exists
         });
 
