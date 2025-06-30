@@ -1073,6 +1073,55 @@ app.delete('/api/clear-database', requireAdmin, (req, res) => {
     });
 });
 
+// Serve FIO test script dynamically with correct backend URL and username
+app.get('/script.sh', (req, res) => {
+    const hostHeader = req.get('Host');
+    const protocol = req.get('X-Forwarded-Proto') || (req.secure ? 'https' : 'http');
+    const backendUrl = `${protocol}://${hostHeader}`;
+    
+    // Get username from Basic Auth if available
+    let username = 'admin'; // default
+    const authHeader = req.get('Authorization');
+    if (authHeader && authHeader.startsWith('Basic ')) {
+        try {
+            const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('ascii');
+            const [user] = credentials.split(':');
+            username = user;
+        } catch (error) {
+            // Keep default username if parsing fails
+        }
+    }
+    
+    const fs = require('fs');
+    const path = require('path');
+    const scriptPath = path.join('/usr/share/nginx/html/fio-analyzer-tests.sh');
+    
+    try {
+        let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+        
+        // Replace placeholders in the script
+        scriptContent = scriptContent.replace(
+            /BACKEND_URL="\${BACKEND_URL:-[^}]*}"/g,
+            `BACKEND_URL="\${BACKEND_URL:-${backendUrl}}"`
+        );
+        
+        scriptContent = scriptContent.replace(
+            /USERNAME="\${USERNAME:-[^}]*}"/g,
+            `USERNAME="\${USERNAME:-${username}}"`
+        );
+        
+        res.setHeader('Content-Type', 'application/x-sh');
+        res.setHeader('Content-Disposition', 'attachment; filename="fio-analyzer-tests.sh"');
+        res.send(scriptContent);
+    } catch (error) {
+        logError('Failed to read script template', error, {
+            requestId: req.requestId,
+            scriptPath
+        });
+        res.status(500).json({ error: 'Failed to generate script' });
+    }
+});
+
 // Start server but don't show "ready" message until database is initialized
 app.listen(port, () => {
     logInfo('FIO Analyzer Backend Server started', {
