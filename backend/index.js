@@ -395,7 +395,7 @@ function populateSampleData() {
         ["Intel Optane", "NVMe SSD"]
     ];
     
-    const block_sizes = [4, 8, 16, 32, 64, 128]; // KB
+    const block_sizes = ['4K', '8K', '16K', '32K', '64K', '128K']; // Text with uppercase suffix
     const patterns = ["sequential_read", "sequential_write", "random_read", "random_write", "mixed_70_30"];
     const queue_depths = [1, 4, 8, 16, 32];
     
@@ -849,7 +849,11 @@ original_filename: ${req.file.originalname}
 
             // Extract test parameters
             const bs = opts.bs || globalOpts.bs || '4k';
-            const block_size = parseInt(bs.toString().replace('k', ''));
+            
+            // Store block size as text with uppercase suffix
+            const bsStr = bs.toString().toUpperCase();
+            const block_size = bsStr;
+            // If block size is a number, 
             const rw = opts.rw || globalOpts.rw || 'read';
             const iodepth = parseInt(opts.iodepth || globalOpts.iodepth || '1');
             const duration = job.runtime || parseInt(globalOpts.runtime || '0');
