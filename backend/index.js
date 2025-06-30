@@ -786,25 +786,36 @@ app.post('/api/import', requireAuth, upload.single('file'), (req, res) => {
             description = 'Imported FIO test'
         } = req.body;
 
-        // Create filename based on form data and date
-        const uploadDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        // Create a structured directory path
+        const now = new Date();
+        const datePart = now.toISOString().split('T')[0]; // YYYY-MM-DD
+        const timePart = now.getTime(); // Milliseconds timestamp
         const safeHostname = hostname.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const safeProtocol = protocol.replace(/[^a-zA-Z0-9-_]/g, '_');
-        const safeDescription = description.replace(/[^a-zA-Z0-9-_\s]/g, '_').replace(/\s+/g, '_');
-        const timestamp = Date.now();
         
-        const filename = `${uploadDate}_${safeHostname}_${safeProtocol}_${safeDescription}_${timestamp}.json`;
-        const uploadsDir = path.join(__dirname, 'uploads');
-        const filePath = path.join(uploadsDir, filename);
+        const uploadPath = path.join(__dirname, 'uploads', safeHostname, datePart, timePart.toString());
         
-        // Ensure uploads directory exists
-        if (!fs.existsSync(uploadsDir)) {
-            fs.mkdirSync(uploadsDir, { recursive: true });
-        }
+        // Ensure the directory exists
+        fs.mkdirSync(uploadPath, { recursive: true });
+
+        // Define file paths
+        const jsonFilePath = path.join(uploadPath, 'fio_results.json');
+        const infoFilePath = path.join(uploadPath, 'upload.info');
         
-        // Save the uploaded file
-        fs.writeFileSync(filePath, req.file.buffer);
-        const relativeFilePath = `uploads/${filename}`;
+        // Save the uploaded JSON file
+        fs.writeFileSync(jsonFilePath, req.file.buffer);
+        
+        // Create and save the .info file
+        const infoContent = `drive_model: ${drive_model}
+drive_type: ${drive_type}
+hostname: ${hostname}
+protocol: ${protocol}
+description: ${description}
+upload_timestamp: ${now.toISOString()}
+original_filename: ${req.file.originalname}
+`;
+        fs.writeFileSync(infoFilePath, infoContent);
+
+        const relativeFilePath = path.relative(path.join(__dirname, 'uploads'), jsonFilePath);
 
         // Process all jobs from FIO output
         const jobs = fioData.jobs;
