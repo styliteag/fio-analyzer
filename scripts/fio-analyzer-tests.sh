@@ -48,9 +48,11 @@ set_defaults() {
     HOSTNAME="${HOSTNAME:-$(hostname)}"
     PROTOCOL="${PROTOCOL:-unknown}"
     DESCRIPTION="${DESCRIPTION:-script_test}"
-    TEST_SIZE="${TEST_SIZE:-10M}"
+    DRIVE_TYPE="${DRIVE_TYPE:-unknown}"
+    DRIVE_MODEL="${DRIVE_MODEL:-unknown}"
+    TEST_SIZE="${TEST_SIZE:-100M}"
     NUM_JOBS="${NUM_JOBS:-4}"
-    RUNTIME="${RUNTIME:-30}"
+    RUNTIME="${RUNTIME:-20}"
     BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
     TARGET_DIR="${TARGET_DIR:-/tmp/fio_test}"
     USERNAME="${USERNAME:-admin}"
@@ -86,6 +88,26 @@ check_curl() {
     if ! command -v curl &> /dev/null; then
         print_error "curl is not installed. Please install curl first."
         exit 1
+    fi
+}
+
+# Function to check if libaio is available
+check_libaio() {
+    print_status "Checking for libaio availability..."
+    
+    # Test if libaio engine can actually be loaded by running a minimal test
+    local test_output
+    test_output=$(fio --name=test --ioengine=libaio --rw=read --bs=4k --size=1M --filename=/dev/null --runtime=1 --time_based 2>&1)
+    
+    if echo "$test_output" | grep -q "engine libaio not loadable"; then
+        print_warning "libaio engine not available - using psync engine"
+        IOENGINE="psync"
+        IODEPTH=1
+    else
+        print_success "libaio engine is available - will use for better performance"
+        IOENGINE="libaio"
+        # Increase iodepth for libaio as it supports async I/O
+        IODEPTH=16
     fi
 }
 
@@ -181,7 +203,7 @@ run_fio_test() {
     
     print_status "Running FIO test: ${pattern} with ${block_size} block size"
     
-    fio --name="test_${pattern}_${block_size}" \
+    fio --name="${DESCRIPTION},pattern:${pattern},block_size:${block_size}" \
         --rw="$pattern" \
         --bs="$block_size" \
         --size="$TEST_SIZE" \
@@ -189,12 +211,12 @@ run_fio_test() {
         --runtime="$RUNTIME" \
         --time_based \
         --group_reporting \
-        --iodepth=1 \
+        --iodepth="$IODEPTH" \
         --direct=1 \
         --filename="${TARGET_DIR}/fio_test_${pattern}_${block_size}" \
         --output-format=json \
         --output="$output_file" \
-        --ioengine=psync \
+        --ioengine="$IOENGINE" \
         --norandommap \
         --randrepeat=0 \
         --thread 2>/dev/null
@@ -218,12 +240,12 @@ upload_results() {
     
     print_status "Uploading results: $test_name"
     
-    response=$(curl -s -w "%{http_code}" \
+    response=$(curl -s -w "%{\nhttp_code}" \
         -X POST \
         -u "$USERNAME:$PASSWORD" \
         -F "file=@$json_file" \
-        -F "drive_model=unknown" \
-        -F "drive_type=unknown" \
+        -F "drive_model=$DRIVE_MODEL" \
+        -F "drive_type=$DRIVE_TYPE" \
         -F "hostname=$HOSTNAME" \
         -F "protocol=$PROTOCOL" \
         -F "description=$DESCRIPTION" \
@@ -260,6 +282,8 @@ show_config() {
     echo "Test Size:    $TEST_SIZE"
     echo "Num Jobs:     $NUM_JOBS"
     echo "Runtime:      ${RUNTIME}s"
+    echo "I/O Engine:   $IOENGINE"
+    echo "I/O Depth:    $IODEPTH"
     echo "Backend URL:  $BACKEND_URL"
     echo "Target Dir:   $TARGET_DIR"
     echo "Username:     $USERNAME"
@@ -331,6 +355,7 @@ main() {
     # Check prerequisites
     check_fio
     check_curl
+    check_libaio
     
     # Show configuration
     show_config
@@ -409,9 +434,10 @@ Configuration:
 Pre-flight Checks:
   The script performs the following checks before starting tests:
   1. Verifies FIO and curl are installed
-  2. Tests API connectivity to the backend server
-  3. Validates authentication credentials
-  4. Confirms test configuration with user (unless --yes is used)
+  2. Checks for libaio availability (uses libaio if available for better performance)
+  3. Tests API connectivity to the backend server
+  4. Validates authentication credentials
+  5. Confirms test configuration with user (unless --yes is used)
 
 Configuration Variables:
   HOSTNAME       - Server hostname (default: current hostname)

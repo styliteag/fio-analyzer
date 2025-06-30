@@ -251,6 +251,55 @@ export default function Upload() {
               </div>
             </div>
 
+            {/* Host and Protocol Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <div className="theme-form-group">
+                <label htmlFor="hostname" className="theme-form-label">
+                  Hostname
+                </label>
+                <input
+                  id="hostname"
+                  type="text"
+                  value={hostname}
+                  onChange={(e) => setHostname(e.target.value)}
+                  placeholder="e.g., server-01"
+                  className="theme-form-input"
+                />
+                <p className="theme-form-help">Optional: Specify the host where the test was run</p>
+              </div>
+
+              <div className="theme-form-group">
+                <label htmlFor="protocol" className="theme-form-label">
+                  Protocol
+                </label>
+                <input
+                  id="protocol"
+                  type="text"
+                  value={protocol}
+                  onChange={(e) => setProtocol(e.target.value)}
+                  placeholder="e.g., NVMe, SATA, iSCSI"
+                  className="theme-form-input"
+                />
+                <p className="theme-form-help">Optional: Specify the storage protocol used</p>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="mt-6">
+              <label htmlFor="description" className="theme-form-label">
+                Description
+              </label>
+              <textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="e.g., Weekly performance check of production database server"
+                className="theme-form-input"
+                rows={3}
+              />
+              <p className="theme-form-help">Optional: Add a description for this test run</p>
+            </div>
+
             {/* Submit Button */}
             <div className="flex items-center justify-between pt-6">
               <button

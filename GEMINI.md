@@ -1,41 +1,4 @@
-# About This Project
-
-This project is a web-based application for visualizing and analyzing storage performance data from `fio`, a popular tool for benchmarking and stress testing I/O performance. The application consists of a Node.js backend that provides a RESTful API for managing and retrieving performance data, and a React frontend that allows users to upload `fio` output files, view interactive charts of performance metrics, and compare different test runs.
-
-## Tech Stack
-
-### Frontend
-
-- **Framework:** React
-- **Build Tool:** Vite
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS
-- **Charting:** Chart.js
-- **Routing:** React Router
-
-### Backend
-
-- **Framework:** Express.js
-- **Language:** JavaScript
-- **Database:** SQLite
-- **File Uploads:** Multer
-
-## Key Files
-
-- `backend/index.js`: The main entry point for the Node.js backend, defining the Express server and API endpoints.
-- `backend/db/database.db`: The SQLite database file where performance data is stored.
-- `frontend/src/App.tsx`: The main React component that sets up the application's routing and layout.
-- `frontend/src/pages/Dashboard.tsx`: The React component for the main dashboard, which displays the interactive charts.
-- `frontend/src/pages/Upload.tsx`: The React component for the file upload page.
-- `frontend/src/components/InteractiveChart.tsx`: The React component that renders the performance charts using Chart.js.
-- `docker/compose.yml`: The Docker Compose file for building and running the application in containers.
-
-## Commands
-
-- `npm start` (in `backend`): Starts the Node.js backend server.
-- `npm run dev` (in `frontend`): Starts the Vite development server for the frontend.
-- `npm run build` (in `frontend`): Builds the frontend for production.
-- `dokcer compose up` (in `docker`): Builds and starts the entire application using Docker Compose.# CLAUDE.md
+# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -44,8 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a **Storage Performance Visualizer** - a full-stack web application that analyzes and visualizes FIO (Flexible I/O Tester) benchmark results. The application consists of:
 
 - **Frontend**: React + TypeScript + Vite application with interactive charts (in `frontend/` directory)
-- **Backend**: Express.js Node.js server with SQLite database (in `backend/` directory)
+- **Backend**: Express.js Node.js server with SQLite database (in `backend/` directory) 
 - **Database**: SQLite with test runs and performance metrics tables
+- **Authentication**: Role-based access control with admin and upload-only users
+- **Testing Script**: Automated FIO testing script with configurable parameters
 
 ## Key Commands
 
@@ -64,49 +29,92 @@ cd backend
 npm install                   # Install Node.js dependencies
 npm start                     # Start Express server (http://localhost:8000)
 
-# Docker deployment
-dokcer compose up --build     # Run full stack in containers (from docker/ directory)
+# Docker deployment (single container)
+docker compose up --build     # Run combined container (from docker/ directory)
+docker compose -f compose.prod.yml up -d  # Production deployment
 ```
 
 ### Run the Server
 
 if the backend and frontend server need to be run you can ask the User to start them. He Maybe will start ./start-frontend-backend.sh to run the servers
 
+### Authentication & User Management
+```bash
+# Admin users (full access to all features)
+node backend/scripts/manage-users.js
+
+# Upload-only users (can only upload FIO test data)
+node backend/scripts/manage-uploaders.js
+```
+
+### Testing Script
+```bash
+# Download the automated testing script
+wget http://your-server/fio-analyzer-tests.sh
+wget http://your-server/.env.example
+
+# Setup and run tests
+chmod +x fio-analyzer-tests.sh
+cp .env.example .env
+# Edit .env with your settings
+./fio-analyzer-tests.sh
+```
+
 ### Database
 - SQLite database auto-initializes with sample data on first run
 - Database path: `backend/db/storage_performance.db` 
-- Docker volume mount: `./data/backend/db:/app/db`
+- Docker volume mounts:
+  - `./data/backend/db:/app/db` (database)
+  - `./data/backend/uploads:/app/uploads` (uploaded files)
+  - `./data/auth/.htpasswd:/app/.htpasswd` (admin users)
+  - `./data/auth/.htuploaders:/app/.htuploaders` (upload-only users)
 
 ## Architecture
 
 ### Backend (Express.js/Node.js)
-- **index.js**: Single file containing all API endpoints and database logic
+- **index.js**: Single file containing all API endpoints, authentication, and database logic
+- **Authentication**: Role-based access control with bcrypt password hashing
+- **Logging**: Structured human-readable logging to stdout for monitoring
 - **Database Schema**:
   - `test_runs`: Test execution metadata (drive info, test params, timestamps)
   - `performance_metrics`: Performance data (IOPS, latency, throughput)
 - **Key Endpoints**:
-  - `GET /api/test-runs`: List all test runs
-  - `GET /api/performance-data`: Get metrics for specific test runs
+  - `GET /api/test-runs`: List all test runs (admin only)
+  - `GET /api/performance-data`: Get metrics for specific test runs (admin only)
+  - `POST /api/import`: Upload FIO test results (admin or uploader)
+  - `GET /api/filters`: Get filter options (admin only)
+  - `PUT /api/test-runs/:id`: Update test run metadata (admin only)
 
 ### Frontend (React + TypeScript)
 - **App.tsx**: Main application component orchestrating data flow
+- **Authentication**: Custom login forms with React context-based authentication
 - **Components**:
   - `TestRunSelector`: Multi-select dropdown for choosing test runs
   - `TemplateSelector`: Chart template/visualization picker  
-  - `InteractiveChart`: Chart.js-powered data visualization
+  - `InteractiveChart`: Chart.js-powered data visualization with interactive controls
+  - `LoginForm`: Custom authentication interface
+- **Interactive Features**:
+  - Sorting by multiple criteria (name, IOPS, latency, etc.)
+  - Grouping by drive model, test type, block size, etc.
+  - Series visibility toggles
+  - Chart export (PNG/CSV)
+  - Fullscreen mode
 - **Types**: All TypeScript interfaces defined in `src/types/index.ts`
 
 ### Data Flow
-1. User selects test runs via `TestRunSelector`
-2. User picks visualization template via `TemplateSelector` 
-3. `App.tsx` fetches performance data from backend API
-4. `InteractiveChart` renders data using Chart.js with custom templates
+1. User authenticates via custom login form
+2. User selects test runs via `TestRunSelector`
+3. User picks visualization template via `TemplateSelector` 
+4. User configures interactive controls (sorting, grouping, etc.)
+5. `App.tsx` fetches performance data from backend API with authentication
+6. `InteractiveChart` renders data using Chart.js with custom templates and user controls
 
-### Docker Setup
-- Frontend runs on port 3000 in containers
-- Backend runs on port 8000 in containers  
-- Services communicate via internal `fio-network`
-- Backend API URL for frontend: `http://backend:8000` (in containers)
+### Docker Setup (Consolidated Architecture)
+- **Single Container**: Combined frontend (nginx) and backend (Node.js) in one container
+- **Port**: Container runs on port 80
+- **Static Files**: Scripts and configs served by nginx at `/fio-analyzer-tests.sh` and `/.env.example`
+- **API**: Backend runs internally on port 8000, proxied by nginx
+- **Build**: Multi-stage Docker build for optimized production deployment
 
 ## Supported Metrics
 - IOPS (Input/Output Operations Per Second)
@@ -117,5 +125,45 @@ if the backend and frontend server need to be run you can ask the User to start 
 ## Technology Stack
 
 - **Frontend**: React 18, TypeScript, Vite, TailwindCSS, Chart.js, Lucide React icons
-- **Backend**: Express.js, Node.js, SQLite3, CORS
+- **Backend**: Express.js, Node.js, SQLite3, CORS, bcryptjs for authentication
+- **Infrastructure**: Nginx (static files & reverse proxy), Docker (single container)
 - **Development**: ESLint for linting, Docker for containerization
+- **Testing**: Automated FIO testing script with .env configuration
+
+## Authentication System
+
+### User Roles
+- **Admin Users** (`.htpasswd`): Full access to all features including viewing data, uploading tests, and managing system
+- **Upload-Only Users** (`.htuploaders`): Restricted access to upload FIO test results only
+
+### Security Features
+- bcrypt password hashing with salt rounds
+- Role-based API endpoint protection
+- Custom authentication forms (no browser basic auth popups)
+- Request logging with user activity tracking
+- Secure credential management via external volume mounts
+
+## Automated Testing Script
+
+### Features
+- **Configuration**: .env file support with environment variable override
+- **Customizable Tests**: Configurable block sizes, test patterns, runtime, and jobs
+- **Multiple Patterns**: Supports read, write, randread, randwrite operations
+- **Automated Upload**: Direct integration with FIO Analyzer API
+- **Comprehensive Logging**: Colored output with test progress and results
+- **Error Handling**: Graceful failure handling and cleanup
+
+### Configuration Options
+```bash
+HOSTNAME=myserver           # Server identifier
+PROTOCOL=NVMe              # Storage protocol  
+DESCRIPTION=test_run       # Test description
+TEST_SIZE=10M              # Test file size
+NUM_JOBS=4                 # Parallel jobs
+RUNTIME=30                 # Test duration (seconds)
+BACKEND_URL=http://server  # FIO Analyzer URL
+USERNAME=admin             # Authentication username
+PASSWORD=admin             # Authentication password
+BLOCK_SIZES=4k,64k,1M      # Test block sizes
+TEST_PATTERNS=read,write   # Test patterns
+```
