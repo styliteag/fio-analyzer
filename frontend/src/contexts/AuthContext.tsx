@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 interface AuthContextType {
   isAuthenticated: boolean;
   username: string | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
   error: string | null;
@@ -69,7 +69,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<void> => {
     setLoading(true);
     setError(null);
 
@@ -94,21 +94,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsAuthenticated(true);
         setUsername(username);
         setLoading(false);
-        return true;
       } else if (response.status === 401) {
         setError('Invalid username or password');
         setLoading(false);
-        return false;
       } else {
         setError('Login failed. Please try again.');
         setLoading(false);
-        return false;
       }
     } catch (err) {
       console.error('Login network error:', err);
       setError('Cannot connect to server. Please check if the backend is running.');
       setLoading(false);
-      return false;
     }
   };
 

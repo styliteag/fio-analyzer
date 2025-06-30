@@ -1,5 +1,5 @@
 # Multi-stage build combining frontend and backend
-FROM node:18-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 # Accept build arguments  
 ARG VITE_API_URL=""
@@ -23,7 +23,7 @@ ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build:prod
 
 # Main application stage
-FROM node:18-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 

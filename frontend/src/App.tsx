@@ -16,7 +16,7 @@ const ProtectedApp = () => {
   }
 
   if (!isAuthenticated) {
-    return <LoginForm onLogin={login} error={error} loading={loading} />;
+    return <LoginForm onLogin={login} error={error || undefined} loading={loading} />;
   }
 
   return (

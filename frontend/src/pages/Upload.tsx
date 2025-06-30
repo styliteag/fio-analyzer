@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../contexts/AuthContext';
-import { importFioData, clearDatabase } from '../utils/api';
+import { importFioData } from '../utils/api';
 import { Upload as UploadIcon, Check, AlertCircle, ArrowLeft, FileText, LogOut, Download } from 'lucide-react';
 
 export default function Upload() {
@@ -51,7 +51,7 @@ export default function Upload() {
     const finalDriveType = showCustomType ? customDriveType : driveType;
     
     try {
-      const result = await importFioData(file, {
+      await importFioData(file, {
         drive_model: driveModel || 'Unknown',
         drive_type: finalDriveType || 'Unknown',
         hostname: hostname || 'Unknown',
