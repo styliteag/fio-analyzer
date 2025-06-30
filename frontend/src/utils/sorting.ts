@@ -27,22 +27,3 @@ export const sortBlockSizes = (blockSizes: (string | number)[]): (string | numbe
 		return bytesA - bytesB;
 	});
 };
-
-// Format block size for display (ensure consistent formatting)
-export const formatBlockSize = (blockSize: string | number): string => {
-	if (typeof blockSize === 'number') {
-		// Convert numeric bytes to human readable
-		if (blockSize >= 1024 * 1024 * 1024) {
-			return `${Math.round(blockSize / (1024 * 1024 * 1024))}G`;
-		} else if (blockSize >= 1024 * 1024) {
-			return `${Math.round(blockSize / (1024 * 1024))}M`;
-		} else if (blockSize >= 1024) {
-			return `${Math.round(blockSize / 1024)}K`;
-		} else {
-			return `${blockSize}`;
-		}
-	}
-	
-	// Already formatted as string, just ensure uppercase suffix
-	return blockSize.toString().replace(/([kmg])$/i, (match) => match.toUpperCase());
-};

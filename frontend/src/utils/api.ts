@@ -161,13 +161,3 @@ export const importFioData = async (
 	}
 	return response.json();
 };
-
-export const clearDatabase = async () => {
-	const response = await authenticatedFetch("/api/clear-database", {
-		method: "DELETE",
-	});
-	if (!response.ok) {
-		throw new Error("Failed to clear database");
-	}
-	return response.json();
-};

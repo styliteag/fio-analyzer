@@ -486,7 +486,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		// Group by drive model and show performance across block sizes
 		const groupedData = new Map<
 			string,
-			Map<number, { iops: number; throughput: number }>
+			Map<string | number, { iops: number; throughput: number }>
 		>();
 
 		sortedData.forEach((item) => {
@@ -498,11 +498,11 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 			}
 
 			const iopsValue = getMetricValue(item.metrics, "iops");
-			const bandwidthValue = getMetricValue(item.metrics, "bandwidth");
+			const throughputValue = getMetricValue(item.metrics, "throughput");
 
 			groupedData
 				.get(driveKey)
-				?.set(blockSize, { iops: iopsValue, bandwidth: bandwidthValue });
+				?.set(blockSize, { iops: iopsValue, throughput: throughputValue });
 		});
 
 		const blockSizes = sortBlockSizes(

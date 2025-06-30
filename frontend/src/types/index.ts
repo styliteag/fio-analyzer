@@ -30,7 +30,7 @@ export interface PerformanceData {
 	drive_model: string;
 	drive_type: string;
 	test_name: string;
-	block_size: number;
+	block_size: string | number;
 	read_write_pattern: string;
 	timestamp: string;
 	queue_depth: number;
@@ -43,7 +43,7 @@ export interface FilterOptions {
 	drive_types: string[];
 	drive_models: string[];
 	patterns: string[];
-	block_sizes: number[];
+	block_sizes: (string | number)[];
 	hostnames: string[];
 	protocols: string[];
 }
@@ -57,12 +57,4 @@ export interface ChartTemplate {
 	yAxis: string;
 	groupBy?: string;
 	metrics: string[];
-}
-
-export interface LatencyPercentile {
-	id: number;
-	test_run_id: number;
-	operation_type: string;
-	percentile: number;
-	latency_ns: number;
 }

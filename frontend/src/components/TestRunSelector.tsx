@@ -51,7 +51,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 		drive_types: [] as string[],
 		drive_models: [] as string[],
 		patterns: [] as string[],
-		block_sizes: [] as number[],
+		block_sizes: [] as (string | number)[],
 		hostnames: [] as string[],
 		protocols: [] as string[],
 	});
