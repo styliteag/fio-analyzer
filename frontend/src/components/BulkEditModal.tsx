@@ -120,7 +120,7 @@ export default function BulkEditModal({
 			if (failed === 0) {
 				onClose();
 			}
-		} catch (_err) {
+		} catch {
 			setError("Bulk update failed");
 		} finally {
 			setSaving(false);

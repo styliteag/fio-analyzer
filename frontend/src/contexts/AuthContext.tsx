@@ -2,6 +2,7 @@ import type React from "react";
 import {
 	createContext,
 	type ReactNode,
+	useCallback,
 	useContext,
 	useEffect,
 	useState,
@@ -36,7 +37,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	const verifyCredentials = async (credentials: string): Promise<boolean> => {
+	const verifyCredentials = useCallback(async (credentials: string): Promise<boolean> => {
 		try {
 			const response = await fetch(
 				`${import.meta.env.VITE_API_URL || "."}/api/test-runs`,
@@ -51,7 +52,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 			console.warn("Network error during credential verification:", error);
 			return false;
 		}
-	};
+	}, []);
 
 	// Check if user is already authenticated on app load
 	useEffect(() => {

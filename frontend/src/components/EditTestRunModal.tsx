@@ -62,7 +62,7 @@ export default function EditTestRunModal({
 			};
 			onSave(updatedTestRun);
 			onClose();
-		} catch (_err) {
+		} catch {
 			setError("Network error occurred");
 		} finally {
 			setSaving(false);

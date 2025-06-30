@@ -1,6 +1,7 @@
 import {
 	createContext,
 	type ReactNode,
+	useCallback,
 	useContext,
 	useEffect,
 	useState,
@@ -45,20 +46,20 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 	};
 
 	// Function to resolve the actual theme
-	const resolveTheme = (currentTheme: Theme): "light" | "dark" => {
+	const resolveTheme = useCallback((currentTheme: Theme): "light" | "dark" => {
 		if (currentTheme === "system") {
 			return getSystemTheme();
 		}
 		return currentTheme;
-	};
+	}, []);
 
 	// Apply theme to document
-	const applyTheme = (resolvedTheme: "light" | "dark") => {
+	const applyTheme = useCallback((resolvedTheme: "light" | "dark") => {
 		const root = window.document.documentElement;
 		root.classList.remove("light", "dark");
 		root.classList.add(resolvedTheme);
 		setActualTheme(resolvedTheme);
-	};
+	}, []);
 
 	// Handle theme changes
 	const handleSetTheme = (newTheme: Theme) => {

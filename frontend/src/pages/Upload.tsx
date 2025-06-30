@@ -93,7 +93,7 @@ export default function Upload() {
 			setTimeout(() => {
 				navigate("/");
 			}, 2000);
-		} catch (_error) {
+		} catch {
 			setMessage({ type: "error", text: "Network error occurred" });
 		} finally {
 			setUploading(false);

@@ -1,5 +1,5 @@
 import { Activity, Database, Download, LogOut, Upload } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InteractiveChart from "../components/InteractiveChart";
 import TemplateSelector from "../components/TemplateSelector";
@@ -20,7 +20,7 @@ export default function Dashboard() {
 	const [refreshTrigger, setRefreshTrigger] = useState(0);
 	const [isChartMaximized, setIsChartMaximized] = useState(false);
 
-	const fetchPerformanceData = async () => {
+	const fetchPerformanceData = useCallback(async () => {
 		if (selectedRuns.length === 0) return;
 
 		setLoading(true);
@@ -51,7 +51,7 @@ export default function Dashboard() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [selectedRuns, selectedTemplate]);
 
 	useEffect(() => {
 		if (selectedRuns.length > 0 && selectedTemplate) {

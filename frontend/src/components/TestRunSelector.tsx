@@ -8,7 +8,7 @@ import {
 	Users,
 } from "lucide-react";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Select from "react-select";
 import { getSelectStyles } from "../hooks/useThemeColors";
 import type { FilterOptions, TestRun } from "../types";
@@ -60,25 +60,25 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 	const [deleting, setDeleting] = useState<number | null>(null);
 	const [bulkDeleting, setBulkDeleting] = useState(false);
 
-	const loadTestRuns = async () => {
+	const loadTestRuns = useCallback(async () => {
 		try {
 			const data = await fetchTestRuns();
 			setTestRuns(data);
 		} catch (error) {
 			console.error("Error fetching test runs:", error);
 		}
-	};
+	}, []);
 
-	const loadFilters = async () => {
+	const loadFilters = useCallback(async () => {
 		try {
 			const data = await fetchFilters();
 			setFilters(data);
 		} catch (error) {
 			console.error("Error fetching filters:", error);
 		}
-	};
+	}, []);
 
-	const applyFilters = () => {
+	const applyFilters = useCallback(() => {
 		let filtered = testRuns;
 
 		if (activeFilters.drive_types.length > 0) {
@@ -118,12 +118,12 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 		}
 
 		setFilteredRuns(filtered);
-	};
+	}, [testRuns, activeFilters]);
 
 	useEffect(() => {
 		loadTestRuns();
 		loadFilters();
-	}, [loadFilters, loadTestRuns]);
+	}, [loadFilters, loadTestRuns, refreshTrigger]);
 
 	useEffect(() => {
 		applyFilters();
@@ -234,7 +234,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 
 			// Refresh filters
 			loadFilters();
-		} catch (_err) {
+		} catch {
 			alert("Network error occurred while deleting test run");
 		} finally {
 			setDeleting(null);
@@ -283,7 +283,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
 			} else {
 				alert(`All ${deletedCount} test runs deleted successfully.`);
 			}
-		} catch (_err) {
+		} catch {
 			alert("An unexpected error occurred during bulk delete");
 		} finally {
 			setBulkDeleting(false);

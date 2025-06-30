@@ -11,7 +11,7 @@ import {
 	Tooltip,
 } from "chart.js";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bar, Line } from "react-chartjs-2";
 import "chartjs-adapter-date-fns";
 import {
@@ -157,7 +157,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		return sortedData;
 	};
 
-	const processDataForTemplate = (
+	const processDataForTemplate = useCallback((
 		template: ChartTemplate,
 		data: PerformanceData[],
 	) => {
@@ -192,7 +192,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 			default:
 				return processDefaultChart(data, colors, options);
 		}
-	};
+	}, [sortBy, sortOrder, groupBy]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const getMetricValue = (
 		metrics: any,
