@@ -5,6 +5,7 @@ import InteractiveChart from "../components/InteractiveChart";
 import TemplateSelector from "../components/TemplateSelector";
 import TestRunSelector from "../components/TestRunSelector";
 import ThemeToggle from "../components/ThemeToggle";
+import ThreeDBarChart from "../components/ThreeDBarChart";
 import { useAuth } from "../contexts/AuthContext";
 import type { ChartTemplate, PerformanceData, TestRun } from "../types";
 import { fetchPerformanceData as apiFetchPerformanceData } from "../utils/api";
@@ -150,14 +151,31 @@ export default function Dashboard() {
 										</div>
 									</div>
 								)}
-								<InteractiveChart
-									template={selectedTemplate}
-									data={performanceData}
-									isMaximized={isChartMaximized}
-									onToggleMaximize={() =>
-										setIsChartMaximized(!isChartMaximized)
-									}
-								/>
+								{selectedTemplate.chartType === '3d-bar' ? (
+									(() => {
+										const mappedData = performanceData.map(d => {
+											const metrics = (d as any).metrics;
+											const latency_percentiles = (d as any).latency_percentiles;
+											return {
+												blocksize: d.block_size,
+												queuedepth: d.queue_depth,
+												iops: metrics?.combined?.iops?.value,
+												latency: latency_percentiles?.combined?.p95?.value,
+												throughput: undefined,
+											};
+										});
+										console.log('3D Chart performanceData:', performanceData);
+										console.log('3D Chart mappedData:', mappedData);
+										return <ThreeDBarChart data={mappedData} />;
+									})()
+								) : (
+									<InteractiveChart
+										template={selectedTemplate}
+										data={performanceData}
+										isMaximized={isChartMaximized}
+										onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+									/>
+								)}
 							</div>
 						)}
 					</div>
@@ -165,12 +183,31 @@ export default function Dashboard() {
 
 				{/* Maximized Chart */}
 				{isChartMaximized && selectedTemplate && (
-					<InteractiveChart
-						template={selectedTemplate}
-						data={performanceData}
-						isMaximized={isChartMaximized}
-						onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
-					/>
+					selectedTemplate.chartType === '3d-bar' ? (
+						(() => {
+							const mappedData = performanceData.map(d => {
+								const metrics = (d as any).metrics;
+								const latency_percentiles = (d as any).latency_percentiles;
+								return {
+									blocksize: d.block_size,
+									queuedepth: d.queue_depth,
+									iops: metrics?.combined?.iops?.value,
+									latency: latency_percentiles?.combined?.p95?.value,
+									throughput: undefined,
+								};
+							});
+							console.log('3D Chart performanceData:', performanceData);
+							console.log('3D Chart mappedData:', mappedData);
+							return <ThreeDBarChart data={mappedData} />;
+						})()
+					) : (
+						<InteractiveChart
+							template={selectedTemplate}
+							data={performanceData}
+							isMaximized={isChartMaximized}
+							onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+						/>
+					)
 				)}
 
 				{/* Instructions */}

@@ -53,6 +53,15 @@ const chartTemplates: ChartTemplate[] = [
 		yAxis: "dual_metrics",
 		metrics: ["iops", "avg_latency"],
 	},
+	{
+		id: "3d-bar",
+		name: "🧊 3D Chart",
+		description: "Interactive 3D bar chart: Block Size × Queue Depth × Metric",
+		chartType: "3d-bar",
+		xAxis: "blocksize",
+		yAxis: "queuedepth",
+		metrics: ["iops", "latency", "throughput"],
+	},
 ];
 
 const getTemplateIcon = (chartType: string) => {

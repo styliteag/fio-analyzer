@@ -52,7 +52,7 @@ export interface ChartTemplate {
 	id: string;
 	name: string;
 	description: string;
-	chartType: "bar" | "line" | "scatter";
+	chartType: "bar" | "line" | "scatter" | "3d-bar";
 	xAxis: string;
 	yAxis: string;
 	groupBy?: string;
