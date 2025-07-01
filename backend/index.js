@@ -1075,34 +1075,28 @@ app.delete('/api/clear-database', requireAdmin, (req, res) => {
 
 // Serve FIO test script dynamically with correct backend URL and credentials
 app.get('/script.sh', (req, res) => {
-    const hostHeader = req.get('Host');
-    const protocol = req.get('X-Forwarded-Proto') || (req.secure ? 'https' : 'http');
-    const backendUrl = `${protocol}://${hostHeader}`;
     
-    // Get credentials from Basic Auth if available
-    let username = 'admin'; // default
-    let password = 'admin'; // default
-    const authHeader = req.get('Authorization');
-    if (authHeader && authHeader.startsWith('Basic ')) {
-        try {
-            const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('ascii');
-            const [user, pass] = credentials.split(':');
-            username = user;
-            password = pass;
-        } catch (error) {
-            // Keep default credentials if parsing fails
-        }
-    }
+    // Log the request for debugging
+    logInfo('Script download requested', {
+        requestId: req.requestId,
+        hostHeader,
+        protocol,
+        backendUrl,
+    });
     
     const fs = require('fs');
     const path = require('path');
     
     // Use local script path in development, Docker path in production
     let scriptPath;
-    if (process.env.NODE_ENV === 'production') {
-        scriptPath = path.join('/usr/share/nginx/html/fio-analyzer-tests.sh');
+    const productionPath = '/usr/share/nginx/html/fio-analyzer-tests.sh';
+    const fallbackPath = path.join(__dirname, '..', 'scripts', 'fio-analyzer-tests.sh');
+        
+    // Check if production path exists, otherwise use fallback
+    if (fs.existsSync(productionPath)) {
+        scriptPath = productionPath;
     } else {
-        scriptPath = path.join(__dirname, '..', 'scripts', 'fio-analyzer-tests.sh');
+        scriptPath = fallbackPath;
     }
     
     try {
@@ -1113,25 +1107,7 @@ app.get('/script.sh', (req, res) => {
             /BACKEND_URL="\${BACKEND_URL:-[^}]*}"/g,
             `BACKEND_URL="\${BACKEND_URL:-${backendUrl}}"`
         );
-        
-        scriptContent = scriptContent.replace(
-            /USERNAME="\${USERNAME:-[^}]*}"/g,
-            `USERNAME="\${USERNAME:-${username}}"`
-        );
-        
-        scriptContent = scriptContent.replace(
-            /PASSWORD="\${PASSWORD:-[^}]*}"/g,
-            `PASSWORD="\${PASSWORD:-${password}}"`
-        );
-        
-        // Add security warning at the top of the script
-        const securityWarning = `# SECURITY WARNING: This script contains your password in plain text.
-# Please ensure this file is stored securely and not shared publicly.
-# Consider using environment variables or .env files for production use.
-# 
-`;
-        scriptContent = securityWarning + scriptContent;
-        
+                
         res.setHeader('Content-Type', 'application/x-sh');
         res.setHeader('Content-Disposition', 'attachment; filename="fio-analyzer-tests.sh"');
         res.send(scriptContent);
@@ -1141,6 +1117,52 @@ app.get('/script.sh', (req, res) => {
             scriptPath
         });
         res.status(500).json({ error: 'Failed to generate script' });
+    }
+});
+
+app.get('/env.example', (req, res) => {
+    
+    // Log the request for debugging
+    logInfo('Env example download requested', {
+        requestId: req.requestId,
+        hostHeader,
+        protocol,
+        backendUrl,
+    });
+    
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Use local script path in development, Docker path in production
+    let scriptPath;
+    const productionPath = '/usr/share/nginx/html/.env.example';
+    const fallbackPath = path.join(__dirname, '..', 'scripts', '.env.example');
+        
+    // Check if production path exists, otherwise use fallback
+    if (fs.existsSync(productionPath)) {
+        scriptPath = productionPath;
+    } else {
+        scriptPath = fallbackPath;
+    }
+    
+    try {
+        let scriptContent = fs.readFileSync(scriptPath, 'utf8');
+        
+        // Replace placeholders in the script
+        scriptContent = scriptContent.replace(
+            /BACKEND_URL=.*"/g,
+            `BACKEND_URL=${backendUrl}"`
+        );
+                
+        res.setHeader('Content-Type', 'text/plain');
+        res.setHeader('Content-Disposition', 'attachment; filename=".env.example"');
+        res.send(scriptContent);
+    } catch (error) {
+        logError('Failed to read script template', error, {
+            requestId: req.requestId,
+            scriptPath
+        });
+        res.status(500).json({ error: 'Failed to generate .env.example' });
     }
 });
 

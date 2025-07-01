@@ -45,9 +45,11 @@ load_env() {
 
 # Configuration Variables with defaults
 set_defaults() {
-    HOSTNAME="${HOSTNAME:-$(hostname)}"
+    HOSTNAME="${HOSTNAME:-$(hostname -s)}"
     PROTOCOL="${PROTOCOL:-unknown}"
     DESCRIPTION="${DESCRIPTION:-script_test}"
+    # Sanitize the description change " " to "_" and remove any special charaters
+    DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
     DRIVE_TYPE="${DRIVE_TYPE:-unknown}"
     DRIVE_MODEL="${DRIVE_MODEL:-unknown}"
     TEST_SIZE="${TEST_SIZE:-100M}"
@@ -55,8 +57,8 @@ set_defaults() {
     RUNTIME="${RUNTIME:-20}"
     BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
     TARGET_DIR="${TARGET_DIR:-/tmp/fio_test}"
-    USERNAME="${USERNAME:-admin}"
-    PASSWORD="${PASSWORD:-admin}"
+    USERNAME="${USERNAME:-uploader}"
+    PASSWORD="${PASSWORD:-uploaderpassword}"
     
     # Parse BLOCK_SIZES from comma-separated string if provided
     if [ -n "$BLOCK_SIZES" ] && [ "$BLOCK_SIZES" != "4k,64k,1M" ]; then
@@ -102,12 +104,13 @@ check_libaio() {
     if echo "$test_output" | grep -q "engine libaio not loadable"; then
         print_warning "libaio engine not available - using psync engine"
         IOENGINE="psync"
+        # Psync is a sync engine that uses the POSIX pwrite() function to write data to the file.
+        # It can only have a iodepth of 1.
         IODEPTH=1
     else
         print_success "libaio engine is available - will use for better performance"
         IOENGINE="libaio"
-        # Increase iodepth for libaio as it supports async I/O
-        IODEPTH=16
+        IODEPTH=1
     fi
 }
 

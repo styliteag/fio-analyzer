@@ -421,8 +421,7 @@ export default function Upload() {
 						{/* Download Links */}
 						<div className="flex justify-center items-center space-x-6 text-sm">
 							<a
-								href="/fio-analyzer-tests.sh"
-								download
+								href="/script.sh"
 								className="inline-flex items-center px-3 py-2 theme-text-secondary hover:theme-text-primary transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
 								title="Download FIO testing script"
 							>
@@ -431,7 +430,7 @@ export default function Upload() {
 							</a>
 							<span className="theme-text-secondary">•</span>
 							<a
-								href="/.env.example"
+								href="/env.example"
 								download
 								className="inline-flex items-center px-3 py-2 theme-text-secondary hover:theme-text-primary transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
 								title="Download configuration template"
