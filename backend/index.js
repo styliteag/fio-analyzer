@@ -1075,14 +1075,9 @@ app.delete('/api/clear-database', requireAdmin, (req, res) => {
 
 // Serve FIO test script dynamically with correct backend URL and credentials
 app.get('/script.sh', (req, res) => {
-    
-    // Log the request for debugging
-    logInfo('Script download requested', {
-        requestId: req.requestId,
-        hostHeader,
-        protocol,
-        backendUrl,
-    });
+    const hostHeader = req.get('Host');
+    const protocol = req.get('X-Forwarded-Proto') || (req.secure ? 'https' : 'http');
+    const backendUrl = `${protocol}://${hostHeader}`;
     
     const fs = require('fs');
     const path = require('path');
@@ -1121,14 +1116,9 @@ app.get('/script.sh', (req, res) => {
 });
 
 app.get('/env.example', (req, res) => {
-    
-    // Log the request for debugging
-    logInfo('Env example download requested', {
-        requestId: req.requestId,
-        hostHeader,
-        protocol,
-        backendUrl,
-    });
+    const hostHeader = req.get('Host');
+    const protocol = req.get('X-Forwarded-Proto') || (req.secure ? 'https' : 'http');
+    const backendUrl = `${protocol}://${hostHeader}`;
     
     const fs = require('fs');
     const path = require('path');
