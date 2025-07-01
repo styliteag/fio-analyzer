@@ -1138,12 +1138,21 @@ app.get('/env.example', (req, res) => {
     try {
         let scriptContent = fs.readFileSync(scriptPath, 'utf8');
         
+        // Log the content for debugging
+        logInfo('Read .env.example content', {
+            requestId: req.requestId,
+            scriptPath,
+            contentLength: scriptContent.length,
+            containsBackendUrl: scriptContent.includes('BACKEND_URL')
+        });
+        
         // Replace placeholders in the script
+        // Replace BACKEND_URL=anything with BACKEND_URL=${backendUrl}
         scriptContent = scriptContent.replace(
-            /BACKEND_URL=.*"/g,
-            `BACKEND_URL=${backendUrl}"`
+            /BACKEND_URL="[^"]*"/g,
+            `BACKEND_URL="${backendUrl}"`
         );
-                
+        
         res.setHeader('Content-Type', 'text/plain');
         res.setHeader('Content-Disposition', 'attachment; filename=".env.example"');
         res.send(scriptContent);
