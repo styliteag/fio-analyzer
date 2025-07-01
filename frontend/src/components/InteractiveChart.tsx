@@ -57,7 +57,6 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 	const chartRef = useRef<any>(null);
 	const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set());
 	const [chartData, setChartData] = useState<any>(null);
-	const [processedData, setProcessedData] = useState<PerformanceData[]>([]);
 	const themeColors = useThemeColors();
 
 	// Interactive controls for all chart templates
@@ -122,10 +121,6 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 
 	useEffect(() => {
 		if (data.length > 0) {
-			// Get the sorted data for tooltip use
-			const sortedData = applySortingAndGrouping(data);
-			setProcessedData(sortedData);
-			
 			const chartDataResult = processDataForTemplate(template, data);
 			setChartData(chartDataResult);
 
@@ -868,21 +863,6 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 				bodyColor: themeColors.text.secondary,
 				borderColor: themeColors.chart.tooltipBorder,
 				borderWidth: 1,
-				callbacks: {
-					afterLabel: (context: any) => {
-						const dataIndex = context.dataIndex;
-						const item = processedData[dataIndex];
-						if (item) {
-							return [
-								`Drive: ${item.drive_model}`,
-								`Pattern: ${item.read_write_pattern}`,
-								`Block Size: ${item.block_size}`,
-								`Queue Depth: ${item.queue_depth}`,
-							];
-						}
-						return [];
-					},
-				},
 			},
 		},
 		scales: getScalesForTemplate(template, themeColors),
@@ -891,7 +871,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 			axis: "x" as const,
 			intersect: false,
 		},
-	}), [template, themeColors, processedData, toggleSeriesVisibility]);
+	}), [template, themeColors, toggleSeriesVisibility]);
 
 	if (!chartData || data.length === 0) {
 		return (
