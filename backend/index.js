@@ -412,7 +412,7 @@ function populateSampleData(callback) {
     
     let testRunId = 1;
 
-    const testRunsStmt = db.prepare('INSERT INTO test_runs (timestamp, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const testRunsStmt = db.prepare('INSERT INTO test_runs (timestamp, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration, hostname, protocol) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const metricsStmt = db.prepare('INSERT INTO performance_metrics (test_run_id, metric_type, value, unit, operation_type) VALUES (?, ?, ?, ?, ?)');
     const percentilesStmt = db.prepare('INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)');
 
@@ -430,7 +430,7 @@ function populateSampleData(callback) {
                         
                         const test_name = `FIO_${pattern}_${block_size}`;
                         console.log(`  Creating: ${test_name} (${drive_model}, ${block_size}, QD${queue_depth})`);
-                        testRunsStmt.run(timestamp, drive_model, drive_type, test_name, block_size, pattern, queue_depth, 300);
+                        testRunsStmt.run(timestamp, drive_model, drive_type, test_name, block_size, pattern, queue_depth, 300, 'test-data', 'generated');
                         
                         const base_iops = getBaseIops(drive_type, pattern, block_size);
                         const base_latency = getBaseLatency(drive_type, pattern);
