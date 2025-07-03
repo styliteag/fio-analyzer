@@ -54,6 +54,7 @@ set_defaults() {
     DRIVE_MODEL="${DRIVE_MODEL:-unknown}"
     TEST_SIZE="${TEST_SIZE:-100M}"
     NUM_JOBS="${NUM_JOBS:-4}"
+    DIRECT="${DIRECT:-1}"
     RUNTIME="${RUNTIME:-20}"
     BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
     TARGET_DIR="${TARGET_DIR:-/tmp/fio_test}"
@@ -281,7 +282,8 @@ run_fio_test() {
         --time_based \
         --group_reporting \
         --iodepth="$IODEPTH" \
-        --direct=1 \
+        --direct="$DIRECT" \
+        --sync=1 \
         --filename="${TARGET_DIR}/fio_test_${pattern}_${block_size}" \
         --output-format=json \
         --output="$output_file" \
@@ -349,9 +351,12 @@ show_config() {
     echo "Hostname:     $HOSTNAME"
     echo "Protocol:     $PROTOCOL"
     echo "Description:  $DESCRIPTION"
+    echo "Drive Model:  $DRIVE_MODEL"
+    echo "Drive Type:   $DRIVE_TYPE"
     echo "Test Size:    $TEST_SIZE"
     echo "Num Jobs:     $NUM_JOBS"
     echo "Runtime:      ${RUNTIME}s"
+    echo "Direct:       $DIRECT"
     echo "I/O Engine:   $IOENGINE"
     echo "I/O Depth:    $IODEPTH"
     echo "Backend URL:  $BACKEND_URL"
@@ -513,9 +518,12 @@ Configuration Variables:
   HOSTNAME       - Server hostname (default: current hostname)
   PROTOCOL       - Storage protocol (default: unknown)
   DESCRIPTION    - Test description (default: "script_test")
+  DRIVE_MODEL    - Drive model (default: unknown)
+  DRIVE_TYPE     - Drive type (default: unknown)
   TEST_SIZE      - Size of test file (default: 10M)
   NUM_JOBS       - Number of parallel jobs (default: 4)
   RUNTIME        - Test runtime in seconds (default: 30)
+  DIRECT         - Direct I/O mode (default: 1)
   BACKEND_URL    - Backend API URL (default: http://localhost:8000)
   TARGET_DIR     - Directory for test files (default: /tmp/fio_test)
   USERNAME       - Authentication username (default: admin)
@@ -530,10 +538,10 @@ Examples:
   $0
   
   # Override with environment variables
-  HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" $0
+  HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" DRIVE_MODEL="WD1003FZEX" DRIVE_TYPE="HDD" $0
   
   # Large test with custom patterns
-  TEST_SIZE="10G" RUNTIME="300" NUM_JOBS="8" TEST_PATTERNS="read,write" $0
+  TEST_SIZE="10G" RUNTIME="300" DIRECT="1" NUM_JOBS="8" TEST_PATTERNS="read,write" $0
 
 EOF
     exit 0
