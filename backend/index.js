@@ -2548,66 +2548,6 @@ process.on('SIGTERM', () => {
 
 /**
  * @swagger
- * /api/test-runs/{id}:
- *   get:
- *     summary: Get a single test run
- *     description: Retrieve a single FIO test run by its ID
- *     tags: [Test Runs]
- *     security:
- *       - basicAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Test run ID
- *         example: 61
- *     responses:
- *       200:
- *         description: Test run retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/TestRun'
- *       401:
- *         description: Unauthorized - Admin access required
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       404:
- *         description: Test run not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-app.get('/api/test-runs/:id', requireAdmin, (req, res) => {
-    const { id } = req.params;
-    db.get(`
-        SELECT id, timestamp, test_date, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration, fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path
-        FROM test_runs
-        WHERE id = ?
-    `, [parseInt(id)], (err, row) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (!row) {
-            return res.status(404).json({ error: 'Test run not found' });
-        }
-        res.json(row);
-    });
-});
-
-/**
- * @swagger
  * /api/test-runs/performance-data:
  *   get:
  *     summary: Get performance metrics for test runs
@@ -2747,6 +2687,66 @@ app.get('/api/test-runs/performance-data', requireAdmin, (req, res) => {
             const responseData = Object.values(data);
             res.json(responseData);
         });
+    });
+});
+
+/**
+ * @swagger
+ * /api/test-runs/{id}:
+ *   get:
+ *     summary: Get a single test run
+ *     description: Retrieve a single FIO test run by its ID
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Test run ID
+ *         example: 61
+ *     responses:
+ *       200:
+ *         description: Test run retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TestRun'
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Test run not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+app.get('/api/test-runs/:id', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    db.get(`
+        SELECT id, timestamp, test_date, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration, fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path
+        FROM test_runs
+        WHERE id = ?
+    `, [parseInt(id)], (err, row) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (!row) {
+            return res.status(404).json({ error: 'Test run not found' });
+        }
+        res.json(row);
     });
 });
 

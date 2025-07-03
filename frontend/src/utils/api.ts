@@ -75,6 +75,44 @@ export const fetchPerformanceData = async (
 	return response.json();
 };
 
+export const fetchSinglePerformanceData = async (
+	testRunId: number,
+	metricTypes?: string[],
+) => {
+	const params = new URLSearchParams();
+	if (metricTypes && metricTypes.length > 0) {
+		params.append("metric_types", metricTypes.join(","));
+	}
+
+	const queryString = params.toString();
+	const url = `/api/test-runs/${testRunId}/performance-data${queryString ? `?${queryString}` : ''}`;
+	const response = await authenticatedFetch(url);
+	if (!response.ok) {
+		throw new Error("Failed to fetch performance data");
+	}
+	return response.json();
+};
+
+export const fetchJobOptions = async (testRunIds: number[]) => {
+	const params = new URLSearchParams({
+		test_run_ids: testRunIds.join(","),
+	});
+
+	const response = await authenticatedFetch(`/api/test-runs/job-options?${params}`);
+	if (!response.ok) {
+		throw new Error("Failed to fetch job options");
+	}
+	return response.json();
+};
+
+export const fetchSingleJobOptions = async (testRunId: number) => {
+	const response = await authenticatedFetch(`/api/test-runs/${testRunId}/job-options`);
+	if (!response.ok) {
+		throw new Error("Failed to fetch job options");
+	}
+	return response.json();
+};
+
 export const fetchFilters = async () => {
 	const response = await authenticatedFetch("/api/filters");
 	if (!response.ok) {
