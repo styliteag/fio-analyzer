@@ -19,6 +19,8 @@
     "express": "^5.1.0",
     "express-basic-auth": "^1.2.1",
     "multer": "^2.0.1",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   }
 }

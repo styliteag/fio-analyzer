@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const basicAuth = require('express-basic-auth');
 const bcrypt = require('bcryptjs');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 
 const DB_PATH = path.resolve(__dirname, './db/storage_performance.db');
 const HTPASSWD_PATH = path.resolve(__dirname, '.htpasswd');
@@ -92,6 +94,182 @@ function parseHtpasswd(filePath) {
 }
 
 app.use(cors());
+
+// Swagger configuration
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'FIO Analyzer API',
+            version: '1.0.0',
+            description: 'A comprehensive API for FIO (Flexible I/O Tester) performance analysis and time-series monitoring',
+            contact: {
+                name: 'FIO Analyzer',
+                url: 'https://github.com/fio-analyzer'
+            }
+        },
+        servers: [
+            {
+                url: 'http://localhost:8000',
+                description: 'Development server'
+            }
+        ],
+        components: {
+            securitySchemes: {
+                basicAuth: {
+                    type: 'http',
+                    scheme: 'basic',
+                    description: 'Admin or uploader credentials'
+                }
+            },
+            schemas: {
+                TestRun: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', description: 'Unique test run ID' },
+                        timestamp: { type: 'string', format: 'date-time', description: 'Test execution timestamp' },
+                        hostname: { type: 'string', description: 'Server hostname' },
+                        protocol: { type: 'string', description: 'Storage protocol (e.g., NVMe, SATA)' },
+                        drive_model: { type: 'string', description: 'Storage device model' },
+                        drive_type: { type: 'string', description: 'Storage device type' },
+                        test_name: { type: 'string', description: 'Test configuration name' },
+                        block_size: { type: 'string', description: 'I/O block size' },
+                        read_write_pattern: { type: 'string', description: 'Test pattern (read, write, randread, etc.)' },
+                        queue_depth: { type: 'integer', description: 'I/O queue depth' },
+                        description: { type: 'string', description: 'Test description' }
+                    }
+                },
+                PerformanceMetric: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'integer', description: 'Metric ID' },
+                        test_run_id: { type: 'integer', description: 'Associated test run ID' },
+                        metric_type: { type: 'string', description: 'Metric type (iops, avg_latency, bandwidth)' },
+                        value: { type: 'number', description: 'Metric value' },
+                        unit: { type: 'string', description: 'Measurement unit' },
+                        operation_type: { type: 'string', description: 'Operation type (read, write, combined)' }
+                    }
+                },
+                ServerInfo: {
+                    type: 'object',
+                    properties: {
+                        hostname: { type: 'string', description: 'Server hostname' },
+                        protocol: { type: 'string', description: 'Storage protocol' },
+                        drive_model: { type: 'string', description: 'Drive model' },
+                        test_count: { type: 'integer', description: 'Total number of tests' },
+                        last_test_time: { type: 'string', format: 'date-time', description: 'Most recent test timestamp' },
+                        first_test_time: { type: 'string', format: 'date-time', description: 'First test timestamp' }
+                    }
+                },
+                TrendData: {
+                    type: 'object',
+                    properties: {
+                        timestamp: { type: 'string', format: 'date-time', description: 'Test timestamp' },
+                        block_size: { type: 'string', description: 'Block size' },
+                        read_write_pattern: { type: 'string', description: 'Test pattern' },
+                        queue_depth: { type: 'integer', description: 'Queue depth' },
+                        value: { type: 'number', description: 'Metric value' },
+                        unit: { type: 'string', description: 'Unit of measurement' },
+                        moving_avg: { type: 'number', description: '3-point moving average' },
+                        percent_change: { type: 'string', description: 'Percentage change from previous value' }
+                    }
+                },
+                Error: {
+                    type: 'object',
+                    properties: {
+                        error: { type: 'string', description: 'Error message' }
+                    }
+                }
+            }
+        },
+        security: [
+            {
+                basicAuth: []
+            }
+        ]
+    },
+    apis: ['./index.js'] // Path to the API docs
+};
+
+const swaggerSpecs = swaggerJsdoc(swaggerOptions);
+
+// Serve Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'FIO Analyzer API Documentation'
+}));
+
+/**
+ * @swagger
+ * /api/info:
+ *   get:
+ *     summary: Get API information
+ *     description: Retrieve basic information about the API including available endpoints and documentation links
+ *     tags: [System]
+ *     responses:
+ *       200:
+ *         description: API information retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 name:
+ *                   type: string
+ *                   description: API name
+ *                   example: "FIO Analyzer API"
+ *                 version:
+ *                   type: string
+ *                   description: API version
+ *                   example: "1.0.0"
+ *                 description:
+ *                   type: string
+ *                   description: API description
+ *                 documentation:
+ *                   type: object
+ *                   properties:
+ *                     swagger_ui:
+ *                       type: string
+ *                       description: Swagger UI endpoint
+ *                       example: "/api-docs"
+ *                     swagger_json:
+ *                       type: string
+ *                       description: Swagger JSON endpoint
+ *                 endpoints:
+ *                   type: object
+ *                   description: Available API endpoints
+ *                 authentication:
+ *                   type: string
+ *                   description: Authentication information
+ *                 status:
+ *                   type: string
+ *                   description: API status
+ *                   example: "running"
+ */
+// API documentation info endpoint
+app.get('/api/info', (req, res) => {
+    res.json({
+        name: 'FIO Analyzer API',
+        version: '1.0.0',
+        description: 'FIO performance analysis and time-series monitoring API',
+        documentation: {
+            swagger_ui: '/api-docs',
+            swagger_json: '/api-docs/swagger.json'
+        },
+        endpoints: {
+            test_runs: '/api/test-runs',
+            performance_data: '/api/performance-data',
+            time_series: {
+                servers: '/api/time-series/servers',
+                latest: '/api/time-series/latest',
+                history: '/api/time-series/history',
+                trends: '/api/time-series/trends'
+            }
+        },
+        authentication: 'Basic Auth (admin/admin for development)',
+        status: 'running'
+    });
+});
 
 // Allow OPTIONS requests to bypass authentication for CORS preflight
 app.use((req, res, next) => {
@@ -590,6 +768,37 @@ function getBaseBandwidth(drive_type, pattern, block_size) {
 }
 
 
+/**
+ * @swagger
+ * /api/test-runs:
+ *   get:
+ *     summary: Get all test runs
+ *     description: Retrieve a list of all FIO test runs with their metadata
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     responses:
+ *       200:
+ *         description: List of test runs retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/TestRun'
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 app.get('/api/test-runs', requireAdmin, (req, res) => {
     logInfo('User requesting test runs list', {
         requestId: req.requestId,
@@ -626,6 +835,48 @@ app.get('/api/test-runs', requireAdmin, (req, res) => {
     });
 });
 
+/**
+ * @swagger
+ * /api/performance-data:
+ *   get:
+ *     summary: Get performance metrics for test runs
+ *     description: Retrieve performance metrics and latency percentiles for specific test runs
+ *     tags: [Performance Data]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: test_run_ids
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of test run IDs
+ *         example: "61,62,63,64"
+ *       - in: query
+ *         name: metric_types
+ *         schema:
+ *           type: string
+ *           default: "iops,avg_latency,bandwidth"
+ *         description: Comma-separated list of metric types to retrieve
+ *         example: "iops,avg_latency,bandwidth"
+ *     responses:
+ *       200:
+ *         description: Performance data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 allOf:
+ *                   - $ref: '#/components/schemas/TestRun'
+ *                   - $ref: '#/components/schemas/PerformanceMetric'
+ *       400:
+ *         description: Bad request - test_run_ids is required
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/performance-data', requireAdmin, (req, res) => {
     const { test_run_ids, metric_types } = req.query;
 
@@ -728,7 +979,64 @@ app.get('/api/performance-data', requireAdmin, (req, res) => {
     });
 });
 
-// Get filter options
+/**
+ * @swagger
+ * /api/filters:
+ *   get:
+ *     summary: Get filter options
+ *     description: Retrieve all available filter options for test runs (drive types, models, patterns, etc.)
+ *     tags: [Filters]
+ *     security:
+ *       - basicAuth: []
+ *     responses:
+ *       200:
+ *         description: Filter options retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 drive_types:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Available drive types
+ *                   example: ["NVMe SSD", "SATA SSD", "HDD"]
+ *                 drive_models:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Available drive models
+ *                   example: ["Samsung_980_PRO", "WD Black SN850"]
+ *                 patterns:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Available test patterns
+ *                   example: ["randread", "randwrite", "read", "write"]
+ *                 block_sizes:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Available block sizes
+ *                   example: ["4K", "64K", "1M"]
+ *                 hostnames:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Available hostnames
+ *                   example: ["test-server-01", "test-data"]
+ *                 protocols:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Available protocols
+ *                   example: ["NVMe", "SATA", "generated"]
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/filters', requireAdmin, (req, res) => {
     const queries = [
         'SELECT DISTINCT drive_type FROM test_runs ORDER BY drive_type',
@@ -778,7 +1086,70 @@ app.get('/api/filters', requireAdmin, (req, res) => {
     });
 });
 
-// Update test run endpoint
+/**
+ * @swagger
+ * /api/test-runs/{id}:
+ *   put:
+ *     summary: Update test run metadata
+ *     description: Update metadata fields for a specific test run
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Test run ID
+ *         example: 61
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               drive_model:
+ *                 type: string
+ *                 description: Drive model name
+ *                 example: "Samsung_980_PRO"
+ *               drive_type:
+ *                 type: string
+ *                 description: Drive type
+ *                 example: "NVMe SSD"
+ *               hostname:
+ *                 type: string
+ *                 description: Server hostname
+ *                 example: "test-server-01"
+ *               protocol:
+ *                 type: string
+ *                 description: Storage protocol
+ *                 example: "NVMe"
+ *             minProperties: 1
+ *     responses:
+ *       200:
+ *         description: Test run updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Test run updated successfully"
+ *                 changes:
+ *                   type: integer
+ *                   example: 1
+ *       400:
+ *         description: Bad request - At least one field is required
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       404:
+ *         description: Test run not found
+ *       500:
+ *         description: Internal server error
+ */
 app.put('/api/test-runs/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
     const { drive_model, drive_type, hostname, protocol } = req.body;
@@ -827,7 +1198,47 @@ app.put('/api/test-runs/:id', requireAdmin, (req, res) => {
     });
 });
 
-// DELETE endpoint for test runs
+/**
+ * @swagger
+ * /api/test-runs/{id}:
+ *   delete:
+ *     summary: Delete test run
+ *     description: Delete a test run and all associated performance metrics
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Test run ID to delete
+ *         example: 61
+ *     responses:
+ *       200:
+ *         description: Test run deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Test run and associated metrics deleted successfully"
+ *                 deleted_test_runs:
+ *                   type: integer
+ *                   example: 1
+ *                 deleted_metrics:
+ *                   type: integer
+ *                   example: 5
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       404:
+ *         description: Test run not found
+ *       500:
+ *         description: Internal server error
+ */
 app.delete('/api/test-runs/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
     
@@ -893,7 +1304,78 @@ app.delete('/api/test-runs/:id', requireAdmin, (req, res) => {
     });
 });
 
-// FIO JSON import endpoint
+/**
+ * @swagger
+ * /api/import:
+ *   post:
+ *     summary: Import FIO test results
+ *     description: Upload and import FIO JSON test results with metadata
+ *     tags: [Import]
+ *     security:
+ *       - basicAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: FIO JSON output file
+ *               drive_model:
+ *                 type: string
+ *                 description: Storage device model
+ *                 example: "Samsung_980_PRO"
+ *               drive_type:
+ *                 type: string
+ *                 description: Storage device type
+ *                 example: "NVMe SSD"
+ *               hostname:
+ *                 type: string
+ *                 description: Server hostname
+ *                 example: "test-server-01"
+ *               protocol:
+ *                 type: string
+ *                 description: Storage protocol
+ *                 example: "NVMe"
+ *               description:
+ *                 type: string
+ *                 description: Test description
+ *                 example: "Automated hourly test"
+ *               date:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Test execution date
+ *             required:
+ *               - file
+ *     responses:
+ *       200:
+ *         description: FIO results imported successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "FIO results imported successfully. Processed 4 out of 4 jobs."
+ *                 test_run_ids:
+ *                   type: array
+ *                   items:
+ *                     type: integer
+ *                   example: [61, 62, 63, 64]
+ *                 skipped_jobs:
+ *                   type: integer
+ *                   example: 0
+ *       400:
+ *         description: Bad request - File or invalid FIO format
+ *       401:
+ *         description: Unauthorized - Admin or uploader access required
+ *       500:
+ *         description: Internal server error
+ */
 app.post('/api/import', requireAuth, upload.single('file'), (req, res) => {
     try {
         if (!req.file) {
@@ -1087,7 +1569,40 @@ function insertLatencyPercentiles(testRunId, percentiles, operationType) {
     stmt.finalize();
 }
 
-// Clear database endpoint (for development/testing)
+/**
+ * @swagger
+ * /api/clear-database:
+ *   delete:
+ *     summary: Clear all database data
+ *     description: Delete all test runs and performance metrics (for development/testing only)
+ *     tags: [Admin]
+ *     security:
+ *       - basicAuth: []
+ *     responses:
+ *       200:
+ *         description: Database cleared successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Database cleared successfully"
+ *                 deleted_test_runs:
+ *                   type: integer
+ *                   example: 91
+ *                 deleted_metrics:
+ *                   type: integer
+ *                   example: 455
+ *                 deleted_latency_percentiles:
+ *                   type: integer
+ *                   example: 273
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
 app.delete('/api/clear-database', requireAdmin, (req, res) => {
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
@@ -1129,6 +1644,34 @@ app.delete('/api/clear-database', requireAdmin, (req, res) => {
     });
 });
 
+/**
+ * @swagger
+ * /script.sh:
+ *   get:
+ *     summary: Download FIO test script
+ *     description: Download the automated FIO testing script with pre-configured backend URL
+ *     tags: [Files]
+ *     responses:
+ *       200:
+ *         description: Script downloaded successfully
+ *         content:
+ *           application/x-sh:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *               description: Shell script for automated FIO testing
+ *         headers:
+ *           Content-Disposition:
+ *             schema:
+ *               type: string
+ *               example: 'attachment; filename="fio-analyzer-tests.sh"'
+ *       500:
+ *         description: Failed to generate script
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // Serve FIO test script dynamically with correct backend URL and credentials
 app.get('/script.sh', (req, res) => {
     const hostHeader = req.get('Host');
@@ -1171,6 +1714,40 @@ app.get('/script.sh', (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /env.example:
+ *   get:
+ *     summary: Download environment configuration template
+ *     description: Download the .env.example template file with pre-configured backend URL for FIO testing script
+ *     tags: [Files]
+ *     responses:
+ *       200:
+ *         description: Environment template downloaded successfully
+ *         content:
+ *           text/plain:
+ *             schema:
+ *               type: string
+ *               description: Environment configuration template
+ *               example: |
+ *                 HOSTNAME=test-server-01
+ *                 PROTOCOL=NVMe
+ *                 DRIVE_TYPE=NVMe SSD
+ *                 BACKEND_URL=http://localhost:8000
+ *                 USERNAME=admin
+ *                 PASSWORD=admin
+ *         headers:
+ *           Content-Disposition:
+ *             schema:
+ *               type: string
+ *               example: 'attachment; filename=".env.example"'
+ *       500:
+ *         description: Failed to read template file
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 app.get('/env.example', (req, res) => {
     const hostHeader = req.get('Host');
     const protocol = req.get('X-Forwarded-Proto') || (req.secure ? 'https' : 'http');
@@ -1223,7 +1800,29 @@ app.get('/env.example', (req, res) => {
 
 // Time-series API endpoints for automated data collection and historical analysis
 
-// Get list of all servers (hostname+protocol combinations)
+/**
+ * @swagger
+ * /api/time-series/servers:
+ *   get:
+ *     summary: Get all servers in time-series
+ *     description: Retrieve a list of all servers (hostname+protocol combinations) with test statistics
+ *     tags: [Time-Series]
+ *     security:
+ *       - basicAuth: []
+ *     responses:
+ *       200:
+ *         description: List of servers retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/ServerInfo'
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/time-series/servers', requireAdmin, (req, res) => {
     logInfo('User requesting servers list for time-series', {
         requestId: req.requestId,
@@ -1265,7 +1864,31 @@ app.get('/api/time-series/servers', requireAdmin, (req, res) => {
     });
 });
 
-// Get latest test results for each server
+/**
+ * @swagger
+ * /api/time-series/latest:
+ *   get:
+ *     summary: Get latest test results per server
+ *     description: Retrieve the most recent test results for each server (hostname+protocol combination)
+ *     tags: [Time-Series]
+ *     security:
+ *       - basicAuth: []
+ *     responses:
+ *       200:
+ *         description: Latest test results retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 allOf:
+ *                   - $ref: '#/components/schemas/TestRun'
+ *                   - $ref: '#/components/schemas/PerformanceMetric'
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/time-series/latest', requireAdmin, (req, res) => {
     logInfo('User requesting latest test results per server', {
         requestId: req.requestId,
@@ -1317,7 +1940,74 @@ app.get('/api/time-series/latest', requireAdmin, (req, res) => {
     });
 });
 
-// Get historical data for specific servers with time range filtering
+/**
+ * @swagger
+ * /api/time-series/history:
+ *   get:
+ *     summary: Get historical performance data
+ *     description: Retrieve historical test data for a specific server with optional time range filtering
+ *     tags: [Time-Series]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: hostname
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Server hostname
+ *         example: test-server-01
+ *       - in: query
+ *         name: protocol
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Storage protocol
+ *         example: NVMe
+ *       - in: query
+ *         name: drive_model
+ *         schema:
+ *           type: string
+ *         description: Specific drive model to filter by
+ *         example: Samsung_980_PRO
+ *       - in: query
+ *         name: start_date
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Start date for time range filter
+ *         example: 2025-07-03T10:00:00Z
+ *       - in: query
+ *         name: end_date
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: End date for time range filter
+ *         example: 2025-07-03T18:00:00Z
+ *       - in: query
+ *         name: metric_types
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of metrics to retrieve
+ *         example: iops,avg_latency,bandwidth
+ *     responses:
+ *       200:
+ *         description: Historical data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 allOf:
+ *                   - $ref: '#/components/schemas/TestRun'
+ *                   - $ref: '#/components/schemas/PerformanceMetric'
+ *       400:
+ *         description: Bad request - hostname and protocol are required
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/time-series/history', requireAdmin, (req, res) => {
     const { hostname, protocol, drive_model, start_date, end_date, metric_types } = req.query;
     
@@ -1409,7 +2099,73 @@ app.get('/api/time-series/history', requireAdmin, (req, res) => {
     });
 });
 
-// Get trend analysis for specific metrics over time
+/**
+ * @swagger
+ * /api/time-series/trends:
+ *   get:
+ *     summary: Get performance trend analysis
+ *     description: Retrieve trend analysis for specific metrics with moving averages and percentage changes
+ *     tags: [Time-Series]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: hostname
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Server hostname
+ *         example: test-server-01
+ *       - in: query
+ *         name: protocol
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Storage protocol
+ *         example: NVMe
+ *       - in: query
+ *         name: drive_model
+ *         schema:
+ *           type: string
+ *         description: Specific drive model to filter by
+ *         example: Samsung_980_PRO
+ *       - in: query
+ *         name: metric_type
+ *         schema:
+ *           type: string
+ *           default: iops
+ *         description: Performance metric to analyze
+ *         example: iops
+ *       - in: query
+ *         name: operation_type
+ *         schema:
+ *           type: string
+ *           default: combined
+ *         description: Operation type to analyze
+ *         example: read
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 30
+ *         description: Number of days to look back
+ *         example: 7
+ *     responses:
+ *       200:
+ *         description: Trend analysis retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/TrendData'
+ *       400:
+ *         description: Bad request - hostname and protocol are required
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
 app.get('/api/time-series/trends', requireAdmin, (req, res) => {
     const { hostname, protocol, drive_model, metric_type = 'iops', operation_type = 'combined', days = 30 } = req.query;
     

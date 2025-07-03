@@ -82,6 +82,7 @@ cp .env.example .env
 - **index.js**: Single file containing all API endpoints, authentication, and database logic
 - **Authentication**: Role-based access control with bcrypt password hashing
 - **Logging**: Structured human-readable logging to stdout for monitoring
+- **API Documentation**: Comprehensive Swagger UI available at `/api-docs` (http://localhost:8000/api-docs)
 - **Database Schema**:
   - `test_runs`: Test execution metadata (drive info, test params, timestamps)
   - `performance_metrics`: Performance data (IOPS, latency, throughput)
@@ -91,6 +92,14 @@ cp .env.example .env
   - `POST /api/import`: Upload FIO test results (admin or uploader)
   - `GET /api/filters`: Get filter options (admin only)
   - `PUT /api/test-runs/:id`: Update test run metadata (admin only)
+  - `GET /api/time-series/*`: Time-series monitoring endpoints (admin only)
+  - **Full API reference**: See Swagger UI at `/api-docs` for all 14 documented endpoints
+
+### Important: Swagger Documentation Maintenance
+- **ALWAYS update Swagger JSDoc comments** when adding/modifying API endpoints in `backend/index.js`
+- All endpoints must have proper `@swagger` documentation blocks
+- Swagger UI provides interactive testing and comprehensive API reference
+- Use existing endpoints as templates for consistent documentation style
 
 ### Frontend (React + TypeScript)
 - **App.tsx**: Main application component orchestrating data flow
@@ -169,7 +178,7 @@ TEST_SIZE=10M              # Test file size
 NUM_JOBS=4                 # Parallel jobs
 RUNTIME=30                 # Test duration (seconds)
 BACKEND_URL=http://localhost:8000  # FIO Analyzer URL (local)
-BACKEND_URL=http://example.intern  # FIO Analyzer URL (In the docker container)
+# BACKEND_URL=http://example.intern  # FIO Analyzer URL (In the docker container)
 USERNAME=admin             # Authentication username (default for dev)
 PASSWORD=admin             # Authentication password (default for dev)
 BLOCK_SIZES=4k,64k,1M      # Test block sizes
@@ -177,6 +186,3 @@ TEST_PATTERNS=read,write   # Test patterns
 ```
 
 ## Memories
-
-### Project Template Understanding
-- Memorized the 3D Template structure for the project, which is crucial for understanding the visualization and data representation capabilities of the FIO Analyzer
