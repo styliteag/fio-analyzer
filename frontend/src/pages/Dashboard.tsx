@@ -166,7 +166,11 @@ export default function Dashboard() {
 										});
 										console.log('3D Chart performanceData:', performanceData);
 										console.log('3D Chart mappedData:', mappedData);
-										return <ThreeDBarChart data={mappedData} />;
+										return <ThreeDBarChart 
+											data={mappedData} 
+											isMaximized={isChartMaximized}
+											onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+										/>;
 									})()
 								) : (
 									<InteractiveChart
@@ -198,7 +202,11 @@ export default function Dashboard() {
 							});
 							console.log('3D Chart performanceData:', performanceData);
 							console.log('3D Chart mappedData:', mappedData);
-							return <ThreeDBarChart data={mappedData} />;
+							return <ThreeDBarChart 
+								data={mappedData} 
+								isMaximized={isChartMaximized}
+								onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+							/>;
 						})()
 					) : (
 						<InteractiveChart

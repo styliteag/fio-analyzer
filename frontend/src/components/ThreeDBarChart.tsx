@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Text, Grid } from '@react-three/drei';
+import { Maximize, Minimize } from 'lucide-react';
 
 // Data type
 export type PerfDatum = {
@@ -22,10 +23,12 @@ type MetricKey = 'iops' | 'latency' | 'throughput';
 interface ThreeDBarChartProps {
   data: PerfDatum[];
   initialMetrics?: MetricKey[];
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
 }
 
 
-export const ThreeDBarChart: React.FC<ThreeDBarChartProps> = ({ data, initialMetrics = ['iops'] }) => {
+export const ThreeDBarChart: React.FC<ThreeDBarChartProps> = ({ data, initialMetrics = ['iops'], isMaximized = false, onToggleMaximize }) => {
   const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>(initialMetrics);
   const [hovered, setHovered] = useState<{x: number, y: number, metric: MetricKey} | null>(null);
 
@@ -72,14 +75,14 @@ export const ThreeDBarChart: React.FC<ThreeDBarChartProps> = ({ data, initialMet
   }
 
   return (
-    <div className="theme-card rounded-lg shadow-md border p-4 bg-white dark:bg-gray-900">
+    <div className={`theme-card rounded-lg shadow-md border p-4 bg-white dark:bg-gray-900 ${isMaximized ? "fixed inset-0 z-50 overflow-auto" : ""}`}>
       {/* Header & Controls */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold theme-text-primary">🧊 3D Performance Matrix</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">Block Size × Queue Depth × Performance</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
           {METRICS.map(m => (
             <label key={m.key} className={`group relative px-3 py-2 rounded-lg cursor-pointer text-sm font-medium transition-all duration-200 ${selectedMetrics.includes(m.key as MetricKey) ? 'text-white shadow-lg' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
               style={selectedMetrics.includes(m.key as MetricKey) ? {backgroundColor: m.color} : {}}>
@@ -95,10 +98,19 @@ export const ThreeDBarChart: React.FC<ThreeDBarChartProps> = ({ data, initialMet
               </div>
             </label>
           ))}
+          {onToggleMaximize && (
+            <button
+              onClick={onToggleMaximize}
+              className="flex items-center px-3 py-2 theme-btn-secondary rounded transition-colors"
+              title={isMaximized ? "Exit fullscreen" : "Enter fullscreen"}
+            >
+              {isMaximized ? <Minimize size={16} /> : <Maximize size={16} />}
+            </button>
+          )}
         </div>
       </div>
       {/* 3D Chart */}
-      <div className="w-full h-96 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-lg">
+      <div className={`w-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-lg ${isMaximized ? "h-[calc(100vh-200px)]" : "h-96"}`}>
         <Canvas camera={{ position: [xLen + 3, 5, yLen + 4], fov: 40 }} shadows>
           <ambientLight intensity={0.4} />
           <directionalLight 
