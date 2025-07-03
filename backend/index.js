@@ -373,6 +373,62 @@ function initDb() {
             )
         `);
 
+        // Time-series database optimizations for efficient queries
+        
+        // Index for time-series queries by server (hostname+protocol) and timestamp
+        db.run(`
+            CREATE INDEX IF NOT EXISTS idx_test_runs_timeseries 
+            ON test_runs (hostname, protocol, timestamp DESC)
+        `);
+        
+        // Index for time-series queries by server, drive model, and timestamp
+        db.run(`
+            CREATE INDEX IF NOT EXISTS idx_test_runs_server_drive_time 
+            ON test_runs (hostname, protocol, drive_model, timestamp DESC)
+        `);
+        
+        // Index for performance metrics by test_run_id and metric_type
+        db.run(`
+            CREATE INDEX IF NOT EXISTS idx_performance_metrics_test_metric 
+            ON performance_metrics (test_run_id, metric_type, operation_type)
+        `);
+        
+        // Index for timestamp-based queries (historical data)
+        db.run(`
+            CREATE INDEX IF NOT EXISTS idx_test_runs_timestamp 
+            ON test_runs (timestamp DESC)
+        `);
+        
+        // Create view for latest test results per server
+        db.run(`
+            CREATE VIEW IF NOT EXISTS latest_test_per_server AS
+            WITH ranked_tests AS (
+                SELECT 
+                    *,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY hostname, protocol, drive_model 
+                        ORDER BY timestamp DESC
+                    ) as rn
+                FROM test_runs 
+                WHERE hostname IS NOT NULL AND protocol IS NOT NULL
+            )
+            SELECT 
+                id,
+                hostname,
+                protocol,
+                drive_model,
+                drive_type,
+                test_name,
+                block_size,
+                read_write_pattern,
+                queue_depth,
+                timestamp,
+                description,
+                test_date
+            FROM ranked_tests 
+            WHERE rn = 1
+        `);
+
         db.get('SELECT COUNT(*) as count FROM test_runs', (err, row) => {
             if (err) {
                 console.error(err.message);
@@ -1163,6 +1219,283 @@ app.get('/env.example', (req, res) => {
         });
         res.status(500).json({ error: 'Failed to generate .env.example' });
     }
+});
+
+// Time-series API endpoints for automated data collection and historical analysis
+
+// Get list of all servers (hostname+protocol combinations)
+app.get('/api/time-series/servers', requireAdmin, (req, res) => {
+    logInfo('User requesting servers list for time-series', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'LIST_SERVERS'
+    });
+    
+    db.all(`
+        SELECT DISTINCT 
+            hostname,
+            protocol,
+            drive_model,
+            COUNT(*) as test_count,
+            MAX(timestamp) as last_test_time,
+            MIN(timestamp) as first_test_time
+        FROM test_runs 
+        WHERE hostname IS NOT NULL AND protocol IS NOT NULL
+        GROUP BY hostname, protocol, drive_model
+        ORDER BY hostname, protocol, drive_model
+    `, [], (err, rows) => {
+        if (err) {
+            logError('Database error fetching servers list', err, {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'LIST_SERVERS'
+            });
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        logInfo('Servers list retrieved successfully', {
+            requestId: req.requestId,
+            username: req.user.username,
+            action: 'LIST_SERVERS',
+            resultCount: rows.length
+        });
+        
+        res.json(rows);
+    });
+});
+
+// Get latest test results for each server
+app.get('/api/time-series/latest', requireAdmin, (req, res) => {
+    logInfo('User requesting latest test results per server', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'GET_LATEST_RESULTS'
+    });
+    
+    const query = `
+        SELECT 
+            lts.id,
+            lts.hostname,
+            lts.protocol,
+            lts.drive_model,
+            lts.drive_type,
+            lts.test_name,
+            lts.block_size,
+            lts.read_write_pattern,
+            lts.queue_depth,
+            lts.timestamp,
+            lts.description,
+            pm.metric_type,
+            pm.value,
+            pm.unit,
+            pm.operation_type
+        FROM latest_test_per_server lts
+        LEFT JOIN performance_metrics pm ON lts.id = pm.test_run_id
+        ORDER BY lts.hostname, lts.protocol, lts.drive_model, pm.metric_type, pm.operation_type
+    `;
+    
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            logError('Database error fetching latest results', err, {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'GET_LATEST_RESULTS'
+            });
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        logInfo('Latest results retrieved successfully', {
+            requestId: req.requestId,
+            username: req.user.username,
+            action: 'GET_LATEST_RESULTS',
+            resultCount: rows.length
+        });
+        
+        res.json(rows);
+    });
+});
+
+// Get historical data for specific servers with time range filtering
+app.get('/api/time-series/history', requireAdmin, (req, res) => {
+    const { hostname, protocol, drive_model, start_date, end_date, metric_types } = req.query;
+    
+    if (!hostname || !protocol) {
+        return res.status(400).json({ error: "hostname and protocol are required" });
+    }
+    
+    const metrics = (metric_types || "iops,avg_latency,bandwidth").split(',').map(m => m.trim());
+    let whereConditions = ['tr.hostname = ?', 'tr.protocol = ?'];
+    let queryParams = [hostname, protocol];
+    
+    if (drive_model) {
+        whereConditions.push('tr.drive_model = ?');
+        queryParams.push(drive_model);
+    }
+    
+    if (start_date) {
+        whereConditions.push('tr.timestamp >= ?');
+        queryParams.push(start_date);
+    }
+    
+    if (end_date) {
+        whereConditions.push('tr.timestamp <= ?');
+        queryParams.push(end_date);
+    }
+    
+    const metric_placeholders = metrics.map(() => '?').join(',');
+    queryParams.push(...metrics);
+    
+    const query = `
+        SELECT 
+            tr.id,
+            tr.hostname,
+            tr.protocol,
+            tr.drive_model,
+            tr.drive_type,
+            tr.test_name,
+            tr.block_size,
+            tr.read_write_pattern,
+            tr.queue_depth,
+            tr.timestamp,
+            tr.description,
+            pm.metric_type,
+            pm.value,
+            pm.unit,
+            pm.operation_type
+        FROM test_runs tr
+        LEFT JOIN performance_metrics pm ON tr.id = pm.test_run_id
+        WHERE ${whereConditions.join(' AND ')} 
+            AND (pm.metric_type IN (${metric_placeholders}) OR pm.metric_type IS NULL)
+        ORDER BY tr.timestamp DESC, pm.metric_type, pm.operation_type
+    `;
+    
+    logInfo('User requesting historical data', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'GET_HISTORICAL_DATA',
+        hostname,
+        protocol,
+        drive_model,
+        start_date,
+        end_date,
+        metrics: metrics.join(',')
+    });
+    
+    db.all(query, queryParams, (err, rows) => {
+        if (err) {
+            logError('Database error fetching historical data', err, {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'GET_HISTORICAL_DATA',
+                hostname,
+                protocol
+            });
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        logInfo('Historical data retrieved successfully', {
+            requestId: req.requestId,
+            username: req.user.username,
+            action: 'GET_HISTORICAL_DATA',
+            hostname,
+            protocol,
+            resultCount: rows.length
+        });
+        
+        res.json(rows);
+    });
+});
+
+// Get trend analysis for specific metrics over time
+app.get('/api/time-series/trends', requireAdmin, (req, res) => {
+    const { hostname, protocol, drive_model, metric_type = 'iops', operation_type = 'combined', days = 30 } = req.query;
+    
+    if (!hostname || !protocol) {
+        return res.status(400).json({ error: "hostname and protocol are required" });
+    }
+    
+    let whereConditions = ['tr.hostname = ?', 'tr.protocol = ?', 'pm.metric_type = ?', 'pm.operation_type = ?'];
+    let queryParams = [hostname, protocol, metric_type, operation_type];
+    
+    if (drive_model) {
+        whereConditions.push('tr.drive_model = ?');
+        queryParams.push(drive_model);
+    }
+    
+    // Add date filter for specified number of days
+    whereConditions.push('tr.timestamp >= datetime("now", "-" || ? || " days")');
+    queryParams.push(parseInt(days));
+    
+    const query = `
+        SELECT 
+            tr.timestamp,
+            tr.block_size,
+            tr.read_write_pattern,
+            tr.queue_depth,
+            pm.value,
+            pm.unit,
+            -- Calculate moving average
+            AVG(pm.value) OVER (
+                ORDER BY tr.timestamp 
+                ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+            ) as moving_avg,
+            -- Calculate percentage change from previous value
+            LAG(pm.value) OVER (ORDER BY tr.timestamp) as prev_value
+        FROM test_runs tr
+        JOIN performance_metrics pm ON tr.id = pm.test_run_id
+        WHERE ${whereConditions.join(' AND ')}
+        ORDER BY tr.timestamp ASC
+    `;
+    
+    logInfo('User requesting trend analysis', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'GET_TREND_ANALYSIS',
+        hostname,
+        protocol,
+        metric_type,
+        operation_type,
+        days
+    });
+    
+    db.all(query, queryParams, (err, rows) => {
+        if (err) {
+            logError('Database error fetching trend analysis', err, {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'GET_TREND_ANALYSIS',
+                hostname,
+                protocol
+            });
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        // Calculate percentage changes
+        const results = rows.map((row, index) => {
+            const percentChange = row.prev_value ? 
+                ((row.value - row.prev_value) / row.prev_value * 100).toFixed(2) : null;
+            
+            return {
+                ...row,
+                percent_change: percentChange
+            };
+        });
+        
+        logInfo('Trend analysis retrieved successfully', {
+            requestId: req.requestId,
+            username: req.user.username,
+            action: 'GET_TREND_ANALYSIS',
+            hostname,
+            protocol,
+            resultCount: results.length
+        });
+        
+        res.json(results);
+    });
 });
 
 // Start server but don't show "ready" message until database is initialized
