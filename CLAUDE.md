@@ -22,14 +22,15 @@ npm install                    # Install frontend dependencies
 npm run dev                   # Start Vite dev server (http://localhost:5173)
 npm run build                 # Build frontend for production
 npm run lint                  # Run ESLint on TypeScript files
-npm run preview               # Preview production build
 
 # Backend development (in backend/ directory)
 cd backend
 npm install                   # Install Node.js dependencies
-npm start                     # Start Express server (http://localhost:8000)
+npm run start                 # Start Express server (http://localhost:8000)
+rm db/storage_performance.db  # Remove the db, it will be regenerated on the next run
 
 # Docker deployment (single container)
+cd docker
 docker compose up --build     # Run combined container (from docker/ directory)
 docker compose -f compose.prod.yml up -d  # Production deployment
 ```
@@ -37,6 +38,12 @@ docker compose -f compose.prod.yml up -d  # Production deployment
 ### Run the Server
 
 if the backend and frontend server need to be run you can ask the User to start them. He Maybe will start ./start-frontend-backend.sh to run the servers
+
+### Run the Server as docker-compose
+cd docker
+docker compose up -d
+
+Now the frontend and backend is availabel at http://example.interm
 
 ### Authentication & User Management
 ```bash
@@ -50,8 +57,8 @@ node backend/scripts/manage-uploaders.js
 ### Testing Script
 ```bash
 # Download the automated testing script
-wget http://your-server/fio-analyzer-tests.sh
-wget http://your-server/.env.example
+wget http://example.intern/script.sh
+wget http://example.intern/.env
 
 # Setup and run tests
 chmod +x fio-analyzer-tests.sh
@@ -161,9 +168,15 @@ DESCRIPTION=test_run       # Test description
 TEST_SIZE=10M              # Test file size
 NUM_JOBS=4                 # Parallel jobs
 RUNTIME=30                 # Test duration (seconds)
-BACKEND_URL=http://server  # FIO Analyzer URL
-USERNAME=admin             # Authentication username
-PASSWORD=admin             # Authentication password
+BACKEND_URL=http://localhost:8000  # FIO Analyzer URL (local)
+BACKEND_URL=http://example.intern  # FIO Analyzer URL (In the docker container)
+USERNAME=admin             # Authentication username (default for dev)
+PASSWORD=admin             # Authentication password (default for dev)
 BLOCK_SIZES=4k,64k,1M      # Test block sizes
 TEST_PATTERNS=read,write   # Test patterns
 ```
+
+## Memories
+
+### Project Template Understanding
+- Memorized the 3D Template structure for the project, which is crucial for understanding the visualization and data representation capabilities of the FIO Analyzer
