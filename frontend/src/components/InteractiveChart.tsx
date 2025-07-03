@@ -261,7 +261,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		// Simple default chart showing IOPS by hostname, model, protocol, pattern, block size, and queue depth
 		const labels = sortedData.map(
 			(item) =>
-				`${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}\nQD${item.queue_depth || "N/A"}`,
+				`${item.drive_model} (${item.protocol || "N/A"})\n${item.read_write_pattern} ${item.block_size} QD${item.queue_depth || "N/A"}`,
 		);
 		const iopsValues = sortedData.map((item) =>
 			getMetricValue(item.metrics, "iops"),
@@ -315,7 +315,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		// Default ungrouped view
 		const labels = sortedData.map(
 			(item) =>
-				`${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}\nQD${item.queue_depth ?? "N/A"}`,
+				`${item.drive_model} (${item.protocol || "N/A"})\n${item.read_write_pattern} ${item.block_size} QD${item.queue_depth ?? "N/A"}`,
 		);
 
 		const datasets = [
@@ -562,7 +562,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		const groupedData = new Map<string, { read: number; write: number }>();
 
 		sortedData.forEach((item) => {
-			const testKey = `${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}\nQD${item.queue_depth || "N/A"}`;
+			const testKey = `${item.drive_model} (${item.protocol || "N/A"})\n${item.read_write_pattern} ${item.block_size} QD${item.queue_depth || "N/A"}`;
 
 			const readIOPS = getMetricValue(item.metrics, "iops", "read");
 			const writeIOPS = getMetricValue(item.metrics, "iops", "write");
@@ -643,7 +643,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({
 		// Dual-axis chart with IOPS and Latency
 		const labels = sortedData.map(
 			(item) =>
-				`${item.hostname || "N/A"}\n${item.drive_model}\n${item.protocol || "N/A"}\n${item.read_write_pattern}\n${item.block_size}\nQD${item.queue_depth || "N/A"}`,
+				`${item.drive_model} (${item.protocol || "N/A"})\n${item.read_write_pattern} ${item.block_size} QD${item.queue_depth || "N/A"}`,
 		);
 
 		const datasets = [
