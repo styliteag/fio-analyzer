@@ -101,13 +101,23 @@ export const ThreeDBarChart: React.FC<ThreeDBarChartProps> = ({ data, initialMet
       <div className="w-full h-96 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 rounded-lg">
         <Canvas camera={{ position: [xLen + 3, 5, yLen + 4], fov: 40 }} shadows>
           <ambientLight intensity={0.4} />
-          <directionalLight position={[8, 12, 6]} intensity={1.0} castShadow shadow-mapSize={[1024, 1024]} />
+          <directionalLight 
+            position={[8, 12, 6]} 
+            intensity={1.0} 
+            castShadow 
+            shadow-mapSize={[1024, 1024]}
+            shadow-camera-far={40}
+            shadow-camera-left={-15}
+            shadow-camera-right={15}
+            shadow-camera-top={15}
+            shadow-camera-bottom={-15}
+          />
           <directionalLight position={[-5, 8, -5]} intensity={0.3} color="#4f46e5" />
           {/* Custom positive quadrant grid */}
           <Grid args={[xLen+1, yLen+1]} position={[xLen/2-0.5, -0.01, yLen/2-0.5]} cellColor="#f1f5f9" sectionColor="#cbd5e1" infiniteGrid={false} fadeDistance={0} />
           {/* Floor plane for better depth perception */}
           <mesh position={[xLen/2-0.5, -0.05, yLen/2-0.5]} rotation={[-Math.PI/2, 0, 0]} receiveShadow>
-            <planeGeometry args={[xLen+2, yLen+2]} />
+            <planeGeometry args={[xLen+4, yLen+3]} />
             <meshStandardMaterial color="#f8fafc" opacity={0.9} transparent />
           </mesh>
           {/* Axis lines and tick marks */}
