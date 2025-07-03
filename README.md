@@ -285,7 +285,7 @@ All API endpoints require authentication. Use basic authentication with username
 - **DELETE /api/test-runs/:id** - Delete test run and associated data
 
 ### Performance Data (Admin Only)
-- **GET /api/performance-data** - Retrieve performance data for specific test runs
+- **GET /api/test-runs/performance-data** - Retrieve performance data for specific test runs
   - Query params: `test_run_ids` (comma-separated), `metric_types` (optional)
   - Returns: Test metadata, separated read/write metrics, latency percentiles
 

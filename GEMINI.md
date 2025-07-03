@@ -80,7 +80,7 @@ cp .env.example .env
   - `performance_metrics`: Performance data (IOPS, latency, throughput)
 - **Key Endpoints**:
   - `GET /api/test-runs`: List all test runs (admin only)
-  - `GET /api/performance-data`: Get metrics for specific test runs (admin only)
+  - `GET /api/test-runs/performance-data`: Get metrics for specific test runs (admin only)
   - `POST /api/import`: Upload FIO test results (admin or uploader)
   - `GET /api/filters`: Get filter options (admin only)
   - `PUT /api/test-runs/:id`: Update test run metadata (admin only)

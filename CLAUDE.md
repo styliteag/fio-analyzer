@@ -90,11 +90,15 @@ cp .env.example .env
   - `performance_metrics`: Performance data (IOPS, latency, throughput)
 - **Key Endpoints**:
   - `GET /api/test-runs`: List all test runs (admin only)
-  - `GET /api/performance-data`: Get metrics for specific test runs (admin only)
+  - `GET /api/test-runs/performance-data`: Get metrics for specific test runs (admin only)
   - `POST /api/import`: Upload FIO test results (admin or uploader)
   - `GET /api/filters`: Get filter options (admin only)
   - `PUT /api/test-runs/:id`: Update test run metadata (admin only)
-  - `GET /api/time-series/*`: Time-series monitoring endpoints (admin only)
+  - **Time-series endpoints** (admin only):
+    - `GET /api/time-series/servers`: List servers with test statistics
+    - `GET /api/time-series/latest`: Latest test results per server
+    - `GET /api/time-series/history`: Historical data with time range filtering
+    - `GET /api/time-series/trends`: Trend analysis with moving averages
   - **Full API reference**: See Swagger UI at `/api-docs` for all 14 documented endpoints
 
 ### Important: Swagger Documentation Maintenance
@@ -111,6 +115,7 @@ cp .env.example .env
   - `TestRunSelector`: Multi-select dropdown for choosing test runs
   - `TemplateSelector`: Chart template/visualization picker  
   - `InteractiveChart`: Chart.js-powered data visualization with interactive controls
+  - `TimeSeriesChart`: Time-series monitoring with server selection and trend analysis
   - `LoginForm`: Custom authentication interface
 - **Interactive Features**:
   - Sorting by multiple criteria (name, IOPS, latency, etc.)
@@ -118,6 +123,7 @@ cp .env.example .env
   - Series visibility toggles
   - Chart export (PNG/CSV)
   - Fullscreen mode
+  - **Time-series monitoring**: Track performance trends over time with server selection and moving averages
 - **Types**: All TypeScript interfaces defined in `src/types/index.ts`
 
 ### Data Flow
