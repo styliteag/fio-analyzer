@@ -110,6 +110,10 @@ const swaggerOptions = {
         },
         servers: [
             {
+                url: '.',
+                description: 'Current server (relative URL)'
+            },
+            {
                 url: 'http://localhost:8000',
                 description: 'Development server'
             }
@@ -191,13 +195,78 @@ const swaggerOptions = {
     apis: ['./index.js'] // Path to the API docs
 };
 
-const swaggerSpecs = swaggerJsdoc(swaggerOptions);
+// Dynamic Swagger setup that adapts to the current host
+app.use('/api-docs', swaggerUi.serve);
+app.get('/api-docs', (req, res) => {
+    // Generate dynamic server URL based on the request
+    const hostHeader = req.get('Host');
+    const protocol = req.get('X-Forwarded-Proto') || (req.secure ? 'https' : 'http');
+    const currentServerUrl = `${protocol}://${hostHeader}`;
+    
+    // Clone the swagger options and update servers
+    const dynamicSwaggerOptions = {
+        ...swaggerOptions,
+        definition: {
+            ...swaggerOptions.definition,
+            servers: [
+                {
+                    url: currentServerUrl,
+                    description: 'Current server'
+                },
+                {
+                    url: 'http://localhost:8000',
+                    description: 'Development server'
+                },
+                {
+                    url: '.',
+                    description: 'Relative URL'
+                }
+            ]
+        }
+    };
+    
+    const dynamicSwaggerSpecs = swaggerJsdoc(dynamicSwaggerOptions);
+    
+    const swaggerUiAssets = swaggerUi.generateHTML(dynamicSwaggerSpecs, {
+        customCss: '.swagger-ui .topbar { display: none }',
+        customSiteTitle: 'FIO Analyzer API Documentation'
+    });
+    
+    res.send(swaggerUiAssets);
+});
 
-// Serve Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
-    customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'FIO Analyzer API Documentation'
-}));
+// Serve Swagger JSON
+app.get('/api-docs/swagger.json', (req, res) => {
+    // Generate dynamic server URL based on the request
+    const hostHeader = req.get('Host');
+    const protocol = req.get('X-Forwarded-Proto') || (req.secure ? 'https' : 'http');
+    const currentServerUrl = `${protocol}://${hostHeader}`;
+    
+    // Clone the swagger options and update servers
+    const dynamicSwaggerOptions = {
+        ...swaggerOptions,
+        definition: {
+            ...swaggerOptions.definition,
+            servers: [
+                {
+                    url: currentServerUrl,
+                    description: 'Current server'
+                },
+                {
+                    url: 'http://localhost:8000',
+                    description: 'Development server'
+                },
+                {
+                    url: '.',
+                    description: 'relative URL'
+                }
+            ]
+        }
+    };
+    
+    const dynamicSwaggerSpecs = swaggerJsdoc(dynamicSwaggerOptions);
+    res.json(dynamicSwaggerSpecs);
+});
 
 /**
  * @swagger

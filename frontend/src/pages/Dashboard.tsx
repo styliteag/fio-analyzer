@@ -1,4 +1,4 @@
-import { Activity, Database, Download, LogOut, Upload } from "lucide-react";
+import { Activity, Database, Download, LogOut, Upload, Book } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InteractiveChart from "../components/InteractiveChart";
@@ -13,6 +13,18 @@ import { fetchPerformanceData as apiFetchPerformanceData } from "../utils/api";
 export default function Dashboard() {
 	const navigate = useNavigate();
 	const { username, logout } = useAuth();
+	
+	// Get the correct API documentation URL based on environment
+	const getApiDocsUrl = () => {
+		const apiBaseUrl = import.meta.env.VITE_API_URL || "";
+		if (apiBaseUrl) {
+			// In Docker/production, use the configured API URL
+			return `${apiBaseUrl}/api-docs`;
+		} else {
+			// In development, use relative path which resolves to localhost:8000
+			return "/api-docs";
+		}
+	};
 	const [selectedRuns, setSelectedRuns] = useState<TestRun[]>([]);
 	const [selectedTemplate, setSelectedTemplate] =
 		useState<ChartTemplate | null>(null);
@@ -305,10 +317,21 @@ export default function Dashboard() {
 								<Download className="h-4 w-4 mr-2" />
 								Config Template
 							</a>
+							<span className="theme-text-secondary">•</span>
+							<a
+								href={getApiDocsUrl()}
+								target="_blank"
+								rel="noopener noreferrer"
+								className="inline-flex items-center px-3 py-2 theme-text-secondary hover:theme-text-primary transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+								title="View interactive API documentation"
+							>
+								<Book className="h-4 w-4 mr-2" />
+								API Docs
+							</a>
 						</div>
 
 						<div className="mt-2 text-xs theme-text-secondary">
-							Download and configure these files to run automated FIO tests
+							Download scripts to run automated FIO tests • View API documentation for integration
 						</div>
 					</div>
 				</div>

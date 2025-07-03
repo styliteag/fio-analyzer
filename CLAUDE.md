@@ -82,7 +82,9 @@ cp .env.example .env
 - **index.js**: Single file containing all API endpoints, authentication, and database logic
 - **Authentication**: Role-based access control with bcrypt password hashing
 - **Logging**: Structured human-readable logging to stdout for monitoring
-- **API Documentation**: Comprehensive Swagger UI available at `/api-docs` (http://localhost:8000/api-docs)
+- **API Documentation**: Comprehensive Swagger UI available at:
+  - Development: http://localhost:8000/api-docs
+  - Docker: http://localhost/api-docs (or your server URL + /api-docs)
 - **Database Schema**:
   - `test_runs`: Test execution metadata (drive info, test params, timestamps)
   - `performance_metrics`: Performance data (IOPS, latency, throughput)
@@ -100,6 +102,7 @@ cp .env.example .env
 - All endpoints must have proper `@swagger` documentation blocks
 - Swagger UI provides interactive testing and comprehensive API reference
 - Use existing endpoints as templates for consistent documentation style
+- **Docker nginx configuration**: The nginx proxy requires a specific rule for `/api-docs` since it doesn't match the `/api/` pattern
 
 ### Frontend (React + TypeScript)
 - **App.tsx**: Main application component orchestrating data flow
