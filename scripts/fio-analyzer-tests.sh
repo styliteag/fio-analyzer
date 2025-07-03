@@ -76,6 +76,47 @@ set_defaults() {
     else
         TEST_PATTERNS=("read" "write" "randread" "randwrite")
     fi
+
+    # Parse NUM_JOBS from comma-separated string if provided
+    if [ -n "$NUM_JOBS" ] && [ "$NUM_JOBS" != "4" ]; then
+        IFS=',' read -ra NUM_JOBS_ARRAY <<< "$NUM_JOBS"
+        NUM_JOBS=("${NUM_JOBS_ARRAY[@]}")
+    else
+        NUM_JOBS=("4")
+    fi
+    
+    # Parse DIRECT from comma-separated string if provided
+    if [ -n "$DIRECT" ] && [ "$DIRECT" != "1" ]; then
+        IFS=',' read -ra DIRECT_ARRAY <<< "$DIRECT"
+        DIRECT=("${DIRECT_ARRAY[@]}")
+    else
+        DIRECT=("1")
+    fi
+
+    # Parse TEST_SIZE from comma-separated string if provided
+    if [ -n "$TEST_SIZE" ] && [ "$TEST_SIZE" != "10M" ]; then
+        IFS=',' read -ra TEST_SIZE_ARRAY <<< "$TEST_SIZE"
+        TEST_SIZE=("${TEST_SIZE_ARRAY[@]}")
+    else
+        TEST_SIZE=("10M")
+    fi
+
+    # Parse SYNC from comma-separated string if provided
+    if [ -n "$SYNC" ] && [ "$SYNC" != "1" ]; then
+        IFS=',' read -ra SYNC_ARRAY <<< "$SYNC"
+        SYNC=("${SYNC_ARRAY[@]}")
+    else
+        SYNC=("1")
+    fi
+
+    # Parse IODEPTH from comma-separated string if provided
+    if [ -n "$IODEPTH" ] && [ "$IODEPTH" != "1" ]; then
+        IFS=',' read -ra IODEPTH_ARRAY <<< "$IODEPTH"
+        IODEPTH=("${IODEPTH_ARRAY[@]}")
+    else
+        IODEPTH=("1")
+    fi
+
 }
 
 # Function to check if fio is installed
@@ -107,11 +148,10 @@ check_libaio() {
         IOENGINE="psync"
         # Psync is a sync engine that uses the POSIX pwrite() function to write data to the file.
         # It can only have a iodepth of 1.
-        IODEPTH=1
+        #IODEPTH=1
     else
         print_success "libaio engine is available - will use for better performance"
         IOENGINE="libaio"
-        IODEPTH=1
     fi
 }
 
@@ -266,24 +306,32 @@ setup_target_dir() {
 }
 
 # Function to run FIO test
+
+
 run_fio_test() {
+    #"$block_size" "$pattern" "$output_file" "$num_jobs" "$direct" "$test_size" "$sync" "$iodepth"; then
     local block_size=$1
     local pattern=$2
     local output_file=$3
-    
+    local num_jobs=$4
+    local direct=$5
+    local test_size=$6
+    local sync=$7
+    local iodepth=$8
+
     print_status "Running FIO test: ${pattern} with ${block_size} block size"
     
-    fio --name="${DESCRIPTION},pattern:${pattern},block_size:${block_size},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    fio --name="${DESCRIPTION},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --rw="$pattern" \
         --bs="$block_size" \
-        --size="$TEST_SIZE" \
-        --numjobs="$NUM_JOBS" \
+        --size="$test_size" \
+        --numjobs="$num_jobs" \
         --runtime="$RUNTIME" \
         --time_based \
         --group_reporting \
-        --iodepth="$IODEPTH" \
-        --direct="$DIRECT" \
-        --sync=1 \
+        --iodepth="$iodepth" \
+        --direct="$direct" \
+        --sync="$sync" \
         --filename="${TARGET_DIR}/fio_test_${pattern}_${block_size}" \
         --output-format=json \
         --output="$output_file" \
@@ -295,6 +343,7 @@ run_fio_test() {
     # delete the file
     rm "${TARGET_DIR}/fio_test_${pattern}_${block_size}" || true
 
+    exit 0
     if [ $? -eq 0 ]; then
         print_success "FIO test completed: ${pattern} with ${block_size}"
         return 0
@@ -378,24 +427,34 @@ run_all_tests() {
     print_status "Starting $total_tests FIO performance tests..."
     
     for block_size in "${BLOCK_SIZES[@]}"; do
+            for num_jobs in "${NUM_JOBS[@]}"; do
         for pattern in "${TEST_PATTERNS[@]}"; do
-            current_test=$((current_test + 1))
-            print_status "Test $current_test/$total_tests: ${pattern} with ${block_size}"
-            
-            output_file="/tmp/fio_results_${pattern}_${block_size}_$(date +%s).json"
-            
-            if run_fio_test "$block_size" "$pattern" "$output_file"; then
-                if upload_results "$output_file" "${pattern}_${block_size}"; then
-                    successful_uploads=$((successful_uploads + 1))
-                else
-                    failed_uploads=$((failed_uploads + 1))
-                fi
-                rm -f "$output_file"
-            else
-                failed_uploads=$((failed_uploads + 1))
-            fi
-            
-            echo
+                for direct in "${DIRECT[@]}"; do
+                    for test_size in "${TEST_SIZE[@]}"; do
+                        for sync in "${SYNC[@]}"; do
+                            for iodepth in "${IODEPTH[@]}"; do
+                                current_test=$((current_test + 1))
+                                print_status "Test $current_test/$total_tests: ${pattern} with ${block_size}"
+
+                                output_file="/tmp/fio_results_${pattern}_${block_size}_${num_jobs}_${direct}_${test_size}_$(date +%s).json"
+
+                                if run_fio_test "$block_size" "$pattern" "$output_file" "$num_jobs" "$direct" "$test_size" "$sync" "$iodepth"; then
+                                    if upload_results "$output_file" "${pattern}_${block_size}_${num_jobs}_${direct}_${test_size}_${sync}_${iodepth}"; then
+                                        successful_uploads=$((successful_uploads + 1))
+                                    else
+                                        failed_uploads=$((failed_uploads + 1))
+                                    fi
+                                    rm -f "$output_file"
+                                else
+                                    failed_uploads=$((failed_uploads + 1))
+                                fi
+
+                                echo
+                            done
+                        done
+                    done
+                done
+            done
         done
     done
     
@@ -442,9 +501,14 @@ main() {
     # Confirm before starting tests (unless --yes flag is used)
     echo
     print_status "All checks passed! Ready to start FIO performance testing."
-    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]}))
+    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]} * ${#NUM_JOBS[@]} * ${#DIRECT[@]} * ${#TEST_SIZE[@]} * ${#SYNC[@]} * ${#IODEPTH[@]}))
     print_status "This will run $total_tests tests with the following configuration:"
     print_status "  Block sizes: ${BLOCK_SIZES[*]}"
+    print_status "  Number of jobs: ${NUM_JOBS[*]}"
+    print_status "  Direct: ${DIRECT[*]}"
+    print_status "  Test size: ${TEST_SIZE[*]}"
+    print_status "  Sync: ${SYNC[*]}"
+    print_status "  I/O Depth: ${IODEPTH[*]}"
     print_status "  Test patterns: ${TEST_PATTERNS[*]}"
     print_status "  Test duration: ${RUNTIME}s per test"
     print_status "  Estimated total time: $((total_tests * RUNTIME / 60)) minutes"
@@ -530,6 +594,11 @@ Configuration Variables:
   PASSWORD       - Authentication password (default: admin)
   BLOCK_SIZES    - Comma-separated block sizes (default: 4k,64k,1M)
   TEST_PATTERNS  - Comma-separated test patterns (default: read,write,randread,randwrite)
+  NUM_JOBS       - Number of parallel jobs (default: 4)
+  DIRECT         - Direct I/O mode (default: 1)
+  TEST_SIZE      - Size of test file (default: 10M)
+  SYNC           - Sync mode (default: 1)
+  IODEPTH        - I/O Depth (default: 1)
 
 Examples:
   # Setup configuration file
