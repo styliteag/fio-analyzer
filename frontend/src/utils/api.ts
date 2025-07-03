@@ -68,7 +68,7 @@ export const fetchPerformanceData = async (
 		params.append("metric_types", metricTypes.join(","));
 	}
 
-	const response = await authenticatedFetch(`/api/performance-data?${params}`);
+	const response = await authenticatedFetch(`/api/test-runs/performance-data?${params}`);
 	if (!response.ok) {
 		throw new Error("Failed to fetch performance data");
 	}
@@ -158,6 +158,63 @@ export const importFioData = async (
 
 	if (!response.ok) {
 		throw new Error("Failed to import FIO data");
+	}
+	return response.json();
+};
+
+// Time-series API functions
+export const fetchTimeSeriesServers = async () => {
+	const response = await authenticatedFetch("/api/time-series/servers");
+	if (!response.ok) {
+		throw new Error("Failed to fetch servers");
+	}
+	return response.json();
+};
+
+export const fetchTimeSeriesLatest = async () => {
+	const response = await authenticatedFetch("/api/time-series/latest");
+	if (!response.ok) {
+		throw new Error("Failed to fetch latest time-series data");
+	}
+	return response.json();
+};
+
+export const fetchTimeSeriesHistory = async (
+	hostname?: string,
+	protocol?: string,
+	days?: number,
+	hours?: number,
+) => {
+	const params = new URLSearchParams();
+	if (hostname) params.append("hostname", hostname);
+	if (protocol) params.append("protocol", protocol);
+	if (days) params.append("days", days.toString());
+	if (hours) params.append("hours", hours.toString());
+
+	const response = await authenticatedFetch(`/api/time-series/history?${params}`);
+	if (!response.ok) {
+		throw new Error("Failed to fetch time-series history");
+	}
+	return response.json();
+};
+
+export const fetchTimeSeriesTrends = async (
+	hostname?: string,
+	protocol?: string,
+	metricType?: string,
+	days?: number,
+	hours?: number,
+) => {
+	const params = new URLSearchParams();
+	if (hostname) params.append("hostname", hostname);
+	if (protocol) params.append("protocol", protocol);
+	if (metricType) params.append("metric_type", metricType);
+	if (days) params.append("days", days.toString());
+	if (hours) params.append("hours", hours.toString());
+
+	const response = await authenticatedFetch(`/api/time-series/trends?${params}`);
+	if (!response.ok) {
+		throw new Error("Failed to fetch time-series trends");
 	}
 	return response.json();
 };

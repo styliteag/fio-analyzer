@@ -110,6 +110,10 @@ const swaggerOptions = {
         },
         servers: [
             {
+                url: '/',
+                description: '/ On the server'
+            },
+            {
                 url: '.',
                 description: 'Current server (relative URL)'
             },
@@ -218,7 +222,7 @@ app.get('/api-docs', (req, res) => {
                     description: 'Development server'
                 },
                 {
-                    url: '.',
+                    url: '/',
                     description: 'Relative URL'
                 }
             ]
@@ -257,7 +261,7 @@ app.get('/api-docs/swagger.json', (req, res) => {
                     description: 'Development server'
                 },
                 {
-                    url: '.',
+                    url: '/',
                     description: 'relative URL'
                 }
             ]
@@ -327,7 +331,7 @@ app.get('/api/info', (req, res) => {
         },
         endpoints: {
             test_runs: '/api/test-runs',
-            performance_data: '/api/performance-data',
+            performance_data: '/api/test-runs/performance-data',
             time_series: {
                 servers: '/api/time-series/servers',
                 latest: '/api/time-series/latest',
@@ -620,6 +624,23 @@ function initDb() {
             )
         `);
 
+        // Create table to store all job options
+        db.run(`
+            CREATE TABLE IF NOT EXISTS job_options (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_run_id INTEGER NOT NULL,
+                option_name TEXT NOT NULL,
+                option_value TEXT,
+                FOREIGN KEY (test_run_id) REFERENCES test_runs (id)
+            )
+        `);
+
+        // Add index for job options queries
+        db.run(`
+            CREATE INDEX IF NOT EXISTS idx_job_options_test_run 
+            ON job_options (test_run_id, option_name)
+        `);
+
         // Time-series database optimizations for efficient queries
         
         // Index for time-series queries by server (hostname+protocol) and timestamp
@@ -715,7 +736,7 @@ function populateSampleData(callback) {
     
     let testRunId = 1;
 
-    const testRunsStmt = db.prepare('INSERT INTO test_runs (timestamp, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration, hostname, protocol) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const testRunsStmt = db.prepare('INSERT INTO test_runs (timestamp, test_date, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration, fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const metricsStmt = db.prepare('INSERT INTO performance_metrics (test_run_id, metric_type, value, unit, operation_type) VALUES (?, ?, ?, ?, ?)');
     const percentilesStmt = db.prepare('INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)');
 
@@ -733,7 +754,51 @@ function populateSampleData(callback) {
                         
                         const test_name = `FIO_${pattern}_${block_size}`;
                         console.log(`  Creating: ${test_name} (${drive_model}, ${block_size}, QD${queue_depth})`);
-                        testRunsStmt.run(timestamp, drive_model, drive_type, test_name, block_size, pattern, queue_depth, 300, 'test-data', 'generated');
+                        // Define testDate as a Date object based on timestamp
+                        const testDate = new Date(timestamp);
+                        testRunsStmt.run(
+                            timestamp,
+                            testDate.toISOString(),
+                            drive_model,
+                            drive_type,
+                            test_name,
+                            block_size,
+                            pattern,
+                            queue_depth,
+                            300,
+                            'fio-3.40',
+                            300,
+                            100,
+                            Math.floor(Math.random() * 1000000),
+                            Math.floor(Math.random() * 1000000),
+                            Math.random() * 100,
+                            Math.random() * 100,
+                            'test-data',
+                            'generated',
+                            function(err) {
+                                if (!err) {
+                                    // Generate job options similar to FIO import
+                                    const jobOpts = {
+                                        bs: block_size,
+                                        rw: pattern,
+                                        iodepth: queue_depth,
+                                        size: '1G',
+                                        numjobs: '1',
+                                        direct: '1',
+                                        sync: '1',
+                                        group_reporting: '',
+                                        time_based: '',
+                                        runtime: '300',
+                                        filename: `/tmp/fio_test/fio_test_${pattern}_${block_size}`,
+                                        ioengine: 'psync',
+                                        norandommap: '',
+                                        randrepeat: '0',
+                                        thread: ''
+                                    };
+                                    insertJobOptions(this.lastID, jobOpts, {});
+                                }
+                            }
+                        );
                         
                         const base_iops = getBaseIops(drive_type, pattern, block_size);
                         const base_latency = getBaseLatency(drive_type, pattern);
@@ -901,150 +966,6 @@ app.get('/api/test-runs', requireAdmin, (req, res) => {
         });
         
         res.json(rows);
-    });
-});
-
-/**
- * @swagger
- * /api/performance-data:
- *   get:
- *     summary: Get performance metrics for test runs
- *     description: Retrieve performance metrics and latency percentiles for specific test runs
- *     tags: [Performance Data]
- *     security:
- *       - basicAuth: []
- *     parameters:
- *       - in: query
- *         name: test_run_ids
- *         required: true
- *         schema:
- *           type: string
- *         description: Comma-separated list of test run IDs
- *         example: "61,62,63,64"
- *       - in: query
- *         name: metric_types
- *         schema:
- *           type: string
- *           default: "iops,avg_latency,bandwidth"
- *         description: Comma-separated list of metric types to retrieve
- *         example: "iops,avg_latency,bandwidth"
- *     responses:
- *       200:
- *         description: Performance data retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 allOf:
- *                   - $ref: '#/components/schemas/TestRun'
- *                   - $ref: '#/components/schemas/PerformanceMetric'
- *       400:
- *         description: Bad request - test_run_ids is required
- *       401:
- *         description: Unauthorized - Admin access required
- *       500:
- *         description: Internal server error
- */
-app.get('/api/performance-data', requireAdmin, (req, res) => {
-    const { test_run_ids, metric_types } = req.query;
-
-    if (!test_run_ids) {
-        return res.status(400).json({ error: "test_run_ids is required" });
-    }
-
-    const run_ids = test_run_ids.split(',').map(id => parseInt(id.trim()));
-    const metrics = (metric_types || "iops,avg_latency,bandwidth").split(',').map(m => m.trim());
-    
-    const placeholders = run_ids.map(() => '?').join(',');
-    const metric_placeholders = metrics.map(() => '?').join(',');
-
-    const query = `
-        SELECT tr.id, tr.drive_model, tr.drive_type, tr.test_name, 
-               tr.block_size, tr.read_write_pattern, tr.timestamp,
-               tr.hostname, tr.protocol, tr.description,
-               pm.metric_type, pm.value, pm.unit, pm.operation_type
-        FROM test_runs tr
-        JOIN performance_metrics pm ON tr.id = pm.test_run_id
-        WHERE tr.id IN (${placeholders}) AND pm.metric_type IN (${metric_placeholders})
-        ORDER BY tr.timestamp, pm.metric_type, pm.operation_type
-    `;
-
-    // Query for latency percentiles
-    const percentileQuery = `
-        SELECT test_run_id, operation_type, percentile, latency_ns
-        FROM latency_percentiles
-        WHERE test_run_id IN (${placeholders})
-        ORDER BY test_run_id, operation_type, percentile
-    `;
-
-    db.all(query, [...run_ids, ...metrics], (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-            return;
-        }
-
-        // Get latency percentiles
-        db.all(percentileQuery, run_ids, (err, percentileRows) => {
-            if (err) {
-                res.status(500).json({ error: err.message });
-                return;
-            }
-
-            const data = {};
-            
-            // Process performance metrics
-            for (const row of rows) {
-                const run_id = row.id;
-                if (!data[run_id]) {
-                    data[run_id] = {
-                        id: run_id,
-                        drive_model: row.drive_model,
-                        drive_type: row.drive_type,
-                        test_name: row.test_name,
-                        block_size: row.block_size,
-                        read_write_pattern: row.read_write_pattern,
-                        timestamp: row.timestamp,
-                        hostname: row.hostname,
-                        protocol: row.protocol,
-                        description: row.description,
-                        metrics: {},
-                        latency_percentiles: {}
-                    };
-                }
-                
-                // Group metrics by operation type
-                const operation = row.operation_type || 'combined';
-                if (!data[run_id].metrics[operation]) {
-                    data[run_id].metrics[operation] = {};
-                }
-                
-                data[run_id].metrics[operation][row.metric_type] = {
-                    value: row.value,
-                    unit: row.unit
-                };
-            }
-            
-            // Process latency percentiles
-            for (const row of percentileRows) {
-                const run_id = row.test_run_id;
-                if (data[run_id]) {
-                    const operation = row.operation_type;
-                    if (!data[run_id].latency_percentiles[operation]) {
-                        data[run_id].latency_percentiles[operation] = {};
-                    }
-                    
-                    data[run_id].latency_percentiles[operation][`p${row.percentile}`] = {
-                        value: row.latency_ns / 1000000, // Convert to milliseconds
-                        unit: 'ms'
-                    };
-                }
-            }
-            
-            // The frontend expects an array of objects, not an object with keys as ids
-            const responseData = Object.values(data);
-            res.json(responseData);
-        });
     });
 });
 
@@ -1318,15 +1239,15 @@ app.delete('/api/test-runs/:id', requireAdmin, (req, res) => {
         testRunId: id
     });
     
-    // Start a transaction to delete from both tables
+    // Start a transaction to delete from all related tables
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
         
-        // First delete related performance metrics
-        db.run('DELETE FROM performance_metrics WHERE test_run_id = ?', [parseInt(id)], function(err) {
+        // First delete related job options
+        db.run('DELETE FROM job_options WHERE test_run_id = ?', [parseInt(id)], function(err) {
             if (err) {
                 db.run('ROLLBACK');
-                logError('Failed to delete performance metrics', err, {
+                logError('Failed to delete job options', err, {
                     requestId: req.requestId,
                     username: req.user.username,
                     action: 'DELETE_TEST_RUN',
@@ -1335,11 +1256,11 @@ app.delete('/api/test-runs/:id', requireAdmin, (req, res) => {
                 return res.status(500).json({ error: err.message });
             }
             
-            // Then delete the test run
-            db.run('DELETE FROM test_runs WHERE id = ?', [parseInt(id)], function(err) {
+            // Then delete related latency percentiles
+            db.run('DELETE FROM latency_percentiles WHERE test_run_id = ?', [parseInt(id)], function(err) {
                 if (err) {
                     db.run('ROLLBACK');
-                    logError('Failed to delete test run', err, {
+                    logError('Failed to delete latency percentiles', err, {
                         requestId: req.requestId,
                         username: req.user.username,
                         action: 'DELETE_TEST_RUN',
@@ -1348,26 +1269,54 @@ app.delete('/api/test-runs/:id', requireAdmin, (req, res) => {
                     return res.status(500).json({ error: err.message });
                 }
                 
-                if (this.changes === 0) {
-                    db.run('ROLLBACK');
-                    logWarning('Test run not found for deletion', {
-                        requestId: req.requestId,
-                        username: req.user.username,
-                        action: 'DELETE_TEST_RUN',
-                        testRunId: id
+                // Then delete related performance metrics
+                db.run('DELETE FROM performance_metrics WHERE test_run_id = ?', [parseInt(id)], function(err) {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        logError('Failed to delete performance metrics', err, {
+                            requestId: req.requestId,
+                            username: req.user.username,
+                            action: 'DELETE_TEST_RUN',
+                            testRunId: id
+                        });
+                        return res.status(500).json({ error: err.message });
+                    }
+                    
+                    // Finally delete the test run
+                    db.run('DELETE FROM test_runs WHERE id = ?', [parseInt(id)], function(err) {
+                        if (err) {
+                            db.run('ROLLBACK');
+                            logError('Failed to delete test run', err, {
+                                requestId: req.requestId,
+                                username: req.user.username,
+                                action: 'DELETE_TEST_RUN',
+                                testRunId: id
+                            });
+                            return res.status(500).json({ error: err.message });
+                        }
+                        
+                        if (this.changes === 0) {
+                            db.run('ROLLBACK');
+                            logWarning('Test run not found for deletion', {
+                                requestId: req.requestId,
+                                username: req.user.username,
+                                action: 'DELETE_TEST_RUN',
+                                testRunId: id
+                            });
+                            return res.status(404).json({ error: 'Test run not found' });
+                        }
+                        
+                        db.run('COMMIT');
+                        logInfo('Test run deleted successfully', {
+                            requestId: req.requestId,
+                            username: req.user.username,
+                            action: 'DELETE_TEST_RUN',
+                            testRunId: id,
+                            deletedRecords: this.changes
+                        });
+                        res.json({ message: 'Test run deleted successfully', changes: this.changes });
                     });
-                    return res.status(404).json({ error: 'Test run not found' });
-                }
-                
-                db.run('COMMIT');
-                logInfo('Test run deleted successfully', {
-                    requestId: req.requestId,
-                    username: req.user.username,
-                    action: 'DELETE_TEST_RUN',
-                    testRunId: id,
-                    deletedRecords: this.changes
                 });
-                res.json({ message: 'Test run deleted successfully', changes: this.changes });
             });
         });
     });
@@ -1526,7 +1475,6 @@ original_filename: ${req.file.originalname}
             // Store block size as text with uppercase suffix
             const bsStr = bs.toString().toUpperCase();
             const block_size = bsStr;
-            // If block size is a number, 
             const rw = opts.rw || globalOpts.rw || 'read';
             const iodepth = parseInt(opts.iodepth || globalOpts.iodepth || '1');
             const duration = job.runtime || parseInt(globalOpts.runtime || '0');
@@ -1580,6 +1528,9 @@ original_filename: ${req.file.originalname}
 
                 const testRunId = this.lastID;
                 importedTestRuns.push(testRunId);
+
+                // Store all job options
+                insertJobOptions(testRunId, opts, globalOpts);
 
                 // Insert performance metrics for read operations
                 if (job.read && job.read.iops > 0) {
@@ -1638,6 +1589,234 @@ function insertLatencyPercentiles(testRunId, percentiles, operationType) {
     stmt.finalize();
 }
 
+function insertJobOptions(testRunId, jobOpts, globalOpts) {
+    const stmt = db.prepare('INSERT INTO job_options (test_run_id, option_name, option_value) VALUES (?, ?, ?)');
+    
+    // Store job-specific options
+    for (const [optionName, optionValue] of Object.entries(jobOpts)) {
+        // Skip the jobname as it's already stored in test_name
+        if (optionName === 'name') continue;
+        
+        // Convert value to string for storage
+        const valueStr = optionValue !== null && optionValue !== undefined ? String(optionValue) : null;
+        stmt.run([testRunId, optionName, valueStr]);
+    }
+    
+    // Store global options with a prefix to distinguish them
+    for (const [optionName, optionValue] of Object.entries(globalOpts)) {
+        // Convert value to string for storage
+        const valueStr = optionValue !== null && optionValue !== undefined ? String(optionValue) : null;
+        stmt.run([testRunId, `global_${optionName}`, valueStr]);
+    }
+    
+    stmt.finalize();
+}
+
+/**
+ * @swagger
+ * /api/test-runs/job-options:
+ *   get:
+ *     summary: Get job options for multiple test runs
+ *     description: Retrieve job options (both job-specific and global) for multiple test runs
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: test_run_ids
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of test run IDs
+ *         example: "61,62,63,64"
+ *     responses:
+ *       200:
+ *         description: Job options retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   test_run_id:
+ *                     type: integer
+ *                     example: 61
+ *                   job_options:
+ *                     type: object
+ *                     description: Job-specific options
+ *                     example: {"bs": "4k", "rw": "randread", "iodepth": "1", "size": "50M"}
+ *                   global_options:
+ *                     type: object
+ *                     description: Global options
+ *                     example: {"runtime": "10", "time_based": ""}
+ *       400:
+ *         description: Bad request - test_run_ids is required
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
+app.get('/api/test-runs/job-options', requireAdmin, (req, res) => {
+    const { test_run_ids } = req.query;
+
+    if (!test_run_ids) {
+        return res.status(400).json({ error: "test_run_ids is required" });
+    }
+
+    const run_ids = test_run_ids.split(',').map(id => parseInt(id.trim()));
+    const placeholders = run_ids.map(() => '?').join(',');
+
+    const query = `
+        SELECT test_run_id, option_name, option_value
+        FROM job_options
+        WHERE test_run_id IN (${placeholders})
+        ORDER BY test_run_id, option_name
+    `;
+
+    db.all(query, run_ids, (err, rows) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+
+        const data = {};
+        
+        // Process job options
+        for (const row of rows) {
+            const run_id = row.test_run_id;
+            if (!data[run_id]) {
+                data[run_id] = {
+                    test_run_id: run_id,
+                    job_options: {},
+                    global_options: {}
+                };
+            }
+            
+            if (row.option_name.startsWith('global_')) {
+                const globalOptionName = row.option_name.substring(7); // Remove 'global_' prefix
+                data[run_id].global_options[globalOptionName] = row.option_value;
+            } else {
+                data[run_id].job_options[row.option_name] = row.option_value;
+            }
+        }
+        
+        // Convert to array format to match performance-data pattern
+        const responseData = Object.values(data);
+        res.json(responseData);
+    });
+});
+
+/**
+ * @swagger
+ * /api/test-runs/{id}/job-options:
+ *   get:
+ *     summary: Get job options for a test run
+ *     description: Retrieve all job options (both job-specific and global) for a specific test run
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Test run ID
+ *         example: 61
+ *     responses:
+ *       200:
+ *         description: Job options retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 test_run_id:
+ *                   type: integer
+ *                   example: 61
+ *                 job_options:
+ *                   type: object
+ *                   description: Job-specific options
+ *                   example: {"bs": "4k", "rw": "randread", "iodepth": "1", "size": "50M"}
+ *                 global_options:
+ *                   type: object
+ *                   description: Global options
+ *                   example: {"runtime": "10", "time_based": ""}
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       404:
+ *         description: Test run not found
+ *       500:
+ *         description: Internal server error
+ */
+app.get('/api/test-runs/:id/job-options', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    
+    logInfo('User requesting job options for test run', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'GET_JOB_OPTIONS',
+        testRunId: id
+    });
+    
+    db.all(`
+        SELECT option_name, option_value
+        FROM job_options
+        WHERE test_run_id = ?
+        ORDER BY option_name
+    `, [parseInt(id)], (err, rows) => {
+        if (err) {
+            logError('Database error fetching job options', err, {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'GET_JOB_OPTIONS',
+                testRunId: id
+            });
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        if (rows.length === 0) {
+            logWarning('No job options found for test run', {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'GET_JOB_OPTIONS',
+                testRunId: id
+            });
+            return res.status(404).json({ error: 'Test run not found or no job options available' });
+        }
+        
+        // Separate job options and global options
+        const jobOptions = {};
+        const globalOptions = {};
+        
+        for (const row of rows) {
+            if (row.option_name.startsWith('global_')) {
+                const globalOptionName = row.option_name.substring(7); // Remove 'global_' prefix
+                globalOptions[globalOptionName] = row.option_value;
+            } else {
+                jobOptions[row.option_name] = row.option_value;
+            }
+        }
+        
+        logInfo('Job options retrieved successfully', {
+            requestId: req.requestId,
+            username: req.user.username,
+            action: 'GET_JOB_OPTIONS',
+            testRunId: id,
+            jobOptionsCount: Object.keys(jobOptions).length,
+            globalOptionsCount: Object.keys(globalOptions).length
+        });
+        
+        res.json({
+            test_run_id: parseInt(id),
+            job_options: jobOptions,
+            global_options: globalOptions
+        });
+    });
+});
+
 /**
  * @swagger
  * /api/clear-database:
@@ -1677,34 +1856,41 @@ app.delete('/api/clear-database', requireAdmin, (req, res) => {
         db.run('BEGIN TRANSACTION');
         
         // Delete all data from tables in proper order (child tables first)
-        db.run('DELETE FROM latency_percentiles', (err) => {
+        db.run('DELETE FROM job_options', (err) => {
             if (err) {
                 db.run('ROLLBACK');
-                return res.status(500).json({ error: 'Failed to clear latency_percentiles: ' + err.message });
+                return res.status(500).json({ error: 'Failed to clear job_options: ' + err.message });
             }
             
-            db.run('DELETE FROM performance_metrics', (err) => {
+            db.run('DELETE FROM latency_percentiles', (err) => {
                 if (err) {
                     db.run('ROLLBACK');
-                    return res.status(500).json({ error: 'Failed to clear performance_metrics: ' + err.message });
+                    return res.status(500).json({ error: 'Failed to clear latency_percentiles: ' + err.message });
                 }
                 
-                db.run('DELETE FROM test_runs', (err) => {
+                db.run('DELETE FROM performance_metrics', (err) => {
                     if (err) {
                         db.run('ROLLBACK');
-                        return res.status(500).json({ error: 'Failed to clear test_runs: ' + err.message });
+                        return res.status(500).json({ error: 'Failed to clear performance_metrics: ' + err.message });
                     }
                     
-                    // Reset auto-increment counters
-                    db.run('DELETE FROM sqlite_sequence WHERE name IN ("test_runs", "performance_metrics", "latency_percentiles")', (err) => {
+                    db.run('DELETE FROM test_runs', (err) => {
                         if (err) {
-                            console.warn('Could not reset auto-increment counters:', err.message);
+                            db.run('ROLLBACK');
+                            return res.status(500).json({ error: 'Failed to clear test_runs: ' + err.message });
                         }
                         
-                        db.run('COMMIT');
-                        res.json({ 
-                            message: 'Database cleared successfully',
-                            tables_cleared: ['test_runs', 'performance_metrics', 'latency_percentiles']
+                        // Reset auto-increment counters
+                        db.run('DELETE FROM sqlite_sequence WHERE name IN ("test_runs", "performance_metrics", "latency_percentiles", "job_options")', (err) => {
+                            if (err) {
+                                console.warn('Could not reset auto-increment counters:', err.message);
+                            }
+                            
+                            db.run('COMMIT');
+                            res.json({ 
+                                message: 'Database cleared successfully',
+                                tables_cleared: ['test_runs', 'performance_metrics', 'latency_percentiles', 'job_options']
+                            });
                         });
                     });
                 });
@@ -2357,5 +2543,336 @@ process.on('SIGTERM', () => {
             logInfo('Database connection closed');
         }
         process.exit(0);
+    });
+});
+
+/**
+ * @swagger
+ * /api/test-runs/{id}:
+ *   get:
+ *     summary: Get a single test run
+ *     description: Retrieve a single FIO test run by its ID
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Test run ID
+ *         example: 61
+ *     responses:
+ *       200:
+ *         description: Test run retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TestRun'
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Test run not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+app.get('/api/test-runs/:id', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    db.get(`
+        SELECT id, timestamp, test_date, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration, fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path
+        FROM test_runs
+        WHERE id = ?
+    `, [parseInt(id)], (err, row) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (!row) {
+            return res.status(404).json({ error: 'Test run not found' });
+        }
+        res.json(row);
+    });
+});
+
+/**
+ * @swagger
+ * /api/test-runs/performance-data:
+ *   get:
+ *     summary: Get performance metrics for test runs
+ *     description: Retrieve performance metrics and latency percentiles for specific test runs
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: test_run_ids
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of test run IDs
+ *         example: "61,62,63,64"
+ *       - in: query
+ *         name: metric_types
+ *         schema:
+ *           type: string
+ *           default: "iops,avg_latency,bandwidth"
+ *         description: Comma-separated list of metric types to retrieve
+ *         example: "iops,avg_latency,bandwidth"
+ *     responses:
+ *       200:
+ *         description: Performance data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 allOf:
+ *                   - $ref: '#/components/schemas/TestRun'
+ *                   - $ref: '#/components/schemas/PerformanceMetric'
+ *       400:
+ *         description: Bad request - test_run_ids is required
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
+app.get('/api/test-runs/performance-data', requireAdmin, (req, res) => {
+    const { test_run_ids, metric_types } = req.query;
+
+    if (!test_run_ids) {
+        return res.status(400).json({ error: "test_run_ids is required" });
+    }
+
+    const run_ids = test_run_ids.split(',').map(id => parseInt(id.trim()));
+    const metrics = (metric_types || "iops,avg_latency,bandwidth").split(',').map(m => m.trim());
+    
+    const placeholders = run_ids.map(() => '?').join(',');
+    const metric_placeholders = metrics.map(() => '?').join(',');
+
+    const query = `
+        SELECT tr.id, tr.drive_model, tr.drive_type, tr.test_name, 
+               tr.block_size, tr.read_write_pattern, tr.timestamp,
+               tr.hostname, tr.protocol, tr.description,
+               pm.metric_type, pm.value, pm.unit, pm.operation_type
+        FROM test_runs tr
+        JOIN performance_metrics pm ON tr.id = pm.test_run_id
+        WHERE tr.id IN (${placeholders}) AND pm.metric_type IN (${metric_placeholders})
+        ORDER BY tr.timestamp, pm.metric_type, pm.operation_type
+    `;
+
+    // Query for latency percentiles
+    const percentileQuery = `
+        SELECT test_run_id, operation_type, percentile, latency_ns
+        FROM latency_percentiles
+        WHERE test_run_id IN (${placeholders})
+        ORDER BY test_run_id, operation_type, percentile
+    `;
+
+    db.all(query, [...run_ids, ...metrics], (err, rows) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+
+        // Get latency percentiles
+        db.all(percentileQuery, run_ids, (err, percentileRows) => {
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+            }
+
+            const data = {};
+            
+            // Process performance metrics
+            for (const row of rows) {
+                const run_id = row.id;
+                if (!data[run_id]) {
+                    data[run_id] = {
+                        id: run_id,
+                        drive_model: row.drive_model,
+                        drive_type: row.drive_type,
+                        test_name: row.test_name,
+                        block_size: row.block_size,
+                        read_write_pattern: row.read_write_pattern,
+                        timestamp: row.timestamp,
+                        hostname: row.hostname,
+                        protocol: row.protocol,
+                        description: row.description,
+                        metrics: {},
+                        latency_percentiles: {}
+                    };
+                }
+                
+                // Group metrics by operation type
+                const operation = row.operation_type || 'combined';
+                if (!data[run_id].metrics[operation]) {
+                    data[run_id].metrics[operation] = {};
+                }
+                
+                data[run_id].metrics[operation][row.metric_type] = {
+                    value: row.value,
+                    unit: row.unit
+                };
+            }
+            
+            // Process latency percentiles
+            for (const row of percentileRows) {
+                const run_id = row.test_run_id;
+                if (data[run_id]) {
+                    const operation = row.operation_type;
+                    if (!data[run_id].latency_percentiles[operation]) {
+                        data[run_id].latency_percentiles[operation] = {};
+                    }
+                    
+                    data[run_id].latency_percentiles[operation][`p${row.percentile}`] = {
+                        value: row.latency_ns / 1000000, // Convert to milliseconds
+                        unit: 'ms'
+                    };
+                }
+            }
+            
+            // The frontend expects an array of objects, not an object with keys as ids
+            const responseData = Object.values(data);
+            res.json(responseData);
+        });
+    });
+});
+
+/**
+ * @swagger
+ * /api/test-runs/{id}/performance-data:
+ *   get:
+ *     summary: Get performance data for a single test run
+ *     description: Retrieve performance metrics and latency percentiles for a specific test run
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Test run ID
+ *         example: 61
+ *       - in: query
+ *         name: metric_types
+ *         schema:
+ *           type: string
+ *           default: "iops,avg_latency,bandwidth"
+ *         description: Comma-separated list of metric types to retrieve
+ *         example: "iops,avg_latency,bandwidth"
+ *     responses:
+ *       200:
+ *         description: Performance data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 test_run:
+ *                   $ref: '#/components/schemas/TestRun'
+ *                 metrics:
+ *                   type: object
+ *                   description: Performance metrics grouped by operation type
+ *                   example: {"read": {"iops": 1000, "bandwidth": 50}, "write": {"iops": 500, "bandwidth": 25}}
+ *                 latency_percentiles:
+ *                   type: object
+ *                   description: Latency percentiles grouped by operation type
+ *                   example: {"read": {"p95": 1.5, "p99": 2.1}, "write": {"p95": 2.0, "p99": 3.0}}
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       404:
+ *         description: Test run not found
+ *       500:
+ *         description: Internal server error
+ */
+app.get('/api/test-runs/:id/performance-data', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const { metric_types } = req.query;
+    
+    const metrics = (metric_types || "iops,avg_latency,bandwidth").split(',').map(m => m.trim());
+    const metric_placeholders = metrics.map(() => '?').join(',');
+    
+    // First, get the test run details
+    db.get(`
+        SELECT id, timestamp, test_date, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration, fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path
+        FROM test_runs
+        WHERE id = ?
+    `, [parseInt(id)], (err, testRun) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (!testRun) {
+            return res.status(404).json({ error: 'Test run not found' });
+        }
+        
+        // Get performance metrics
+        db.all(`
+            SELECT metric_type, value, unit, operation_type
+            FROM performance_metrics
+            WHERE test_run_id = ? AND metric_type IN (${metric_placeholders})
+            ORDER BY operation_type, metric_type
+        `, [parseInt(id), ...metrics], (err, metricRows) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            
+            // Get latency percentiles
+            db.all(`
+                SELECT operation_type, percentile, latency_ns
+                FROM latency_percentiles
+                WHERE test_run_id = ?
+                ORDER BY operation_type, percentile
+            `, [parseInt(id)], (err, percentileRows) => {
+                if (err) {
+                    return res.status(500).json({ error: err.message });
+                }
+                
+                // Group metrics by operation type
+                const metricsByOperation = {};
+                for (const row of metricRows) {
+                    const operation = row.operation_type || 'combined';
+                    if (!metricsByOperation[operation]) {
+                        metricsByOperation[operation] = {};
+                    }
+                    metricsByOperation[operation][row.metric_type] = {
+                        value: row.value,
+                        unit: row.unit
+                    };
+                }
+                
+                // Group percentiles by operation type
+                const percentilesByOperation = {};
+                for (const row of percentileRows) {
+                    const operation = row.operation_type;
+                    if (!percentilesByOperation[operation]) {
+                        percentilesByOperation[operation] = {};
+                    }
+                    percentilesByOperation[operation][`p${row.percentile}`] = {
+                        value: row.latency_ns / 1000000, // Convert to milliseconds
+                        unit: 'ms'
+                    };
+                }
+                
+                res.json({
+                    test_run: testRun,
+                    metrics: metricsByOperation,
+                    latency_percentiles: percentilesByOperation
+                });
+            });
+        });
     });
 });

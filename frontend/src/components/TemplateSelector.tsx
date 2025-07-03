@@ -3,6 +3,7 @@ import {
 	ScatterChart as Scatter3D,
 	TrendingUp,
 	Zap,
+	Clock,
 } from "lucide-react";
 import type React from "react";
 import type { ChartTemplate } from "../types";
@@ -62,6 +63,16 @@ const chartTemplates: ChartTemplate[] = [
 		yAxis: "queuedepth",
 		metrics: ["iops", "latency", "throughput"],
 	},
+	{
+		id: "time-series-overview",
+		name: "🕐 Time Series",
+		description: "Monitor performance trends over time with server selection",
+		chartType: "time-series",
+		xAxis: "timestamp",
+		yAxis: "performance",
+		groupBy: "server",
+		metrics: ["iops", "avg_latency", "bandwidth"],
+	},
 ];
 
 const getTemplateIcon = (chartType: string) => {
@@ -72,6 +83,8 @@ const getTemplateIcon = (chartType: string) => {
 			return <TrendingUp size={20} />;
 		case "scatter":
 			return <Scatter3D size={20} />;
+		case "time-series":
+			return <Clock size={20} />;
 		default:
 			return <Zap size={20} />;
 	}

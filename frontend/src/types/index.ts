@@ -52,9 +52,42 @@ export interface ChartTemplate {
 	id: string;
 	name: string;
 	description: string;
-	chartType: "bar" | "line" | "scatter" | "3d-bar";
+	chartType: "bar" | "line" | "scatter" | "3d-bar" | "time-series";
 	xAxis: string;
 	yAxis: string;
 	groupBy?: string;
 	metrics: string[];
+}
+
+// Time-series interfaces
+export interface ServerInfo {
+	hostname: string;
+	protocol: string;
+	drive_model: string;
+	test_count: number;
+	last_test_time: string;
+	first_test_time: string;
+}
+
+export interface TimeSeriesDataPoint {
+	timestamp: string;
+	hostname: string;
+	protocol: string;
+	drive_model: string;
+	block_size: string;
+	read_write_pattern: string;
+	queue_depth: number;
+	value: number;
+	unit: string;
+}
+
+export interface TrendDataPoint {
+	timestamp: string;
+	block_size: string;
+	read_write_pattern: string;
+	queue_depth: number;
+	value: number;
+	unit: string;
+	moving_avg: number;
+	percent_change: string;
 }

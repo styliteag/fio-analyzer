@@ -6,6 +6,7 @@ import TemplateSelector from "../components/TemplateSelector";
 import TestRunSelector from "../components/TestRunSelector";
 import ThemeToggle from "../components/ThemeToggle";
 import ThreeDBarChart from "../components/ThreeDBarChart";
+import TimeSeriesChart from "../components/TimeSeriesChart";
 import { useAuth } from "../contexts/AuthContext";
 import type { ChartTemplate, PerformanceData, TestRun } from "../types";
 import { fetchPerformanceData as apiFetchPerformanceData } from "../utils/api";
@@ -163,7 +164,12 @@ export default function Dashboard() {
 										</div>
 									</div>
 								)}
-								{selectedTemplate.chartType === '3d-bar' ? (
+								{selectedTemplate.chartType === 'time-series' ? (
+									<TimeSeriesChart
+										isMaximized={isChartMaximized}
+										onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+									/>
+								) : selectedTemplate.chartType === '3d-bar' ? (
 									(() => {
 										const mappedData = performanceData.map(d => {
 											const metrics = (d as any).metrics;
@@ -199,7 +205,12 @@ export default function Dashboard() {
 
 				{/* Maximized Chart */}
 				{isChartMaximized && selectedTemplate && (
-					selectedTemplate.chartType === '3d-bar' ? (
+					selectedTemplate.chartType === 'time-series' ? (
+						<TimeSeriesChart
+							isMaximized={isChartMaximized}
+							onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+						/>
+					) : selectedTemplate.chartType === '3d-bar' ? (
 						(() => {
 							const mappedData = performanceData.map(d => {
 								const metrics = (d as any).metrics;
