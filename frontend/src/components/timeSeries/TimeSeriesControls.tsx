@@ -47,29 +47,36 @@ const TimeSeriesControls: React.FC<TimeSeriesControlsProps> = ({
                     <Server className="h-4 w-4 mr-1" />
                     Servers
                 </label>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
+                <div>
                     {serverGroups.length === 0 ? (
                         <div className="text-sm theme-text-secondary">
                             {loading ? "Loading servers..." : "No servers available"}
                         </div>
                     ) : (
-                        serverGroups.map((group) => (
-                            <label key={group.id} className="flex items-center text-sm">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedServerIds.includes(group.id)}
-                                    onChange={() => onServerToggle(group.id)}
-                                    disabled={loading}
-                                    className="mr-2"
-                                />
-                                <span className="theme-text-primary">
-                                    {group.hostname} ({group.protocol})
-                                </span>
-                                <span className="text-xs theme-text-secondary ml-2">
-                                    {group.driveModels.length} drive{group.driveModels.length !== 1 ? 's' : ''}
-                                </span>
-                            </label>
-                        ))
+                        <select
+                            multiple
+                            value={selectedServerIds}
+                            onChange={e => {
+                                const options = Array.from(e.target.options);
+                                const newSelected = options.filter(o => o.selected).map(o => o.value);
+                                // Call onServerToggle for each server that changed
+                                serverGroups.forEach(group => {
+                                    const isSelected = selectedServerIds.includes(group.id);
+                                    const willBeSelected = newSelected.includes(group.id);
+                                    if (isSelected !== willBeSelected) {
+                                        onServerToggle(group.id);
+                                    }
+                                });
+                            }}
+                            disabled={loading}
+                            className="w-full min-h-[2.5rem] max-h-32 rounded border theme-border-primary theme-bg-secondary theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            {serverGroups.map(group => (
+                                <option key={group.id} value={group.id}>
+                                    {group.hostname} ({group.protocol}) - {group.driveModels.length} drive{group.driveModels.length !== 1 ? 's' : ''}
+                                </option>
+                            ))}
+                        </select>
                     )}
                 </div>
             </div>
