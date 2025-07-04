@@ -239,6 +239,174 @@ The script provides colored progress output showing:
 - Final summary with success/failure counts
 - Automatic cleanup of temporary files
 
+### Automated Cron Job Setup
+
+For continuous performance monitoring, you can set up a cron job to run FIO tests automatically on an hourly, daily, or custom schedule.
+
+#### Basic Hourly Cron Setup
+```bash
+# Edit your crontab
+crontab -e
+
+# Add entry for hourly tests (runs at the top of every hour)
+0 * * * * cd /path/to/your/scripts && ./fio-analyzer-tests.sh >> /var/log/fio-tests.log 2>&1
+
+# Add entry for daily tests (runs at 2 AM every day)
+0 2 * * * cd /path/to/your/scripts && ./fio-analyzer-tests.sh >> /var/log/fio-tests.log 2>&1
+
+# Add entry for business hours only (9 AM to 5 PM, Monday-Friday)
+0 9-17 * * 1-5 cd /path/to/your/scripts && ./fio-analyzer-tests.sh >> /var/log/fio-tests.log 2>&1
+```
+
+#### Advanced Cron Setup with Environment Variables
+Create a wrapper script for better control and logging:
+
+```bash
+# Create /path/to/your/scripts/fio-cron-wrapper.sh
+#!/bin/bash
+
+# Set environment variables
+export PATH="/usr/local/bin:/usr/bin:/bin"
+export HOSTNAME="$(hostname)"
+export PROTOCOL="NVMe"
+export DESCRIPTION="Automated hourly performance test"
+export BACKEND_URL="http://your-server"
+export USERNAME="your-upload-user"
+export PASSWORD="your-password"
+
+# Add timestamp to logs
+echo "$(date): Starting FIO performance test" >> /var/log/fio-tests.log
+
+# Run the test with timeout (kill after 30 minutes if stuck)
+timeout 1800 /path/to/your/scripts/fio-analyzer-tests.sh >> /var/log/fio-tests.log 2>&1
+
+# Log completion
+echo "$(date): FIO test completed with exit code $?" >> /var/log/fio-tests.log
+```
+
+```bash
+# Make wrapper executable
+chmod +x /path/to/your/scripts/fio-cron-wrapper.sh
+
+# Add to crontab (hourly execution)
+0 * * * * /path/to/your/scripts/fio-cron-wrapper.sh
+```
+
+#### Cron Schedule Examples
+```bash
+# Every 15 minutes
+*/15 * * * * /path/to/your/scripts/fio-cron-wrapper.sh
+
+# Every 6 hours
+0 */6 * * * /path/to/your/scripts/fio-cron-wrapper.sh
+
+# Twice daily (6 AM and 6 PM)
+0 6,18 * * * /path/to/your/scripts/fio-cron-wrapper.sh
+
+# Weekly on Sundays at 3 AM
+0 3 * * 0 /path/to/your/scripts/fio-cron-wrapper.sh
+
+# Monthly on the 1st at midnight
+0 0 1 * * /path/to/your/scripts/fio-cron-wrapper.sh
+```
+
+#### Log Rotation for Automated Tests
+To prevent log files from growing too large:
+
+```bash
+# Create /etc/logrotate.d/fio-tests
+/var/log/fio-tests.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
+}
+
+# Test log rotation
+sudo logrotate -d /etc/logrotate.d/fio-tests
+```
+
+#### Monitoring Cron Job Health
+Create a monitoring script to check if tests are running successfully:
+
+```bash
+# Create /path/to/your/scripts/check-fio-health.sh
+#!/bin/bash
+
+LOG_FILE="/var/log/fio-tests.log"
+BACKEND_URL="http://your-server"
+
+# Check if log was updated in last 2 hours
+if [ $(find "$LOG_FILE" -mmin -120 | wc -l) -eq 0 ]; then
+    echo "WARNING: FIO tests may not be running - no recent log activity"
+fi
+
+# Check backend connectivity
+if ! curl -s "$BACKEND_URL/api/info" > /dev/null; then
+    echo "ERROR: Cannot reach FIO Analyzer backend at $BACKEND_URL"
+fi
+
+# Check for recent error patterns in logs
+if tail -100 "$LOG_FILE" | grep -q "ERROR\|FAILED\|timeout"; then
+    echo "WARNING: Recent errors found in FIO test logs"
+    tail -20 "$LOG_FILE" | grep -E "ERROR|FAILED|timeout"
+fi
+```
+
+#### Setup Checklist for Production Cron Jobs
+
+1. **Test Script Manually First**
+   ```bash
+   # Ensure script works before adding to cron
+   ./fio-analyzer-tests.sh
+   ```
+
+2. **Create Dedicated User (Recommended)**
+   ```bash
+   # Create user for FIO testing
+   sudo useradd -m -s /bin/bash fio-tester
+   sudo su - fio-tester
+   
+   # Setup script and cron for this user
+   crontab -e
+   ```
+
+3. **Configure Permissions**
+   ```bash
+   # Ensure test directory is writable
+   mkdir -p /tmp/fio_test
+   chmod 755 /tmp/fio_test
+   
+   # Ensure log directory exists
+   sudo mkdir -p /var/log
+   sudo touch /var/log/fio-tests.log
+   sudo chown fio-tester:fio-tester /var/log/fio-tests.log
+   ```
+
+4. **Test Cron Environment**
+   ```bash
+   # Add temporary test to cron
+   * * * * * env > /tmp/cron-env.txt
+   
+   # Compare with shell environment
+   diff <(env | sort) <(sort /tmp/cron-env.txt)
+   ```
+
+5. **Monitor and Validate**
+   ```bash
+   # Check cron service is running
+   sudo systemctl status cron
+   
+   # View cron logs
+   sudo journalctl -u cron -f
+   
+   # Verify tests appear in FIO Analyzer
+   curl -u username:password "http://your-server/api/time-series/latest"
+   ```
+
 #### Troubleshooting
 ```bash
 # Check if FIO is installed
