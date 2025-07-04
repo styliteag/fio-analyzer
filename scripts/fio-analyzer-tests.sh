@@ -304,7 +304,6 @@ run_fio_test() {
     # delete the file
     rm "${TARGET_DIR}/fio_test_${pattern}_${block_size}" || true
 
-    exit 0
     if [ $? -eq 0 ]; then
         print_success "FIO test completed: ${pattern} with ${block_size}"
         return 0
