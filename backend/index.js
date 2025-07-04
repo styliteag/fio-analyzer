@@ -93,6 +93,63 @@ function parseHtpasswd(filePath) {
     }
 }
 
+// Calculate unique key for test run configuration
+function calculateUniqueKey(testRun) {
+    const fields = [
+        testRun.drive_type || '',
+        testRun.drive_model || '',
+        testRun.hostname || '',
+        testRun.protocol || '',
+        testRun.block_size || '',
+        testRun.read_write_pattern || '',
+        testRun.output_file || '',
+        testRun.num_jobs || '',
+        testRun.direct || '',
+        testRun.test_size || '',
+        testRun.sync || '',
+        testRun.iodepth || ''
+    ];
+    return fields.join('|').toLowerCase();
+}
+
+// Mark existing tests as not latest when inserting a new test with the same configuration
+function updateLatestFlags(testRun, callback) {
+    const uniqueKey = calculateUniqueKey(testRun);
+    
+    // Find all existing tests with the same unique configuration
+    const query = `
+        UPDATE test_runs 
+        SET is_latest = 0 
+        WHERE drive_type = ? AND drive_model = ? AND hostname = ? AND protocol = ? 
+        AND block_size = ? AND read_write_pattern = ? AND output_file = ? AND num_jobs = ? 
+        AND direct = ? AND test_size = ? AND sync = ? AND iodepth = ?
+    `;
+    
+    const params = [
+        testRun.drive_type || null,
+        testRun.drive_model || null,
+        testRun.hostname || null,
+        testRun.protocol || null,
+        testRun.block_size || null,
+        testRun.read_write_pattern || null,
+        testRun.output_file || null,
+        testRun.num_jobs || null,
+        testRun.direct || null,
+        testRun.test_size || null,
+        testRun.sync || null,
+        testRun.iodepth || null
+    ];
+    
+    db.run(query, params, function(err) {
+        if (err) {
+            console.error('Error updating latest flags:', err.message);
+            return callback(err);
+        }
+        console.log(`Updated ${this.changes} existing tests to is_latest=0 for configuration: ${uniqueKey}`);
+        callback(null);
+    });
+}
+
 app.use(cors());
 
 // Swagger configuration
@@ -576,7 +633,16 @@ function initDb() {
                 hostname TEXT,
                 protocol TEXT,
                 description TEXT,
-                uploaded_file_path TEXT
+                uploaded_file_path TEXT,
+                -- Job options fields moved from job_options table
+                output_file TEXT,
+                num_jobs INTEGER,
+                direct INTEGER,
+                test_size TEXT,
+                sync INTEGER,
+                iodepth INTEGER,
+                -- Uniqueness tracking
+                is_latest INTEGER DEFAULT 1
             )
         `);
 
@@ -624,21 +690,10 @@ function initDb() {
             )
         `);
 
-        // Create table to store all job options
+        // Create composite index for uniqueness checks
         db.run(`
-            CREATE TABLE IF NOT EXISTS job_options (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                test_run_id INTEGER NOT NULL,
-                option_name TEXT NOT NULL,
-                option_value TEXT,
-                FOREIGN KEY (test_run_id) REFERENCES test_runs (id)
-            )
-        `);
-
-        // Add index for job options queries
-        db.run(`
-            CREATE INDEX IF NOT EXISTS idx_job_options_test_run 
-            ON job_options (test_run_id, option_name)
+            CREATE INDEX IF NOT EXISTS idx_test_runs_unique_key 
+            ON test_runs (drive_type, drive_model, hostname, protocol, block_size, read_write_pattern, output_file, num_jobs, direct, test_size, sync, iodepth)
         `);
 
         // Time-series database optimizations for efficient queries
@@ -722,126 +777,159 @@ function showServerReady() {
 }
 
 function populateSampleData(callback) {
-    const drives = [
-        ["Samsung 980 PRO", "NVMe SSD"],
-        ["WD Black SN850", "NVMe SSD"],
-        ["Crucial MX500", "SATA SSD"],
-        ["Seagate Barracuda", "HDD"],
-        ["Intel Optane", "NVMe SSD"]
+    // Define multiple realistic servers with different storage types
+    const servers = [
+        { hostname: "sim-web-01", protocol: "NFS", drives: [["Simsung 980 PRO", "HDD"]] },
+        { hostname: "sim-db-01", protocol: "iSCSI", drives: [["Simsung SN850", "NVMe SSD"]] },
+        { hostname: "sim-app-01", protocol: "Local", drives: [["Simsung 980 PRO", "NVMe SSD"]] },
+        { hostname: "sim-cache-01", protocol: "Local", drives: [["Simsung Optane", "NVMe SSD"]] }
     ];
     
-    const block_sizes = ['512', '1K', '4K', '8K', '16K', '32K', '64K', '128K', '1M', '2G']; // Text with uppercase suffix
-    const patterns = ["sequential_read", "sequential_write", "random_read", "random_write", "mixed_70_30"];
-    const queue_depths = [1, 4, 8, 16, 32];
-    
-    let testRunId = 1;
+    const block_sizes = ['4K', '8K', '16K', '64K', '1M']; // Focused on common block sizes
+    const patterns = ["sequential_read", "sequential_write", "random_read", "random_write"];
+    const queue_depths = [1, 4, 8, 16];
 
     const testRunsStmt = db.prepare('INSERT INTO test_runs (timestamp, test_date, drive_model, drive_type, test_name, block_size, read_write_pattern, queue_depth, duration, fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const metricsStmt = db.prepare('INSERT INTO performance_metrics (test_run_id, metric_type, value, unit, operation_type) VALUES (?, ?, ?, ?, ?)');
     const percentilesStmt = db.prepare('INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)');
 
-    db.serialize(() => {
-        for (const [drive_model, drive_type] of drives) {
-            console.log(`Processing drive: ${drive_model} (${drive_type})`);
-            for (let i = 0; i < 3; i++) { // Reduced from 10 to 3 iterations
-                const timestamp = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString();
+    // Store test runs data for later processing
+    const testRunsData = [];
+    
+    // Create time-series data for each server over the last 30 days
+    for (const server of servers) {
+        console.log(`Processing server: ${server.hostname} (${server.protocol})`);
+        
+        // Generate tests for each drive on this server
+        for (const [drive_model, drive_type] of server.drives) {
+            console.log(`  Drive: ${drive_model} (${drive_type})`);
+            
+            // Create regular time-series data - tests every few days over 30 days
+            for (let dayOffset = 0; dayOffset < 30; dayOffset += 2 + Math.floor(Math.random() * 4)) {
+                // Create timestamp for this day (with some hour randomization)
+                const dayMs = dayOffset * 24 * 60 * 60 * 1000;
+                const hourRandomization = Math.random() * 12 * 60 * 60 * 1000; // Random hour in first 12 hours
+                const timestamp = new Date(Date.now() - dayMs + hourRandomization).toISOString();
                 
-                const sampleBlockSizes = [...block_sizes].sort(() => 0.5 - Math.random()).slice(0, 2); // Reduced from 3 to 2
-                for (const block_size of sampleBlockSizes) {
-                    const samplePatterns = [...patterns].sort(() => 0.5 - Math.random()).slice(0, 2);
-                    for (const pattern of samplePatterns) {
-                        const queue_depth = queue_depths[Math.floor(Math.random() * queue_depths.length)];
-                        
-                        const test_name = `FIO_${pattern}_${block_size}`;
-                        console.log(`  Creating: ${test_name} (${drive_model}, ${block_size}, QD${queue_depth})`);
-                        // Define testDate as a Date object based on timestamp
-                        const testDate = new Date(timestamp);
-                        testRunsStmt.run(
-                            timestamp,
-                            testDate.toISOString(),
-                            drive_model,
-                            drive_type,
-                            test_name,
-                            block_size,
-                            pattern,
-                            queue_depth,
-                            300,
-                            'fio-3.40',
-                            300,
-                            100,
-                            Math.floor(Math.random() * 1000000),
-                            Math.floor(Math.random() * 1000000),
-                            Math.random() * 100,
-                            Math.random() * 100,
-                            'test-data',
-                            'generated',
-                            function(err) {
-                                if (!err) {
-                                    // Generate job options similar to FIO import
-                                    const jobOpts = {
-                                        bs: block_size,
-                                        rw: pattern,
-                                        iodepth: queue_depth,
-                                        size: '1G',
-                                        numjobs: '1',
-                                        direct: '1',
-                                        sync: '1',
-                                        group_reporting: '',
-                                        time_based: '',
-                                        runtime: '300',
-                                        filename: `/tmp/fio_test/fio_test_${pattern}_${block_size}`,
-                                        ioengine: 'psync',
-                                        norandommap: '',
-                                        randrepeat: '0',
-                                        thread: ''
-                                    };
-                                    insertJobOptions(this.lastID, jobOpts, {});
-                                }
-                            }
-                        );
-                        
-                        const base_iops = getBaseIops(drive_type, pattern, block_size);
-                        const base_latency = getBaseLatency(drive_type, pattern);
-                        const base_bandwidth = getBaseBandwidth(drive_type, pattern, block_size);
-                        
-                        const iops = base_iops * (0.8 + Math.random() * 0.4);
-                        const latency = base_latency * (0.7 + Math.random() * 0.6);
-                        const bandwidth = base_bandwidth * (0.85 + Math.random() * 0.3);
-                        
-                        // Store core metrics with 'combined' operation type to match FIO import structure
-                        const metrics = [
-                            [testRunId, "iops", iops, "IOPS", "combined"],
-                            [testRunId, "avg_latency", latency, "ms", "combined"],
-                            [testRunId, "bandwidth", bandwidth, "MB/s", "combined"]
-                        ];
-                        
-                        for (const metric of metrics) {
-                            metricsStmt.run(metric);
-                        }
-                        
-                        // Store percentiles in latency_percentiles table like FIO import
-                        const p95_latency_ns = latency * 1.5 * 1000000; // Convert ms to ns
-                        const p99_latency_ns = latency * 2.2 * 1000000; // Convert ms to ns
-                        
-                        const percentiles = [
-                            [testRunId, "combined", 95.0, p95_latency_ns],
-                            [testRunId, "combined", 99.0, p99_latency_ns]
-                        ];
-                        
-                        for (const percentile of percentiles) {
-                            percentilesStmt.run(percentile);
-                        }
-                        
-                        testRunId++;
-                    }
-                }
+                // Create a focused test run for this time point
+                const block_size = block_sizes[Math.floor(Math.random() * block_sizes.length)];
+                const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+                const queue_depth = queue_depths[Math.floor(Math.random() * queue_depths.length)];
+                
+                const test_name = `${server.hostname}_${pattern}_${block_size}`;
+                console.log(`    Creating: ${test_name} (${drive_model}, ${block_size}, QD${queue_depth}) at ${timestamp.substring(0, 10)}`);
+                
+                // Store test run data for batch processing
+                testRunsData.push({
+                    timestamp,
+                    drive_model,
+                    drive_type,
+                    test_name,
+                    block_size,
+                    pattern,
+                    queue_depth,
+                    server,
+                    testDate: new Date(timestamp)
+                });
             }
         }
-        testRunsStmt.finalize();
-        metricsStmt.finalize();
-        percentilesStmt.finalize();
-        console.log('Sample data population completed!');
-        if (callback) callback();
+    }
+
+    db.serialize(() => {
+        // Insert all test runs first
+        for (const testRun of testRunsData) {
+            testRunsStmt.run(
+                testRun.timestamp,
+                testRun.testDate.toISOString(),
+                testRun.drive_model,
+                testRun.drive_type,
+                testRun.test_name,
+                testRun.block_size,
+                testRun.pattern,
+                testRun.queue_depth,
+                300,
+                'fio-3.40',
+                300,
+                100,
+                Math.floor(Math.random() * 1000000),
+                Math.floor(Math.random() * 1000000),
+                Math.random() * 100,
+                Math.random() * 100,
+                testRun.server.hostname,
+                testRun.server.protocol,
+                `Automated performance test on ${testRun.server.hostname} (${testRun.server.protocol} storage)`,
+                null
+            );
+        }
+        
+        // Now add metrics and job options for all test runs
+        db.all('SELECT id, drive_type, read_write_pattern, block_size FROM test_runs WHERE hostname != "test-server"', (err, rows) => {
+            if (err) {
+                console.error('Error fetching test runs for metrics:', err);
+                return;
+            }
+            
+            for (const row of rows) {
+                // Generate and store performance metrics
+                const base_iops = getBaseIops(row.drive_type, row.read_write_pattern, row.block_size);
+                const base_latency = getBaseLatency(row.drive_type, row.read_write_pattern);
+                const base_bandwidth = getBaseBandwidth(row.drive_type, row.read_write_pattern, row.block_size);
+                
+                const iops = base_iops * (0.8 + Math.random() * 0.4);
+                const latency = base_latency * (0.7 + Math.random() * 0.6);
+                const bandwidth = base_bandwidth * (0.85 + Math.random() * 0.3);
+                
+                // Store core metrics with 'combined' operation type to match FIO import structure
+                const metrics = [
+                    [row.id, "iops", iops, "IOPS", "combined"],
+                    [row.id, "avg_latency", latency, "ms", "combined"],
+                    [row.id, "bandwidth", bandwidth, "MB/s", "combined"]
+                ];
+                
+                for (const metric of metrics) {
+                    metricsStmt.run(metric);
+                }
+                
+                // Store percentiles in latency_percentiles table like FIO import
+                const p95_latency_ns = latency * 1.5 * 1000000; // Convert ms to ns
+                const p99_latency_ns = latency * 2.2 * 1000000; // Convert ms to ns
+                
+                const percentiles = [
+                    [row.id, "combined", 95.0, p95_latency_ns],
+                    [row.id, "combined", 99.0, p99_latency_ns]
+                ];
+                
+                for (const percentile of percentiles) {
+                    percentilesStmt.run(percentile);
+                }
+                
+                // Generate job options similar to FIO import
+                const jobOpts = {
+                    bs: row.block_size,
+                    rw: row.read_write_pattern,
+                    iodepth: Math.floor(Math.random() * 32) + 1,
+                    size: '1G',
+                    numjobs: '1',
+                    direct: '1',
+                    sync: '1',
+                    group_reporting: '',
+                    time_based: '',
+                    runtime: '300',
+                    filename: `/tmp/fio_test/fio_test_${row.read_write_pattern}_${row.block_size}`,
+                    ioengine: 'psync',
+                    norandommap: '',
+                    randrepeat: '0',
+                    thread: ''
+                };
+                insertJobOptions(row.id, jobOpts, {});
+            }
+            
+            testRunsStmt.finalize();
+            metricsStmt.finalize();
+            percentilesStmt.finalize();
+            console.log('Sample data population completed with metrics and job options!');
+            if (callback) callback();
+        });
     });
 }
 
@@ -906,11 +994,19 @@ function getBaseBandwidth(drive_type, pattern, block_size) {
  * @swagger
  * /api/test-runs:
  *   get:
- *     summary: Get all test runs
- *     description: Retrieve a list of all FIO test runs with their metadata
+ *     summary: Get latest test runs (or all with historical data)
+ *     description: Retrieve a list of FIO test runs. By default returns only the latest test for each unique configuration. Use include_historical=true to get all historical data.
  *     tags: [Test Runs]
  *     security:
  *       - basicAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: include_historical
+ *         required: false
+ *         schema:
+ *           type: boolean
+ *         description: Include historical test runs (default false - only latest per configuration)
+ *         example: false
  *     responses:
  *       200:
  *         description: List of test runs retrieved successfully
@@ -934,20 +1030,33 @@ function getBaseBandwidth(drive_type, pattern, block_size) {
  *               $ref: '#/components/schemas/Error'
  */
 app.get('/api/test-runs', requireAdmin, (req, res) => {
+    const includeHistorical = req.query.include_historical === 'true';
+    
     logInfo('User requesting test runs list', {
         requestId: req.requestId,
         username: req.user.username,
-        action: 'LIST_TEST_RUNS'
+        action: 'LIST_TEST_RUNS',
+        includeHistorical: includeHistorical
     });
     
-    db.all(`
+    // Build query with optional is_latest filter
+    let query = `
         SELECT id, timestamp, drive_model, drive_type, test_name, 
                block_size, read_write_pattern, queue_depth, duration,
                fio_version, job_runtime, rwmixread, total_ios_read, 
-               total_ios_write, usr_cpu, sys_cpu, hostname, protocol
+               total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
+               output_file, num_jobs, direct, test_size, sync, iodepth, is_latest
         FROM test_runs
-        ORDER BY timestamp DESC
-    `, [], (err, rows) => {
+    `;
+    
+    // Add WHERE clause to filter by is_latest unless historical data is requested
+    if (!includeHistorical) {
+        query += ` WHERE is_latest = 1`;
+    }
+    
+    query += ` ORDER BY timestamp DESC`;
+    
+    db.all(query, [], (err, rows) => {
         if (err) {
             logError('Database error fetching test runs', err, {
                 requestId: req.requestId,
@@ -962,7 +1071,8 @@ app.get('/api/test-runs', requireAdmin, (req, res) => {
             requestId: req.requestId,
             username: req.user.username,
             action: 'LIST_TEST_RUNS',
-            resultCount: rows.length
+            resultCount: rows.length,
+            includeHistorical: includeHistorical
         });
         
         res.json(rows);
@@ -1481,38 +1591,83 @@ original_filename: ${req.file.originalname}
             const test_name = job.jobname || `fio_job_${jobIndex + 1}`;
             const rwmixread = parseInt(opts.rwmixread || '100');
 
-            // Insert test run
-            const insertTestRun = `
-                INSERT INTO test_runs 
-                (timestamp, test_date, drive_model, drive_type, test_name, block_size, 
-                 read_write_pattern, queue_depth, duration, fio_version, 
-                 job_runtime, rwmixread, total_ios_read, total_ios_write, 
-                 usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `;
+            // Extract job options for uniqueness and storage
+            const output_file = opts.filename || globalOpts.filename || '';
+            const num_jobs = parseInt(opts.numjobs || globalOpts.numjobs || '1');
+            const direct = parseInt(opts.direct || globalOpts.direct || '0');
+            const test_size = opts.size || globalOpts.size || '';
+            const sync = parseInt(opts.sync || globalOpts.sync || '0');
 
-            db.run(insertTestRun, [
-                new Date().toISOString(),
-                testDate.toISOString(),
-                drive_model,
+            // Create test run object for uniqueness calculation
+            const testRunData = {
                 drive_type,
-                test_name,
-                block_size,
-                rw,
-                iodepth,
-                duration,
-                fioData['fio version'],
-                job.job_runtime,
-                rwmixread,
-                job.read?.total_ios || 0,
-                job.write?.total_ios || 0,
-                job.usr_cpu,
-                job.sys_cpu,
+                drive_model,
                 hostname,
                 protocol,
-                description,
-                relativeFilePath
-            ], function(err) {
+                block_size,
+                read_write_pattern: rw,
+                output_file,
+                num_jobs,
+                direct,
+                test_size,
+                sync,
+                iodepth
+            };
+
+            // Update existing tests to is_latest = 0 for same configuration
+            updateLatestFlags(testRunData, (err) => {
+                if (err) {
+                    console.error(`Error updating latest flags for job ${test_name}:`, err.message);
+                    completedJobs++;
+                    if (completedJobs === jobs.length) {
+                        res.json({ 
+                            message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
+                            test_run_ids: importedTestRuns,
+                            skipped_jobs: jobs.length - importedTestRuns.length
+                        });
+                    }
+                    return;
+                }
+
+                // Insert test run with job options fields and is_latest = 1
+                const insertTestRun = `
+                    INSERT INTO test_runs 
+                    (timestamp, test_date, drive_model, drive_type, test_name, block_size, 
+                     read_write_pattern, queue_depth, duration, fio_version, 
+                     job_runtime, rwmixread, total_ios_read, total_ios_write, 
+                     usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path,
+                     output_file, num_jobs, direct, test_size, sync, iodepth, is_latest)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                `;
+
+                db.run(insertTestRun, [
+                    new Date().toISOString(),
+                    testDate.toISOString(),
+                    drive_model,
+                    drive_type,
+                    test_name,
+                    block_size,
+                    rw,
+                    iodepth,
+                    duration,
+                    fioData['fio version'],
+                    job.job_runtime,
+                    rwmixread,
+                    job.read?.total_ios || 0,
+                    job.write?.total_ios || 0,
+                    job.usr_cpu,
+                    job.sys_cpu,
+                    hostname,
+                    protocol,
+                    description,
+                    relativeFilePath,
+                    output_file,
+                    num_jobs,
+                    direct,
+                    test_size,
+                    sync,
+                    iodepth
+                ], function(err) {
                 if (err) {
                     console.error(`Error importing job ${test_name}:`, err.message);
                     completedJobs++;
@@ -1558,6 +1713,7 @@ original_filename: ${req.file.originalname}
                         skipped_jobs: jobs.length - importedTestRuns.length
                     });
                 }
+                });
             });
         });
 
@@ -1612,210 +1768,6 @@ function insertJobOptions(testRunId, jobOpts, globalOpts) {
     stmt.finalize();
 }
 
-/**
- * @swagger
- * /api/test-runs/job-options:
- *   get:
- *     summary: Get job options for multiple test runs
- *     description: Retrieve job options (both job-specific and global) for multiple test runs
- *     tags: [Test Runs]
- *     security:
- *       - basicAuth: []
- *     parameters:
- *       - in: query
- *         name: test_run_ids
- *         required: true
- *         schema:
- *           type: string
- *         description: Comma-separated list of test run IDs
- *         example: "61,62,63,64"
- *     responses:
- *       200:
- *         description: Job options retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   test_run_id:
- *                     type: integer
- *                     example: 61
- *                   job_options:
- *                     type: object
- *                     description: Job-specific options
- *                     example: {"bs": "4k", "rw": "randread", "iodepth": "1", "size": "50M"}
- *                   global_options:
- *                     type: object
- *                     description: Global options
- *                     example: {"runtime": "10", "time_based": ""}
- *       400:
- *         description: Bad request - test_run_ids is required
- *       401:
- *         description: Unauthorized - Admin access required
- *       500:
- *         description: Internal server error
- */
-app.get('/api/test-runs/job-options', requireAdmin, (req, res) => {
-    const { test_run_ids } = req.query;
-
-    if (!test_run_ids) {
-        return res.status(400).json({ error: "test_run_ids is required" });
-    }
-
-    const run_ids = test_run_ids.split(',').map(id => parseInt(id.trim()));
-    const placeholders = run_ids.map(() => '?').join(',');
-
-    const query = `
-        SELECT test_run_id, option_name, option_value
-        FROM job_options
-        WHERE test_run_id IN (${placeholders})
-        ORDER BY test_run_id, option_name
-    `;
-
-    db.all(query, run_ids, (err, rows) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-            return;
-        }
-
-        const data = {};
-        
-        // Process job options
-        for (const row of rows) {
-            const run_id = row.test_run_id;
-            if (!data[run_id]) {
-                data[run_id] = {
-                    test_run_id: run_id,
-                    job_options: {},
-                    global_options: {}
-                };
-            }
-            
-            if (row.option_name.startsWith('global_')) {
-                const globalOptionName = row.option_name.substring(7); // Remove 'global_' prefix
-                data[run_id].global_options[globalOptionName] = row.option_value;
-            } else {
-                data[run_id].job_options[row.option_name] = row.option_value;
-            }
-        }
-        
-        // Convert to array format to match performance-data pattern
-        const responseData = Object.values(data);
-        res.json(responseData);
-    });
-});
-
-/**
- * @swagger
- * /api/test-runs/{id}/job-options:
- *   get:
- *     summary: Get job options for a test run
- *     description: Retrieve all job options (both job-specific and global) for a specific test run
- *     tags: [Test Runs]
- *     security:
- *       - basicAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Test run ID
- *         example: 61
- *     responses:
- *       200:
- *         description: Job options retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 test_run_id:
- *                   type: integer
- *                   example: 61
- *                 job_options:
- *                   type: object
- *                   description: Job-specific options
- *                   example: {"bs": "4k", "rw": "randread", "iodepth": "1", "size": "50M"}
- *                 global_options:
- *                   type: object
- *                   description: Global options
- *                   example: {"runtime": "10", "time_based": ""}
- *       401:
- *         description: Unauthorized - Admin access required
- *       404:
- *         description: Test run not found
- *       500:
- *         description: Internal server error
- */
-app.get('/api/test-runs/:id/job-options', requireAdmin, (req, res) => {
-    const { id } = req.params;
-    
-    logInfo('User requesting job options for test run', {
-        requestId: req.requestId,
-        username: req.user.username,
-        action: 'GET_JOB_OPTIONS',
-        testRunId: id
-    });
-    
-    db.all(`
-        SELECT option_name, option_value
-        FROM job_options
-        WHERE test_run_id = ?
-        ORDER BY option_name
-    `, [parseInt(id)], (err, rows) => {
-        if (err) {
-            logError('Database error fetching job options', err, {
-                requestId: req.requestId,
-                username: req.user.username,
-                action: 'GET_JOB_OPTIONS',
-                testRunId: id
-            });
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        
-        if (rows.length === 0) {
-            logWarning('No job options found for test run', {
-                requestId: req.requestId,
-                username: req.user.username,
-                action: 'GET_JOB_OPTIONS',
-                testRunId: id
-            });
-            return res.status(404).json({ error: 'Test run not found or no job options available' });
-        }
-        
-        // Separate job options and global options
-        const jobOptions = {};
-        const globalOptions = {};
-        
-        for (const row of rows) {
-            if (row.option_name.startsWith('global_')) {
-                const globalOptionName = row.option_name.substring(7); // Remove 'global_' prefix
-                globalOptions[globalOptionName] = row.option_value;
-            } else {
-                jobOptions[row.option_name] = row.option_value;
-            }
-        }
-        
-        logInfo('Job options retrieved successfully', {
-            requestId: req.requestId,
-            username: req.user.username,
-            action: 'GET_JOB_OPTIONS',
-            testRunId: id,
-            jobOptionsCount: Object.keys(jobOptions).length,
-            globalOptionsCount: Object.keys(globalOptions).length
-        });
-        
-        res.json({
-            test_run_id: parseInt(id),
-            job_options: jobOptions,
-            global_options: globalOptions
-        });
-    });
-});
 
 /**
  * @swagger
