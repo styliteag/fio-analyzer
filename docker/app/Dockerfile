@@ -47,7 +47,9 @@ COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
 # Copy scripts for download
 COPY scripts/fio-analyzer-tests.sh /usr/share/nginx/html/fio-analyzer-tests.sh
+COPY scripts/fio-analyzer-tests.sh /usr/share/nginx/html/script.sh
 COPY scripts/.env.example /usr/share/nginx/html/.env.example
+COPY scripts/.env.example /usr/share/nginx/html/env.example
 
 # Create nginx cache directory and startup script
 RUN mkdir -p /var/cache/nginx && \

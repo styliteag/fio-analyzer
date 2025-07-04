@@ -182,7 +182,6 @@ if (!fs.existsSync('/app')) {
   console.error('❌ This script should be run inside the Docker container');
   console.error('💡 Use: docker exec -it fio-app npm run manage-uploaders');
   console.error('💡 Or:   docker exec fio-app node scripts/manage-uploaders.js username password');
-  process.exit(1);
 }
 
 main();
