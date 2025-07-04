@@ -59,7 +59,7 @@ set_defaults() {
     BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
     TARGET_DIR="${TARGET_DIR:-/tmp/fio_test}"
     USERNAME="${USERNAME:-uploader}"
-    PASSWORD="${PASSWORD:-uploaderpassword}"
+    PASSWORD="${PASSWORD:-uploader}"
     
     # Parse BLOCK_SIZES from comma-separated string if provided
     if [ -n "$BLOCK_SIZES" ] && [ "$BLOCK_SIZES" != "4k,64k,1M" ]; then
@@ -185,86 +185,40 @@ check_api_connectivity() {
 
 # Function to validate credentials
 check_credentials() {
-    print_status "Validating credentials for user '$USERNAME'"
-    
-    # First try to access test-runs endpoint (admin-only)
-    local response
-    response=$(curl -s -w "%{http_code}" -u "$USERNAME:$PASSWORD" \
+    print_status "Validating upload credentials for user '$USERNAME'"
+
+    # Test upload endpoint for upload-only users
+    local upload_response
+    upload_response=$(curl -s -w "%{http_code}" -u "$USERNAME:$PASSWORD" \
         --connect-timeout 10 --max-time 30 \
-        "$BACKEND_URL/api/test-runs" 2>/dev/null)
-    
-    local curl_exit_code=$?
-    if [ $curl_exit_code -ne 0 ]; then
-        print_error "Network error while validating credentials"
-        exit 1
-    fi
-    
-    local http_code="${response: -3}"
-    local response_body="${response%???}"
-    
-    case "$http_code" in
-        200)
+        -X GET "$BACKEND_URL/api/import" 2>/dev/null)
+
+    local upload_http_code="${upload_response: -3}"
+
+    case "$upload_http_code" in
+        405)
+            # Method Not Allowed is expected for GET on /api/import (it only accepts POST)
             print_success "Credentials validated successfully"
-            print_status "User '$USERNAME' has full admin access"
+            print_status "User '$USERNAME' has upload access"
             return 0
             ;;
-        401)
-            print_error "Authentication failed: Invalid username or password"
-            print_error "Please check your credentials:"
-            print_error "  - Username: $USERNAME"
-            print_error "  - Password: [hidden]"
-            print_error "  - Verify credentials are correct in your .env file"
-            exit 1
-            ;;
-        403)
-            print_status "User '$USERNAME' does not have admin access, checking upload permissions..."
-            # Test upload endpoint for upload-only users
-            local upload_response
-            upload_response=$(curl -s -w "%{http_code}" -u "$USERNAME:$PASSWORD" \
+        404)
+            # Some servers return 404 for GET on POST-only routes instead of 405
+            # Test with a POST request to validate upload permissions
+            print_status "Testing upload endpoint with POST request..."
+            local post_response
+            post_response=$(curl -s -w "%{http_code}" -u "$USERNAME:$PASSWORD" \
                 --connect-timeout 10 --max-time 30 \
-                -X GET "$BACKEND_URL/api/import" 2>/dev/null)
-            
-            local upload_http_code="${upload_response: -3}"
-            
-            case "$upload_http_code" in
-                405)
-                    # Method Not Allowed is expected for GET on /api/import (it only accepts POST)
-                    # This means the user can access the endpoint but wrong method
+                -X POST "$BACKEND_URL/api/import" 2>/dev/null)
+
+            local post_http_code="${post_response: -3}"
+
+            case "$post_http_code" in
+                400)
+                    # Bad Request - expected when no file is uploaded, but user is authenticated
                     print_success "Credentials validated successfully"
-                    print_status "User '$USERNAME' has upload-only access"
+                    print_status "User '$USERNAME' has upload access"
                     return 0
-                    ;;
-                404)
-                    # Some servers return 404 for GET on POST-only routes instead of 405
-                    # Test with a POST request to validate upload permissions
-                    print_status "Testing upload endpoint with POST request..."
-                    local post_response
-                    post_response=$(curl -s -w "%{http_code}" -u "$USERNAME:$PASSWORD" \
-                        --connect-timeout 10 --max-time 30 \
-                        -X POST "$BACKEND_URL/api/import" 2>/dev/null)
-                    
-                    local post_http_code="${post_response: -3}"
-                    
-                    case "$post_http_code" in
-                        400)
-                            # Bad Request - expected when no file is uploaded, but user is authenticated
-                            print_success "Credentials validated successfully"
-                            print_status "User '$USERNAME' has upload-only access"
-                            return 0
-                            ;;
-                        401)
-                            print_error "Authentication failed: Invalid username or password"
-                            exit 1
-                            ;;
-                        403)
-                            print_error "Access denied: User '$USERNAME' does not have upload permissions"
-                            exit 1
-                            ;;
-                        *)
-                            print_error "Cannot validate upload permissions (HTTP $post_http_code)"
-                            exit 1
-                            ;;
-                    esac
                     ;;
                 401)
                     print_error "Authentication failed: Invalid username or password"
@@ -274,21 +228,28 @@ check_credentials() {
                     print_error "Access denied: User '$USERNAME' does not have upload permissions"
                     exit 1
                     ;;
-                200)
-                    # Unexpected but valid response
-                    print_success "Credentials validated successfully"
-                    print_status "User '$USERNAME' has upload access"
-                    return 0
-                    ;;
                 *)
-                    print_error "Cannot validate upload permissions (HTTP $upload_http_code)"
+                    print_error "Cannot validate upload permissions (HTTP $post_http_code)"
                     exit 1
                     ;;
             esac
             ;;
+        401)
+            print_error "Authentication failed: Invalid username or password"
+            exit 1
+            ;;
+        403)
+            print_error "Access denied: User '$USERNAME' does not have upload permissions"
+            exit 1
+            ;;
+        200)
+            # Unexpected but valid response
+            print_success "Credentials validated successfully"
+            print_status "User '$USERNAME' has upload access"
+            return 0
+            ;;
         *)
-            print_error "Unexpected response while validating credentials (HTTP $http_code)"
-            print_error "Response: $response_body"
+            print_error "Cannot validate upload permissions (HTTP $upload_http_code)"
             exit 1
             ;;
     esac
