@@ -4,7 +4,7 @@ export interface TestRun {
 	drive_model: string;
 	drive_type: string;
 	test_name: string;
-	block_size: number;
+	block_size: number | string;
 	read_write_pattern: string;
 	queue_depth: number;
 	duration: number;
@@ -17,6 +17,15 @@ export interface TestRun {
 	sys_cpu?: number;
 	hostname?: string;
 	protocol?: string;
+	// Job options fields from database consolidation
+	output_file?: string;
+	num_jobs?: number;
+	direct?: number;
+	test_size?: string;
+	sync?: number;
+	iodepth?: number;
+	// Uniqueness tracking
+	is_latest?: number;
 }
 
 export interface PerformanceMetric {

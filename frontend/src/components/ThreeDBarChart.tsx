@@ -9,16 +9,16 @@ export type PerfDatum = {
   queuedepth: string | number;
   iops?: number;
   latency?: number;
-  throughput?: number;
+  bandwidth?: number;
 };
 
 const METRICS = [
   { key: 'iops', label: 'IOPS', color: '#6366f1' },
   { key: 'latency', label: 'Latency (ms)', color: '#f59e0b' },
-  { key: 'throughput', label: 'Throughput', color: '#10b981' },
+  { key: 'bandwidth', label: 'Bandwidth', color: '#10b981' },
 ];
 
-type MetricKey = 'iops' | 'latency' | 'throughput';
+type MetricKey = 'iops' | 'latency' | 'bandwidth';
 
 interface ThreeDBarChartProps {
   data: PerfDatum[];

@@ -48,8 +48,9 @@ export const authenticatedFetch = async (
 };
 
 // API functions
-export const fetchTestRuns = async () => {
-	const response = await authenticatedFetch("/api/test-runs");
+export const fetchTestRuns = async (includeHistorical: boolean = false) => {
+	const params = includeHistorical ? "?include_historical=true" : "";
+	const response = await authenticatedFetch(`/api/test-runs${params}`);
 	if (!response.ok) {
 		throw new Error("Failed to fetch test runs");
 	}
@@ -93,25 +94,6 @@ export const fetchSinglePerformanceData = async (
 	return response.json();
 };
 
-export const fetchJobOptions = async (testRunIds: number[]) => {
-	const params = new URLSearchParams({
-		test_run_ids: testRunIds.join(","),
-	});
-
-	const response = await authenticatedFetch(`/api/test-runs/job-options?${params}`);
-	if (!response.ok) {
-		throw new Error("Failed to fetch job options");
-	}
-	return response.json();
-};
-
-export const fetchSingleJobOptions = async (testRunId: number) => {
-	const response = await authenticatedFetch(`/api/test-runs/${testRunId}/job-options`);
-	if (!response.ok) {
-		throw new Error("Failed to fetch job options");
-	}
-	return response.json();
-};
 
 export const fetchFilters = async () => {
 	const response = await authenticatedFetch("/api/filters");

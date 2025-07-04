@@ -43,7 +43,7 @@ export default function Dashboard() {
 			const metrics = selectedTemplate?.metrics || [
 				"iops",
 				"avg_latency",
-				"throughput",
+				"bandwidth",
 			];
 
 			const data = await apiFetchPerformanceData(runIds, metrics);
