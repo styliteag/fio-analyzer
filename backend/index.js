@@ -6,7 +6,7 @@ const swaggerUi = require('swagger-ui-express');
 // Import our modules
 const { PORT, swaggerOptions } = require('./config');
 const { initDatabase } = require('./database');
-const { logInfo } = require('./utils');
+const { logInfo, requestLoggingMiddleware, errorLoggingMiddleware } = require('./utils');
 const apiRoutes = require('./routes');
 
 const app = express();
@@ -14,6 +14,9 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Add comprehensive logging middleware
+app.use(requestLoggingMiddleware);
 
 // Initialize database
 const db = initDatabase();
@@ -88,12 +91,16 @@ app.use('/api', apiRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+    logInfo('Health check requested', { requestId: req.requestId });
     res.json({ 
         status: 'OK', 
         timestamp: new Date().toISOString(),
         version: '1.0.0'
     });
 });
+
+// Add error logging middleware (must be last)
+app.use(errorLoggingMiddleware);
 
 // Start server
 app.listen(PORT, () => {
@@ -108,33 +115,57 @@ app.listen(PORT, () => {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-    console.log('\nReceived SIGINT. Graceful shutdown...');
+    logInfo('Received SIGINT signal, initiating graceful shutdown', {
+        processId: process.pid,
+        uptime: process.uptime()
+    });
+    
     if (db) {
         db.close((err) => {
             if (err) {
-                console.error('Error closing database:', err.message);
+                logError('Error closing database during shutdown', err, {
+                    processId: process.pid
+                });
             } else {
-                console.log('Database connection closed.');
+                logInfo('Database connection closed successfully during shutdown', {
+                    processId: process.pid
+                });
             }
+            logInfo('Server shutdown complete', { processId: process.pid });
             process.exit(0);
         });
     } else {
+        logInfo('Server shutdown complete (no database connection)', { 
+            processId: process.pid 
+        });
         process.exit(0);
     }
 });
 
 process.on('SIGTERM', () => {
-    console.log('Received SIGTERM. Graceful shutdown...');
+    logInfo('Received SIGTERM signal, initiating graceful shutdown', {
+        processId: process.pid,
+        uptime: process.uptime()
+    });
+    
     if (db) {
         db.close((err) => {
             if (err) {
-                console.error('Error closing database:', err.message);
+                logError('Error closing database during shutdown', err, {
+                    processId: process.pid
+                });
             } else {
-                console.log('Database connection closed.');
+                logInfo('Database connection closed successfully during shutdown', {
+                    processId: process.pid
+                });
             }
+            logInfo('Server shutdown complete', { processId: process.pid });
             process.exit(0);
         });
     } else {
+        logInfo('Server shutdown complete (no database connection)', { 
+            processId: process.pid 
+        });
         process.exit(0);
     }
 });

@@ -1,17 +1,19 @@
 const sqlite3 = require('sqlite3').verbose();
 const { DB_PATH } = require('../config');
-const { logInfo, logError, calculateUniqueKey, getBaseIops, getBaseLatency, getBaseBandwidth, parseBlockSizeToKB, showServerReady } = require('../utils');
+const { logInfo, logError, logWarning, calculateUniqueKey, getBaseIops, getBaseLatency, getBaseBandwidth, parseBlockSizeToKB, showServerReady } = require('../utils');
 
 let db;
 
 // Initialize database connection
 function initDatabase() {
+    logInfo('Initializing database connection', { dbPath: DB_PATH });
+    
     db = new sqlite3.Database(DB_PATH, (err) => {
         if (err) {
-            console.error('Error opening database:', err.message);
+            logError('Error opening database', err, { dbPath: DB_PATH });
             process.exit(1);
         }
-        console.log('Connected to the SQLite database.');
+        logInfo('Connected to SQLite database successfully', { dbPath: DB_PATH });
         initDb();
     });
     
@@ -21,7 +23,9 @@ function initDatabase() {
 // Get database instance
 function getDatabase() {
     if (!db) {
-        throw new Error('Database not initialized. Call initDatabase() first.');
+        const error = new Error('Database not initialized. Call initDatabase() first.');
+        logError('Database not initialized', error);
+        throw error;
     }
     return db;
 }
@@ -29,6 +33,13 @@ function getDatabase() {
 // Mark existing tests as not latest when inserting a new test with the same configuration
 function updateLatestFlags(testRun, callback) {
     const uniqueKey = calculateUniqueKey(testRun);
+    
+    logInfo('Updating latest flags for test run', { 
+        uniqueKey,
+        driveType: testRun.drive_type,
+        driveModel: testRun.drive_model,
+        hostname: testRun.hostname
+    });
     
     // Find all existing tests with the same unique configuration
     const query = `
@@ -56,10 +67,13 @@ function updateLatestFlags(testRun, callback) {
     
     db.run(query, params, function(err) {
         if (err) {
-            console.error('Error updating latest flags:', err.message);
+            logError('Error updating latest flags', err, { uniqueKey });
             return callback(err);
         }
-        console.log(`Updated ${this.changes} existing tests to is_latest=0 for configuration: ${uniqueKey}`);
+        logInfo('Updated existing tests to is_latest=0', { 
+            changes: this.changes,
+            uniqueKey 
+        });
         callback(null);
     });
 }
@@ -409,19 +423,47 @@ function insertLatencyPercentiles(testRunId, operationType, baseLatency, callbac
     ];
     
     let inserted = 0;
+    let errors = 0;
+    
     percentiles.forEach(p => {
         const latencyNs = Math.floor(baseLatency * p.multiplier * 1000000); // Convert ms to ns
-        db.run(
-            'INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)',
-            [testRunId, operationType, p.percentile, latencyNs],
-            (err) => {
-                if (err) console.error('Error inserting latency percentile:', err);
-                inserted++;
-                if (inserted === percentiles.length) {
-                    callback();
+        
+        // Ensure latency is valid
+        if (latencyNs > 0) {
+            db.run(
+                'INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)',
+                [testRunId, operationType, p.percentile, latencyNs],
+                (err) => {
+                    if (err) {
+                        logError('Error inserting latency percentile', err, {
+                            testRunId,
+                            operationType,
+                            percentile: p.percentile,
+                            latencyNs,
+                            baseLatency
+                        });
+                        errors++;
+                    }
+                    inserted++;
+                    if (inserted === percentiles.length && callback) {
+                        callback(errors > 0 ? new Error(`${errors} percentile insertions failed`) : null);
+                    }
                 }
+            );
+        } else {
+            logWarning('Skipping invalid latency percentile', {
+                testRunId,
+                operationType,
+                percentile: p.percentile,
+                latencyNs,
+                baseLatency,
+                reason: 'invalid_latency'
+            });
+            inserted++;
+            if (inserted === percentiles.length && callback) {
+                callback(errors > 0 ? new Error(`${errors} percentile insertions failed`) : null);
             }
-        );
+        }
     });
 }
 

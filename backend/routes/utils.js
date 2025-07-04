@@ -275,23 +275,4 @@ router.delete('/database/clear', requireAdmin, (req, res) => {
     });
 });
 
-// Serve static files
-router.get('/script.sh', (req, res) => {
-    const scriptPath = path.join(__dirname, '..', 'static', 'fio-analyzer-tests.sh');
-    if (fs.existsSync(scriptPath)) {
-        res.download(scriptPath, 'fio-analyzer-tests.sh');
-    } else {
-        res.status(404).json({ error: 'Script not found' });
-    }
-});
-
-router.get('/env.example', (req, res) => {
-    const envPath = path.join(__dirname, '..', 'static', '.env.example');
-    if (fs.existsSync(envPath)) {
-        res.download(envPath, '.env.example');
-    } else {
-        res.status(404).json({ error: 'Environment file not found' });
-    }
-});
-
 module.exports = router;

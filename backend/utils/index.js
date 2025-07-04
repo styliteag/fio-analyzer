@@ -5,7 +5,7 @@ function generateRequestId() {
     return crypto.randomBytes(8).toString('hex');
 }
 
-// Logging functions with structured output
+// Enhanced logging functions with structured output
 function logInfo(message, metadata = {}) {
     const timestamp = new Date().toISOString();
     const logEntry = {
@@ -39,6 +39,71 @@ function logWarning(message, metadata = {}) {
         ...metadata
     };
     console.warn(`[${timestamp}] WARN  ${message} | ${Object.entries(metadata).map(([k, v]) => `${k}=${v}`).join(' ')}`);
+}
+
+function logDebug(message, metadata = {}) {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+        timestamp,
+        level: 'DEBUG',
+        message,
+        ...metadata
+    };
+    console.log(`[${timestamp}] DEBUG ${message} | ${Object.entries(metadata).map(([k, v]) => `${k}=${v}`).join(' ')}`);
+}
+
+// Enhanced request logging middleware
+function requestLoggingMiddleware(req, res, next) {
+    const requestId = generateRequestId();
+    req.requestId = requestId;
+    
+    const startTime = Date.now();
+    
+    // Log incoming request
+    logInfo('Incoming request', {
+        requestId,
+        method: req.method,
+        url: req.originalUrl,
+        userAgent: req.get('User-Agent'),
+        ip: req.ip || req.connection.remoteAddress,
+        contentLength: req.get('Content-Length') || 0
+    });
+    
+    // Override res.end to log response
+    const originalEnd = res.end;
+    res.end = function(chunk, encoding) {
+        const duration = Date.now() - startTime;
+        const statusCode = res.statusCode;
+        
+        logInfo('Request completed', {
+            requestId,
+            method: req.method,
+            url: req.originalUrl,
+            statusCode,
+            duration: `${duration}ms`,
+            contentLength: res.get('Content-Length') || 0
+        });
+        
+        originalEnd.call(this, chunk, encoding);
+    };
+    
+    next();
+}
+
+// Error logging middleware
+function errorLoggingMiddleware(err, req, res, next) {
+    logError('Unhandled error', err, {
+        requestId: req.requestId,
+        method: req.method,
+        url: req.originalUrl,
+        userAgent: req.get('User-Agent'),
+        ip: req.ip || req.connection.remoteAddress
+    });
+    
+    res.status(500).json({
+        error: 'Internal server error',
+        requestId: req.requestId
+    });
 }
 
 // Calculate unique key for test run configuration
@@ -135,11 +200,14 @@ module.exports = {
     logInfo,
     logError,
     logWarning,
+    logDebug,
     calculateUniqueKey,
     parseBlockSizeToKB,
     getBaseIops,
     getBaseLatency,
     getBaseBandwidth,
     showServerReady,
-    requestIdMiddleware
+    requestIdMiddleware,
+    requestLoggingMiddleware,
+    errorLoggingMiddleware
 };
