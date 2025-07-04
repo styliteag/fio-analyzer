@@ -108,31 +108,117 @@ cp .env.example .env
 - Use existing endpoints as templates for consistent documentation style
 - **Docker nginx configuration**: The nginx proxy requires a specific rule for `/api-docs` since it doesn't match the `/api/` pattern
 
-### Frontend (React + TypeScript)
-- **App.tsx**: Main application component orchestrating data flow
-- **Authentication**: Custom login forms with React context-based authentication
-- **Components**:
-  - `TestRunSelector`: Multi-select dropdown for choosing test runs
-  - `TemplateSelector`: Chart template/visualization picker  
-  - `InteractiveChart`: Chart.js-powered data visualization with interactive controls
-  - `TimeSeriesChart`: Time-series monitoring with server selection and trend analysis
-  - `LoginForm`: Custom authentication interface
-- **Interactive Features**:
-  - Sorting by multiple criteria (name, IOPS, latency, etc.)
-  - Grouping by drive model, test type, block size, etc.
-  - Series visibility toggles
-  - Chart export (PNG/CSV)
-  - Fullscreen mode
-  - **Time-series monitoring**: Track performance trends over time with server selection and moving averages
-- **Types**: All TypeScript interfaces defined in `src/types/index.ts`
+### Frontend (React + TypeScript) - Modular Architecture
 
-### Data Flow
-1. User authenticates via custom login form
-2. User selects test runs via `TestRunSelector`
-3. User picks visualization template via `TemplateSelector` 
-4. User configures interactive controls (sorting, grouping, etc.)
-5. `App.tsx` fetches performance data from backend API with authentication
-6. `InteractiveChart` renders data using Chart.js with custom templates and user controls
+#### **Core Structure (Refactored 2024)**
+```
+frontend/src/
+├── services/           # Business logic layer
+│   ├── api/           # API communication
+│   ├── data/          # Data transformation & validation
+│   └── config/        # Configuration & constants
+├── hooks/             # Custom React hooks
+│   └── api/           # API operation hooks
+├── components/        # UI components
+│   ├── ui/            # Reusable UI components
+│   ├── charts/        # Chart-specific components
+│   ├── forms/         # Form components
+│   └── layout/        # Layout components
+├── features/          # Feature-specific components
+└── types/             # TypeScript type definitions
+```
+
+#### **Services Layer (`src/services/`)**
+- **API Services** (`api/`): Modular API clients
+  - `base.ts` - Authentication & common API utilities
+  - `testRuns.ts` - Test run CRUD operations
+  - `performance.ts` - Performance data fetching
+  - `timeSeries.ts` - Time-series specific APIs
+  - `upload.ts` - File upload with validation
+- **Data Services** (`data/`): Data processing utilities
+  - `transforms.ts` - Chart data transformation
+  - `validators.ts` - Data validation utilities
+  - `formatters.ts` - Display formatting functions
+- **Configuration** (`config/`): Application configuration
+  - `constants.ts` - App constants & validation rules
+  - `chartTemplates.ts` - Chart template definitions
+  - `theme.ts` - Theme configuration
+
+#### **Custom Hooks (`src/hooks/`)**
+- **API Hooks** (`api/`): State management for API operations
+  - `useTestRuns.ts` - Test run data management
+  - `usePerformanceData.ts` - Performance data with filtering
+  - `useTimeSeries.ts` - Time-series data operations
+  - `useUpload.ts` - File upload state management
+
+#### **UI Components (`src/components/`)**
+- **Core UI Library** (`ui/`): Reusable components
+  - `Button.tsx` - Configurable button component
+  - `Card.tsx` - Container component with variants
+  - `Modal.tsx` - Modal with confirmation variants
+  - `Input.tsx` - Form input components
+  - `Loading.tsx` - Loading states & skeletons
+  - `ErrorDisplay.tsx` - Error handling components
+- **Chart Components** (`charts/`): Modular chart system
+  - `ChartContainer.tsx` - Main chart orchestrator
+  - `ChartControls.tsx` - Interactive controls (sort/group)
+  - `ChartRenderer.tsx` - Chart.js rendering with themes
+  - `SeriesToggle.tsx` - Series visibility management
+  - `ChartExport.tsx` - Export functionality (PNG/CSV/JSON)
+  - `ChartStats.tsx` - Chart statistics display
+  - `chartProcessors.ts` - Data processing utilities
+
+#### **Legacy Components (Still in use)**
+- `TestRunSelector.tsx`: Multi-select dropdown for test runs (614 lines - needs refactoring)
+- `TemplateSelector.tsx`: Chart template picker
+- `TimeSeriesChart.tsx`: Time-series monitoring (needs refactoring)
+- `LoginForm.tsx`: Authentication interface
+
+#### **Interactive Features**
+- Sorting by multiple criteria (name, IOPS, latency, block size, etc.)
+- Grouping by drive model, test type, protocol, hostname
+- Series visibility toggles with bulk controls
+- Chart export (PNG/CSV/JSON) with download management
+- Fullscreen mode for detailed analysis
+- **Time-series monitoring**: Server selection, trend analysis, moving averages
+- Theme support (light/dark) with Chart.js integration
+
+#### **Key Architectural Improvements**
+- **Separation of Concerns**: Business logic separated from UI components
+- **Reusability**: UI components can be used across features
+- **Type Safety**: Comprehensive TypeScript interfaces
+- **Performance**: Custom hooks with optimized state management
+- **Maintainability**: Single responsibility principle applied throughout
+- **Testing**: Components can be tested in isolation
+
+### Data Flow (Updated Architecture)
+1. **Authentication**: User authenticates via `LoginForm` component
+2. **Test Selection**: User selects test runs via `TestRunSelector` (614 lines - legacy)
+3. **Template Selection**: User picks visualization template via `TemplateSelector`
+4. **Data Fetching**: Custom hooks (`useTestRuns`, `usePerformanceData`) handle API calls
+5. **Data Processing**: Service layer (`services/data/`) transforms data for visualization
+6. **Chart Rendering**: Modular chart system renders via `ChartContainer` → `ChartRenderer`
+7. **User Interaction**: `ChartControls` manage sorting/grouping, `SeriesToggle` manages visibility
+
+#### **Modern Component Usage Pattern**
+```typescript
+// Using the new modular architecture
+import { ChartContainer } from './components/charts';
+import { usePerformanceData } from './hooks';
+
+const Dashboard = () => {
+    const { data, loading } = usePerformanceData({ testRunIds: [1,2,3] });
+    
+    return (
+        <ChartContainer 
+            template={selectedTemplate}
+            data={data}
+            showControls={true}
+            showExport={true}
+        />
+    );
+};
+```
 
 ### Docker Setup (Consolidated Architecture)
 - **Single Container**: Combined frontend (nginx) and backend (Node.js) in one container
@@ -193,5 +279,45 @@ PASSWORD=admin             # Authentication password (default for dev)
 BLOCK_SIZES=4k,64k,1M      # Test block sizes
 TEST_PATTERNS=read,write   # Test patterns
 ```
+
+## Development Notes & Memories
+
+### Frontend Refactoring Progress (2024)
+- ✅ **Services Layer**: Complete modular API, data processing, and configuration
+- ✅ **Custom Hooks**: API operations with loading/error states  
+- ✅ **UI Component Library**: Reusable Button, Card, Modal, Input, Loading, Error components
+- ✅ **Chart System**: Broke down 1076-line `InteractiveChart.tsx` into 7 focused components
+- 🔄 **Legacy Components**: `TestRunSelector.tsx` (614 lines) and `TimeSeriesChart.tsx` need refactoring
+- ⭐ **Key Achievement**: Transformed monolithic components into maintainable, testable modules
+
+### File Location Quick Reference
+```bash
+# API Services (NEW)
+frontend/src/services/api/{base,testRuns,performance,timeSeries,upload}.ts
+
+# Data Processing (NEW)  
+frontend/src/services/data/{transforms,validators,formatters}.ts
+
+# Configuration (NEW)
+frontend/src/services/config/{constants,chartTemplates,theme}.ts
+
+# Custom Hooks (NEW)
+frontend/src/hooks/api/{useTestRuns,usePerformanceData,useTimeSeries,useUpload}.ts
+
+# UI Components (NEW)
+frontend/src/components/ui/{Button,Card,Modal,Input,Loading,ErrorDisplay}.tsx
+
+# Chart System (NEW - replaces old InteractiveChart.tsx)
+frontend/src/components/charts/{ChartContainer,ChartControls,ChartRenderer,SeriesToggle,ChartExport,ChartStats}.tsx
+
+# Legacy (needs refactoring)
+frontend/src/components/{TestRunSelector,TimeSeriesChart}.tsx
+```
+
+### Backend Architecture (Modular)
+- **Routes**: `backend/routes/` - API endpoints separated by feature
+- **Database**: `backend/database/` - Schema and connection management
+- **Utils**: `backend/utils/` - Helper functions and utilities
+- **Config**: `backend/config/` - Application configuration
 
 ## Memories
