@@ -4,7 +4,7 @@ import { BarChart3, Maximize, Minimize, Filter } from 'lucide-react';
 import type { ChartTemplate, PerformanceData } from '../../types';
 import { Button, EmptyState } from '../ui';
 import ChartControls from './ChartControls';
-import SeriesToggle, { BulkSeriesControl } from './SeriesToggle';
+import SeriesToggle from './SeriesToggle';
 import { ExportMenu } from './ChartExport';
 import ChartStats from './ChartStats';
 import ChartRenderer from './ChartRenderer';
@@ -81,29 +81,6 @@ const ChartContainer: React.FC<ChartContainerProps> = ({
         });
     }, []);
 
-    const showAllSeries = useCallback(() => {
-        if (chartData) {
-            const allSeries = new Set<string>(chartData.datasets.map((d: any) => d.label as string));
-            setVisibleSeries(allSeries);
-        }
-    }, [chartData]);
-
-    const hideAllSeries = useCallback(() => {
-        setVisibleSeries(new Set());
-    }, []);
-
-    const toggleAllSeries = useCallback(() => {
-        if (chartData) {
-            const allLabels = chartData.datasets.map((d: any) => d.label as string);
-            const allVisible = allLabels.every((label: string) => visibleSeries.has(label));
-            
-            if (allVisible) {
-                setVisibleSeries(new Set());
-            } else {
-                setVisibleSeries(new Set(allLabels));
-            }
-        }
-    }, [chartData, visibleSeries]);
 
     // Empty state
     if (!chartData || data.length === 0) {
