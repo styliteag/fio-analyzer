@@ -35,8 +35,12 @@ export const useTimeSeriesServers = (autoFetch: boolean = true): UseTimeSeriesSe
             setLoading(true);
             setError(null);
             
-            const serversData = await fetchTimeSeriesServers();
-            setServers(serversData);
+            const response = await fetchTimeSeriesServers();
+            if (response.data) {
+                setServers(response.data);
+            } else {
+                throw new Error(response.error || 'Failed to fetch servers');
+            }
         } catch (err: any) {
             setError(err.message || 'Failed to fetch servers');
             console.error('Error fetching time series servers:', err);
@@ -77,8 +81,12 @@ export const useTimeSeriesLatest = (autoFetch: boolean = true): UseTimeSeriesLat
             setLoading(true);
             setError(null);
             
-            const latestData = await fetchTimeSeriesLatest();
-            setData(latestData);
+            const response = await fetchTimeSeriesLatest();
+            if (response.data) {
+                setData(response.data);
+            } else {
+                throw new Error(response.error || 'Failed to fetch latest data');
+            }
         } catch (err: any) {
             setError(err.message || 'Failed to fetch latest data');
             console.error('Error fetching time series latest:', err);
@@ -144,8 +152,12 @@ export const useTimeSeriesHistory = ({
             setLoading(true);
             setError(null);
             
-            const historyData = await fetchTimeSeriesHistory(fetchOptions || options);
-            setData(historyData);
+            const response = await fetchTimeSeriesHistory(fetchOptions || options);
+            if (response.data) {
+                setData(response.data);
+            } else {
+                throw new Error(response.error || 'Failed to fetch history data');
+            }
         } catch (err: any) {
             setError(err.message || 'Failed to fetch history data');
             console.error('Error fetching time series history:', err);
@@ -214,8 +226,12 @@ export const useTimeSeriesTrends = ({
             setLoading(true);
             setError(null);
             
-            const trendsData = await fetchTimeSeriesTrends(fetchOptions || options);
-            setData(trendsData);
+            const response = await fetchTimeSeriesTrends(fetchOptions || options);
+            if (response.data) {
+                setData(response.data);
+            } else {
+                throw new Error(response.error || 'Failed to fetch trends data');
+            }
         } catch (err: any) {
             setError(err.message || 'Failed to fetch trends data');
             console.error('Error fetching time series trends:', err);

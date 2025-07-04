@@ -276,12 +276,12 @@ export const componentThemes = {
 
 // Utility functions
 export const getTheme = (themeName: ThemeName): Theme => {
-    return themes[themeName];
+    return themes[themeName] as Theme;
 };
 
 export const getComponentTheme = (component: keyof typeof componentThemes, theme: ThemeName) => {
     const componentConfig = componentThemes[component];
-    return componentConfig[theme];
+    return componentConfig[theme as keyof typeof componentConfig];
 };
 
 export const applyCssVariables = (themeName: ThemeName) => {

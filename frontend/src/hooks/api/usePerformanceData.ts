@@ -38,10 +38,12 @@ export const usePerformanceData = (options: UsePerformanceDataOptions): UsePerfo
             setError(null);
             
             const metrics = metricTypes?.length ? metricTypes : getDefaultMetrics();
-            const performanceData = await fetchPerformanceData({
+            const response = await fetchPerformanceData({
                 testRunIds,
                 metricTypes: metrics,
             });
+
+            const performanceData = Array.isArray(response) ? response : (response.data || []);
 
             // Validate data if enabled
             if (validateData) {
@@ -114,7 +116,8 @@ export const useSinglePerformanceData = (
             setLoading(true);
             setError(null);
             
-            const performanceData = await fetchSinglePerformanceData(testRunId, metricTypes);
+            const response = await fetchSinglePerformanceData(testRunId, metricTypes);
+            const performanceData = Array.isArray(response) ? response : (response.data || []);
             setData(performanceData[0] || null);
         } catch (err: any) {
             setError(err.message || 'Failed to fetch performance data');

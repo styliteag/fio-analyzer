@@ -1,15 +1,15 @@
 import { Activity, Database, Download, LogOut, Upload, Book } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import InteractiveChart from "../components/InteractiveChart";
+import { ChartContainer } from "../components/charts";
 import TemplateSelector from "../components/TemplateSelector";
 import TestRunSelector from "../components/TestRunSelector";
 import ThemeToggle from "../components/ThemeToggle";
 import ThreeDBarChart from "../components/ThreeDBarChart";
 import TimeSeriesChart from "../components/TimeSeriesChart";
 import { useAuth } from "../contexts/AuthContext";
-import type { ChartTemplate, PerformanceData, TestRun } from "../types";
-import { fetchPerformanceData as apiFetchPerformanceData } from "../utils/api";
+import { usePerformanceData } from "../hooks";
+import type { ChartTemplate, TestRun } from "../types";
 
 export default function Dashboard() {
 	const navigate = useNavigate();
@@ -29,49 +29,66 @@ export default function Dashboard() {
 	const [selectedRuns, setSelectedRuns] = useState<TestRun[]>([]);
 	const [selectedTemplate, setSelectedTemplate] =
 		useState<ChartTemplate | null>(null);
-	const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
-	const [loading, setLoading] = useState(false);
 	const [refreshTrigger, setRefreshTrigger] = useState(0);
 	const [isChartMaximized, setIsChartMaximized] = useState(false);
 
-	const fetchPerformanceData = useCallback(async () => {
-		if (selectedRuns.length === 0) return;
+	// Memoize values to prevent unnecessary re-renders
+	const testRunIds = useMemo(() => selectedRuns.map(run => run.id), [selectedRuns]);
+	const metricTypes = useMemo(() => 
+		selectedTemplate?.metrics || ["iops", "avg_latency", "bandwidth"], 
+		[selectedTemplate?.metrics]
+	);
+	const shouldAutoFetch = useMemo(() => 
+		selectedRuns.length > 0 && selectedTemplate !== null, 
+		[selectedRuns.length, selectedTemplate]
+	);
 
-		setLoading(true);
-		try {
-			const runIds = selectedRuns.map((run) => run.id);
-			const metrics = selectedTemplate?.metrics || [
-				"iops",
-				"avg_latency",
-				"bandwidth",
-			];
+	// Use new performance data hook with stable options
+	const hookOptions = useMemo(() => ({
+		testRunIds,
+		metricTypes,
+		autoFetch: shouldAutoFetch,
+	}), [testRunIds, metricTypes, shouldAutoFetch]);
+	
+	const { data: performanceData, loading } = usePerformanceData(hookOptions);
 
-			const data = await apiFetchPerformanceData(runIds, metrics);
-
-			// Enhance performance data with queue_depth from selected runs
-			const enhancedData = data.map((perfData: any) => {
-				const correspondingRun = selectedRuns.find(
-					(run) => run.id === perfData.id,
-				);
-				return {
-					...perfData,
-					queue_depth: correspondingRun?.queue_depth || 1,
-				};
-			});
-
-			setPerformanceData(enhancedData);
-		} catch (error) {
-			console.error("Error fetching performance data:", error);
-		} finally {
-			setLoading(false);
+	// Enhance performance data with queue_depth from selected runs
+	const enhancedPerformanceData = useMemo(() => {
+		if (!performanceData || performanceData.length === 0) {
+			return [];
 		}
-	}, [selectedRuns, selectedTemplate]);
+		
+		return performanceData.map((perfData) => {
+			const correspondingRun = selectedRuns.find(
+				(run) => run.id === perfData.id,
+			);
+			return {
+				...perfData,
+				queue_depth: correspondingRun?.queue_depth || 1,
+			};
+		});
+	}, [performanceData, selectedRuns]);
 
-	useEffect(() => {
-		if (selectedRuns.length > 0 && selectedTemplate) {
-			fetchPerformanceData();
-		}
-	}, [selectedRuns, selectedTemplate, fetchPerformanceData]);
+	// Memoize 3D chart data transformation
+	const threeDChartData = useMemo(() => {
+		return enhancedPerformanceData.map(d => {
+			const metrics = (d as any).metrics;
+			const latency_percentiles = (d as any).latency_percentiles;
+			return {
+				blocksize: d.block_size,
+				queuedepth: d.queue_depth,
+				iops: metrics?.combined?.iops?.value,
+				latency: latency_percentiles?.combined?.p95?.value,
+				throughput: undefined,
+			};
+		});
+	}, [enhancedPerformanceData]);
+
+	// Memoize toggle maximize handler
+	const handleToggleMaximize = useMemo(() => 
+		() => setIsChartMaximized(!isChartMaximized), 
+		[isChartMaximized]
+	);
 
 	useEffect(() => {
 		// Refresh data when navigating back to dashboard
@@ -167,35 +184,23 @@ export default function Dashboard() {
 								{selectedTemplate.chartType === 'time-series' ? (
 									<TimeSeriesChart
 										isMaximized={isChartMaximized}
-										onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+										onToggleMaximize={handleToggleMaximize}
 									/>
 								) : selectedTemplate.chartType === '3d-bar' ? (
-									(() => {
-										const mappedData = performanceData.map(d => {
-											const metrics = (d as any).metrics;
-											const latency_percentiles = (d as any).latency_percentiles;
-											return {
-												blocksize: d.block_size,
-												queuedepth: d.queue_depth,
-												iops: metrics?.combined?.iops?.value,
-												latency: latency_percentiles?.combined?.p95?.value,
-												throughput: undefined,
-											};
-										});
-										console.log('3D Chart performanceData:', performanceData);
-										console.log('3D Chart mappedData:', mappedData);
-										return <ThreeDBarChart 
-											data={mappedData} 
-											isMaximized={isChartMaximized}
-											onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
-										/>;
-									})()
-								) : (
-									<InteractiveChart
-										template={selectedTemplate}
-										data={performanceData}
+									<ThreeDBarChart 
+										data={threeDChartData} 
 										isMaximized={isChartMaximized}
-										onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+										onToggleMaximize={handleToggleMaximize}
+									/>
+								) : (
+									<ChartContainer
+										template={selectedTemplate}
+										data={enhancedPerformanceData}
+										isMaximized={isChartMaximized}
+										onToggleMaximize={handleToggleMaximize}
+										showControls={true}
+										showStats={true}
+										showExport={true}
 									/>
 								)}
 							</div>
@@ -208,35 +213,23 @@ export default function Dashboard() {
 					selectedTemplate.chartType === 'time-series' ? (
 						<TimeSeriesChart
 							isMaximized={isChartMaximized}
-							onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+							onToggleMaximize={handleToggleMaximize}
 						/>
 					) : selectedTemplate.chartType === '3d-bar' ? (
-						(() => {
-							const mappedData = performanceData.map(d => {
-								const metrics = (d as any).metrics;
-								const latency_percentiles = (d as any).latency_percentiles;
-								return {
-									blocksize: d.block_size,
-									queuedepth: d.queue_depth,
-									iops: metrics?.combined?.iops?.value,
-									latency: latency_percentiles?.combined?.p95?.value,
-									throughput: undefined,
-								};
-							});
-							console.log('3D Chart performanceData:', performanceData);
-							console.log('3D Chart mappedData:', mappedData);
-							return <ThreeDBarChart 
-								data={mappedData} 
-								isMaximized={isChartMaximized}
-								onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
-							/>;
-						})()
-					) : (
-						<InteractiveChart
-							template={selectedTemplate}
-							data={performanceData}
+						<ThreeDBarChart 
+							data={threeDChartData} 
 							isMaximized={isChartMaximized}
-							onToggleMaximize={() => setIsChartMaximized(!isChartMaximized)}
+							onToggleMaximize={handleToggleMaximize}
+						/>
+					) : (
+						<ChartContainer
+							template={selectedTemplate}
+							data={enhancedPerformanceData}
+							isMaximized={isChartMaximized}
+							onToggleMaximize={handleToggleMaximize}
+							showControls={true}
+							showStats={true}
+							showExport={true}
 						/>
 					)
 				)}

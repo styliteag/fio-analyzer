@@ -100,3 +100,41 @@ export interface TrendDataPoint {
 	moving_avg: number;
 	percent_change: string;
 }
+
+// Time Series Component Types
+export interface TimeSeriesMetricsPoint {
+	timestamp: string;
+	value: number;
+	metric_type: string;
+}
+
+export interface TimeSeriesServerGroup {
+	id: string;
+	hostname: string;
+	protocol: string;
+	driveModels: string[];
+	totalTests: number;
+	lastTestTime: string;
+	firstTestTime: string;
+}
+
+export interface TimeSeriesEnabledMetrics {
+	iops: boolean;
+	latency: boolean;
+	bandwidth: boolean;
+}
+
+export type TimeSeriesTimeRange = "24h" | "7d" | "30d";
+
+export interface TimeSeriesChartDataset {
+	label: string;
+	data: Array<{ x: string; y: number }>;
+	borderColor: string;
+	backgroundColor: string;
+	borderDash?: number[];
+	tension: number;
+	fill: boolean;
+	yAxisID: string;
+	pointRadius: number;
+	pointHoverRadius: number;
+}

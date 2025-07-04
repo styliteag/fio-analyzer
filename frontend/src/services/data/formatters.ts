@@ -1,5 +1,5 @@
 // Data formatting utilities for display and export
-import type { PerformanceData, PerformanceMetric } from '../../types';
+import type { PerformanceData } from '../../types';
 
 // Format numbers with appropriate units and precision
 export const formatMetricValue = (
@@ -160,7 +160,7 @@ export const formatTestRunName = (testRun: PerformanceData): string => {
         testRun.hostname,
         testRun.drive_model,
         testRun.block_size,
-        testRun.pattern
+        testRun.read_write_pattern
     ].filter(Boolean);
     
     return parts.join(' - ');
@@ -228,7 +228,7 @@ export const formatCSVData = (data: PerformanceData[]): string => {
                 `"${item.drive_type}"`,
                 `"${item.protocol}"`,
                 item.block_size,
-                `"${item.pattern}"`,
+                `"${item.read_write_pattern}"`,
                 `"${formatTimestamp(item.timestamp, 'long')}"`
             ];
 

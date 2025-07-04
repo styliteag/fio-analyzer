@@ -32,8 +32,12 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
             setLoading(true);
             setError(null);
             
-            const data = await fetchTestRuns();
-            setTestRuns(data);
+            const response = await fetchTestRuns();
+            if (response.data) {
+                setTestRuns(response.data);
+            } else {
+                throw new Error(response.error || 'Failed to fetch test runs');
+            }
         } catch (err: any) {
             setError(err.message || 'Failed to fetch test runs');
             console.error('Error fetching test runs:', err);
@@ -46,8 +50,12 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
         if (!includeFilters) return;
         
         try {
-            const filtersData = await fetchFilters();
-            setFilters(filtersData);
+            const response = await fetchFilters();
+            if (response.data) {
+                setFilters(response.data);
+            } else {
+                throw new Error(response.error || 'Failed to fetch filters');
+            }
         } catch (err: any) {
             console.error('Error fetching filters:', err);
             // Don't set error for filters since it's not critical
@@ -131,8 +139,11 @@ export const useTestRun = (id: number) => {
             setLoading(true);
             setError(null);
             
-            const testRuns = await fetchTestRuns();
-            const foundRun = testRuns.find(run => run.id === id);
+            const response = await fetchTestRuns();
+            if (!response.data) {
+                throw new Error(response.error || 'Failed to fetch test runs');
+            }
+            const foundRun = response.data.find((run: TestRun) => run.id === id);
             
             if (foundRun) {
                 setTestRun(foundRun);

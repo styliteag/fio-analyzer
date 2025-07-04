@@ -14,6 +14,7 @@ export interface ButtonProps {
     type?: 'button' | 'submit' | 'reset';
     onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
     className?: string;
+    title?: string;
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -28,6 +29,7 @@ const Button: React.FC<ButtonProps> = ({
     type = 'button',
     onClick,
     className = '',
+    title,
 }) => {
     const baseClasses = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
     
@@ -91,6 +93,7 @@ const Button: React.FC<ButtonProps> = ({
             className={classes}
             disabled={disabled || loading}
             onClick={onClick}
+            title={title}
         >
             {loading && loadingSpinner}
             {!loading && iconPosition === 'left' && iconElement}

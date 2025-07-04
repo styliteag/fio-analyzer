@@ -65,7 +65,11 @@ export const useUpload = (): UseUploadResult => {
             
             clearInterval(progressInterval);
             setUploadProgress(100);
-            setResponse(uploadResponse);
+            if (uploadResponse.data) {
+                setResponse(uploadResponse.data);
+            } else {
+                throw new Error(uploadResponse.error || 'Upload failed');
+            }
             
             return true;
         } catch (err: any) {
@@ -198,7 +202,8 @@ export const useBatchUpload = (): UseBatchUploadResult => {
                             ...u, 
                             status: 'completed' as const, 
                             progress: 100,
-                            response 
+                            response: response.data || undefined,
+                            error: response.error
                         }
                         : u
                 ));
@@ -316,11 +321,11 @@ export const useUploadForm = (): UseUploadFormResult => {
 
     const isValid = Object.keys(errors).length === 0 && 
         file !== null && 
-        formData.drive_model &&
-        formData.drive_type &&
-        formData.hostname &&
-        formData.protocol &&
-        formData.description;
+        Boolean(formData.drive_model) &&
+        Boolean(formData.drive_type) &&
+        Boolean(formData.hostname) &&
+        Boolean(formData.protocol) &&
+        Boolean(formData.description);
 
     return {
         formData,

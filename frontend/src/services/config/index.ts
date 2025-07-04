@@ -3,6 +3,18 @@ export * from './chartTemplates';
 export * from './constants';
 export * from './theme';
 
+// Import constants for use in appConfig
+import { 
+    API_CONFIG, 
+    UI_CONFIG, 
+    VALIDATION_RULES, 
+    UPLOAD_CONSTRAINTS,
+    METRIC_TYPES
+} from './constants';
+import { chartConfig, chartTemplates } from './chartTemplates';
+import type { ThemeName } from './theme';
+import { applyCssVariables } from './theme';
+
 // Re-export commonly used configurations
 export {
     chartTemplates,
@@ -94,23 +106,21 @@ export const appConfig = {
     
     // Development settings
     development: {
-        enableDebugLogs: process.env.NODE_ENV === 'development',
-        enableDevTools: process.env.NODE_ENV === 'development',
+        enableDebugLogs: import.meta.env.DEV,
+        enableDevTools: import.meta.env.DEV,
         mockApi: false,
     },
 } as const;
 
 // Environment-specific configuration
 export const getEnvironmentConfig = () => {
-    const env = process.env.NODE_ENV || 'development';
-    
     return {
-        isDevelopment: env === 'development',
-        isProduction: env === 'production',
-        isTest: env === 'test',
+        isDevelopment: import.meta.env.DEV,
+        isProduction: import.meta.env.PROD,
+        isTest: import.meta.env.MODE === 'test',
         apiBaseUrl: API_CONFIG.baseURL,
-        enableDebugMode: env === 'development',
-        enableHotReload: env === 'development',
+        enableDebugMode: import.meta.env.DEV,
+        enableHotReload: import.meta.env.DEV,
     };
 };
 
@@ -119,7 +129,7 @@ export const validateConfig = () => {
     const errors: string[] = [];
     
     // Validate API configuration
-    if (!API_CONFIG.baseURL && process.env.NODE_ENV === 'development') {
+    if (!API_CONFIG.baseURL && import.meta.env.DEV) {
         console.warn('API base URL not configured for development');
     }
     
@@ -130,7 +140,7 @@ export const validateConfig = () => {
     
     // Validate metric types
     const requiredMetrics = ['iops', 'avg_latency', 'bandwidth'];
-    const availableMetrics = Object.keys(METRIC_TYPES);
+    const availableMetrics = Object.keys(METRIC_TYPES || {});
     const missingMetrics = requiredMetrics.filter(
         metric => !availableMetrics.includes(metric)
     );

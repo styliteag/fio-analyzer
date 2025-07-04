@@ -1,5 +1,5 @@
 // Chart rendering component with Chart.js integration
-import React, { forwardRef, useMemo } from 'react';
+import { forwardRef, useMemo } from 'react';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -16,7 +16,7 @@ import { Bar, Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import type { ChartTemplate } from '../../types';
 import { useThemeColors } from '../../hooks/useThemeColors';
-import type { ChartData } from './chartProcessors';
+import type { ChartData as CustomChartData, ChartDataset } from './chartProcessors';
 
 // Register Chart.js components
 ChartJS.register(
@@ -32,7 +32,7 @@ ChartJS.register(
 );
 
 export interface ChartRendererProps {
-    chartData: ChartData;
+    chartData: CustomChartData;
     template: ChartTemplate;
     isMaximized?: boolean;
     onSeriesToggle?: (label: string) => void;
@@ -58,7 +58,7 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
 
         return {
             ...chartData,
-            datasets: chartData.datasets.filter(dataset => 
+            datasets: chartData.datasets.filter((dataset: ChartDataset) => 
                 visibleSeries.has(dataset.label)
             ),
         };
@@ -141,7 +141,7 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
         <div className={`${isMaximized ? 'h-[calc(100vh-280px)]' : 'h-[600px]'} ${className}`}>
             <ChartComponent
                 ref={ref}
-                data={filteredChartData}
+                data={filteredChartData as any}
                 options={chartOptions}
             />
         </div>

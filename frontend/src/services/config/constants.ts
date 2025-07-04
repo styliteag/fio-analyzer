@@ -192,7 +192,7 @@ export const TIME_RANGES = [
 
 // API configuration
 export const API_CONFIG = {
-    baseURL: process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000',
+    baseURL: import.meta.env.PROD ? '' : 'http://localhost:8000',
     timeout: 30000, // 30 seconds
     retryAttempts: 3,
     retryDelay: 1000, // 1 second

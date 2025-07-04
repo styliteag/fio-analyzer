@@ -321,3 +321,7 @@ frontend/src/components/{TestRunSelector,TimeSeriesChart}.tsx
 - **Config**: `backend/config/` - Application configuration
 
 ## Memories
+
+- Never try to run "npm run dev" It will block. run "cd frontend ; npm run build" to check for errors or run "cd frontend; npm run dev &" to detach it. Better ask the user to start the frontend!
+- To test four build errors run "cd frontend ; npm run build"
+- To run the frontend ask the user, or run "cd frontend ; npm run dev &"

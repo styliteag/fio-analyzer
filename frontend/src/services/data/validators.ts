@@ -1,5 +1,4 @@
 // Data validation utilities
-import type { PerformanceData, TestRun, PerformanceMetric } from '../../types';
 
 export interface ValidationResult {
     valid: boolean;

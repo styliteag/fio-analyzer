@@ -5,7 +5,7 @@ import type { ChartTemplate, PerformanceData } from '../../types';
 import { Button, EmptyState } from '../ui';
 import ChartControls from './ChartControls';
 import SeriesToggle, { BulkSeriesControl } from './SeriesToggle';
-import ChartExport, { ExportMenu } from './ChartExport';
+import { ExportMenu } from './ChartExport';
 import ChartStats from './ChartStats';
 import ChartRenderer from './ChartRenderer';
 import { processDataForTemplate } from './chartProcessors';
@@ -61,8 +61,8 @@ const ChartContainer: React.FC<ChartContainerProps> = ({
             setChartData(processedData);
             
             // Initialize all series as visible
-            const allSeries = new Set(
-                processedData.datasets.map((d: any) => d.label)
+            const allSeries = new Set<string>(
+                processedData.datasets.map((d: any) => d.label as string)
             );
             setVisibleSeries(allSeries);
         }
@@ -83,7 +83,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({
 
     const showAllSeries = useCallback(() => {
         if (chartData) {
-            const allSeries = new Set(chartData.datasets.map((d: any) => d.label));
+            const allSeries = new Set<string>(chartData.datasets.map((d: any) => d.label as string));
             setVisibleSeries(allSeries);
         }
     }, [chartData]);
@@ -94,8 +94,8 @@ const ChartContainer: React.FC<ChartContainerProps> = ({
 
     const toggleAllSeries = useCallback(() => {
         if (chartData) {
-            const allLabels = chartData.datasets.map((d: any) => d.label);
-            const allVisible = allLabels.every(label => visibleSeries.has(label));
+            const allLabels = chartData.datasets.map((d: any) => d.label as string);
+            const allVisible = allLabels.every((label: string) => visibleSeries.has(label));
             
             if (allVisible) {
                 setVisibleSeries(new Set());
