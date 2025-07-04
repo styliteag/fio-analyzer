@@ -1,6 +1,6 @@
 // Main chart container component that orchestrates all chart functionality
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Maximize, Minimize } from 'lucide-react';
+import { BarChart3, Maximize, Minimize, Filter } from 'lucide-react';
 import type { ChartTemplate, PerformanceData } from '../../types';
 import { Button, EmptyState } from '../ui';
 import ChartControls from './ChartControls';
@@ -133,18 +133,20 @@ const ChartContainer: React.FC<ChartContainerProps> = ({
                 </div>
                 
                 <div className="flex items-center space-x-2">
-                    {/* Bulk series controls */}
-                    {chartData.datasets.length > 1 && (
-                        <BulkSeriesControl
-                            datasets={chartData.datasets}
-                            visibleSeries={visibleSeries}
-                            onShowAll={showAllSeries}
-                            onHideAll={hideAllSeries}
-                            onToggleAll={toggleAllSeries}
-                        />
+                    {/* Show Controls toggle button (icon only) */}
+                    {showControls && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowControlsPanel(!showControlsPanel)}
+                            icon={Filter}
+                            title={showControlsPanel ? 'Hide Controls' : 'Show Controls'}
+                        >
+                            {''}
+                        </Button>
                     )}
                     
-                    {/* Export controls */}
+                    {/* Export controls (icon only) */}
                     {showExport && (
                         <ExportMenu
                             chartRef={chartRef}
@@ -153,7 +155,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({
                         />
                     )}
                     
-                    {/* Maximize/minimize button */}
+                    {/* Maximize/minimize button (icon only) */}
                     {onToggleMaximize && (
                         <Button
                             variant="outline"
@@ -162,14 +164,14 @@ const ChartContainer: React.FC<ChartContainerProps> = ({
                             icon={isMaximized ? Minimize : Maximize}
                             title={isMaximized ? 'Exit fullscreen' : 'Enter fullscreen'}
                         >
-                            {isMaximized ? 'Exit' : 'Fullscreen'}
+                            {''}
                         </Button>
                     )}
                 </div>
             </div>
 
             {/* Interactive controls */}
-            {showControls && (
+            {showControls && showControlsPanel && (
                 <div className="p-6 border-b theme-border-primary">
                     <ChartControls
                         sortBy={sortBy}

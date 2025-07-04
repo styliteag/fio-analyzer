@@ -36,31 +36,34 @@ const Button: React.FC<ButtonProps> = ({
     const variantClasses = {
         primary: 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500',
         secondary: 'bg-gray-600 hover:bg-gray-700 text-white focus:ring-gray-500',
-        outline: 'border border-gray-300 hover:bg-gray-50 text-gray-700 focus:ring-blue-500 theme-border-primary theme-text-primary hover:theme-bg-tertiary',
-        ghost: 'hover:bg-gray-100 text-gray-700 focus:ring-blue-500 theme-text-primary hover:theme-bg-tertiary',
+        outline: 'border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900',
+        ghost: 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-gray-900',
         danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500',
     };
     
-    const sizeClasses = {
-        sm: 'px-3 py-1.5 text-sm',
-        md: 'px-4 py-2 text-sm',
-        lg: 'px-6 py-3 text-base',
-    };
+    const isIconOnly = (!children || children === '') && Icon;
+    const sizeClasses = isIconOnly
+        ? 'p-2'
+        : {
+            sm: 'px-3 py-1.5 text-sm',
+            md: 'px-4 py-2 text-sm',
+            lg: 'px-6 py-3 text-base',
+        }[size];
     
     const widthClasses = fullWidth ? 'w-full' : '';
     
     const classes = [
         baseClasses,
         variantClasses[variant],
-        sizeClasses[size],
+        sizeClasses,
         widthClasses,
         className,
     ].filter(Boolean).join(' ');
 
     const iconElement = Icon && (
         <Icon 
-            size={size === 'sm' ? 16 : size === 'lg' ? 20 : 18} 
-            className={`${iconPosition === 'left' ? 'mr-2' : 'ml-2'}`}
+            size={isIconOnly ? 20 : size === 'sm' ? 16 : size === 'lg' ? 20 : 18} 
+            className={isIconOnly ? '' : iconPosition === 'left' ? 'mr-2' : 'ml-2'}
         />
     );
 
@@ -96,9 +99,10 @@ const Button: React.FC<ButtonProps> = ({
             title={title}
         >
             {loading && loadingSpinner}
-            {!loading && iconPosition === 'left' && iconElement}
-            <span>{children}</span>
-            {!loading && iconPosition === 'right' && iconElement}
+            {!loading && iconElement}
+            {!loading && !isIconOnly && iconPosition === 'left' && iconElement}
+            {!loading && !isIconOnly && <span>{children}</span>}
+            {!loading && !isIconOnly && iconPosition === 'right' && iconElement}
         </button>
     );
 };

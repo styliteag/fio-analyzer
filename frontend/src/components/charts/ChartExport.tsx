@@ -219,8 +219,9 @@ export const ExportMenu: React.FC<ExportMenuProps> = ({
                 size="sm"
                 onClick={() => setIsOpen(!isOpen)}
                 icon={Download}
+                title="Export"
             >
-                Export
+                {''}
             </Button>
 
             {isOpen && (
