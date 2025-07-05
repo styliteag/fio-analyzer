@@ -104,20 +104,131 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
                 cornerRadius: 8,
                 padding: 12,
                 callbacks: {
+                    title: (context: any) => {
+                        // Get the first data point to extract common information
+                        const firstContext = context[0];
+                        const dataIndex = firstContext.dataIndex;
+                        const originalData = firstContext.dataset.originalData?.[dataIndex];
+                        
+                        if (!originalData) {
+                            return firstContext.label || '';
+                        }
+                        
+                        // Build title with common information
+                        const titleParts = [];
+                        
+                        // Add hostname if available
+                        if (originalData.hostname) {
+                            titleParts.push(originalData.hostname);
+                        }
+                        
+                        // Add drive model and block size
+                        titleParts.push(`${originalData.drive_model} - ${originalData.block_size}`);
+                        
+                        // Add pattern if available
+                        if (originalData.read_write_pattern) {
+                            titleParts.push(originalData.read_write_pattern);
+                        }
+                        
+                        // Add protocol if available
+                        if (originalData.protocol) {
+                            titleParts.push(originalData.protocol);
+                        }
+                        
+                        // Add queue depth if available
+                        if (originalData.queue_depth) {
+                            titleParts.push(`QD: ${originalData.queue_depth}`);
+                        }
+                        
+                        // Add drive type if available
+                        if (originalData.drive_type) {
+                            titleParts.push(originalData.drive_type);
+                        }
+                        
+                        // Add timestamp if available
+                        if (originalData.timestamp) {
+                            const date = new Date(originalData.timestamp);
+                            titleParts.push(`${date.toLocaleDateString()} ${date.toLocaleTimeString()}`);
+                        }
+                        
+                        return titleParts.join(' | ');
+                    },
                     label: (context: any) => {
                         const label = context.dataset.label || '';
                         const value = context.formattedValue;
+                        const dataIndex = context.dataIndex;
+                        
+                        // Get original data for additional details
+                        const originalData = context.dataset.originalData?.[dataIndex];
                         
                         // Add units based on metric type
+                        let formattedValue = value;
                         if (label.toLowerCase().includes('latency')) {
-                            return `${label}: ${value} ms`;
+                            formattedValue = `${value} ms`;
                         } else if (label.toLowerCase().includes('bandwidth') || label.toLowerCase().includes('throughput')) {
-                            return `${label}: ${value} MB/s`;
+                            formattedValue = `${value} MB/s`;
                         } else if (label.toLowerCase().includes('iops')) {
-                            return `${label}: ${value} IOPS`;
+                            formattedValue = `${value} IOPS`;
                         }
                         
-                        return `${label}: ${value}`;
+                        // Build enhanced label with metric-specific details only
+                        let enhancedLabel = `${label}: ${formattedValue}`;
+                        
+                        // Add metric-specific details if available
+                        if (originalData && originalData.metrics) {
+                            const additionalMetrics = [];
+                            
+                            // Add latency percentiles only for latency metrics
+                            if (label.toLowerCase().includes('latency')) {
+                                if (originalData.metrics.p95_latency?.value) {
+                                    additionalMetrics.push(`P95: ${originalData.metrics.p95_latency.value.toFixed(2)}ms`);
+                                }
+                                
+                                if (originalData.metrics.p99_latency?.value) {
+                                    additionalMetrics.push(`P99: ${originalData.metrics.p99_latency.value.toFixed(2)}ms`);
+                                }
+                                
+                                if (originalData.metrics.min_latency?.value) {
+                                    additionalMetrics.push(`Min: ${originalData.metrics.min_latency.value.toFixed(2)}ms`);
+                                }
+                                
+                                if (originalData.metrics.max_latency?.value) {
+                                    additionalMetrics.push(`Max: ${originalData.metrics.max_latency.value.toFixed(2)}ms`);
+                                }
+                            }
+                            
+                            // Add CPU usage for all metrics
+                            if ((originalData as any).usr_cpu !== undefined) {
+                                additionalMetrics.push(`CPU User: ${(originalData as any).usr_cpu.toFixed(1)}%`);
+                            }
+                            
+                            if ((originalData as any).sys_cpu !== undefined) {
+                                additionalMetrics.push(`CPU Sys: ${(originalData as any).sys_cpu.toFixed(1)}%`);
+                            }
+                            
+                            // Add test configuration details
+                            if ((originalData as any).duration) {
+                                additionalMetrics.push(`Duration: ${(originalData as any).duration}s`);
+                            }
+                            
+                            if ((originalData as any).num_jobs) {
+                                additionalMetrics.push(`Jobs: ${(originalData as any).num_jobs}`);
+                            }
+                            
+                            if ((originalData as any).iodepth) {
+                                additionalMetrics.push(`IO Depth: ${(originalData as any).iodepth}`);
+                            }
+                            
+                            if ((originalData as any).test_size) {
+                                additionalMetrics.push(`Test Size: ${(originalData as any).test_size}`);
+                            }
+                            
+                            if (additionalMetrics.length > 0) {
+                                enhancedLabel += `\n${additionalMetrics.join(' | ')}`;
+                            }
+                        }
+                        
+                        return enhancedLabel;
                     },
                 },
             },

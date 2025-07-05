@@ -17,6 +17,7 @@ export interface ChartDataset {
     borderWidth?: number;
     yAxisID?: string;
     type?: string;
+    originalData?: PerformanceData[];
 }
 
 export interface ChartData {
@@ -130,6 +131,7 @@ export const processPerformanceOverview = (
             borderColor: colors[0],
             borderWidth: 1,
             yAxisID: "y",
+            originalData: sortedData,
         },
         {
             label: "Avg Latency (ms)",
@@ -138,6 +140,7 @@ export const processPerformanceOverview = (
             borderColor: colors[1],
             borderWidth: 1,
             yAxisID: "y1",
+            originalData: sortedData,
         },
         {
             label: "Bandwidth (MB/s)",
@@ -146,6 +149,7 @@ export const processPerformanceOverview = (
             borderColor: colors[2],
             borderWidth: 1,
             yAxisID: "y2",
+            originalData: sortedData,
         },
     ];
 
@@ -197,6 +201,7 @@ export const processBlockSizeImpact = (
             borderColor: colors[colorIndex % colors.length],
             borderWidth: 2,
             yAxisID: "y",
+            originalData: items,
         });
 
         // Bandwidth dataset
@@ -207,6 +212,7 @@ export const processBlockSizeImpact = (
             borderColor: colors[(colorIndex + 1) % colors.length],
             borderWidth: 2,
             yAxisID: "y1",
+            originalData: items,
         });
 
         colorIndex += 2;
@@ -266,6 +272,7 @@ export const processReadWriteComparison = (
                 backgroundColor: colors[0],
                 borderColor: colors[0],
                 borderWidth: 1,
+                originalData: readData,
             },
             {
                 label: "Write IOPS",
@@ -273,6 +280,7 @@ export const processReadWriteComparison = (
                 backgroundColor: colors[1],
                 borderColor: colors[1],
                 borderWidth: 1,
+                originalData: writeData,
             },
         ],
     };
@@ -300,6 +308,7 @@ export const processIOPSLatencyDual = (
                 borderColor: colors[0],
                 borderWidth: 1,
                 yAxisID: "y",
+                originalData: sortedData,
             },
             {
                 label: "Avg Latency (ms)",
@@ -309,6 +318,7 @@ export const processIOPSLatencyDual = (
                 borderWidth: 1,
                 yAxisID: "y1",
                 type: "line",
+                originalData: sortedData,
             },
         ],
     };
@@ -335,6 +345,7 @@ export const processDefaultChart = (
                 backgroundColor: colors[0],
                 borderColor: colors[0],
                 borderWidth: 1,
+                originalData: sortedData,
             },
         ],
     };
