@@ -7,6 +7,10 @@
     "start": "node index.js",
     "manage-users": "node scripts/manage-users.js",
     "manage-uploaders": "node scripts/manage-uploaders.js",
+    "importall": "node scripts/import-all.js",
+    "importall:overwrite": "node scripts/import-all.js --overwrite",
+    "importall:dry-run": "node scripts/import-all.js --dry-run",
+    "importall:verbose": "node scripts/import-all.js --verbose",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
