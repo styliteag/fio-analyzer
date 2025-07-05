@@ -1,0 +1,15 @@
+{
+  "name": "FIO Analyzer",
+  "short_name": "FIO Analyzer",
+  "description": "Storage Performance Analysis and Visualization Tool",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#1e40af",
+  "background_color": "#ffffff",
+  "display": "standalone"
+} 
