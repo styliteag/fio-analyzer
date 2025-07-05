@@ -1,16 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { ChartOptions } from "chart.js";
 import { 
-    generateChartDatasets, 
+    generateSeriesDatasets,
     getChartTitle,
-    type ServerGroup,
     type EnabledMetrics,
-    type TimeRange
+    type TimeRange,
+    type TimeSeriesDataSeries
 } from "../utils/timeSeriesHelpers";
 
 interface UseTimeSeriesChartProps {
-    chartData: { [serverId: string]: any[] };
-    serverGroups: ServerGroup[];
+    seriesData: TimeSeriesDataSeries[];
     enabledMetrics: EnabledMetrics;
     timeRange: TimeRange;
 }
@@ -19,25 +18,40 @@ interface UseTimeSeriesChartResult {
     processedChartData: { datasets: any[] } | null;
     chartOptions: ChartOptions<'line'>;
     hasData: boolean;
+    // Series toggle functionality
+    visibleSeries: Set<string>;
+    toggleSeries: (seriesId: string) => void;
+    showAllSeries: () => void;
+    hideAllSeries: () => void;
+    availableSeries: TimeSeriesDataSeries[];
 }
 
 export const useTimeSeriesChart = ({
-    chartData,
-    serverGroups,
+    seriesData,
     enabledMetrics,
     timeRange,
 }: UseTimeSeriesChartProps): UseTimeSeriesChartResult => {
+    
+    // Initialize visible series (all series visible by default)
+    const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set());
+    
+    // Update visible series when series data changes
+    useMemo(() => {
+        if (seriesData.length > 0) {
+            setVisibleSeries(new Set(seriesData.map(s => s.id)));
+        }
+    }, [seriesData]);
     
     /**
      * Processes chart data for Chart.js consumption
      */
     const processedChartData = useMemo(() => {
-        if (Object.keys(chartData).length === 0) return null;
+        if (seriesData.length === 0) return null;
 
-        const datasets = generateChartDatasets(chartData, serverGroups, enabledMetrics);
+        const datasets = generateSeriesDatasets(seriesData, enabledMetrics, visibleSeries);
         
         return datasets.length > 0 ? { datasets } : null;
-    }, [chartData, enabledMetrics, serverGroups]);
+    }, [seriesData, enabledMetrics, visibleSeries]);
 
     /**
      * Chart.js configuration options
@@ -183,9 +197,37 @@ export const useTimeSeriesChart = ({
         return processedChartData !== null && processedChartData.datasets.length > 0;
     }, [processedChartData]);
 
+    /**
+     * Series toggle functions
+     */
+    const toggleSeries = (seriesId: string) => {
+        setVisibleSeries(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(seriesId)) {
+                newSet.delete(seriesId);
+            } else {
+                newSet.add(seriesId);
+            }
+            return newSet;
+        });
+    };
+
+    const showAllSeries = () => {
+        setVisibleSeries(new Set(seriesData.map(s => s.id)));
+    };
+
+    const hideAllSeries = () => {
+        setVisibleSeries(new Set());
+    };
+
     return {
         processedChartData,
         chartOptions,
         hasData,
+        visibleSeries,
+        toggleSeries,
+        showAllSeries,
+        hideAllSeries,
+        availableSeries: seriesData,
     };
 };

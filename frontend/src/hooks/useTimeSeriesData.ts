@@ -6,6 +6,7 @@ import {
     validateServerSelection,
     type ServerGroup,
     type TimeRange,
+    type TimeSeriesDataSeries,
 } from "../utils/timeSeriesHelpers";
 import type { TimeSeriesFilters } from "../utils/filterConverters";
 
@@ -13,8 +14,9 @@ interface UseTimeSeriesDataResult {
     // Server data
     serverGroups: ServerGroup[];
     
-    // Chart data
+    // Chart data - now organized by series instead of just servers
     chartData: { [serverId: string]: any[] };
+    seriesData: TimeSeriesDataSeries[];
     
     // Loading states
     loading: boolean;
@@ -32,6 +34,7 @@ interface UseTimeSeriesDataResult {
 export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
     const [serverGroups, setServerGroups] = useState<ServerGroup[]>([]);
     const [chartData, setChartData] = useState<{ [serverId: string]: any[] }>({});
+    const [seriesData, setSeriesData] = useState<TimeSeriesDataSeries[]>([]);
     const [loading, setLoading] = useState(false);
     const [serversLoading, setServersLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -77,7 +80,6 @@ export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
 
         try {
             const { days, hours } = getTimeRangeParams(timeRange);
-            const newChartData: { [serverId: string]: any[] } = {};
 
             // Create a base query for all combinations of filters
             const baseQuery: TimeSeriesHistoryOptions = {
@@ -168,20 +170,64 @@ export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
 
             const results = await Promise.all(queries);
             
-            // Combine results by server ID
+            // Process results into series data
+            const seriesMap = new Map<string, TimeSeriesDataSeries>();
+            const serverDataMap: { [serverId: string]: any[] } = {};
+            
             results.forEach(result => {
                 if (result.error) {
                     console.warn(`Failed to fetch data: ${result.error}`);
                     return;
                 }
                 
-                if (!newChartData[result.serverId]) {
-                    newChartData[result.serverId] = [];
+                // Group data by unique combinations of test configuration
+                const dataByConfig = new Map<string, any[]>();
+                
+                result.data.forEach((dataPoint: any) => {
+                    // Create unique key for this test configuration
+                    const configKey = `${dataPoint.block_size}-${dataPoint.read_write_pattern}-${dataPoint.queue_depth}`;
+                    
+                    if (!dataByConfig.has(configKey)) {
+                        dataByConfig.set(configKey, []);
+                    }
+                    dataByConfig.get(configKey)!.push(dataPoint);
+                });
+                
+                // Create series for each unique configuration
+                dataByConfig.forEach((data, configKey) => {
+                    if (data.length === 0) return;
+                    
+                    const firstPoint = data[0];
+                    const serverGroup = serverGroups.find(g => g.id === result.serverId);
+                    
+                    if (!serverGroup) return;
+                    
+                    const seriesId = `${result.serverId}-${configKey}`;
+                    const label = `${serverGroup.hostname} (${serverGroup.protocol}) - ${firstPoint.block_size} ${firstPoint.read_write_pattern} Q${firstPoint.queue_depth}`;
+                    
+                    seriesMap.set(seriesId, {
+                        id: seriesId,
+                        serverId: result.serverId,
+                        hostname: serverGroup.hostname,
+                        protocol: serverGroup.protocol,
+                        driveModel: firstPoint.drive_model || '',
+                        blockSize: firstPoint.block_size,
+                        pattern: firstPoint.read_write_pattern,
+                        queueDepth: firstPoint.queue_depth,
+                        data: data,
+                        label: label
+                    });
+                });
+                
+                // Keep backward compatibility with existing chartData structure
+                if (!serverDataMap[result.serverId]) {
+                    serverDataMap[result.serverId] = [];
                 }
-                newChartData[result.serverId].push(...result.data);
+                serverDataMap[result.serverId].push(...result.data);
             });
 
-            setChartData(newChartData);
+            setChartData(serverDataMap);
+            setSeriesData(Array.from(seriesMap.values()));
 
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Failed to fetch time-series data";
@@ -214,6 +260,7 @@ export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
     return {
         serverGroups,
         chartData,
+        seriesData,
         loading,
         serversLoading,
         error,

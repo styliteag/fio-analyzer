@@ -33,7 +33,7 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
     // Use the custom hook for data management
     const {
         serverGroups,
-        chartData,
+        seriesData,
         loading,
         serversLoading,
         error,
@@ -175,8 +175,7 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
 
             {/* Chart Area */}
             <TimeSeriesChart
-                chartData={chartData}
-                serverGroups={serverGroups}
+                seriesData={seriesData}
                 enabledMetrics={enabledMetrics}
                 timeRange={timeRange}
                 loading={loading}

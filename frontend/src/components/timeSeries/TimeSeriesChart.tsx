@@ -15,9 +15,9 @@ import {
 import "chartjs-adapter-date-fns";
 import { useTimeSeriesChart } from "../../hooks/useTimeSeriesChart";
 import type { 
-    ServerGroup, 
     EnabledMetrics, 
-    TimeRange 
+    TimeRange,
+    TimeSeriesDataSeries
 } from "../../utils/timeSeriesHelpers";
 
 // Register ChartJS components
@@ -33,8 +33,7 @@ ChartJS.register(
 );
 
 interface TimeSeriesChartProps {
-    chartData: { [serverId: string]: any[] };
-    serverGroups: ServerGroup[];
+    seriesData: TimeSeriesDataSeries[];
     enabledMetrics: EnabledMetrics;
     timeRange: TimeRange;
     loading?: boolean;
@@ -42,16 +41,23 @@ interface TimeSeriesChartProps {
 }
 
 const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
-    chartData,
-    serverGroups,
+    seriesData,
     enabledMetrics,
     timeRange,
     loading = false,
     isMaximized = false,
 }) => {
-    const { processedChartData, chartOptions, hasData } = useTimeSeriesChart({
-        chartData,
-        serverGroups,
+    const { 
+        processedChartData, 
+        chartOptions, 
+        hasData,
+        visibleSeries,
+        toggleSeries,
+        showAllSeries,
+        hideAllSeries,
+        availableSeries
+    } = useTimeSeriesChart({
+        seriesData,
         enabledMetrics,
         timeRange,
     });
@@ -79,6 +85,44 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
         </div>
     );
 
+    const renderSeriesToggle = () => (
+        <div className="mb-4 p-3 theme-bg-tertiary rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium theme-text-primary">Series Visibility</h4>
+                <div className="flex gap-2">
+                    <button
+                        onClick={showAllSeries}
+                        className="text-xs px-2 py-1 rounded theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary"
+                    >
+                        Show All
+                    </button>
+                    <button
+                        onClick={hideAllSeries}
+                        className="text-xs px-2 py-1 rounded theme-text-secondary hover:theme-text-primary hover:theme-bg-secondary"
+                    >
+                        Hide All
+                    </button>
+                </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {availableSeries.map(series => (
+                    <button
+                        key={series.id}
+                        onClick={() => toggleSeries(series.id)}
+                        className={`text-xs px-2 py-1 rounded border transition-colors ${
+                            visibleSeries.has(series.id)
+                                ? 'border-blue-500 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                                : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                        }`}
+                        title={series.label}
+                    >
+                        {series.hostname} - {series.blockSize} {series.pattern}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+
     return (
         <div className={`p-4 ${isMaximized ? "h-full" : "h-96"} relative`}>
             {loading && renderLoadingState()}
@@ -87,11 +131,14 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
                 renderEmptyState()
             ) : (
                 <div className="h-full">
-                    <Line 
-                        data={processedChartData!} 
-                        options={chartOptions} 
-                        key={`chart-${timeRange}`}
-                    />
+                    {availableSeries.length > 1 && renderSeriesToggle()}
+                    <div className={`${availableSeries.length > 1 ? 'h-5/6' : 'h-full'}`}>
+                        <Line 
+                            data={processedChartData!} 
+                            options={chartOptions} 
+                            key={`chart-${timeRange}`}
+                        />
+                    </div>
                 </div>
             )}
         </div>

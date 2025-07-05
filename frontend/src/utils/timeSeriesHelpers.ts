@@ -109,7 +109,7 @@ export const processMetricData = (
 };
 
 /**
- * Generates chart datasets from time series data
+ * Generates chart datasets from time series data (legacy function)
  */
 export const generateChartDatasets = (
     chartData: { [serverId: string]: any[] },
@@ -161,6 +161,86 @@ export const generateChartDatasets = (
                 data,
                 "bandwidth",
                 `${serverLabel} - Bandwidth`,
+                baseColor,
+                "y2",
+                [2, 2]
+            );
+            if (bandwidthDataset.data.length > 0) {
+                datasets.push(bandwidthDataset);
+            }
+        }
+    });
+
+    return datasets;
+};
+
+// Define TimeSeriesDataSeries interface here since it's needed in helpers
+export interface TimeSeriesDataSeries {
+    id: string;
+    serverId: string;
+    hostname: string;
+    protocol: string;
+    driveModel: string;
+    blockSize: string;
+    pattern: string;
+    queueDepth: number;
+    data: any[];
+    label: string;
+}
+
+/**
+ * Generates chart datasets from series data - NEW version with individual series
+ */
+export const generateSeriesDatasets = (
+    seriesData: TimeSeriesDataSeries[],
+    enabledMetrics: EnabledMetrics,
+    visibleSeries?: Set<string>
+): ChartDataset[] => {
+    const datasets: ChartDataset[] = [];
+    let colorIndex = 0;
+
+    seriesData.forEach((series) => {
+        // Skip if series is hidden
+        if (visibleSeries && !visibleSeries.has(series.id)) {
+            return;
+        }
+
+        const baseColor = SERVER_COLORS[colorIndex % SERVER_COLORS.length];
+        colorIndex++;
+
+        // Process each enabled metric for this series
+        if (enabledMetrics.iops) {
+            const iopsDataset = processMetricData(
+                series.data,
+                "iops",
+                `${series.label} - IOPS`,
+                baseColor,
+                "y"
+            );
+            if (iopsDataset.data.length > 0) {
+                datasets.push(iopsDataset);
+            }
+        }
+
+        if (enabledMetrics.latency) {
+            const latencyDataset = processMetricData(
+                series.data,
+                "avg_latency",
+                `${series.label} - Latency`,
+                baseColor,
+                "y1",
+                [5, 5]
+            );
+            if (latencyDataset.data.length > 0) {
+                datasets.push(latencyDataset);
+            }
+        }
+
+        if (enabledMetrics.bandwidth) {
+            const bandwidthDataset = processMetricData(
+                series.data,
+                "bandwidth",
+                `${series.label} - Bandwidth`,
                 baseColor,
                 "y2",
                 [2, 2]
