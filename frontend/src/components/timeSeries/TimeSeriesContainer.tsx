@@ -99,11 +99,11 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
     return (
         <div
             className={`theme-card rounded-lg shadow-md border ${
-                isMaximized ? "fixed inset-4 z-50" : "h-auto"
+                isMaximized ? "fixed inset-4 z-50 flex flex-col" : "h-auto"
             }`}
         >
             {/* Header Controls */}
-            <div className="p-4 border-b theme-border-primary">
+            <div className={`p-4 border-b theme-border-primary ${isMaximized ? "flex-shrink-0" : ""}`}>
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center">
                         <Activity className="h-6 w-6 theme-text-accent mr-3" />
@@ -174,13 +174,15 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
             </div>
 
             {/* Chart Area */}
-            <TimeSeriesChart
-                seriesData={seriesData}
-                enabledMetrics={enabledMetrics}
-                timeRange={timeRange}
-                loading={loading}
-                isMaximized={isMaximized}
-            />
+            <div className={isMaximized ? "flex-1 min-h-0" : ""}>
+                <TimeSeriesChart
+                    seriesData={seriesData}
+                    enabledMetrics={enabledMetrics}
+                    timeRange={timeRange}
+                    loading={loading}
+                    isMaximized={isMaximized}
+                />
+            </div>
 
         </div>
     );
