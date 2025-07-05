@@ -1,9 +1,11 @@
 import React from "react";
 import { TimeSeriesContainer } from "./timeSeries";
+import type { ActiveFilters } from "../hooks/useTestRunFilters";
 
 interface TimeSeriesChartProps {
 	isMaximized: boolean;
 	onToggleMaximize: () => void;
+	sharedFilters?: ActiveFilters;
 }
 
 /**
@@ -15,11 +17,13 @@ interface TimeSeriesChartProps {
 const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
 	isMaximized,
 	onToggleMaximize,
+	sharedFilters,
 }) => {
 	return (
 		<TimeSeriesContainer
 			isMaximized={isMaximized}
 			onToggleMaximize={onToggleMaximize}
+			sharedFilters={sharedFilters}
 		/>
 	);
 };

@@ -3,6 +3,8 @@ import TemplateSelector from "../components/TemplateSelector";
 import TestRunSelector from "../components/TestRunSelector";
 import { DashboardHeader, DashboardFooter, WelcomeGuide, ChartArea } from "../components/layout";
 import { usePerformanceData } from "../hooks";
+import { useTestRunFilters } from "../hooks/useTestRunFilters";
+import { fetchTestRuns } from "../services/api/testRuns";
 import type { ChartTemplate, TestRun } from "../types";
 
 export default function Dashboard() {
@@ -22,6 +24,18 @@ export default function Dashboard() {
 		useState<ChartTemplate | null>(null);
 	const [refreshTrigger, setRefreshTrigger] = useState(0);
 	const [isChartMaximized, setIsChartMaximized] = useState(false);
+	
+	// Shared state for test runs and filters (lifted up from TestRunSelector)
+	const [testRuns, setTestRuns] = useState<TestRun[]>([]);
+	const [filtersLoading, setFiltersLoading] = useState(true);
+
+	// Use shared filter state for both TestRunSelector and TimeSeriesContainer
+	const {
+		activeFilters,
+		filteredRuns,
+		hasActiveFilters,
+		updateFilter,
+	} = useTestRunFilters(testRuns);
 
 	// Memoize values to prevent unnecessary re-renders
 	const testRunIds = useMemo(() => selectedRuns.map(run => run.id), [selectedRuns]);
@@ -81,6 +95,26 @@ export default function Dashboard() {
 		[isChartMaximized]
 	);
 
+	// Load test runs function (lifted from TestRunSelector)
+	const loadTestRuns = useMemo(() => async () => {
+		try {
+			setFiltersLoading(true);
+			const result = await fetchTestRuns();
+			if (result.data) {
+				setTestRuns(result.data);
+			}
+		} catch (err) {
+			console.error('Failed to load test runs:', err);
+		} finally {
+			setFiltersLoading(false);
+		}
+	}, []);
+
+	// Load test runs on mount and refresh trigger
+	useEffect(() => {
+		loadTestRuns();
+	}, [loadTestRuns, refreshTrigger]);
+
 	useEffect(() => {
 		// Refresh data when navigating back to dashboard
 		const handleFocus = () => {
@@ -103,6 +137,13 @@ export default function Dashboard() {
 						selectedRuns={selectedRuns}
 						onSelectionChange={setSelectedRuns}
 						refreshTrigger={refreshTrigger}
+						// Pass shared filter state
+						testRuns={testRuns}
+						activeFilters={activeFilters}
+						filteredRuns={filteredRuns}
+						hasActiveFilters={hasActiveFilters()}
+						onFilterChange={updateFilter}
+						loading={filtersLoading}
 					/>
 				</div>
 
@@ -128,6 +169,8 @@ export default function Dashboard() {
 								isChartMaximized={isChartMaximized}
 								handleToggleMaximize={handleToggleMaximize}
 								loading={loading}
+								// Pass shared filter state for time-series charts
+								sharedFilters={activeFilters}
 							/>
 						)}
 					</div>
@@ -142,6 +185,8 @@ export default function Dashboard() {
 						isChartMaximized={isChartMaximized}
 						handleToggleMaximize={handleToggleMaximize}
 						loading={loading}
+						// Pass shared filter state for time-series charts
+						sharedFilters={activeFilters}
 					/>
 				)}
 

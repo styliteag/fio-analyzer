@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Calendar, Plus, Settings } from 'lucide-react';
 import Select from 'react-select';
 import { getSelectStyles } from '../../hooks/useThemeColors';
-import { useTestRunFilters } from '../../hooks/useTestRunFilters';
 import { useTestRunSelection } from '../../hooks/useTestRunSelection';
 import { useTestRunOperations } from '../../hooks/useTestRunOperations';
-import { fetchTestRuns, fetchFilters } from '../../services/api/testRuns';
+import { fetchFilters } from '../../services/api/testRuns';
 import type { FilterOptions, TestRun } from '../../types';
+import type { ActiveFilters } from '../../hooks/useTestRunFilters';
 import TestRunFilters from './TestRunFilters';
 import TestRunGrid from './TestRunGrid';
 import TestRunActions from './TestRunActions';
@@ -17,14 +17,27 @@ interface TestRunSelectorProps {
     selectedRuns: TestRun[];
     onSelectionChange: (runs: TestRun[]) => void;
     refreshTrigger?: number;
+    // Shared filter state from Dashboard
+    testRuns?: TestRun[];
+    activeFilters?: ActiveFilters;
+    filteredRuns?: TestRun[];
+    hasActiveFilters?: boolean;
+    onFilterChange?: (filterType: keyof ActiveFilters, values: (string | number)[]) => void;
+    loading?: boolean;
 }
 
 const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     selectedRuns,
     onSelectionChange,
     refreshTrigger = 0,
+    // Shared filter state from Dashboard
+    testRuns: propTestRuns = [],
+    activeFilters: propActiveFilters,
+    filteredRuns: propFilteredRuns = [],
+    hasActiveFilters: propHasActiveFilters = false,
+    onFilterChange,
+    loading: propLoading = false,
 }) => {
-    const [testRuns, setTestRuns] = useState<TestRun[]>([]);
     const [filters, setFilters] = useState<FilterOptions>({
         drive_types: [],
         drive_models: [],
@@ -33,16 +46,22 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
         hostnames: [],
         protocols: [],
     });
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Custom hooks for managing filters, selection, and operations
-    const {
-        activeFilters,
-        filteredRuns,
-        hasActiveFilters,
-        updateFilter,
-    } = useTestRunFilters(testRuns);
+    // Use shared filter state if provided, otherwise fall back to local state
+    const testRuns = propTestRuns;
+    const activeFilters = propActiveFilters || {
+        drive_types: [],
+        drive_models: [],
+        patterns: [],
+        block_sizes: [],
+        hostnames: [],
+        protocols: [],
+    };
+    const filteredRuns = propFilteredRuns;
+    const hasActiveFilters = propHasActiveFilters;
+    const updateFilter = onFilterChange || ((_filterType: keyof ActiveFilters, _values: (string | number)[]) => {});
+    const loading = propLoading;
 
     const {
         runOptions,
@@ -77,33 +96,15 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
         handleBulkDelete,
     } = useTestRunOperations(
         testRuns,
-        setTestRuns,
+        () => {}, // No longer need to setTestRuns - that's handled by Dashboard
         selectedRuns,
         onSelectionChange,
         loadFilters
     );
 
-    const loadTestRuns = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const result = await fetchTestRuns();
-            if (result.error) {
-                setError(result.error);
-            } else if (result.data) {
-                setTestRuns(result.data);
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load test runs');
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
     useEffect(() => {
-        loadTestRuns();
         loadFilters();
-    }, [loadTestRuns, loadFilters, refreshTrigger]);
+    }, [loadFilters, refreshTrigger]);
 
     const handleDeleteWithAlert = useCallback(async (testRun: TestRun) => {
         const result = await handleDeleteTestRun(testRun);
@@ -160,7 +161,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
                         <Calendar size={14} className="inline mr-1 theme-text-tertiary" />
                         Select Test Runs ({filteredRuns.length} available)
                     </label>
-                    {hasActiveFilters() && getUnselectedMatchingCount() > 0 && (
+                    {hasActiveFilters && getUnselectedMatchingCount() > 0 && (
                         <button
                             type="button"
                             onClick={handleSelectAllMatching}
@@ -208,7 +209,7 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
                 <div className="mt-4">
                     <TestRunActions
                         selectedRuns={selectedRuns}
-                        hasActiveFilters={hasActiveFilters()}
+                        hasActiveFilters={hasActiveFilters}
                         unselectedMatchingCount={getUnselectedMatchingCount()}
                         onSelectAllMatching={handleSelectAllMatching}
                         onBulkEdit={handleBulkEdit}

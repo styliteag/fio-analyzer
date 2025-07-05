@@ -161,6 +161,30 @@ router.get('/latest', requireAdmin, (req, res) => {
  *         description: Filter by drive model
  *         example: "Samsung 980 PRO"
  *       - in: query
+ *         name: drive_type
+ *         schema:
+ *           type: string
+ *         description: Filter by drive type
+ *         example: "NVMe SSD"
+ *       - in: query
+ *         name: block_size
+ *         schema:
+ *           type: string
+ *         description: Filter by block size
+ *         example: "4k"
+ *       - in: query
+ *         name: read_write_pattern
+ *         schema:
+ *           type: string
+ *         description: Filter by read/write pattern
+ *         example: "randread"
+ *       - in: query
+ *         name: queue_depth
+ *         schema:
+ *           type: integer
+ *         description: Filter by queue depth
+ *         example: 32
+ *       - in: query
  *         name: start_date
  *         schema:
  *           type: string
@@ -219,13 +243,13 @@ router.get('/latest', requireAdmin, (req, res) => {
  *         description: Internal server error
  */
 router.get('/history', requireAdmin, (req, res) => {
-    const { hostname, protocol, drive_model, start_date, end_date, metric_type } = req.query;
+    const { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, start_date, end_date, metric_type } = req.query;
     
     logInfo('User requesting time-series history', {
         requestId: req.requestId,
         username: req.user.username,
         action: 'GET_TIMESERIES_HISTORY',
-        filters: { hostname, protocol, drive_model, start_date, end_date, metric_type }
+        filters: { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, start_date, end_date, metric_type }
     });
     
     let query = `
@@ -261,6 +285,26 @@ router.get('/history', requireAdmin, (req, res) => {
     if (drive_model) {
         query += ' AND tr.drive_model = ?';
         params.push(drive_model);
+    }
+    
+    if (drive_type) {
+        query += ' AND tr.drive_type = ?';
+        params.push(drive_type);
+    }
+    
+    if (block_size) {
+        query += ' AND tr.block_size = ?';
+        params.push(block_size);
+    }
+    
+    if (read_write_pattern) {
+        query += ' AND tr.read_write_pattern = ?';
+        params.push(read_write_pattern);
+    }
+    
+    if (queue_depth) {
+        query += ' AND tr.queue_depth = ?';
+        params.push(parseInt(queue_depth));
     }
     
     if (start_date) {
@@ -366,7 +410,7 @@ router.get('/history', requireAdmin, (req, res) => {
  *         description: Internal server error
  */
 router.get('/trends', requireAdmin, (req, res) => {
-    const { hostname, protocol, drive_model, metric_type, days = 30 } = req.query;
+    const { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, metric_type, days = 30 } = req.query;
     
     if (!hostname || !protocol || !drive_model || !metric_type) {
         return res.status(400).json({ 
@@ -381,6 +425,10 @@ router.get('/trends', requireAdmin, (req, res) => {
         hostname,
         protocol,
         drive_model,
+        drive_type,
+        block_size,
+        read_write_pattern,
+        queue_depth,
         metric_type,
         days
     });
@@ -405,6 +453,10 @@ router.get('/trends', requireAdmin, (req, res) => {
             AND tr.drive_model = ?
             AND pm.metric_type = ?
             AND tr.timestamp >= ?
+            ${drive_type ? 'AND tr.drive_type = ?' : ''}
+            ${block_size ? 'AND tr.block_size = ?' : ''}
+            ${read_write_pattern ? 'AND tr.read_write_pattern = ?' : ''}
+            ${queue_depth ? 'AND tr.queue_depth = ?' : ''}
             ORDER BY tr.timestamp
         ),
         with_moving_avg AS (
@@ -437,7 +489,15 @@ router.get('/trends', requireAdmin, (req, res) => {
     `;
     
     const db = getDatabase();
-    db.all(query, [hostname, protocol, drive_model, metric_type, cutoffDate.toISOString()], (err, rows) => {
+    const queryParams = [hostname, protocol, drive_model, metric_type, cutoffDate.toISOString()];
+    
+    // Add optional filter parameters
+    if (drive_type) queryParams.push(drive_type);
+    if (block_size) queryParams.push(block_size);
+    if (read_write_pattern) queryParams.push(read_write_pattern);
+    if (queue_depth) queryParams.push(parseInt(queue_depth));
+    
+    db.all(query, queryParams, (err, rows) => {
         if (err) {
             logError('Database error fetching trend analysis', err, {
                 requestId: req.requestId,
@@ -453,7 +513,7 @@ router.get('/trends', requireAdmin, (req, res) => {
             username: req.user.username,
             action: 'GET_TREND_ANALYSIS',
             resultCount: rows.length,
-            analysisParams: { hostname, protocol, drive_model, metric_type, days }
+            analysisParams: { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, metric_type, days }
         });
         
         res.json(rows);

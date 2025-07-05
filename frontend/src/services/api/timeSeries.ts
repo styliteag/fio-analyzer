@@ -11,6 +11,10 @@ export interface TimeSeriesHistoryOptions {
     startDate?: string;
     endDate?: string;
     driveModel?: string;
+    driveType?: string;
+    blockSize?: string;
+    readWritePattern?: string;
+    queueDepth?: number;
 }
 
 export interface TimeSeriesTrendsOptions {
@@ -43,6 +47,10 @@ export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions =
         startDate,
         endDate,
         driveModel,
+        driveType,
+        blockSize,
+        readWritePattern,
+        queueDepth,
     } = options;
     
     const params = new URLSearchParams();
@@ -50,6 +58,10 @@ export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions =
     if (hostname) params.append("hostname", hostname);
     if (protocol) params.append("protocol", protocol);
     if (driveModel) params.append("drive_model", driveModel);
+    if (driveType) params.append("drive_type", driveType);
+    if (blockSize) params.append("block_size", blockSize);
+    if (readWritePattern) params.append("read_write_pattern", readWritePattern);
+    if (queueDepth !== undefined) params.append("queue_depth", queueDepth.toString());
     if (startDate) params.append("start_date", startDate);
     if (endDate) params.append("end_date", endDate);
     if (metricType) params.append("metric_type", metricType);

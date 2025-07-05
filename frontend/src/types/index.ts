@@ -86,6 +86,7 @@ export interface TimeSeriesDataPoint {
 	block_size: string;
 	read_write_pattern: string;
 	queue_depth: number;
+	metric_type: string;
 	value: number;
 	unit: string;
 }

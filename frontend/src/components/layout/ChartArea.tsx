@@ -4,6 +4,7 @@ import { ChartContainer } from '../charts';
 import ThreeDBarChart from '../ThreeDBarChart';
 import TimeSeriesChart from '../TimeSeriesChart';
 import type { ChartTemplate, PerformanceData } from '../../types';
+import type { ActiveFilters } from '../../hooks/useTestRunFilters';
 
 interface ChartAreaProps {
     selectedTemplate: ChartTemplate;
@@ -12,6 +13,7 @@ interface ChartAreaProps {
     isChartMaximized: boolean;
     handleToggleMaximize: () => void;
     loading: boolean;
+    sharedFilters?: ActiveFilters;
 }
 
 export const ChartArea: React.FC<ChartAreaProps> = ({
@@ -21,6 +23,7 @@ export const ChartArea: React.FC<ChartAreaProps> = ({
     isChartMaximized,
     handleToggleMaximize,
     loading,
+    sharedFilters,
 }) => {
     if (!selectedTemplate) return null;
 
@@ -41,6 +44,7 @@ export const ChartArea: React.FC<ChartAreaProps> = ({
                 <TimeSeriesChart
                     isMaximized={isChartMaximized}
                     onToggleMaximize={handleToggleMaximize}
+                    sharedFilters={sharedFilters}
                 />
             ) : selectedTemplate.chartType === '3d-bar' ? (
                 <ThreeDBarChart 

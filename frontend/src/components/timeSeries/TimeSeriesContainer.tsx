@@ -1,23 +1,28 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Maximize2, Minimize2, Activity, AlertCircle, RefreshCw } from "lucide-react";
 import { useTimeSeriesData } from "../../hooks/useTimeSeriesData";
+import { convertActiveFiltersToTimeSeriesFilters } from "../../utils/filterConverters";
 import TimeSeriesControls from "./TimeSeriesControls";
 import TimeSeriesChart from "./TimeSeriesChart";
 import TimeSeriesStats from "./TimeSeriesStats";
+import TimeSeriesTestGrid from "./TimeSeriesTestGrid";
 import { 
     validateMetricsSelection,
     type EnabledMetrics,
     type TimeRange 
 } from "../../utils/timeSeriesHelpers";
+import type { ActiveFilters } from "../../hooks/useTestRunFilters";
 
 interface TimeSeriesContainerProps {
     isMaximized: boolean;
     onToggleMaximize: () => void;
+    sharedFilters?: ActiveFilters;
 }
 
 const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
     isMaximized,
     onToggleMaximize,
+    sharedFilters,
 }) => {
     // State for user selections
     const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
@@ -40,28 +45,40 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
         clearError,
     } = useTimeSeriesData();
 
-    // Auto-select first server group when servers are loaded
-    useEffect(() => {
-        if (serverGroups.length > 0 && selectedServerIds.length === 0) {
-            setSelectedServerIds([serverGroups[0].id]);
+    // Convert shared filters from TestRun format to TimeSeries format
+    const activeFilters = useMemo(() => {
+        if (!sharedFilters) {
+            return {
+                hostnames: [],
+                protocols: [],
+                drive_models: [],
+                drive_types: [],
+                block_sizes: [],
+                patterns: [],
+                start_date: '',
+                end_date: '',
+            };
         }
-    }, [serverGroups, selectedServerIds]);
+        return convertActiveFiltersToTimeSeriesFilters(sharedFilters);
+    }, [sharedFilters]);
+
+    // Note: We no longer need filter options since filters are inherited from Dashboard
+
+    // Auto-select all server groups when servers are loaded (filters will narrow this down)
+    useEffect(() => {
+        if (serverGroups.length > 0) {
+            setSelectedServerIds(serverGroups.map(group => group.id));
+        }
+    }, [serverGroups]);
 
     // Load time series data when selections change
     useEffect(() => {
         if (selectedServerIds.length > 0) {
-            loadTimeSeriesData(selectedServerIds, timeRange);
+            loadTimeSeriesData(selectedServerIds, timeRange, activeFilters);
         }
-    }, [selectedServerIds, timeRange, loadTimeSeriesData]);
+    }, [selectedServerIds, timeRange, activeFilters, loadTimeSeriesData]);
 
-    // Event handlers
-    const handleServerToggle = (serverId: string) => {
-        setSelectedServerIds(prev => 
-            prev.includes(serverId)
-                ? prev.filter(id => id !== serverId)
-                : [...prev, serverId]
-        );
-    };
+    // Server selection is now handled by filters - no longer needed
 
     const handleTimeRangeChange = (newTimeRange: TimeRange) => {
         setTimeRange(newTimeRange);
@@ -77,7 +94,7 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
     const handleRefresh = () => {
         refreshServers();
         if (selectedServerIds.length > 0) {
-            loadTimeSeriesData(selectedServerIds, timeRange);
+            loadTimeSeriesData(selectedServerIds, timeRange, activeFilters);
         }
     };
 
@@ -155,14 +172,13 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
 
                 {/* Control Row */}
                 <TimeSeriesControls
-                    serverGroups={serverGroups}
-                    selectedServerIds={selectedServerIds}
                     timeRange={timeRange}
                     enabledMetrics={enabledMetrics}
-                    onServerToggle={handleServerToggle}
                     onTimeRangeChange={handleTimeRangeChange}
                     onMetricToggle={handleMetricToggle}
                     loading={loading || serversLoading}
+                    // Show inherited filters from Test Run Selection
+                    inheritedFilters={sharedFilters}
                 />
             </div>
 
@@ -177,12 +193,20 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
                 isMaximized={isMaximized}
             />
 
-            {/* Server Statistics */}
-            <TimeSeriesStats
-                selectedServerIds={selectedServerIds}
-                serverGroups={serverGroups}
-                chartData={chartData}
-            />
+            {/* Test Grid and Server Statistics */}
+            <div className="p-4 space-y-6">
+                <TimeSeriesTestGrid
+                    data={chartData}
+                    serverGroups={serverGroups}
+                    loading={loading}
+                />
+                
+                <TimeSeriesStats
+                    selectedServerIds={selectedServerIds}
+                    serverGroups={serverGroups}
+                    chartData={chartData}
+                />
+            </div>
         </div>
     );
 };
