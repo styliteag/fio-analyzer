@@ -114,14 +114,16 @@ export const formatTimestamp = (
     }
 
     switch (format) {
-        case 'short':
+        case 'short': {
             const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
             const formattedTime = date.toTimeString().split(' ')[0]; // HH:MM:SS
             return `${formattedDate} ${formattedTime}`;
-        case 'long':
+        }
+        case 'long': {
             const longDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
             const longTime = date.toTimeString().split(' ')[0]; // HH:MM:SS
             return `${longDate} ${longTime}`;
+        }
         case 'time':
             return date.toTimeString().split(' ')[0]; // HH:MM:SS
         case 'date':
