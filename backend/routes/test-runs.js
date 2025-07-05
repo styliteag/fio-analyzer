@@ -172,7 +172,8 @@ router.get('/performance-data', requireAdmin, (req, res) => {
         SELECT 
             tr.id, tr.drive_model, tr.drive_type, tr.test_name, 
             tr.block_size, tr.read_write_pattern, tr.timestamp, tr.queue_depth,
-            tr.hostname, tr.protocol,
+            tr.hostname, tr.protocol, tr.output_file, tr.num_jobs, tr.direct, 
+            tr.test_size, tr.sync, tr.iodepth, tr.duration,
             pm.metric_type, pm.value, pm.unit, pm.operation_type
         FROM test_runs tr
         JOIN performance_metrics pm ON tr.id = pm.test_run_id
@@ -203,6 +204,13 @@ router.get('/performance-data', requireAdmin, (req, res) => {
                     queue_depth: row.queue_depth,
                     hostname: row.hostname,
                     protocol: row.protocol,
+                    output_file: row.output_file,
+                    num_jobs: row.num_jobs,
+                    direct: row.direct,
+                    test_size: row.test_size,
+                    sync: row.sync,
+                    iodepth: row.iodepth,
+                    duration: row.duration,
                     metrics: {}
                 };
             }

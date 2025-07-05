@@ -94,8 +94,8 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
                 },
             },
             tooltip: {
-                mode: 'index' as const,
-                intersect: false,
+                mode: 'nearest' as const,
+                intersect: true,
                 backgroundColor: themeColors.chart.tooltipBg,
                 titleColor: themeColors.text.primary,
                 bodyColor: themeColors.text.secondary,
@@ -103,9 +103,10 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
                 borderWidth: 1,
                 cornerRadius: 8,
                 padding: 12,
+                displayColors: true,
                 callbacks: {
                     title: (context: any) => {
-                        // Get the first data point to extract common information
+                        // Get the first (and only) data point since we're using intersect: true
                         const firstContext = context[0];
                         const dataIndex = firstContext.dataIndex;
                         const originalData = firstContext.dataset.originalData?.[dataIndex];
@@ -114,15 +115,10 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
                             return firstContext.label || '';
                         }
                         
-                        // Build title with common information
+                        // Build title with test configuration information
                         const titleParts = [];
                         
-                        // Add hostname if available
-                        if (originalData.hostname) {
-                            titleParts.push(originalData.hostname);
-                        }
-                        
-                        // Add drive model and block size
+                        // Add drive model and block size as primary identifier
                         titleParts.push(`${originalData.drive_model} - ${originalData.block_size}`);
                         
                         // Add pattern if available
@@ -130,27 +126,14 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
                             titleParts.push(originalData.read_write_pattern);
                         }
                         
+                        // Add hostname if available
+                        if (originalData.hostname) {
+                            titleParts.push(`📍 ${originalData.hostname}`);
+                        }
+                        
                         // Add protocol if available
                         if (originalData.protocol) {
-                            titleParts.push(originalData.protocol);
-                        }
-                        
-                        // Add queue depth if available
-                        if (originalData.queue_depth) {
-                            titleParts.push(`QD: ${originalData.queue_depth}`);
-                        }
-                        
-                        // Add drive type if available
-                        if (originalData.drive_type) {
-                            titleParts.push(originalData.drive_type);
-                        }
-                        
-                        // Add timestamp if available
-                        if (originalData.timestamp) {
-                            const date = new Date(originalData.timestamp);
-                            const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
-                            const formattedTime = date.toTimeString().split(' ')[0]; // HH:MM:SS
-                            titleParts.push(`${formattedDate} ${formattedTime}`);
+                            titleParts.push(`🔗 ${originalData.protocol}`);
                         }
                         
                         return titleParts.join(' | ');
@@ -163,6 +146,11 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
                         // Get original data for additional details
                         const originalData = context.dataset.originalData?.[dataIndex];
                         
+                        // Skip if no value (happens with grouped data where not all groups have data for all x-axis positions)
+                        if (!value || value === '0') {
+                            return '';
+                        }
+                        
                         // Add units based on metric type
                         let formattedValue = value;
                         if (label.toLowerCase().includes('latency')) {
@@ -173,64 +161,47 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
                             formattedValue = `${value} IOPS`;
                         }
                         
-                        // Build enhanced label with metric-specific details only
+                        // Build compact label
                         let enhancedLabel = `${label}: ${formattedValue}`;
                         
-                        // Add metric-specific details if available
-                        if (originalData && originalData.metrics) {
-                            const additionalMetrics = [];
+                        // Add essential details if available
+                        if (originalData) {
+                            const details = [];
                             
-                            // Add latency percentiles only for latency metrics
-                            if (label.toLowerCase().includes('latency')) {
-                                if (originalData.metrics.p95_latency?.value) {
-                                    additionalMetrics.push(`P95: ${originalData.metrics.p95_latency.value.toFixed(2)}ms`);
+                            // Add queue depth
+                            if (originalData.queue_depth) {
+                                details.push(`QD: ${originalData.queue_depth}`);
+                            }
+                            
+                            // Add drive type
+                            if (originalData.drive_type) {
+                                details.push(originalData.drive_type);
+                            }
+                            
+                            // Add timestamp 
+                            if (originalData.timestamp) {
+                                const date = new Date(originalData.timestamp);
+                                const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+                                details.push(formattedDate);
+                            }
+                            
+                            // Add key metric-specific details
+                            if (originalData.metrics) {
+                                if (label.toLowerCase().includes('latency') && originalData.metrics.p95_latency?.value) {
+                                    details.push(`P95: ${originalData.metrics.p95_latency.value.toFixed(2)}ms`);
                                 }
-                                
-                                if (originalData.metrics.p99_latency?.value) {
-                                    additionalMetrics.push(`P99: ${originalData.metrics.p99_latency.value.toFixed(2)}ms`);
-                                }
-                                
-                                if (originalData.metrics.min_latency?.value) {
-                                    additionalMetrics.push(`Min: ${originalData.metrics.min_latency.value.toFixed(2)}ms`);
-                                }
-                                
-                                if (originalData.metrics.max_latency?.value) {
-                                    additionalMetrics.push(`Max: ${originalData.metrics.max_latency.value.toFixed(2)}ms`);
-                                }
                             }
                             
-                            // Add CPU usage for all metrics
-                            if ((originalData as any).usr_cpu !== undefined) {
-                                additionalMetrics.push(`CPU User: ${(originalData as any).usr_cpu.toFixed(1)}%`);
-                            }
-                            
-                            if ((originalData as any).sys_cpu !== undefined) {
-                                additionalMetrics.push(`CPU Sys: ${(originalData as any).sys_cpu.toFixed(1)}%`);
-                            }
-                            
-                            // Add test configuration details
-                            if ((originalData as any).duration) {
-                                additionalMetrics.push(`Duration: ${(originalData as any).duration}s`);
-                            }
-                            
-                            if ((originalData as any).num_jobs) {
-                                additionalMetrics.push(`Jobs: ${(originalData as any).num_jobs}`);
-                            }
-                            
-                            if ((originalData as any).iodepth) {
-                                additionalMetrics.push(`IO Depth: ${(originalData as any).iodepth}`);
-                            }
-                            
-                            if ((originalData as any).test_size) {
-                                additionalMetrics.push(`Test Size: ${(originalData as any).test_size}`);
-                            }
-                            
-                            if (additionalMetrics.length > 0) {
-                                enhancedLabel += `\n${additionalMetrics.join(' | ')}`;
+                            if (details.length > 0) {
+                                enhancedLabel += `\n${details.join(' | ')}`;
                             }
                         }
                         
                         return enhancedLabel;
+                    },
+                    // Custom filter to remove zero values from tooltip
+                    filter: (tooltipItem: any) => {
+                        return tooltipItem.parsed.y !== 0;
                     },
                 },
             },
@@ -238,8 +209,8 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
         scales: getScalesForTemplate(template, themeColors),
         interaction: {
             mode: 'nearest' as const,
-            axis: 'x' as const,
-            intersect: false,
+            axis: 'xy' as const,
+            intersect: true,
         },
         animation: {
             duration: 750,

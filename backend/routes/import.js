@@ -322,7 +322,9 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
             const block_size = bsStr;
             const rw = opts.rw || globalOpts.rw || 'read';
             const iodepth = parseInt(opts.iodepth || globalOpts.iodepth || '1');
-            const duration = job.runtime || parseInt(globalOpts.runtime || '0');
+            // Get duration from multiple possible sources, prefer actual runtime over configured
+            const duration = Math.round((job.job_runtime || 0) / 1000) || // Actual runtime in ms -> seconds
+                           parseInt(opts.runtime || globalOpts.runtime || '0'); // Configured runtime in seconds
             const test_name = job.jobname || `fio_job_${jobIndex + 1}`;
             const rwmixread = parseInt(opts.rwmixread || '100');
 

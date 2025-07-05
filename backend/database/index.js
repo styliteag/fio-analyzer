@@ -305,8 +305,9 @@ function populateSampleData(callback) {
                 timestamp, test_date, drive_model, drive_type, test_name, 
                 block_size, read_write_pattern, queue_depth, duration, 
                 fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, 
-                usr_cpu, sys_cpu, hostname, protocol, description
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                usr_cpu, sys_cpu, hostname, protocol, description,
+                output_file, num_jobs, direct, test_size, sync, iodepth
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         testRunsData.forEach((data, index) => {
@@ -314,6 +315,14 @@ function populateSampleData(callback) {
             const fakeIops = Math.floor(getBaseIops(data.drive_type, data.pattern, data.block_size) * (0.8 + Math.random() * 0.4));
             const fakeLatency = getBaseLatency(data.drive_type, data.pattern) * (0.8 + Math.random() * 0.4);
             const fakeBandwidth = Math.floor(getBaseBandwidth(data.drive_type, data.pattern, data.block_size) * (0.8 + Math.random() * 0.4));
+            
+            // Generate realistic job option values
+            const numJobs = [1, 2, 4, 8][Math.floor(Math.random() * 4)]; // 1, 2, 4, or 8 jobs
+            const directIO = Math.random() > 0.5 ? 1 : 0; // 50% chance of direct IO
+            const syncMode = Math.random() > 0.7 ? 1 : 0; // 30% chance of sync mode
+            const testSizes = ["1M", "10M", "100M", "1G"];
+            const testSize = testSizes[Math.floor(Math.random() * testSizes.length)];
+            const iodepth = [1, 4, 8, 16, 32][Math.floor(Math.random() * 5)]; // Common iodepth values
             
             stmt.run([
                 data.timestamp,
@@ -334,7 +343,13 @@ function populateSampleData(callback) {
                 2.1 + Math.random() * 2, // sys_cpu: 2-4%
                 data.server.hostname,
                 data.server.protocol,
-                `Simulated ${data.pattern} test on ${data.drive_model} drive`
+                `Simulated ${data.pattern} test on ${data.drive_model} drive`,
+                "testfile.bin", // output_file
+                numJobs, // num_jobs
+                directIO, // direct: 0 or 1
+                testSize, // test_size
+                syncMode, // sync: 0 or 1
+                iodepth // iodepth
             ], function(err) {
                 if (err) {
                     console.error('Error inserting test run:', err);

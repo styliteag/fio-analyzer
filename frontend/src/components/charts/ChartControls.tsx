@@ -21,7 +21,13 @@ export type GroupOption =
     | "blocksize"
     | "protocol"
     | "hostname"
-    | "queuedepth";
+    | "queuedepth"
+    | "iodepth"
+    | "numjobs"
+    | "direct"
+    | "sync"
+    | "testsize"
+    | "duration";
 
 export interface ChartControlsProps {
     sortBy: SortOption;
@@ -66,6 +72,12 @@ const ChartControls: React.FC<ChartControlsProps> = ({
         { value: "protocol", label: "Protocol" },
         { value: "hostname", label: "Hostname" },
         { value: "queuedepth", label: "Queue Depth" },
+        { value: "iodepth", label: "IO Depth" },
+        { value: "numjobs", label: "Number of Jobs" },
+        { value: "direct", label: "Direct IO" },
+        { value: "sync", label: "Sync Mode" },
+        { value: "testsize", label: "Test Size" },
+        { value: "duration", label: "Runtime" },
     ];
 
     return (

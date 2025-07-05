@@ -47,6 +47,54 @@ export const getMetricValue = (
     return 0;
 };
 
+// Helper function to format group keys consistently
+export const formatGroupKey = (groupBy: GroupOption, item: PerformanceData): string => {
+    switch (groupBy) {
+        case "drive":
+            return item.drive_model;
+        case "test":
+            return item.read_write_pattern;
+        case "blocksize":
+            return item.block_size.toString();
+        case "protocol":
+            return item.protocol || "Unknown";
+        case "hostname":
+            return item.hostname || "Unknown";
+        case "queuedepth": {
+            const queueDepth = item.queue_depth || (item as any).iodepth || 0;
+            return `QD${queueDepth}`;
+        }
+        case "iodepth": {
+            const ioDepth = (item as any).iodepth || item.queue_depth || 0;
+            return `IOD${ioDepth}`;
+        }
+        case "numjobs": {
+            const numJobs = (item as any).num_jobs || 1;
+            return `${numJobs} Jobs`;
+        }
+        case "direct": {
+            const direct = (item as any).direct;
+            if (direct === null || direct === undefined) return "Direct IO: Unknown";
+            return direct === 1 ? "Direct IO: Yes" : "Direct IO: No";
+        }
+        case "sync": {
+            const sync = (item as any).sync;
+            if (sync === null || sync === undefined) return "Sync: Unknown";
+            return sync === 1 ? "Sync: On" : "Sync: Off";
+        }
+        case "testsize": {
+            const testSize = (item as any).test_size || "Unknown";
+            return `Size: ${testSize}`;
+        }
+        case "duration": {
+            const duration = (item as any).duration || 0;
+            return `${duration}s`;
+        }
+        default:
+            return "Default";
+    }
+};
+
 // Apply sorting and grouping to data
 export const applySortingAndGrouping = (
     data: PerformanceData[],
@@ -93,8 +141,8 @@ export const applySortingAndGrouping = (
                 bValue = b.hostname || "";
                 break;
             case "queuedepth":
-                aValue = a.queue_depth || 0;
-                bValue = b.queue_depth || 0;
+                aValue = a.queue_depth || (a as any).iodepth || 0;
+                bValue = b.queue_depth || (b as any).iodepth || 0;
                 break;
             default:
                 aValue = a.test_name;
@@ -113,33 +161,13 @@ export const applySortingAndGrouping = (
         sortedData.sort((a, b) => {
             let aGroupValue: any, bGroupValue: any;
 
-            switch (groupBy) {
-                case "drive":
-                    aGroupValue = a.drive_model;
-                    bGroupValue = b.drive_model;
-                    break;
-                case "test":
-                    aGroupValue = a.test_name;
-                    bGroupValue = b.test_name;
-                    break;
-                case "blocksize":
-                    aGroupValue = a.block_size;
-                    bGroupValue = b.block_size;
-                    return sortBlockSizes([aGroupValue, bGroupValue])[0] === aGroupValue ? -1 : 1;
-                case "protocol":
-                    aGroupValue = a.protocol || "";
-                    bGroupValue = b.protocol || "";
-                    break;
-                case "hostname":
-                    aGroupValue = a.hostname || "";
-                    bGroupValue = b.hostname || "";
-                    break;
-                case "queuedepth":
-                    aGroupValue = a.queue_depth || 0;
-                    bGroupValue = b.queue_depth || 0;
-                    break;
-                default:
-                    return 0; // No grouping
+            // Use the helper function to format group values consistently
+            aGroupValue = formatGroupKey(groupBy, a);
+            bGroupValue = formatGroupKey(groupBy, b);
+            
+            // Special handling for block size sorting
+            if (groupBy === "blocksize") {
+                return sortBlockSizes([a.block_size.toString(), b.block_size.toString()])[0] === a.block_size.toString() ? -1 : 1;
             }
 
             const groupComparison =
@@ -185,8 +213,8 @@ export const applySortingAndGrouping = (
                         bValue = b.hostname || "";
                         break;
                     case "queuedepth":
-                        aValue = a.queue_depth || 0;
-                        bValue = b.queue_depth || 0;
+                        aValue = a.queue_depth || (a as any).iodepth || 0;
+                        bValue = b.queue_depth || (b as any).iodepth || 0;
                         break;
                     default:
                         aValue = a.test_name;
@@ -258,29 +286,7 @@ export const processPerformanceOverview = (
     // Group data by the specified field
     const groups = new Map<string, PerformanceData[]>();
     sortedData.forEach((item) => {
-        let groupKey: string;
-        switch (groupBy) {
-            case "drive":
-                groupKey = item.drive_model;
-                break;
-            case "test":
-                groupKey = item.test_name;
-                break;
-            case "blocksize":
-                groupKey = item.block_size.toString();
-                break;
-            case "protocol":
-                groupKey = item.protocol || "Unknown";
-                break;
-            case "hostname":
-                groupKey = item.hostname || "Unknown";
-                break;
-            case "queuedepth":
-                groupKey = `QD${item.queue_depth || 0}`;
-                break;
-            default:
-                groupKey = "Default";
-        }
+        const groupKey = formatGroupKey(groupBy, item);
 
         if (!groups.has(groupKey)) {
             groups.set(groupKey, []);
@@ -288,10 +294,24 @@ export const processPerformanceOverview = (
         groups.get(groupKey)?.push(item);
     });
 
-    // Create labels from all unique test configurations
+    // Helper function to create consistent labels for grouping
+    const createItemLabel = (item: PerformanceData): string => {
+        let labelParts = [item.drive_model, item.block_size, item.read_write_pattern];
+        
+        // Add the groupBy field to ensure X-axis separation when grouping
+        const excludedFromLabel: GroupOption[] = ["none", "drive", "test", "blocksize"];
+        if (!excludedFromLabel.includes(groupBy)) {
+            // Add grouping field value for fields not already in the base label
+            labelParts.push(formatGroupKey(groupBy, item));
+        }
+        
+        return labelParts.join(' - ');
+    };
+
+    // Create labels from all unique test configurations (include groupBy field to ensure uniqueness)
     const allLabels = new Set<string>();
     sortedData.forEach((item) => {
-        allLabels.add(`${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}`);
+        allLabels.add(createItemLabel(item));
     });
     const labels = Array.from(allLabels);
 
@@ -304,9 +324,7 @@ export const processPerformanceOverview = (
         
         // IOPS dataset for this group
         const iopsData = labels.map(label => {
-            const item = groupData.find(item => 
-                `${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}` === label
-            );
+            const item = groupData.find(item => createItemLabel(item) === label);
             return item ? getMetricValue(item.metrics, "iops") : 0;
         });
 
@@ -322,9 +340,7 @@ export const processPerformanceOverview = (
 
         // Latency dataset for this group
         const latencyData = labels.map(label => {
-            const item = groupData.find(item => 
-                `${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}` === label
-            );
+            const item = groupData.find(item => createItemLabel(item) === label);
             return item ? getMetricValue(item.metrics, "avg_latency") : 0;
         });
 
@@ -340,9 +356,7 @@ export const processPerformanceOverview = (
 
         // Bandwidth dataset for this group
         const bandwidthData = labels.map(label => {
-            const item = groupData.find(item => 
-                `${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}` === label
-            );
+            const item = groupData.find(item => createItemLabel(item) === label);
             return item ? getMetricValue(item.metrics, "bandwidth") : 0;
         });
 
@@ -536,29 +550,7 @@ export const processIOPSLatencyDual = (
     // Group data by the specified field
     const groups = new Map<string, PerformanceData[]>();
     sortedData.forEach((item) => {
-        let groupKey: string;
-        switch (groupBy) {
-            case "drive":
-                groupKey = item.drive_model;
-                break;
-            case "test":
-                groupKey = item.test_name;
-                break;
-            case "blocksize":
-                groupKey = item.block_size.toString();
-                break;
-            case "protocol":
-                groupKey = item.protocol || "Unknown";
-                break;
-            case "hostname":
-                groupKey = item.hostname || "Unknown";
-                break;
-            case "queuedepth":
-                groupKey = `QD${item.queue_depth || 0}`;
-                break;
-            default:
-                groupKey = "Default";
-        }
+        const groupKey = formatGroupKey(groupBy, item);
 
         if (!groups.has(groupKey)) {
             groups.set(groupKey, []);
@@ -566,10 +558,24 @@ export const processIOPSLatencyDual = (
         groups.get(groupKey)?.push(item);
     });
 
+    // Helper function to create consistent labels for grouping
+    const createItemLabel = (item: PerformanceData): string => {
+        let labelParts = [item.drive_model, item.block_size];
+        
+        // Add the groupBy field to ensure X-axis separation when grouping
+        const excludedFromLabel: GroupOption[] = ["none", "drive", "blocksize"];
+        if (!excludedFromLabel.includes(groupBy)) {
+            // Add grouping field value for fields not already in the base label
+            labelParts.push(formatGroupKey(groupBy, item));
+        }
+        
+        return labelParts.join(' - ');
+    };
+
     // Create labels from all unique test configurations
     const allLabels = new Set<string>();
     sortedData.forEach((item) => {
-        allLabels.add(`${item.drive_model} - ${item.block_size}`);
+        allLabels.add(createItemLabel(item));
     });
     const labels = Array.from(allLabels);
 
@@ -580,9 +586,7 @@ export const processIOPSLatencyDual = (
     Array.from(groups.entries()).forEach(([groupName, groupData]) => {
         // IOPS dataset for this group
         const iopsData = labels.map(label => {
-            const item = groupData.find(item => 
-                `${item.drive_model} - ${item.block_size}` === label
-            );
+            const item = groupData.find(item => createItemLabel(item) === label);
             return item ? getMetricValue(item.metrics, "iops") : 0;
         });
 
@@ -598,9 +602,7 @@ export const processIOPSLatencyDual = (
 
         // Latency dataset for this group
         const latencyData = labels.map(label => {
-            const item = groupData.find(item => 
-                `${item.drive_model} - ${item.block_size}` === label
-            );
+            const item = groupData.find(item => createItemLabel(item) === label);
             return item ? getMetricValue(item.metrics, "avg_latency") : 0;
         });
 
@@ -654,29 +656,7 @@ export const processDefaultChart = (
     // Group data by the specified field
     const groups = new Map<string, PerformanceData[]>();
     sortedData.forEach((item) => {
-        let groupKey: string;
-        switch (groupBy) {
-            case "drive":
-                groupKey = item.drive_model;
-                break;
-            case "test":
-                groupKey = item.test_name;
-                break;
-            case "blocksize":
-                groupKey = item.block_size.toString();
-                break;
-            case "protocol":
-                groupKey = item.protocol || "Unknown";
-                break;
-            case "hostname":
-                groupKey = item.hostname || "Unknown";
-                break;
-            case "queuedepth":
-                groupKey = `QD${item.queue_depth || 0}`;
-                break;
-            default:
-                groupKey = "Default";
-        }
+        const groupKey = formatGroupKey(groupBy, item);
 
         if (!groups.has(groupKey)) {
             groups.set(groupKey, []);
@@ -684,10 +664,24 @@ export const processDefaultChart = (
         groups.get(groupKey)?.push(item);
     });
 
+    // Helper function to create consistent labels for grouping
+    const createItemLabel = (item: PerformanceData): string => {
+        let labelParts = [item.test_name, item.drive_model];
+        
+        // Add the groupBy field to ensure X-axis separation when grouping
+        const excludedFromLabel: GroupOption[] = ["none", "drive", "test"];
+        if (!excludedFromLabel.includes(groupBy)) {
+            // Add grouping field value for fields not already in the base label
+            labelParts.push(formatGroupKey(groupBy, item));
+        }
+        
+        return labelParts.join(' - ');
+    };
+
     // Create labels from all unique test configurations
     const allLabels = new Set<string>();
     sortedData.forEach((item) => {
-        allLabels.add(`${item.test_name} - ${item.drive_model}`);
+        allLabels.add(createItemLabel(item));
     });
     const labels = Array.from(allLabels);
 
@@ -697,9 +691,7 @@ export const processDefaultChart = (
     // Create datasets for each group
     Array.from(groups.entries()).forEach(([groupName, groupData]) => {
         const iopsData = labels.map(label => {
-            const item = groupData.find(item => 
-                `${item.test_name} - ${item.drive_model}` === label
-            );
+            const item = groupData.find(item => createItemLabel(item) === label);
             return item ? getMetricValue(item.metrics, "iops") : 0;
         });
 
