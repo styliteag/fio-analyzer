@@ -380,7 +380,7 @@ show_config() {
 
 # Function to run all tests
 run_all_tests() {
-    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]}))
+    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]} * ${#NUM_JOBS[@]} * ${#DIRECT[@]} * ${#TEST_SIZE[@]} * ${#SYNC[@]} * ${#IODEPTH[@]}))
     local current_test=0
     local successful_uploads=0
     local failed_uploads=0
