@@ -442,6 +442,15 @@ main() {
     echo "============================="
     echo
     
+    # Check for --yes flag to skip confirmation and server checks
+    local skip_confirmation=false
+    for arg in "$@"; do
+        if [ "$arg" = "--yes" ] || [ "$arg" = "-y" ]; then
+            skip_confirmation=true
+            break
+        fi
+    done
+    
     # Load configuration
     load_env
     set_defaults
@@ -454,9 +463,13 @@ main() {
     # Show configuration
     show_config
     
-    # Validate API connectivity and credentials
-    check_api_connectivity
-    check_credentials
+    # Validate API connectivity and credentials (skip if --yes flag is used)
+    if [ "$skip_confirmation" = false ]; then
+        check_api_connectivity
+        check_credentials
+    else
+        print_status "Skipping server connectivity checks due to --yes flag"
+    fi
     
     # Confirm before starting tests (unless --yes flag is used)
     echo
@@ -473,15 +486,6 @@ main() {
     print_status "  Test duration: ${RUNTIME}s per test"
     print_status "  Estimated total time: $((total_tests * RUNTIME / 60)) minutes"
     echo
-    
-    # Check for --yes flag to skip confirmation
-    local skip_confirmation=false
-    for arg in "$@"; do
-        if [ "$arg" = "--yes" ] || [ "$arg" = "-y" ]; then
-            skip_confirmation=true
-            break
-        fi
-    done
     
     if [ "$skip_confirmation" = false ]; then
         read -p "Do you want to proceed? (y/N): " -n 1 -r
