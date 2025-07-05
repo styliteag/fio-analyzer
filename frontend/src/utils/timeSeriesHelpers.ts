@@ -193,18 +193,12 @@ export interface TimeSeriesDataSeries {
  */
 export const generateSeriesDatasets = (
     seriesData: TimeSeriesDataSeries[],
-    enabledMetrics: EnabledMetrics,
-    visibleSeries?: Set<string>
+    enabledMetrics: EnabledMetrics
 ): ChartDataset[] => {
     const datasets: ChartDataset[] = [];
     let colorIndex = 0;
 
     seriesData.forEach((series) => {
-        // Skip if series is hidden
-        if (visibleSeries && !visibleSeries.has(series.id)) {
-            return;
-        }
-
         const baseColor = SERVER_COLORS[colorIndex % SERVER_COLORS.length];
         colorIndex++;
 

@@ -137,9 +137,6 @@ const TimeSeriesControls: React.FC<TimeSeriesControlsProps> = ({
                         )}
                     </div>
                     
-                    <div className="mt-2 text-xs theme-text-tertiary">
-                        💡 To change these filters, modify selections in "Test Run Selection" above
-                    </div>
                 </div>
             )}
         </div>

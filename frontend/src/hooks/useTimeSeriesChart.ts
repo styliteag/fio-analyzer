@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ChartOptions } from "chart.js";
 import { 
     generateSeriesDatasets,
@@ -18,12 +18,6 @@ interface UseTimeSeriesChartResult {
     processedChartData: { datasets: any[] } | null;
     chartOptions: ChartOptions<'line'>;
     hasData: boolean;
-    // Series toggle functionality
-    visibleSeries: Set<string>;
-    toggleSeries: (seriesId: string) => void;
-    showAllSeries: () => void;
-    hideAllSeries: () => void;
-    availableSeries: TimeSeriesDataSeries[];
 }
 
 export const useTimeSeriesChart = ({
@@ -32,26 +26,16 @@ export const useTimeSeriesChart = ({
     timeRange,
 }: UseTimeSeriesChartProps): UseTimeSeriesChartResult => {
     
-    // Initialize visible series (all series visible by default)
-    const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set());
-    
-    // Update visible series when series data changes
-    useMemo(() => {
-        if (seriesData.length > 0) {
-            setVisibleSeries(new Set(seriesData.map(s => s.id)));
-        }
-    }, [seriesData]);
-    
     /**
      * Processes chart data for Chart.js consumption
      */
     const processedChartData = useMemo(() => {
         if (seriesData.length === 0) return null;
 
-        const datasets = generateSeriesDatasets(seriesData, enabledMetrics, visibleSeries);
+        const datasets = generateSeriesDatasets(seriesData, enabledMetrics);
         
         return datasets.length > 0 ? { datasets } : null;
-    }, [seriesData, enabledMetrics, visibleSeries]);
+    }, [seriesData, enabledMetrics]);
 
     /**
      * Chart.js configuration options
@@ -197,37 +181,9 @@ export const useTimeSeriesChart = ({
         return processedChartData !== null && processedChartData.datasets.length > 0;
     }, [processedChartData]);
 
-    /**
-     * Series toggle functions
-     */
-    const toggleSeries = (seriesId: string) => {
-        setVisibleSeries(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(seriesId)) {
-                newSet.delete(seriesId);
-            } else {
-                newSet.add(seriesId);
-            }
-            return newSet;
-        });
-    };
-
-    const showAllSeries = () => {
-        setVisibleSeries(new Set(seriesData.map(s => s.id)));
-    };
-
-    const hideAllSeries = () => {
-        setVisibleSeries(new Set());
-    };
-
     return {
         processedChartData,
         chartOptions,
         hasData,
-        visibleSeries,
-        toggleSeries,
-        showAllSeries,
-        hideAllSeries,
-        availableSeries: seriesData,
     };
 };
