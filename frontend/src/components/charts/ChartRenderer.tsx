@@ -148,7 +148,9 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
                         // Add timestamp if available
                         if (originalData.timestamp) {
                             const date = new Date(originalData.timestamp);
-                            titleParts.push(`${date.toLocaleDateString()} ${date.toLocaleTimeString()}`);
+                            const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+                            const formattedTime = date.toTimeString().split(' ')[0]; // HH:MM:SS
+                            titleParts.push(`${formattedDate} ${formattedTime}`);
                         }
                         
                         return titleParts.join(' | ');

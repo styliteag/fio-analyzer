@@ -13,19 +13,27 @@ export const useTestRunSelection = (
     filteredRuns: TestRun[]
 ) => {
     const runOptions = useMemo(() => {
-        return filteredRuns.map((run) => ({
-            value: run,
-            label: `${run.drive_model} - ${run.test_name} (${new Date(run.timestamp).toLocaleDateString()})`,
-            key: run.id,
-        }));
+        return filteredRuns.map((run) => {
+            const date = new Date(run.timestamp);
+            const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+            return {
+                value: run,
+                label: `${run.drive_model} - ${run.test_name} (${formattedDate})`,
+                key: run.id,
+            };
+        });
     }, [filteredRuns]);
 
     const selectedOptions = useMemo(() => {
-        return selectedRuns.map((run) => ({
-            value: run,
-            label: `${run.drive_model} - ${run.test_name} (${new Date(run.timestamp).toLocaleDateString()})`,
-            key: run.id,
-        }));
+        return selectedRuns.map((run) => {
+            const date = new Date(run.timestamp);
+            const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+            return {
+                value: run,
+                label: `${run.drive_model} - ${run.test_name} (${formattedDate})`,
+                key: run.id,
+            };
+        });
     }, [selectedRuns]);
 
     const handleRunSelection = useCallback((

@@ -70,6 +70,16 @@ export const useTimeSeriesChart = ({
                 borderColor: "rgba(255, 255, 255, 0.2)",
                 borderWidth: 1,
                 callbacks: {
+                    title: (context) => {
+                        // Format the date consistently
+                        if (context.length > 0 && context[0].parsed.x) {
+                            const date = new Date(context[0].parsed.x);
+                            const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
+                            const formattedTime = date.toTimeString().split(' ')[0]; // HH:MM:SS
+                            return `${formattedDate} ${formattedTime}`;
+                        }
+                        return '';
+                    },
                     label: (context) => {
                         const label = context.dataset.label || '';
                         const value = context.parsed.y;
@@ -93,9 +103,9 @@ export const useTimeSeriesChart = ({
                 type: "time" as const,
                 time: {
                     displayFormats: {
-                        hour: "MMM d, HH:mm",
-                        day: "MMM d",
-                        week: "MMM d",
+                        hour: "MM-dd HH:mm",
+                        day: "MM-dd",
+                        week: "MM-dd",
                     },
                 },
                 title: {
