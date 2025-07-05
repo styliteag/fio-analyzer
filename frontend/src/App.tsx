@@ -3,6 +3,7 @@ import { LoginForm } from "./components/LoginForm";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Dashboard from "./pages/Dashboard";
 import Upload from "./pages/Upload";
+import Admin from "./pages/Admin";
 
 const ProtectedApp = () => {
 	const { isAuthenticated, login, loading, error } = useAuth();
@@ -25,6 +26,7 @@ const ProtectedApp = () => {
 		<Routes>
 			<Route path="/" element={<Dashboard />} />
 			<Route path="/upload" element={<Upload />} />
+			<Route path="/admin" element={<Admin />} />
 		</Routes>
 	);
 };

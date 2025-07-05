@@ -9,7 +9,9 @@ export * from './upload';
 export { 
     fetchTestRuns,
     updateTestRun,
+    bulkUpdateTestRuns,
     deleteTestRun,
+    deleteTestRuns,
     fetchFilters,
 } from './testRuns';
 

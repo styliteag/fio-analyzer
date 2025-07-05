@@ -40,6 +40,20 @@ export const deleteTestRun = async (id: number) => {
     });
 };
 
+// Bulk update test runs
+export const bulkUpdateTestRuns = async (
+    testRunIds: number[],
+    updates: TestRunUpdateData,
+) => {
+    return apiCall(`/api/test-runs/bulk`, {
+        method: "PUT",
+        body: JSON.stringify({
+            testRunIds,
+            updates,
+        }),
+    });
+};
+
 // Bulk delete test runs
 export const deleteTestRuns = async (ids: number[]) => {
     const results = await Promise.allSettled(

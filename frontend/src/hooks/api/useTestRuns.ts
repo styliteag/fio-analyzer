@@ -1,7 +1,8 @@
 // Custom hook for test run operations
 import { useState, useEffect, useCallback } from 'react';
-import { fetchTestRuns, updateTestRun, deleteTestRun, fetchFilters } from '../../services/api';
+import { fetchTestRuns, updateTestRun, deleteTestRun, deleteTestRuns, bulkUpdateTestRuns, fetchFilters } from '../../services/api';
 import type { TestRun, FilterOptions } from '../../types';
+import type { TestRunUpdateData } from '../../services/api/testRuns';
 
 export interface UseTestRunsResult {
     testRuns: TestRun[];
@@ -9,8 +10,11 @@ export interface UseTestRunsResult {
     loading: boolean;
     error: string | null;
     refetch: () => Promise<void>;
-    updateTestRunData: (id: number, updates: Partial<TestRun>) => Promise<boolean>;
+    refreshTestRuns: (includeHistorical?: boolean) => Promise<void>;
+    updateTestRun: (id: number, updates: TestRunUpdateData) => Promise<boolean>;
+    bulkUpdateTestRuns: (ids: number[], updates: TestRunUpdateData) => Promise<boolean>;
     deleteTestRunData: (id: number) => Promise<boolean>;
+    bulkDeleteTestRuns: (ids: number[]) => Promise<{successful: number, failed: number, total: number}>;
     refreshFilters: () => Promise<void>;
 }
 
@@ -27,12 +31,12 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchTestRunsData = useCallback(async () => {
+    const fetchTestRunsData = useCallback(async (includeHistorical = false) => {
         try {
             setLoading(true);
             setError(null);
             
-            const response = await fetchTestRuns();
+            const response = await fetchTestRuns({ includeHistorical });
             if (response.data) {
                 setTestRuns(response.data);
             } else {
@@ -69,7 +73,7 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
         ]);
     }, [fetchTestRunsData, fetchFiltersData]);
 
-    const updateTestRunData = useCallback(async (id: number, updates: Partial<TestRun>): Promise<boolean> => {
+    const updateTestRunData = useCallback(async (id: number, updates: TestRunUpdateData): Promise<boolean> => {
         try {
             setError(null);
             await updateTestRun(id, updates);
@@ -85,6 +89,26 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
         } catch (err: any) {
             setError(err.message || 'Failed to update test run');
             console.error('Error updating test run:', err);
+            return false;
+        }
+    }, []);
+
+    const bulkUpdateTestRunData = useCallback(async (ids: number[], updates: TestRunUpdateData): Promise<boolean> => {
+        try {
+            setError(null);
+            await bulkUpdateTestRuns(ids, updates);
+            
+            // Update local state optimistically
+            setTestRuns(prevRuns => 
+                prevRuns.map(run => 
+                    ids.includes(run.id) ? { ...run, ...updates } : run
+                )
+            );
+            
+            return true;
+        } catch (err: any) {
+            setError(err.message || 'Failed to bulk update test runs');
+            console.error('Error bulk updating test runs:', err);
             return false;
         }
     }, []);
@@ -105,6 +129,24 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
         }
     }, []);
 
+    const bulkDeleteTestRunData = useCallback(async (ids: number[]) => {
+        try {
+            setError(null);
+            const result = await deleteTestRuns(ids);
+            
+            // Update local state - remove successfully deleted test runs
+            if (result.successful > 0) {
+                setTestRuns(prevRuns => prevRuns.filter(run => !ids.includes(run.id)));
+            }
+            
+            return result;
+        } catch (err: any) {
+            setError(err.message || 'Failed to delete test runs');
+            console.error('Error bulk deleting test runs:', err);
+            return { successful: 0, failed: ids.length, total: ids.length };
+        }
+    }, []);
+
     const refreshFilters = useCallback(async () => {
         await fetchFiltersData();
     }, [fetchFiltersData]);
@@ -122,8 +164,11 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
         loading,
         error,
         refetch,
-        updateTestRunData,
+        refreshTestRuns: fetchTestRunsData,
+        updateTestRun: updateTestRunData,
+        bulkUpdateTestRuns: bulkUpdateTestRunData,
         deleteTestRunData,
+        bulkDeleteTestRuns: bulkDeleteTestRunData,
         refreshFilters,
     };
 };
