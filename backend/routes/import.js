@@ -186,23 +186,25 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
 
         // Create directory structure for organized file storage
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const isodate = testDate.toISOString().substring(0, 10);
+        const isotime = testDate.toISOString().substring(11, 16).replace(/[:.]/g, '-');
         const hostDir = hostname || 'unknown-host';
-        const dateDir = testDate.toISOString().substring(0, 10); // YYYY-MM-DD
-        const uploadDir = path.join(__dirname, '..', 'uploads', hostDir, dateDir, timestamp);
+        const protocolDir = protocol || 'unknown-protocol';
+        const driveTypeDir = drive_type || 'unknown-drive-type';
+        const driveModelDir = drive_model || 'unknown-drive-model';
+        //const testPattern = || 'unknown-test-pattern';
+        const uploadDir = path.join(__dirname, '..', 'uploads', hostDir, protocolDir, isodate , isotime, driveTypeDir, driveModelDir);
         
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
             logInfo('Created organized upload directory', {
                 requestId: req.requestId,
-                uploadDir,
-                hostDir,
-                dateDir,
-                timestamp
+                uploadDir
             });
         }
 
         // Move uploaded file to organized location
-        const finalPath = path.join(uploadDir, 'fio_results.json');
+        const finalPath = path.join(uploadDir, 'fio_results_' + timestamp + '.json');
         fs.renameSync(file.path, finalPath);
         
         logInfo('File moved to organized location', {
@@ -216,7 +218,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
         const relativeFilePath = path.relative(path.join(__dirname, '..'), finalPath);
         
         // Create metadata file
-        const metadataPath = path.join(uploadDir, 'upload.info');
+        const metadataPath = path.join(uploadDir, 'upload_' + timestamp + '.info');
         const metadata = {
             drive_model,
             drive_type,
