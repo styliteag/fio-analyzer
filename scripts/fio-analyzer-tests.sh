@@ -118,6 +118,14 @@ set_defaults() {
         IODEPTH=("1")
     fi
 
+    # Parse RUNTIME from comma-separated string if provided
+    if [ -n "$RUNTIME" ] && [ "$RUNTIME" != "30" ]; then
+        IFS=',' read -ra RUNTIME_ARRAY <<< "$RUNTIME"
+        RUNTIME=("${RUNTIME_ARRAY[@]}")
+    else
+        RUNTIME=("30")
+    fi
+
 }
 
 # Function to check if fio is installed
@@ -271,7 +279,6 @@ setup_target_dir() {
 
 
 run_fio_test() {
-    #"$block_size" "$pattern" "$output_file" "$num_jobs" "$direct" "$test_size" "$sync" "$iodepth"; then
     local block_size=$1
     local pattern=$2
     local output_file=$3
@@ -280,15 +287,16 @@ run_fio_test() {
     local test_size=$6
     local sync=$7
     local iodepth=$8
+    local runtime=$9
 
     print_status "Running FIO test: ${pattern} with ${block_size} block size"
     
-    fio --name="${DESCRIPTION},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    fio --name="${DESCRIPTION},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},runtime:${runtime},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --rw="$pattern" \
         --bs="$block_size" \
         --size="$test_size" \
         --numjobs="$num_jobs" \
-        --runtime="$RUNTIME" \
+        --runtime="$runtime" \
         --time_based \
         --group_reporting \
         --iodepth="$iodepth" \
@@ -353,8 +361,20 @@ cleanup() {
     rm -f /tmp/fio_results_*.json
 }
 
+# Function to get maximum value from an array
+get_max_value() {
+    local max=0
+    for val in "$@"; do
+        if [ "$val" -gt "$max" ]; then
+            max=$val
+        fi
+    done
+    echo "$max"
+}
+
 # Function to display configuration
 show_config() {
+    local max_runtime=$(get_max_value "${RUNTIME[@]}")
     echo "========================================="
     echo "FIO Performance Test Configuration"
     echo "========================================="
@@ -365,7 +385,7 @@ show_config() {
     echo "Drive Type:   $DRIVE_TYPE"
     echo "Test Size:    $TEST_SIZE"
     echo "Num Jobs:     $NUM_JOBS"
-    echo "Runtime:      ${RUNTIME}s"
+    echo "Runtime:      ${RUNTIME[*]} (max: ${max_runtime}s)"
     echo "Direct:       $DIRECT"
     echo "I/O Engine:   $IOENGINE"
     echo "I/O Depth:    $IODEPTH"
@@ -380,7 +400,7 @@ show_config() {
 
 # Function to run all tests
 run_all_tests() {
-    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]} * ${#NUM_JOBS[@]} * ${#DIRECT[@]} * ${#TEST_SIZE[@]} * ${#SYNC[@]} * ${#IODEPTH[@]}))
+    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]} * ${#NUM_JOBS[@]} * ${#DIRECT[@]} * ${#TEST_SIZE[@]} * ${#SYNC[@]} * ${#IODEPTH[@]} * ${#RUNTIME[@]}))
     local current_test=0
     local successful_uploads=0
     local failed_uploads=0
@@ -394,23 +414,25 @@ run_all_tests() {
                     for test_size in "${TEST_SIZE[@]}"; do
                         for sync in "${SYNC[@]}"; do
                             for iodepth in "${IODEPTH[@]}"; do
-                                current_test=$((current_test + 1))
-                                print_status "Test $current_test/$total_tests: ${pattern} with ${block_size}"
+                                for runtime in "${RUNTIME[@]}"; do
+                                    current_test=$((current_test + 1))
+                                    print_status "Test $current_test/$total_tests: ${pattern} with ${block_size} ${num_jobs} ${direct} ${test_size} ${sync} ${iodepth} ${runtime}"
 
-                                output_file="/tmp/fio_results_${pattern}_${block_size}_${num_jobs}_${direct}_${test_size}_$(date +%s).json"
+                                    output_file="/tmp/fio_results_${pattern}_${block_size}_${num_jobs}_${direct}_${test_size}_$(date +%s).json"
 
-                                if run_fio_test "$block_size" "$pattern" "$output_file" "$num_jobs" "$direct" "$test_size" "$sync" "$iodepth"; then
-                                    if upload_results "$output_file" "${pattern}_${block_size}_${num_jobs}_${direct}_${test_size}_${sync}_${iodepth}"; then
-                                        successful_uploads=$((successful_uploads + 1))
+                                    if run_fio_test "$block_size" "$pattern" "$output_file" "$num_jobs" "$direct" "$test_size" "$sync" "$iodepth" "$runtime"; then
+                                        if upload_results "$output_file" "${pattern}_${block_size}_${num_jobs}_${direct}_${test_size}_${sync}_${iodepth}_${runtime}"; then
+                                            successful_uploads=$((successful_uploads + 1))
+                                        else
+                                            failed_uploads=$((failed_uploads + 1))
+                                        fi
+                                        rm -f "$output_file"
                                     else
                                         failed_uploads=$((failed_uploads + 1))
                                     fi
-                                    rm -f "$output_file"
-                                else
-                                    failed_uploads=$((failed_uploads + 1))
-                                fi
 
-                                echo
+                                    echo
+                                done
                             done
                         done
                     done
@@ -475,17 +497,20 @@ main() {
     # Confirm before starting tests (unless --yes flag is used)
     echo
     print_status "All checks passed! Ready to start FIO performance testing."
-    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]} * ${#NUM_JOBS[@]} * ${#DIRECT[@]} * ${#TEST_SIZE[@]} * ${#SYNC[@]} * ${#IODEPTH[@]}))
-    print_status "This will run $total_tests tests with the following configuration:"
+    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]} * ${#NUM_JOBS[@]} * ${#DIRECT[@]} * ${#TEST_SIZE[@]} * ${#SYNC[@]} * ${#IODEPTH[@]} * ${#RUNTIME[@]}))
     print_status "  Block sizes: ${BLOCK_SIZES[*]}"
-    print_status "  Number of jobs: ${NUM_JOBS[*]}"
     print_status "  Direct: ${DIRECT[*]}"
     print_status "  Test size: ${TEST_SIZE[*]}"
     print_status "  Sync: ${SYNC[*]}"
     print_status "  I/O Depth: ${IODEPTH[*]}"
+    print_status "  Runtime: ${RUNTIME[*]}"
+    print_status "  Number of jobs: ${NUM_JOBS[*]}"
+    local max_runtime=$(get_max_value "${RUNTIME[@]}")
     print_status "  Test patterns: ${TEST_PATTERNS[*]}"
-    print_status "  Test duration: ${RUNTIME}s per test"
-    print_status "  Estimated total time: $((total_tests * RUNTIME / 60)) minutes"
+    print_status "  Test duration: ${RUNTIME[*]} (max: ${max_runtime}s) per test"
+    print_status "  Estimated total time: $((total_tests * max_runtime / 60)) minutes"
+    echo
+    print_status "This will run $total_tests tests with the listed configurations!"
     echo
     
     if [ "$skip_confirmation" = false ]; then
@@ -564,6 +589,7 @@ Configuration Variables:
   TEST_SIZE      - Size of test file (default: 10M)
   SYNC           - Sync mode (default: 1)
   IODEPTH        - I/O Depth (default: 1)
+  RUNTIME        - Test runtime in seconds (default: 30)
 
 Examples:
   # Setup configuration file
