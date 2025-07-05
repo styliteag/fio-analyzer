@@ -29,8 +29,9 @@ print_error() {
 
 # Function to load .env file
 load_env() {
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local env_file="$script_dir/.env"
+    #local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    #local env_file="$script_dir/.env"
+    local env_file=".env"
     
     if [ -f "$env_file" ]; then
         print_status "Loading configuration from $env_file"
