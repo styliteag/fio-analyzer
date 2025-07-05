@@ -7,7 +7,7 @@ import {
     type ServerGroup,
     type TimeRange,
 } from "../utils/timeSeriesHelpers";
-import type { TimeSeriesFilters } from "../components/timeSeries/TimeSeriesFilters";
+import type { TimeSeriesFilters } from "../utils/filterConverters";
 
 interface UseTimeSeriesDataResult {
     // Server data

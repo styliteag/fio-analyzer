@@ -1,5 +1,16 @@
 import type { ActiveFilters } from '../hooks/useTestRunFilters';
-import type { TimeSeriesFilters } from '../components/timeSeries/TimeSeriesFilters';
+
+// Define TimeSeriesFilters interface locally since the component was removed
+export interface TimeSeriesFilters {
+    hostnames: string[];
+    protocols: string[];
+    drive_models: string[];
+    drive_types: string[];
+    block_sizes: string[];
+    patterns: string[];
+    start_date: string;
+    end_date: string;
+}
 
 /**
  * Converts TestRun ActiveFilters format to TimeSeriesFilters format
@@ -30,7 +41,7 @@ export const convertTimeSeriesFiltersToActiveFilters = (
         protocols: timeSeriesFilters.protocols,
         drive_models: timeSeriesFilters.drive_models,
         drive_types: timeSeriesFilters.drive_types,
-        block_sizes: timeSeriesFilters.block_sizes.map(size => {
+        block_sizes: timeSeriesFilters.block_sizes.map((size: string) => {
             // Try to convert to number if it's a numeric string, otherwise keep as string
             const numValue = parseInt(size, 10);
             return isNaN(numValue) ? size : numValue;

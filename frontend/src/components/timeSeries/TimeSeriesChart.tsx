@@ -1,6 +1,6 @@
 import React from "react";
 import { Line } from "react-chartjs-2";
-import { Server, TrendingUp } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -37,7 +37,6 @@ interface TimeSeriesChartProps {
     serverGroups: ServerGroup[];
     enabledMetrics: EnabledMetrics;
     timeRange: TimeRange;
-    selectedServerIds: string[];
     loading?: boolean;
     isMaximized?: boolean;
 }
@@ -47,7 +46,6 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
     serverGroups,
     enabledMetrics,
     timeRange,
-    selectedServerIds,
     loading = false,
     isMaximized = false,
 }) => {
@@ -58,37 +56,19 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
         timeRange,
     });
 
-    const renderEmptyState = () => {
-        if (selectedServerIds.length === 0) {
-            return (
-                <div className="h-full flex items-center justify-center">
-                    <div className="text-center">
-                        <Server className="h-16 w-16 theme-text-secondary mx-auto mb-4" />
-                        <h4 className="text-lg font-medium theme-text-primary mb-2">
-                            Select Servers to Monitor
-                        </h4>
-                        <p className="theme-text-secondary">
-                            Choose one or more servers to view their performance trends over time
-                        </p>
-                    </div>
-                </div>
-            );
-        }
-
-        return (
-            <div className="h-full flex items-center justify-center">
-                <div className="text-center">
-                    <TrendingUp className="h-16 w-16 theme-text-secondary mx-auto mb-4" />
-                    <h4 className="text-lg font-medium theme-text-primary mb-2">
-                        No Data Available
-                    </h4>
-                    <p className="theme-text-secondary">
-                        No performance data found for the selected time range
-                    </p>
-                </div>
+    const renderEmptyState = () => (
+        <div className="h-full flex items-center justify-center">
+            <div className="text-center">
+                <TrendingUp className="h-16 w-16 theme-text-secondary mx-auto mb-4" />
+                <h4 className="text-lg font-medium theme-text-primary mb-2">
+                    No Data Available
+                </h4>
+                <p className="theme-text-secondary">
+                    No performance data found for the selected filters and time range
+                </p>
             </div>
-        );
-    };
+        </div>
+    );
 
     const renderLoadingState = () => (
         <div className="absolute inset-0 flex items-center justify-center theme-bg-card bg-opacity-75 z-10">
@@ -110,7 +90,7 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
                     <Line 
                         data={processedChartData!} 
                         options={chartOptions} 
-                        key={`${selectedServerIds.join('-')}-${timeRange}`}
+                        key={`chart-${timeRange}`}
                     />
                 </div>
             )}

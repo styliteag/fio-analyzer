@@ -4,8 +4,6 @@ import { useTimeSeriesData } from "../../hooks/useTimeSeriesData";
 import { convertActiveFiltersToTimeSeriesFilters } from "../../utils/filterConverters";
 import TimeSeriesControls from "./TimeSeriesControls";
 import TimeSeriesChart from "./TimeSeriesChart";
-import TimeSeriesStats from "./TimeSeriesStats";
-import TimeSeriesTestGrid from "./TimeSeriesTestGrid";
 import { 
     validateMetricsSelection,
     type EnabledMetrics,
@@ -25,7 +23,6 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
     sharedFilters,
 }) => {
     // State for user selections
-    const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
     const [timeRange, setTimeRange] = useState<TimeRange>("7d");
     const [enabledMetrics, setEnabledMetrics] = useState<EnabledMetrics>({
         iops: true,
@@ -64,21 +61,14 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
 
     // Note: We no longer need filter options since filters are inherited from Dashboard
 
-    // Auto-select all server groups when servers are loaded (filters will narrow this down)
+    // Load time series data when filters change
     useEffect(() => {
         if (serverGroups.length > 0) {
-            setSelectedServerIds(serverGroups.map(group => group.id));
+            // Use all server groups - filtering is handled by the API
+            const allServerIds = serverGroups.map(group => group.id);
+            loadTimeSeriesData(allServerIds, timeRange, activeFilters);
         }
-    }, [serverGroups]);
-
-    // Load time series data when selections change
-    useEffect(() => {
-        if (selectedServerIds.length > 0) {
-            loadTimeSeriesData(selectedServerIds, timeRange, activeFilters);
-        }
-    }, [selectedServerIds, timeRange, activeFilters, loadTimeSeriesData]);
-
-    // Server selection is now handled by filters - no longer needed
+    }, [serverGroups, timeRange, activeFilters, loadTimeSeriesData]);
 
     const handleTimeRangeChange = (newTimeRange: TimeRange) => {
         setTimeRange(newTimeRange);
@@ -93,8 +83,9 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
 
     const handleRefresh = () => {
         refreshServers();
-        if (selectedServerIds.length > 0) {
-            loadTimeSeriesData(selectedServerIds, timeRange, activeFilters);
+        if (serverGroups.length > 0) {
+            const allServerIds = serverGroups.map(group => group.id);
+            loadTimeSeriesData(allServerIds, timeRange, activeFilters);
         }
     };
 
@@ -188,25 +179,10 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
                 serverGroups={serverGroups}
                 enabledMetrics={enabledMetrics}
                 timeRange={timeRange}
-                selectedServerIds={selectedServerIds}
                 loading={loading}
                 isMaximized={isMaximized}
             />
 
-            {/* Test Grid and Server Statistics */}
-            <div className="p-4 space-y-6">
-                <TimeSeriesTestGrid
-                    data={chartData}
-                    serverGroups={serverGroups}
-                    loading={loading}
-                />
-                
-                <TimeSeriesStats
-                    selectedServerIds={selectedServerIds}
-                    serverGroups={serverGroups}
-                    chartData={chartData}
-                />
-            </div>
         </div>
     );
 };
