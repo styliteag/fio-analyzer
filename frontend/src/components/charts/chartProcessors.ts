@@ -52,7 +52,7 @@ export const applySortingAndGrouping = (
     data: PerformanceData[],
     options: ProcessorOptions,
 ): PerformanceData[] => {
-    const { sortBy, sortOrder } = options;
+    const { sortBy, sortOrder, groupBy } = options;
     
     // Apply sorting
     const sortedData = [...data];
@@ -108,6 +108,102 @@ export const applySortingAndGrouping = (
         return sortOrder === "asc" ? comparison : -comparison;
     });
 
+    // Apply grouping (affects how data is ordered for better visual grouping)
+    if (groupBy !== "none") {
+        sortedData.sort((a, b) => {
+            let aGroupValue: any, bGroupValue: any;
+
+            switch (groupBy) {
+                case "drive":
+                    aGroupValue = a.drive_model;
+                    bGroupValue = b.drive_model;
+                    break;
+                case "test":
+                    aGroupValue = a.test_name;
+                    bGroupValue = b.test_name;
+                    break;
+                case "blocksize":
+                    aGroupValue = a.block_size;
+                    bGroupValue = b.block_size;
+                    return sortBlockSizes([aGroupValue, bGroupValue])[0] === aGroupValue ? -1 : 1;
+                case "protocol":
+                    aGroupValue = a.protocol || "";
+                    bGroupValue = b.protocol || "";
+                    break;
+                case "hostname":
+                    aGroupValue = a.hostname || "";
+                    bGroupValue = b.hostname || "";
+                    break;
+                case "queuedepth":
+                    aGroupValue = a.queue_depth || 0;
+                    bGroupValue = b.queue_depth || 0;
+                    break;
+                default:
+                    return 0; // No grouping
+            }
+
+            const groupComparison =
+                typeof aGroupValue === "string"
+                    ? aGroupValue.localeCompare(bGroupValue)
+                    : aGroupValue - bGroupValue;
+
+            // If groups are the same, maintain original sort order
+            if (groupComparison === 0) {
+                // Apply the original sorting within the group
+                let aValue: any, bValue: any;
+                switch (sortBy) {
+                    case "name":
+                        aValue = `${a.test_name}_${a.drive_model}_${a.block_size}`;
+                        bValue = `${b.test_name}_${b.drive_model}_${b.block_size}`;
+                        break;
+                    case "iops":
+                        aValue = getMetricValue(a.metrics, "iops");
+                        bValue = getMetricValue(b.metrics, "iops");
+                        break;
+                    case "latency":
+                        aValue = getMetricValue(a.metrics, "avg_latency");
+                        bValue = getMetricValue(b.metrics, "avg_latency");
+                        break;
+                    case "bandwidth":
+                        aValue = getMetricValue(a.metrics, "bandwidth");
+                        bValue = getMetricValue(b.metrics, "bandwidth");
+                        break;
+                    case "blocksize":
+                        aValue = a.block_size;
+                        bValue = b.block_size;
+                        return sortBlockSizes([aValue, bValue])[0] === aValue ? -1 : 1;
+                    case "drivemodel":
+                        aValue = a.drive_model;
+                        bValue = b.drive_model;
+                        break;
+                    case "protocol":
+                        aValue = a.protocol || "";
+                        bValue = b.protocol || "";
+                        break;
+                    case "hostname":
+                        aValue = a.hostname || "";
+                        bValue = b.hostname || "";
+                        break;
+                    case "queuedepth":
+                        aValue = a.queue_depth || 0;
+                        bValue = b.queue_depth || 0;
+                        break;
+                    default:
+                        aValue = a.test_name;
+                        bValue = b.test_name;
+                }
+
+                const comparison =
+                    typeof aValue === "string"
+                        ? aValue.localeCompare(bValue)
+                        : aValue - bValue;
+                return sortOrder === "asc" ? comparison : -comparison;
+            }
+
+            return groupComparison;
+        });
+    }
+
     return sortedData;
 };
 
@@ -118,40 +214,150 @@ export const processPerformanceOverview = (
     options: ProcessorOptions,
 ): ChartData => {
     const sortedData = applySortingAndGrouping(data, options);
+    const { groupBy } = options;
     
-    const labels = sortedData.map((item) => 
-        `${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}`
-    );
+    // If no grouping, use the original simple approach
+    if (groupBy === "none") {
+        const labels = sortedData.map((item) => 
+            `${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}`
+        );
 
-    const datasets = [
-        {
-            label: "IOPS",
-            data: sortedData.map((item) => getMetricValue(item.metrics, "iops")),
-            backgroundColor: colors[0],
-            borderColor: colors[0],
+        const datasets = [
+            {
+                label: "IOPS",
+                data: sortedData.map((item) => getMetricValue(item.metrics, "iops")),
+                backgroundColor: colors[0],
+                borderColor: colors[0],
+                borderWidth: 1,
+                yAxisID: "y",
+                originalData: sortedData,
+            },
+            {
+                label: "Avg Latency (ms)",
+                data: sortedData.map((item) => getMetricValue(item.metrics, "avg_latency")),
+                backgroundColor: colors[1],
+                borderColor: colors[1],
+                borderWidth: 1,
+                yAxisID: "y1",
+                originalData: sortedData,
+            },
+            {
+                label: "Bandwidth (MB/s)",
+                data: sortedData.map((item) => getMetricValue(item.metrics, "bandwidth")),
+                backgroundColor: colors[2],
+                borderColor: colors[2],
+                borderWidth: 1,
+                yAxisID: "y2",
+                originalData: sortedData,
+            },
+        ];
+
+        return { labels, datasets };
+    }
+
+    // Group data by the specified field
+    const groups = new Map<string, PerformanceData[]>();
+    sortedData.forEach((item) => {
+        let groupKey: string;
+        switch (groupBy) {
+            case "drive":
+                groupKey = item.drive_model;
+                break;
+            case "test":
+                groupKey = item.test_name;
+                break;
+            case "blocksize":
+                groupKey = item.block_size.toString();
+                break;
+            case "protocol":
+                groupKey = item.protocol || "Unknown";
+                break;
+            case "hostname":
+                groupKey = item.hostname || "Unknown";
+                break;
+            case "queuedepth":
+                groupKey = `QD${item.queue_depth || 0}`;
+                break;
+            default:
+                groupKey = "Default";
+        }
+
+        if (!groups.has(groupKey)) {
+            groups.set(groupKey, []);
+        }
+        groups.get(groupKey)?.push(item);
+    });
+
+    // Create labels from all unique test configurations
+    const allLabels = new Set<string>();
+    sortedData.forEach((item) => {
+        allLabels.add(`${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}`);
+    });
+    const labels = Array.from(allLabels);
+
+    const datasets: ChartDataset[] = [];
+    let colorIndex = 0;
+
+    // Create datasets for each group and metric
+    Array.from(groups.entries()).forEach(([groupName, groupData]) => {
+        const groupColor = colors[colorIndex % colors.length];
+        
+        // IOPS dataset for this group
+        const iopsData = labels.map(label => {
+            const item = groupData.find(item => 
+                `${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}` === label
+            );
+            return item ? getMetricValue(item.metrics, "iops") : 0;
+        });
+
+        datasets.push({
+            label: `${groupName} - IOPS`,
+            data: iopsData,
+            backgroundColor: groupColor,
+            borderColor: groupColor,
             borderWidth: 1,
             yAxisID: "y",
-            originalData: sortedData,
-        },
-        {
-            label: "Avg Latency (ms)",
-            data: sortedData.map((item) => getMetricValue(item.metrics, "avg_latency")),
-            backgroundColor: colors[1],
-            borderColor: colors[1],
+            originalData: groupData,
+        });
+
+        // Latency dataset for this group
+        const latencyData = labels.map(label => {
+            const item = groupData.find(item => 
+                `${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}` === label
+            );
+            return item ? getMetricValue(item.metrics, "avg_latency") : 0;
+        });
+
+        datasets.push({
+            label: `${groupName} - Avg Latency (ms)`,
+            data: latencyData,
+            backgroundColor: colors[(colorIndex + 1) % colors.length],
+            borderColor: colors[(colorIndex + 1) % colors.length],
             borderWidth: 1,
             yAxisID: "y1",
-            originalData: sortedData,
-        },
-        {
-            label: "Bandwidth (MB/s)",
-            data: sortedData.map((item) => getMetricValue(item.metrics, "bandwidth")),
-            backgroundColor: colors[2],
-            borderColor: colors[2],
+            originalData: groupData,
+        });
+
+        // Bandwidth dataset for this group
+        const bandwidthData = labels.map(label => {
+            const item = groupData.find(item => 
+                `${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}` === label
+            );
+            return item ? getMetricValue(item.metrics, "bandwidth") : 0;
+        });
+
+        datasets.push({
+            label: `${groupName} - Bandwidth (MB/s)`,
+            data: bandwidthData,
+            backgroundColor: colors[(colorIndex + 2) % colors.length],
+            borderColor: colors[(colorIndex + 2) % colors.length],
             borderWidth: 1,
             yAxisID: "y2",
-            originalData: sortedData,
-        },
-    ];
+            originalData: groupData,
+        });
+
+        colorIndex += 3; // Move to next set of colors for the next group
+    });
 
     return { labels, datasets };
 };
@@ -293,35 +499,126 @@ export const processIOPSLatencyDual = (
     options: ProcessorOptions,
 ): ChartData => {
     const sortedData = applySortingAndGrouping(data, options);
+    const { groupBy } = options;
     
-    const labels = sortedData.map(item => 
-        `${item.drive_model} - ${item.block_size}`
-    );
+    // If no grouping, use the original simple approach
+    if (groupBy === "none") {
+        const labels = sortedData.map(item => 
+            `${item.drive_model} - ${item.block_size}`
+        );
 
-    return {
-        labels,
-        datasets: [
-            {
-                label: "IOPS",
-                data: sortedData.map(item => getMetricValue(item.metrics, "iops")),
-                backgroundColor: colors[0],
-                borderColor: colors[0],
-                borderWidth: 1,
-                yAxisID: "y",
-                originalData: sortedData,
-            },
-            {
-                label: "Avg Latency (ms)",
-                data: sortedData.map(item => getMetricValue(item.metrics, "avg_latency")),
-                backgroundColor: colors[1],
-                borderColor: colors[1],
-                borderWidth: 1,
-                yAxisID: "y1",
-                type: "line",
-                originalData: sortedData,
-            },
-        ],
-    };
+        return {
+            labels,
+            datasets: [
+                {
+                    label: "IOPS",
+                    data: sortedData.map(item => getMetricValue(item.metrics, "iops")),
+                    backgroundColor: colors[0],
+                    borderColor: colors[0],
+                    borderWidth: 1,
+                    yAxisID: "y",
+                    originalData: sortedData,
+                },
+                {
+                    label: "Avg Latency (ms)",
+                    data: sortedData.map(item => getMetricValue(item.metrics, "avg_latency")),
+                    backgroundColor: colors[1],
+                    borderColor: colors[1],
+                    borderWidth: 1,
+                    yAxisID: "y1",
+                    type: "line",
+                    originalData: sortedData,
+                },
+            ],
+        };
+    }
+
+    // Group data by the specified field
+    const groups = new Map<string, PerformanceData[]>();
+    sortedData.forEach((item) => {
+        let groupKey: string;
+        switch (groupBy) {
+            case "drive":
+                groupKey = item.drive_model;
+                break;
+            case "test":
+                groupKey = item.test_name;
+                break;
+            case "blocksize":
+                groupKey = item.block_size.toString();
+                break;
+            case "protocol":
+                groupKey = item.protocol || "Unknown";
+                break;
+            case "hostname":
+                groupKey = item.hostname || "Unknown";
+                break;
+            case "queuedepth":
+                groupKey = `QD${item.queue_depth || 0}`;
+                break;
+            default:
+                groupKey = "Default";
+        }
+
+        if (!groups.has(groupKey)) {
+            groups.set(groupKey, []);
+        }
+        groups.get(groupKey)?.push(item);
+    });
+
+    // Create labels from all unique test configurations
+    const allLabels = new Set<string>();
+    sortedData.forEach((item) => {
+        allLabels.add(`${item.drive_model} - ${item.block_size}`);
+    });
+    const labels = Array.from(allLabels);
+
+    const datasets: ChartDataset[] = [];
+    let colorIndex = 0;
+
+    // Create datasets for each group
+    Array.from(groups.entries()).forEach(([groupName, groupData]) => {
+        // IOPS dataset for this group
+        const iopsData = labels.map(label => {
+            const item = groupData.find(item => 
+                `${item.drive_model} - ${item.block_size}` === label
+            );
+            return item ? getMetricValue(item.metrics, "iops") : 0;
+        });
+
+        datasets.push({
+            label: `${groupName} - IOPS`,
+            data: iopsData,
+            backgroundColor: colors[colorIndex % colors.length],
+            borderColor: colors[colorIndex % colors.length],
+            borderWidth: 1,
+            yAxisID: "y",
+            originalData: groupData,
+        });
+
+        // Latency dataset for this group
+        const latencyData = labels.map(label => {
+            const item = groupData.find(item => 
+                `${item.drive_model} - ${item.block_size}` === label
+            );
+            return item ? getMetricValue(item.metrics, "avg_latency") : 0;
+        });
+
+        datasets.push({
+            label: `${groupName} - Avg Latency (ms)`,
+            data: latencyData,
+            backgroundColor: colors[(colorIndex + 1) % colors.length],
+            borderColor: colors[(colorIndex + 1) % colors.length],
+            borderWidth: 1,
+            yAxisID: "y1",
+            type: "line",
+            originalData: groupData,
+        });
+
+        colorIndex += 2; // Move to next set of colors for the next group
+    });
+
+    return { labels, datasets };
 };
 
 // Default chart processor
@@ -331,24 +628,94 @@ export const processDefaultChart = (
     options: ProcessorOptions,
 ): ChartData => {
     const sortedData = applySortingAndGrouping(data, options);
+    const { groupBy } = options;
     
-    const labels = sortedData.map(item => 
-        `${item.test_name} - ${item.drive_model}`
-    );
+    // If no grouping, use the original simple approach
+    if (groupBy === "none") {
+        const labels = sortedData.map(item => 
+            `${item.test_name} - ${item.drive_model}`
+        );
 
-    return {
-        labels,
-        datasets: [
-            {
-                label: "IOPS",
-                data: sortedData.map(item => getMetricValue(item.metrics, "iops")),
-                backgroundColor: colors[0],
-                borderColor: colors[0],
-                borderWidth: 1,
-                originalData: sortedData,
-            },
-        ],
-    };
+        return {
+            labels,
+            datasets: [
+                {
+                    label: "IOPS",
+                    data: sortedData.map(item => getMetricValue(item.metrics, "iops")),
+                    backgroundColor: colors[0],
+                    borderColor: colors[0],
+                    borderWidth: 1,
+                    originalData: sortedData,
+                },
+            ],
+        };
+    }
+
+    // Group data by the specified field
+    const groups = new Map<string, PerformanceData[]>();
+    sortedData.forEach((item) => {
+        let groupKey: string;
+        switch (groupBy) {
+            case "drive":
+                groupKey = item.drive_model;
+                break;
+            case "test":
+                groupKey = item.test_name;
+                break;
+            case "blocksize":
+                groupKey = item.block_size.toString();
+                break;
+            case "protocol":
+                groupKey = item.protocol || "Unknown";
+                break;
+            case "hostname":
+                groupKey = item.hostname || "Unknown";
+                break;
+            case "queuedepth":
+                groupKey = `QD${item.queue_depth || 0}`;
+                break;
+            default:
+                groupKey = "Default";
+        }
+
+        if (!groups.has(groupKey)) {
+            groups.set(groupKey, []);
+        }
+        groups.get(groupKey)?.push(item);
+    });
+
+    // Create labels from all unique test configurations
+    const allLabels = new Set<string>();
+    sortedData.forEach((item) => {
+        allLabels.add(`${item.test_name} - ${item.drive_model}`);
+    });
+    const labels = Array.from(allLabels);
+
+    const datasets: ChartDataset[] = [];
+    let colorIndex = 0;
+
+    // Create datasets for each group
+    Array.from(groups.entries()).forEach(([groupName, groupData]) => {
+        const iopsData = labels.map(label => {
+            const item = groupData.find(item => 
+                `${item.test_name} - ${item.drive_model}` === label
+            );
+            return item ? getMetricValue(item.metrics, "iops") : 0;
+        });
+
+        datasets.push({
+            label: `${groupName} - IOPS`,
+            data: iopsData,
+            backgroundColor: colors[colorIndex % colors.length],
+            borderColor: colors[colorIndex % colors.length],
+            borderWidth: 1,
+            originalData: groupData,
+        });
+
+        colorIndex++;
+    });
+
+    return { labels, datasets };
 };
 
 // Main processor function that routes to specific processors
