@@ -6,19 +6,22 @@
 current_dir=$(pwd)
 
 # Get all subdirectories of the current directory
-subdirs=$(find $current_dir -type d)
+subdirs=$(find "$current_dir" -type d -mindepth 1 -maxdepth 1)
 
 # Run fio in each subdirectory
 for subdir in $subdirs; do
-    echo "Running fio in $subdir"
-    # check if a .env file exists in the subdirectory   
+    echo "Processing: $(basename "$subdir")"
+    
+    # Check if a .env file exists in the subdirectory   
     if [ -f "$subdir/.env" ]; then
-        echo "Running fio in $subdir"
-        cd $subdir
-        ../fio-analyzer-tests.sh --yes
-        cd $current_dir
+        cd "$subdir" && ../fio-analyzer-tests.sh --yes && cd "$current_dir"
+        if [ $? -eq 0 ]; then
+            echo "✓ Success"
+        else
+            echo "✗ Failed"
+        fi
     else
-        echo "No .env file found in $subdir, skipping"
+        echo "⚠ Skipped (no .env)"
     fi
 done
 
