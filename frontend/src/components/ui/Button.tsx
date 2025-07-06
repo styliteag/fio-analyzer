@@ -99,10 +99,10 @@ const Button: React.FC<ButtonProps> = ({
             title={title}
         >
             {loading && loadingSpinner}
-            {!loading && iconElement}
             {!loading && !isIconOnly && iconPosition === 'left' && iconElement}
             {!loading && !isIconOnly && <span>{children}</span>}
             {!loading && !isIconOnly && iconPosition === 'right' && iconElement}
+            {!loading && isIconOnly && iconElement}
         </button>
     );
 };
