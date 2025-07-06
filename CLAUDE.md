@@ -280,6 +280,60 @@ BLOCK_SIZES=4k,64k,1M      # Test block sizes
 TEST_PATTERNS=read,write   # Test patterns
 ```
 
+## Latest Updates & Architectural Improvements (January 2025)
+
+### Server-Side Filtering Implementation ✅ COMPLETED
+**Major Performance Enhancement** - Implemented comprehensive server-side filtering to handle large datasets efficiently:
+
+#### **Backend Enhancements:**
+- **Enhanced `/api/test-runs` endpoint** with comprehensive filter parameters:
+  - Added support for: `hostnames`, `protocols`, `drive_types`, `drive_models`, `patterns`, `block_sizes`, `syncs`, `queue_depths`, `directs`, `num_jobs`, `test_sizes`, `durations`
+  - Parameterized SQL queries for security and performance
+  - Updated Swagger documentation with all filter parameters
+
+- **Fixed Time Series Filtering** - Resolved critical disconnect between main test run selection and time series charts:
+  - **Problem**: Time series showed unfiltered historical data regardless of main selection filters
+  - **Solution**: Extended `/api/time-series/history` and `/api/time-series/trends` endpoints with missing filter parameters (`test_size`, `sync`, `direct`, `num_jobs`, `duration`)
+  - **Result**: Perfect alignment between main selection and time series data
+
+#### **Frontend Enhancements:**
+- **New `useServerSideTestRuns` hook** with 300ms debouncing for optimal performance
+- **Progressive enhancement approach** with feature flags for gradual rollout
+- **Admin page integration** with basic server-side filter controls (hostnames, protocols, drive_types)
+- **Dashboard preparation** for optional server-side filtering (disabled by default for stability)
+- **Updated filter conversion utilities** to support all time series parameters
+
+#### **Filter Flow Architecture:**
+```
+Main Selection Filters → convertActiveFiltersToTimeSeriesFilters() → 
+loadTimeSeriesData() → fetchTimeSeriesHistory() → 
+Backend API with ALL parameters → Filtered Time Series Data
+```
+
+### Admin Interface Modernization ✅ COMPLETED
+**Complete redesign** of the admin interface for better usability and functionality:
+
+#### **Key Features:**
+- **Dual View System**: Toggle between "Latest Tests" and "Historical Data" views
+- **Advanced Server-Side Filtering**: Real-time filtering with debouncing for performance
+- **Bulk Operations**: 
+  - Bulk edit metadata fields (hostname, protocol, description, test_name, drive_type, drive_model)
+  - Bulk delete with confirmation
+- **Historical Data Management**:
+  - Timeline view showing test evolution over time
+  - History line editing (bulk update historical runs in groups)
+  - History deletion (remove historical runs while keeping latest)
+- **Enhanced UX**: 
+  - Clean card-based design with dark mode support
+  - Real-time search and filtering
+  - Responsive layout for mobile devices
+  - Progress indicators and loading states
+
+#### **Component Replacement:**
+- **Removed**: Legacy `Admin.tsx` (complex, hard to maintain)
+- **Replaced with**: New streamlined `Admin.tsx` (clean, modular architecture)
+- **Updated routing**: Seamless transition maintaining `/admin` path
+
 ## Development Notes & Memories
 
 ### Frontend Refactoring Progress (2024) - COMPLETED ✅
@@ -392,9 +446,26 @@ frontend/src/components/{TemplateSelector,LoginForm,ThemeToggle}.tsx
 - **Utils**: `backend/utils/` - Helper functions and utilities
 - **Config**: `backend/config/` - Application configuration
 
-## Memories
+## Important Technical Considerations & Workflow
 
-- Never try to run "npm run dev" It will block. run "cd frontend ; npm run build" to check for errors or run "cd frontend; npm run dev &" to detach it. Better ask the user to start the frontend!
-- To test four build errors run "cd frontend ; npm run build"
-- To run the frontend ask the user, or run "cd frontend ; npm run dev &"
+### **Build & Development**
+- **Building**: Always run `npm run build` from the frontend root (not `cd frontend; npm run build`)
+- **Development Server**: Never run `npm run dev` directly - it will block. Either:
+  - Ask the user to start the frontend server
+  - Run `cd frontend; npm run dev &` to detach it
+- **Error Checking**: Use `npm run build` to check for TypeScript/build errors
+- **Linting**: Always run `npm run lint` to ensure code quality (zero warnings policy)
+
+### **Server-Side vs Client-Side Filtering**
+- **Admin Page**: Uses server-side filtering by default (`useServerSideFiltering = true`)
+- **Dashboard Page**: Uses client-side filtering by default (`useServerSideFiltering = false`) for stability
+- **Time Series**: Always respects main selection filters through unified filter conversion
+- **Performance**: Server-side filtering essential for large datasets (>10K records)
+
+### **Critical Bug Fix Applied (Jan 2025)**
+- **Time Series Filtering**: Fixed major disconnect where time series charts ignored main selection filters
+- **Root Cause**: Missing filter parameters in time series API endpoints
+- **Impact**: Now ensures data consistency across all views - main selection filters properly apply to time series historical data
+
+## Memories
 - Always use "2025-06-31" as date and 20:00:00 as time and "2025-06-31 20:00:00" as datetime
