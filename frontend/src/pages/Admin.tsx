@@ -6,6 +6,7 @@ import Modal from '../components/ui/Modal';
 import Loading from '../components/ui/Loading';
 import ErrorDisplay from '../components/ui/ErrorDisplay';
 import { useTestRuns } from '../hooks/api/useTestRuns';
+import { useServerSideTestRuns } from '../hooks/useServerSideTestRuns';
 import type { TestRun } from '../types';
 
 interface EditableFields {
@@ -28,7 +29,40 @@ interface GroupEditingState {
 }
 
 const Admin: React.FC = () => {
-  const { testRuns, loading, error, refreshTestRuns, updateTestRun, bulkUpdateTestRuns, bulkDeleteTestRuns } = useTestRuns();
+  // Feature flag for server-side filtering (can be made configurable later)
+  const useServerSideFiltering = false;
+  
+  // Traditional client-side hook (fallback)
+  const { 
+    testRuns: clientTestRuns, 
+    loading: clientLoading, 
+    error: clientError, 
+    refreshTestRuns, 
+    updateTestRun, 
+    bulkUpdateTestRuns, 
+    bulkDeleteTestRuns 
+  } = useTestRuns({ autoFetch: !useServerSideFiltering });
+  
+  // New server-side filtering hook
+  const {
+    testRuns: serverTestRuns,
+    loading: serverLoading,
+    error: serverError,
+    activeFilters,
+    setActiveFilters,
+    clearFilters: clearServerFilters,
+    refetch: _refetchServerData,
+    hasActiveFilters: hasServerFilters,
+    filters: serverFilters
+  } = useServerSideTestRuns({ 
+    includeHistorical: true, 
+    autoFetch: useServerSideFiltering 
+  });
+  
+  // Choose which data source to use based on feature flag
+  const testRuns = useServerSideFiltering ? serverTestRuns : clientTestRuns;
+  const loading = useServerSideFiltering ? serverLoading : clientLoading;
+  const error = useServerSideFiltering ? serverError : clientError;
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const isSearching = searchTerm !== debouncedSearchTerm;
@@ -68,38 +102,40 @@ const Admin: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Pre-compute search indexes for better performance
-  const searchIndexMap = useMemo(() => {
-    if (!debouncedSearchTerm) return new Map();
-    
-    const map = new Map<number, string>();
-    testRuns.forEach(run => {
-      // Create search index once per run
-      const searchableFields = [
-        run.hostname,
-        run.protocol,
-        run.drive_model,
-        run.drive_type,
-        run.read_write_pattern,
-        run.test_name,
-        run.description,
-        run.block_size,
-        run.test_size,
-        run.queue_depth?.toString(),
-        run.duration?.toString(),
-        run.direct?.toString(),
-        run.sync?.toString(),
-        run.num_jobs?.toString()
-      ].filter(field => field != null).map(field => String(field).toLowerCase()).join(' ');
-      
-      map.set(run.id, searchableFields);
-    });
-    
-    return map;
-  }, [testRuns, debouncedSearchTerm]);
-
+  // Simplified client-side filtering for search only (server handles other filters)
   const filteredRuns = useMemo(() => {
-    // Early exit if no search term
+    if (useServerSideFiltering) {
+      // When using server-side filtering, only apply search term filter client-side
+      if (!debouncedSearchTerm?.trim()) {
+        return testRuns;
+      }
+      
+      const searchTerms = debouncedSearchTerm.toLowerCase().split(' ').filter(term => term.trim() !== '');
+      if (searchTerms.length === 0) return testRuns;
+      
+      return testRuns.filter(run => {
+        const searchableFields = [
+          run.hostname,
+          run.protocol,
+          run.drive_model,
+          run.drive_type,
+          run.read_write_pattern,
+          run.test_name,
+          run.description,
+          run.block_size,
+          run.test_size,
+          run.queue_depth?.toString(),
+          run.duration?.toString(),
+          run.direct?.toString(),
+          run.sync?.toString(),
+          run.num_jobs?.toString()
+        ].filter(field => field != null).map(field => String(field).toLowerCase()).join(' ');
+        
+        return searchTerms.every(term => searchableFields.includes(term));
+      });
+    }
+    
+    // Legacy client-side filtering logic (kept for fallback)
     const hasSearchTerm = debouncedSearchTerm?.trim();
     let searchTerms: string[] = [];
     
@@ -139,16 +175,29 @@ const Admin: React.FC = () => {
         }
       }
       
-      // Search term filtering (optimized with pre-computed indexes)
+      // Search term filtering
       if (searchTerms.length === 0) return true;
       
-      const searchableFields = searchIndexMap.get(run.id);
-      if (!searchableFields) return true;
+      const searchableFields = [
+        run.hostname,
+        run.protocol,
+        run.drive_model,
+        run.drive_type,
+        run.read_write_pattern,
+        run.test_name,
+        run.description,
+        run.block_size,
+        run.test_size,
+        run.queue_depth?.toString(),
+        run.duration?.toString(),
+        run.direct?.toString(),
+        run.sync?.toString(),
+        run.num_jobs?.toString()
+      ].filter(field => field != null).map(field => String(field).toLowerCase()).join(' ');
       
-      // Check if ALL search terms are found in the pre-computed search index
       return searchTerms.every(term => searchableFields.includes(term));
     });
-  }, [testRuns, selectedGroupRunIds, timeSeriesFilter, fromDate, toDate, searchIndexMap, debouncedSearchTerm]);
+  }, [testRuns, selectedGroupRunIds, timeSeriesFilter, fromDate, toDate, debouncedSearchTerm, useServerSideFiltering]);
 
   const sortedRuns = useMemo(() => [...filteredRuns].sort((a, b) => {
     const aVal = a[sortField];
@@ -169,15 +218,20 @@ const Admin: React.FC = () => {
     return sortDirection === 'desc' ? -comparison : comparison;
   }), [filteredRuns, sortField, sortDirection]);
 
-  // Limit displayed results for performance
+  // Limit displayed results for performance (only when not using server-side filtering)
   const displayedRuns = useMemo(() => {
+    if (useServerSideFiltering) {
+      // No need to limit when using server-side filtering
+      return sortedRuns;
+    }
+    
     if (showAllResults || sortedRuns.length <= displayLimit) {
       return sortedRuns;
     }
     return sortedRuns.slice(0, displayLimit);
-  }, [sortedRuns, displayLimit, showAllResults]);
+  }, [sortedRuns, displayLimit, showAllResults, useServerSideFiltering]);
 
-  const hasMoreResults = sortedRuns.length > displayLimit && !showAllResults;
+  const hasMoreResults = !useServerSideFiltering && sortedRuns.length > displayLimit && !showAllResults;
 
   // Group historical data for special view
   const groupedHistoricalData = timeSeriesFilter === 'with-history' ? (() => {
@@ -331,11 +385,17 @@ const Admin: React.FC = () => {
     // Only include fields that are enabled for update
     const fieldsToUpdate: EditableFields = {};
     Object.entries(bulkEditEnabled).forEach(([field, enabled]) => {
-      if (enabled && bulkEditFields[field as keyof EditableFields]) {
+      if (enabled && bulkEditFields[field as keyof EditableFields] !== undefined) {
         fieldsToUpdate[field as keyof EditableFields] = bulkEditFields[field as keyof EditableFields];
       }
     });
     
+    // Guard against empty updates (e.g., user forgot to enable fields)
+    if (Object.keys(fieldsToUpdate).length === 0) {
+      alert('Please enable at least one field and provide a value to update.');
+      return;
+    }
+
     try {
       await bulkUpdateTestRuns(Array.from(selectedRuns), fieldsToUpdate);
       setBulkEditModalOpen(false);
@@ -352,6 +412,7 @@ const Admin: React.FC = () => {
       refreshTestRuns(true);
     } catch (err) {
       console.error('Failed to bulk update test runs:', err);
+      alert(err instanceof Error ? err.message : 'Bulk update failed');
     }
   };
 
@@ -497,6 +558,61 @@ const Admin: React.FC = () => {
                   </div>
                 )}
               </div>
+              
+              {/* Server-side filtering controls */}
+              {useServerSideFiltering && serverFilters && (
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    value={activeFilters.hostnames[0] || ''}
+                    onChange={(e) => setActiveFilters({
+                      ...activeFilters,
+                      hostnames: e.target.value ? [e.target.value] : []
+                    })}
+                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Hosts</option>
+                    {serverFilters.hostnames.map(hostname => (
+                      <option key={hostname} value={hostname}>{hostname}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={activeFilters.protocols[0] || ''}
+                    onChange={(e) => setActiveFilters({
+                      ...activeFilters,
+                      protocols: e.target.value ? [e.target.value] : []
+                    })}
+                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Protocols</option>
+                    {serverFilters.protocols.map(protocol => (
+                      <option key={protocol} value={protocol}>{protocol}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={activeFilters.drive_types[0] || ''}
+                    onChange={(e) => setActiveFilters({
+                      ...activeFilters,
+                      drive_types: e.target.value ? [e.target.value] : []
+                    })}
+                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All Drive Types</option>
+                    {serverFilters.drive_types.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                  {hasServerFilters && (
+                    <Button
+                      onClick={clearServerFilters}
+                      variant="ghost"
+                      size="sm"
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
+              )}
               
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">

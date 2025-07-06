@@ -29,6 +29,219 @@ router.use(requestIdMiddleware);
 
 /**
  * @swagger
+ * /api/test-runs/bulk:
+ *   put:
+ *     summary: Bulk update test run metadata
+ *     description: Update metadata fields for multiple test runs at once
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - testRunIds
+ *               - updates
+ *             properties:
+ *               testRunIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Array of test run IDs to update
+ *                 example: [1, 2, 3, 4]
+ *               updates:
+ *                 type: object
+ *                 properties:
+ *                   description:
+ *                     type: string
+ *                     description: New test description
+ *                     example: "Bulk updated performance test"
+ *                   test_name:
+ *                     type: string
+ *                     description: New test name
+ *                     example: "Bulk updated test name"
+ *                   hostname:
+ *                     type: string
+ *                     description: New hostname
+ *                     example: "prod-cluster-01"
+ *                   protocol:
+ *                     type: string
+ *                     description: New protocol
+ *                     example: "NVMe"
+ *                   drive_type:
+ *                     type: string
+ *                     description: New drive type
+ *                     example: "NVMe SSD"
+ *                   drive_model:
+ *                     type: string
+ *                     description: New drive model
+ *                     example: "Samsung 980 PRO"
+ *     responses:
+ *       200:
+ *         description: Test runs updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Successfully updated 4 test runs"
+ *                 updated:
+ *                   type: integer
+ *                   example: 4
+ *                 failed:
+ *                   type: integer
+ *                   example: 0
+ *       400:
+ *         description: Bad request - Invalid fields or missing data
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
+router.put('/bulk', requireAdmin, (req, res) => {
+    const { testRunIds, updates } = req.body;
+    
+    // Validate required fields
+    if (!testRunIds || !Array.isArray(testRunIds) || testRunIds.length === 0) {
+        return res.status(400).json({ error: 'testRunIds array is required and must not be empty' });
+    }
+    
+    if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: 'updates object is required' });
+    }
+    
+    // Define allowed fields for validation
+    const allowedFields = ['description', 'test_name', 'hostname', 'protocol', 'drive_type', 'drive_model'];
+    const submittedFields = Object.keys(updates);
+    
+    // Check for invalid fields
+    const invalidFields = submittedFields.filter(field => !allowedFields.includes(field));
+    if (invalidFields.length > 0) {
+        logWarning('Invalid fields in bulk test run update request', {
+            requestId: req.requestId,
+            username: req.user.username,
+            testRunIds,
+            invalidFields
+        });
+        return res.status(400).json({ 
+            error: `Invalid fields: ${invalidFields.join(', ')}. Allowed fields: ${allowedFields.join(', ')}` 
+        });
+    }
+    
+    // Simple validation
+    const validation = {
+        hostname: { maxLength: 255 },
+        protocol: { maxLength: 100 },
+        description: { maxLength: 1000 },
+        test_name: { maxLength: 500 },
+        drive_type: { maxLength: 100 },
+        drive_model: { maxLength: 255 }
+    };
+    
+    for (const [field, value] of Object.entries(updates)) {
+        if (value && validation[field] && value.length > validation[field].maxLength) {
+            return res.status(400).json({ 
+                error: `Field '${field}' exceeds maximum length of ${validation[field].maxLength} characters` 
+            });
+        }
+    }
+    
+    logInfo('Admin bulk updating test runs', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'BULK_UPDATE_TEST_RUNS',
+        testRunCount: testRunIds.length,
+        testRunIds,
+        updatedFields: submittedFields,
+        changes: updates
+    });
+    
+    const db = getDatabase();
+    
+    // Build dynamic SQL for only the fields being updated
+    const setParts = [];
+    const values = [];
+    
+    if (updates.description !== undefined) {
+        setParts.push('description = ?');
+        values.push(updates.description);
+    }
+    if (updates.test_name !== undefined) {
+        setParts.push('test_name = ?');
+        values.push(updates.test_name);
+    }
+    if (updates.hostname !== undefined) {
+        setParts.push('hostname = ?');
+        values.push(updates.hostname);
+    }
+    if (updates.protocol !== undefined) {
+        setParts.push('protocol = ?');
+        values.push(updates.protocol);
+    }
+    if (updates.drive_type !== undefined) {
+        setParts.push('drive_type = ?');
+        values.push(updates.drive_type);
+    }
+    if (updates.drive_model !== undefined) {
+        setParts.push('drive_model = ?');
+        values.push(updates.drive_model);
+    }
+    
+    if (setParts.length === 0) {
+        return res.status(400).json({ error: 'No valid fields to update' });
+    }
+    
+    // Create placeholders for WHERE IN clause
+    const placeholders = testRunIds.map(() => '?').join(',');
+    const whereValues = testRunIds.map(id => parseInt(id));
+    
+    const query = `
+        UPDATE test_runs 
+        SET ${setParts.join(', ')}
+        WHERE id IN (${placeholders})
+    `;
+    
+    db.run(query, [...values, ...whereValues], function(err) {
+        if (err) {
+            logError('Database error in bulk update', err, {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'BULK_UPDATE_TEST_RUNS',
+                testRunIds
+            });
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        const updatedCount = this.changes;
+        const failedCount = testRunIds.length - updatedCount;
+        
+        logInfo('Bulk test run update completed', {
+            requestId: req.requestId,
+            username: req.user.username,
+            action: 'BULK_UPDATE_TEST_RUNS',
+            requestedCount: testRunIds.length,
+            updatedCount,
+            failedCount,
+            updatedFields: submittedFields,
+            newValues: updates
+        });
+        
+        res.json({ 
+            message: `Successfully updated ${updatedCount} test runs`,
+            updated: updatedCount,
+            failed: failedCount
+        });
+    });
+});
+
+/**
+ * @swagger
  * /api/test-runs:
  *   get:
  *     summary: Get test runs with optional filtering
@@ -680,219 +893,6 @@ router.put('/:id', requireAdmin, (req, res) => {
         });
         
         res.json({ message: 'Test run updated successfully' });
-    });
-});
-
-/**
- * @swagger
- * /api/test-runs/bulk:
- *   put:
- *     summary: Bulk update test run metadata
- *     description: Update metadata fields for multiple test runs at once
- *     tags: [Test Runs]
- *     security:
- *       - basicAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - testRunIds
- *               - updates
- *             properties:
- *               testRunIds:
- *                 type: array
- *                 items:
- *                   type: integer
- *                 description: Array of test run IDs to update
- *                 example: [1, 2, 3, 4]
- *               updates:
- *                 type: object
- *                 properties:
- *                   description:
- *                     type: string
- *                     description: New test description
- *                     example: "Bulk updated performance test"
- *                   test_name:
- *                     type: string
- *                     description: New test name
- *                     example: "Bulk updated test name"
- *                   hostname:
- *                     type: string
- *                     description: New hostname
- *                     example: "prod-cluster-01"
- *                   protocol:
- *                     type: string
- *                     description: New protocol
- *                     example: "NVMe"
- *                   drive_type:
- *                     type: string
- *                     description: New drive type
- *                     example: "NVMe SSD"
- *                   drive_model:
- *                     type: string
- *                     description: New drive model
- *                     example: "Samsung 980 PRO"
- *     responses:
- *       200:
- *         description: Test runs updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Successfully updated 4 test runs"
- *                 updated:
- *                   type: integer
- *                   example: 4
- *                 failed:
- *                   type: integer
- *                   example: 0
- *       400:
- *         description: Bad request - Invalid fields or missing data
- *       401:
- *         description: Unauthorized - Admin access required
- *       500:
- *         description: Internal server error
- */
-router.put('/bulk', requireAdmin, (req, res) => {
-    const { testRunIds, updates } = req.body;
-    
-    // Validate required fields
-    if (!testRunIds || !Array.isArray(testRunIds) || testRunIds.length === 0) {
-        return res.status(400).json({ error: 'testRunIds array is required and must not be empty' });
-    }
-    
-    if (!updates || typeof updates !== 'object') {
-        return res.status(400).json({ error: 'updates object is required' });
-    }
-    
-    // Define allowed fields for validation
-    const allowedFields = ['description', 'test_name', 'hostname', 'protocol', 'drive_type', 'drive_model'];
-    const submittedFields = Object.keys(updates);
-    
-    // Check for invalid fields
-    const invalidFields = submittedFields.filter(field => !allowedFields.includes(field));
-    if (invalidFields.length > 0) {
-        logWarning('Invalid fields in bulk test run update request', {
-            requestId: req.requestId,
-            username: req.user.username,
-            testRunIds,
-            invalidFields
-        });
-        return res.status(400).json({ 
-            error: `Invalid fields: ${invalidFields.join(', ')}. Allowed fields: ${allowedFields.join(', ')}` 
-        });
-    }
-    
-    // Simple validation
-    const validation = {
-        hostname: { maxLength: 255 },
-        protocol: { maxLength: 100 },
-        description: { maxLength: 1000 },
-        test_name: { maxLength: 500 },
-        drive_type: { maxLength: 100 },
-        drive_model: { maxLength: 255 }
-    };
-    
-    for (const [field, value] of Object.entries(updates)) {
-        if (value && validation[field] && value.length > validation[field].maxLength) {
-            return res.status(400).json({ 
-                error: `Field '${field}' exceeds maximum length of ${validation[field].maxLength} characters` 
-            });
-        }
-    }
-    
-    logInfo('Admin bulk updating test runs', {
-        requestId: req.requestId,
-        username: req.user.username,
-        action: 'BULK_UPDATE_TEST_RUNS',
-        testRunCount: testRunIds.length,
-        testRunIds,
-        updatedFields: submittedFields,
-        changes: updates
-    });
-    
-    const db = getDatabase();
-    
-    // Build dynamic SQL for only the fields being updated
-    const setParts = [];
-    const values = [];
-    
-    if (updates.description !== undefined) {
-        setParts.push('description = ?');
-        values.push(updates.description);
-    }
-    if (updates.test_name !== undefined) {
-        setParts.push('test_name = ?');
-        values.push(updates.test_name);
-    }
-    if (updates.hostname !== undefined) {
-        setParts.push('hostname = ?');
-        values.push(updates.hostname);
-    }
-    if (updates.protocol !== undefined) {
-        setParts.push('protocol = ?');
-        values.push(updates.protocol);
-    }
-    if (updates.drive_type !== undefined) {
-        setParts.push('drive_type = ?');
-        values.push(updates.drive_type);
-    }
-    if (updates.drive_model !== undefined) {
-        setParts.push('drive_model = ?');
-        values.push(updates.drive_model);
-    }
-    
-    if (setParts.length === 0) {
-        return res.status(400).json({ error: 'No valid fields to update' });
-    }
-    
-    // Create placeholders for WHERE IN clause
-    const placeholders = testRunIds.map(() => '?').join(',');
-    const whereValues = testRunIds.map(id => parseInt(id));
-    
-    const query = `
-        UPDATE test_runs 
-        SET ${setParts.join(', ')}
-        WHERE id IN (${placeholders})
-    `;
-    
-    db.run(query, [...values, ...whereValues], function(err) {
-        if (err) {
-            logError('Database error in bulk update', err, {
-                requestId: req.requestId,
-                username: req.user.username,
-                action: 'BULK_UPDATE_TEST_RUNS',
-                testRunIds
-            });
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        
-        const updatedCount = this.changes;
-        const failedCount = testRunIds.length - updatedCount;
-        
-        logInfo('Bulk test run update completed', {
-            requestId: req.requestId,
-            username: req.user.username,
-            action: 'BULK_UPDATE_TEST_RUNS',
-            requestedCount: testRunIds.length,
-            updatedCount,
-            failedCount,
-            updatedFields: submittedFields,
-            newValues: updates
-        });
-        
-        res.json({ 
-            message: `Successfully updated ${updatedCount} test runs`,
-            updated: updatedCount,
-            failed: failedCount
-        });
     });
 });
 

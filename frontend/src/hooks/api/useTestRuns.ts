@@ -76,8 +76,13 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
     const updateTestRunData = useCallback(async (id: number, updates: TestRunUpdateData): Promise<boolean> => {
         try {
             setError(null);
-            await updateTestRun(id, updates);
-            
+            const response = await updateTestRun(id, updates);
+
+            // Throw if backend returned an error so calling components can handle it
+            if (response.error) {
+                throw new Error(response.error);
+            }
+
             // Update local state optimistically
             setTestRuns(prevRuns => 
                 prevRuns.map(run => 
@@ -89,14 +94,19 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
         } catch (err: any) {
             setError(err.message || 'Failed to update test run');
             console.error('Error updating test run:', err);
-            return false;
+            throw err;
         }
     }, []);
 
     const bulkUpdateTestRunData = useCallback(async (ids: number[], updates: TestRunUpdateData): Promise<boolean> => {
         try {
             setError(null);
-            await bulkUpdateTestRuns(ids, updates);
+            const response = await bulkUpdateTestRuns(ids, updates);
+
+            // Throw if backend returned an error so calling components can handle it
+            if (response.error) {
+                throw new Error(response.error);
+            }
             
             // Update local state optimistically
             setTestRuns(prevRuns => 
@@ -109,7 +119,7 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
         } catch (err: any) {
             setError(err.message || 'Failed to bulk update test runs');
             console.error('Error bulk updating test runs:', err);
-            return false;
+            throw err;
         }
     }, []);
 
