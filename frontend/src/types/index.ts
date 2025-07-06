@@ -4,6 +4,7 @@ export interface TestRun {
 	drive_model: string;
 	drive_type: string;
 	test_name: string;
+	description?: string;
 	block_size: number | string;
 	read_write_pattern: string;
 	queue_depth: number;
@@ -39,6 +40,7 @@ export interface PerformanceData {
 	drive_model: string;
 	drive_type: string;
 	test_name: string;
+	description?: string;
 	block_size: string | number;
 	read_write_pattern: string;
 	timestamp: string;

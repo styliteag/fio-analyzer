@@ -12,6 +12,7 @@ interface EditableFields {
   hostname?: string;
   protocol?: string;
   description?: string;
+  test_name?: string;
   drive_type?: string;
   drive_model?: string;
 }
@@ -38,6 +39,7 @@ const Admin: React.FC = () => {
     hostname: false,
     protocol: false,
     description: false,
+    test_name: false,
     drive_type: false,
     drive_model: false,
   });
@@ -98,6 +100,7 @@ const Admin: React.FC = () => {
       run.drive_type,
       run.read_write_pattern,
       run.test_name,
+      run.description,
       run.block_size,
       run.test_size,
       run.queue_depth?.toString(),
@@ -201,7 +204,8 @@ const Admin: React.FC = () => {
       fields: {
         hostname: run.hostname || '',
         protocol: run.protocol || '',
-        description: run.test_name || '',
+        description: run.description || '',
+        test_name: run.test_name || '',
         drive_type: run.drive_type || '',
         drive_model: run.drive_model || ''
       }
@@ -230,7 +234,8 @@ const Admin: React.FC = () => {
       fields: {
         hostname: group.hostname || '',
         protocol: group.protocol || '',
-        description: group.firstRun.test_name || '',
+        description: group.firstRun.description || '',
+        test_name: group.firstRun.test_name || '',
         drive_type: group.drive_type || '',
         drive_model: group.drive_model || ''
       }
@@ -293,6 +298,7 @@ const Admin: React.FC = () => {
         hostname: false,
         protocol: false,
         description: false,
+        test_name: false,
         drive_type: false,
         drive_model: false,
       });
@@ -356,7 +362,8 @@ const Admin: React.FC = () => {
     return {
       hostname: getMostCommonValue(selectedTestRuns.map(run => run.hostname)),
       protocol: getMostCommonValue(selectedTestRuns.map(run => run.protocol)),
-      description: getMostCommonValue(selectedTestRuns.map(run => run.test_name)),
+      description: getMostCommonValue(selectedTestRuns.map(run => run.description)),
+      test_name: getMostCommonValue(selectedTestRuns.map(run => run.test_name)),
       drive_type: getMostCommonValue(selectedTestRuns.map(run => run.drive_type)),
       drive_model: getMostCommonValue(selectedTestRuns.map(run => run.drive_model)),
     };
@@ -386,6 +393,9 @@ const Admin: React.FC = () => {
           values = selectedTestRuns.map(run => run.protocol);
           break;
         case 'description':
+          values = selectedTestRuns.map(run => run.description);
+          break;
+        case 'test_name':
           values = selectedTestRuns.map(run => run.test_name);
           break;
         case 'drive_type':
@@ -991,21 +1001,41 @@ const Admin: React.FC = () => {
                         `}>
                           <td colSpan={15} className="px-4 pb-3 pt-1">
                             {isEditing ? (
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">Desc:</span>
-                                <Input
-                                  value={editingState.fields.description || ''}
-                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('description', e.target.value)}
-                                  className="flex-1"
-                                  size="sm"
-                                  placeholder="Test description"
-                                />
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">Test Name:</span>
+                                  <Input
+                                    value={editingState.fields.test_name || ''}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('test_name', e.target.value)}
+                                    className="flex-1"
+                                    size="sm"
+                                    placeholder="Test name"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">Description:</span>
+                                  <Input
+                                    value={editingState.fields.description || ''}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('description', e.target.value)}
+                                    className="flex-1"
+                                    size="sm"
+                                    placeholder="Test description"
+                                  />
+                                </div>
                               </div>
                             ) : (
-                              <div className="flex items-start gap-2">
-                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5 whitespace-nowrap">Desc:</span>
-                                <div className={`text-xs leading-relaxed break-words ${isSelected ? 'text-blue-800 dark:text-blue-200' : 'text-gray-600 dark:text-gray-400'}`}>
-                                  {run.test_name || <span className="italic text-gray-400">No description</span>}
+                              <div className="space-y-1">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5 whitespace-nowrap">Test Name:</span>
+                                  <div className={`text-xs leading-relaxed break-words ${isSelected ? 'text-blue-800 dark:text-blue-200' : 'text-gray-600 dark:text-gray-400'}`}>
+                                    {run.test_name || <span className="italic text-gray-400">No test name</span>}
+                                  </div>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5 whitespace-nowrap">Description:</span>
+                                  <div className={`text-xs leading-relaxed break-words ${isSelected ? 'text-blue-800 dark:text-blue-200' : 'text-gray-600 dark:text-gray-400'}`}>
+                                    {run.description || <span className="italic text-gray-400">No description</span>}
+                                  </div>
                                 </div>
                               </div>
                             )}

@@ -78,7 +78,7 @@ router.get('/', requireAdmin, (req, res) => {
     
     // Build query with optional is_latest filter
     let query = `
-        SELECT id, timestamp, drive_model, drive_type, test_name, 
+        SELECT id, timestamp, drive_model, drive_type, test_name, description,
                block_size, read_write_pattern, queue_depth, duration,
                fio_version, job_runtime, rwmixread, total_ios_read, 
                total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
@@ -170,7 +170,7 @@ router.get('/performance-data', requireAdmin, (req, res) => {
 
     const query = `
         SELECT 
-            tr.id, tr.drive_model, tr.drive_type, tr.test_name, 
+            tr.id, tr.drive_model, tr.drive_type, tr.test_name, tr.description,
             tr.block_size, tr.read_write_pattern, tr.timestamp, tr.queue_depth,
             tr.hostname, tr.protocol, tr.output_file, tr.num_jobs, tr.direct, 
             tr.test_size, tr.sync, tr.iodepth, tr.duration,
@@ -198,6 +198,7 @@ router.get('/performance-data', requireAdmin, (req, res) => {
                     drive_model: row.drive_model,
                     drive_type: row.drive_type,
                     test_name: row.test_name,
+                    description: row.description,
                     block_size: row.block_size,
                     read_write_pattern: row.read_write_pattern,
                     timestamp: row.timestamp,
@@ -257,6 +258,10 @@ router.get('/performance-data', requireAdmin, (req, res) => {
  *                 type: string
  *                 description: Updated test description
  *                 example: "Updated performance test on production server"
+ *               test_name:
+ *                 type: string
+ *                 description: Updated test name
+ *                 example: "Updated test name"
  *               hostname:
  *                 type: string
  *                 description: Updated hostname
@@ -293,10 +298,10 @@ router.get('/performance-data', requireAdmin, (req, res) => {
  */
 router.put('/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
-    const { description, hostname, protocol, drive_type, drive_model } = req.body;
+    const { description, test_name, hostname, protocol, drive_type, drive_model } = req.body;
     
     // Define allowed fields for validation
-    const allowedFields = ['description', 'hostname', 'protocol', 'drive_type', 'drive_model'];
+    const allowedFields = ['description', 'test_name', 'hostname', 'protocol', 'drive_type', 'drive_model'];
     const submittedFields = Object.keys(req.body);
     
     // Check for invalid fields
@@ -318,6 +323,7 @@ router.put('/:id', requireAdmin, (req, res) => {
         hostname: { maxLength: 255 },
         protocol: { maxLength: 100 },
         description: { maxLength: 1000 },
+        test_name: { maxLength: 500 },
         drive_type: { maxLength: 100 },
         drive_model: { maxLength: 255 }
     };
@@ -343,12 +349,13 @@ router.put('/:id', requireAdmin, (req, res) => {
     db.run(`
         UPDATE test_runs 
         SET description = COALESCE(?, description),
+            test_name = COALESCE(?, test_name),
             hostname = COALESCE(?, hostname),
             protocol = COALESCE(?, protocol),
             drive_type = COALESCE(?, drive_type),
             drive_model = COALESCE(?, drive_model)
         WHERE id = ?
-    `, [description, hostname, protocol, drive_type, drive_model, parseInt(id)], function(err) {
+    `, [description, test_name, hostname, protocol, drive_type, drive_model, parseInt(id)], function(err) {
         if (err) {
             logError('Database error updating test run', err, {
                 requestId: req.requestId,
@@ -416,6 +423,10 @@ router.put('/:id', requireAdmin, (req, res) => {
  *                     type: string
  *                     description: New test description
  *                     example: "Bulk updated performance test"
+ *                   test_name:
+ *                     type: string
+ *                     description: New test name
+ *                     example: "Bulk updated test name"
  *                   hostname:
  *                     type: string
  *                     description: New hostname
@@ -469,7 +480,7 @@ router.put('/bulk', requireAdmin, (req, res) => {
     }
     
     // Define allowed fields for validation
-    const allowedFields = ['description', 'hostname', 'protocol', 'drive_type', 'drive_model'];
+    const allowedFields = ['description', 'test_name', 'hostname', 'protocol', 'drive_type', 'drive_model'];
     const submittedFields = Object.keys(updates);
     
     // Check for invalid fields
@@ -491,6 +502,7 @@ router.put('/bulk', requireAdmin, (req, res) => {
         hostname: { maxLength: 255 },
         protocol: { maxLength: 100 },
         description: { maxLength: 1000 },
+        test_name: { maxLength: 500 },
         drive_type: { maxLength: 100 },
         drive_model: { maxLength: 255 }
     };
@@ -522,6 +534,10 @@ router.put('/bulk', requireAdmin, (req, res) => {
     if (updates.description !== undefined) {
         setParts.push('description = ?');
         values.push(updates.description);
+    }
+    if (updates.test_name !== undefined) {
+        setParts.push('test_name = ?');
+        values.push(updates.test_name);
     }
     if (updates.hostname !== undefined) {
         setParts.push('hostname = ?');
