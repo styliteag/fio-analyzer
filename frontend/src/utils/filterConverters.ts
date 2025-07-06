@@ -47,5 +47,11 @@ export const convertTimeSeriesFiltersToActiveFilters = (
             return isNaN(numValue) ? size : numValue;
         }),
         patterns: timeSeriesFilters.patterns,
+        syncs: [],
+        queue_depths: [],
+        directs: [],
+        num_jobs: [],
+        test_sizes: [],
+        durations: [],
     };
 };

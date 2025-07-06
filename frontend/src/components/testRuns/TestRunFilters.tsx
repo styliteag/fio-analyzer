@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
-import { HardDrive, Clock, Layers, Database, Zap, X } from 'lucide-react';
+import { HardDrive, Clock, Layers, Database, Zap } from 'lucide-react';
 import { getSelectStyles } from '../../hooks/useThemeColors';
 import { sortBlockSizes } from '../../utils/sorting';
 import type { FilterOptions, TestRun } from '../../types';
@@ -23,9 +23,10 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
     onFilterChange,
     dynamicFilterOptions,
     useDynamicFilters = false,
-    onClearAllFilters,
     testRuns = [],
     filteredRuns = [],
+    // @ts-ignore - onClearAllFilters is part of the interface but not used in this component
+    onClearAllFilters, // eslint-disable-line @typescript-eslint/no-unused-vars
 }) => {
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const [filtersWhenOpened, setFiltersWhenOpened] = useState<ActiveFilters | null>(null);

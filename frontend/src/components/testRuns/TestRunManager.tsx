@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Settings, Check, X, Plus, Minus } from 'lucide-react';
 import { useTestRunSelection, TestRunSelectionOptions } from '../../hooks/useTestRunSelection';
 import { useTestRunOperations } from '../../hooks/useTestRunOperations';
-import { useTestRunFilters, type DynamicFilterOptions } from '../../hooks/useTestRunFilters';
+import { useTestRunFilters } from '../../hooks/useTestRunFilters';
 import type { TestRun, FilterOptions } from '../../types';
 import type { ActiveFilters } from '../../hooks/useTestRunFilters';
 import TestRunFilters from './TestRunFilters';

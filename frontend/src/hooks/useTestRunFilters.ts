@@ -303,7 +303,7 @@ export const useTestRunFilters = (testRuns: TestRun[]) => {
             const filteredFieldCounts = filteredCounts[field];
             
             options[field as keyof DynamicFilterOptions] = Object.entries(allFieldCounts)
-                .map(([value, _]) => ({
+                .map(([value]) => ({
                     value: field === 'queue_depths' || field === 'durations' || field === 'syncs' || field === 'directs' || field === 'num_jobs' 
                         ? parseInt(value) 
                         : value,
