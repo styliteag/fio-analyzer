@@ -8,6 +8,7 @@ export * from './upload';
 // Re-export commonly used functions for backward compatibility
 export { 
     fetchTestRuns,
+    fetchTestRun,
     updateTestRun,
     bulkUpdateTestRuns,
     deleteTestRun,

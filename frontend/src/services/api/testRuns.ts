@@ -22,6 +22,11 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}) => {
     return apiCall<TestRun[]>(`/api/test-runs${params}`);
 };
 
+// Fetch a single test run by ID
+export const fetchTestRun = async (id: number) => {
+    return apiCall<TestRun>(`/api/test-runs/${id}`);
+};
+
 // Update a specific test run
 export const updateTestRun = async (
     id: number,

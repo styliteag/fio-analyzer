@@ -233,6 +233,103 @@ router.get('/performance-data', requireAdmin, (req, res) => {
 /**
  * @swagger
  * /api/test-runs/{id}:
+ *   get:
+ *     summary: Get a single test run by ID
+ *     description: Retrieve a specific FIO test run by its unique identifier
+ *     tags: [Test Runs]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Test run ID
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: Test run retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TestRun'
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Test run not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/:id', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    
+    logInfo('User requesting single test run', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'GET_TEST_RUN',
+        testRunId: id
+    });
+    
+    const query = `
+        SELECT id, timestamp, drive_model, drive_type, test_name, description,
+               block_size, read_write_pattern, queue_depth, duration,
+               fio_version, job_runtime, rwmixread, total_ios_read, 
+               total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
+               output_file, num_jobs, direct, test_size, sync, iodepth, is_latest
+        FROM test_runs
+        WHERE id = ?
+    `;
+    
+    const db = getDatabase();
+    db.get(query, [parseInt(id)], (err, row) => {
+        if (err) {
+            logError('Database error fetching test run', err, {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'GET_TEST_RUN',
+                testRunId: id
+            });
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        if (!row) {
+            logWarning('Test run not found', {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'GET_TEST_RUN',
+                testRunId: id
+            });
+            return res.status(404).json({ error: 'Test run not found' });
+        }
+        
+        logInfo('Test run retrieved successfully', {
+            requestId: req.requestId,
+            username: req.user.username,
+            action: 'GET_TEST_RUN',
+            testRunId: id
+        });
+        
+        res.json(row);
+    });
+});
+
+/**
+ * @swagger
+ * /api/test-runs/{id}:
  *   put:
  *     summary: Update test run metadata
  *     description: Update metadata fields for a specific test run

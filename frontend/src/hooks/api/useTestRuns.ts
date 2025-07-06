@@ -1,6 +1,6 @@
 // Custom hook for test run operations
 import { useState, useEffect, useCallback } from 'react';
-import { fetchTestRuns, updateTestRun, deleteTestRun, deleteTestRuns, bulkUpdateTestRuns, fetchFilters } from '../../services/api';
+import { fetchTestRuns, fetchTestRun, updateTestRun, deleteTestRun, deleteTestRuns, bulkUpdateTestRuns, fetchFilters } from '../../services/api';
 import type { TestRun, FilterOptions } from '../../types';
 import type { TestRunUpdateData } from '../../services/api/testRuns';
 
@@ -179,21 +179,16 @@ export const useTestRun = (id: number) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchTestRun = useCallback(async () => {
+    const fetchTestRunData = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
             
-            const response = await fetchTestRuns();
-            if (!response.data) {
-                throw new Error(response.error || 'Failed to fetch test runs');
-            }
-            const foundRun = response.data.find((run: TestRun) => run.id === id);
-            
-            if (foundRun) {
-                setTestRun(foundRun);
+            const response = await fetchTestRun(id);
+            if (response.data) {
+                setTestRun(response.data);
             } else {
-                setError('Test run not found');
+                throw new Error(response.error || 'Failed to fetch test run');
             }
         } catch (err: any) {
             setError(err.message || 'Failed to fetch test run');
@@ -233,14 +228,14 @@ export const useTestRun = (id: number) => {
     }, [id]);
 
     useEffect(() => {
-        fetchTestRun();
-    }, [fetchTestRun]);
+        fetchTestRunData();
+    }, [fetchTestRunData]);
 
     return {
         testRun,
         loading,
         error,
-        refetch: fetchTestRun,
+        refetch: fetchTestRunData,
         update: updateTestRunData,
         delete: deleteTestRunData,
     };
