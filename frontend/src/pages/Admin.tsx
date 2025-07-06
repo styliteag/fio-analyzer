@@ -1,13 +1,30 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Edit2, Search, RefreshCw, X, Check, Trash2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Settings, Database, Filter, BarChart3, History, ChevronUp, ChevronDown, Edit2, Trash2, ArrowLeft } from 'lucide-react';
 import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
-import Modal from '../components/ui/Modal';
 import Loading from '../components/ui/Loading';
 import ErrorDisplay from '../components/ui/ErrorDisplay';
-import { useTestRuns } from '../hooks/api/useTestRuns';
+import Modal from '../components/ui/Modal';
 import { useServerSideTestRuns } from '../hooks/useServerSideTestRuns';
+import { bulkUpdateTestRuns, deleteTestRuns } from '../services/api/testRuns';
+import { useNavigate } from 'react-router-dom';
 import type { TestRun } from '../types';
+
+/*
+  A leaner Admin page that relies 100% on the server-side filtering hook.
+  Two simple views:
+    1. Latest runs (is_latest = 1)
+    2. Historical time-series (is_latest = 0) – grouped by configuration key
+*/
+
+const groupKey = (run: TestRun) => [
+  run.hostname,
+  run.protocol,
+  run.drive_model,
+  run.drive_type,
+  run.read_write_pattern,
+  run.block_size,
+  run.queue_depth,
+].join('|');
 
 interface EditableFields {
   hostname?: string;
@@ -18,269 +35,112 @@ interface EditableFields {
   drive_model?: string;
 }
 
-interface EditingState {
-  testRunId: number | null;
+interface BulkEditState {
+  isOpen: boolean;
   fields: EditableFields;
+  enabledFields: Record<keyof EditableFields, boolean>;
 }
 
-interface GroupEditingState {
-  groupKey: string | null;
+interface BulkDeleteState {
+  isOpen: boolean;
+}
+
+interface HistoryEditState {
+  isOpen: boolean;
+  group: any | null;
   fields: EditableFields;
+  enabledFields: Record<keyof EditableFields, boolean>;
 }
 
 const Admin: React.FC = () => {
-  // Feature flag for server-side filtering (can be made configurable later)
-  const useServerSideFiltering = true;
-  
-  // Traditional client-side hook (fallback)
-  const { 
-    testRuns: clientTestRuns, 
-    loading: clientLoading, 
-    error: clientError, 
-    refreshTestRuns, 
-    updateTestRun, 
-    bulkUpdateTestRuns, 
-    bulkDeleteTestRuns 
-  } = useTestRuns({ autoFetch: !useServerSideFiltering });
-  
-  // New server-side filtering hook
-  const {
-    testRuns: serverTestRuns,
-    loading: serverLoading,
-    error: serverError,
-    activeFilters,
-    setActiveFilters,
-    clearFilters: clearServerFilters,
-    refetch: _refetchServerData, // eslint-disable-line @typescript-eslint/no-unused-vars
-    hasActiveFilters: hasServerFilters,
-    filters: serverFilters
-  } = useServerSideTestRuns({ 
-    includeHistorical: true, 
-    autoFetch: useServerSideFiltering 
-  });
-  
-  // Choose which data source to use based on feature flag
-  const testRuns = useServerSideFiltering ? serverTestRuns : clientTestRuns;
-  const loading = useServerSideFiltering ? serverLoading : clientLoading;
-  const error = useServerSideFiltering ? serverError : clientError;
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const isSearching = searchTerm !== debouncedSearchTerm;
-  const [selectedRuns, setSelectedRuns] = useState<Set<number>>(new Set());
-  const [editingState, setEditingState] = useState<EditingState>({ testRunId: null, fields: {} });
-  const [groupEditingState, setGroupEditingState] = useState<GroupEditingState>({ groupKey: null, fields: {} });
-  const [bulkEditModalOpen, setBulkEditModalOpen] = useState(false);
-  const [bulkEditFields, setBulkEditFields] = useState<EditableFields>({});
-  const [bulkEditEnabled, setBulkEditEnabled] = useState<Record<keyof EditableFields, boolean>>({
-    hostname: false,
-    protocol: false,
-    description: false,
-    test_name: false,
-    drive_type: false,
-    drive_model: false,
-  });
-  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
-  const [historyEditModalOpen, setHistoryEditModalOpen] = useState(false);
-  const [historyEditFields, setHistoryEditFields] = useState<EditableFields>({});
-  const [historyEditEnabled, setHistoryEditEnabled] = useState<Record<keyof EditableFields, boolean>>({
-    hostname: false,
-    protocol: false,
-    description: false,
-    test_name: false,
-    drive_type: false,
-    drive_model: false,
-  });
-  const [selectedHistoryGroup, setSelectedHistoryGroup] = useState<any>(null);
+  const navigate = useNavigate();
+  const [view, setView] = useState<'latest' | 'history'>('latest');
   const [sortField, setSortField] = useState<keyof TestRun>('timestamp');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [fromDate, setFromDate] = useState<string>('');
-  const [toDate, setToDate] = useState<string>('');
-  const [timeSeriesFilter, setTimeSeriesFilter] = useState<string>('all');
-  const [selectedGroupRunIds, setSelectedGroupRunIds] = useState<number[]>([]);
-  const [displayLimit, setDisplayLimit] = useState(500); // Limit displayed results for performance
-  const [showAllResults, setShowAllResults] = useState(false);
-
-  useEffect(() => {
-    refreshTestRuns(true); // Always include historical data for admin view
-  }, [refreshTestRuns]);
-
-  // Debounce search term to improve performance - reduced delay for faster response
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 150); // Reduced to 150ms for faster response
-
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // Simplified client-side filtering for search only (server handles other filters)
-  const filteredRuns = useMemo(() => {
-    if (useServerSideFiltering) {
-      // When using server-side filtering, only apply search term filter client-side
-      if (!debouncedSearchTerm?.trim()) {
-        return testRuns;
-      }
-      
-      const searchTerms = debouncedSearchTerm.toLowerCase().split(' ').filter(term => term.trim() !== '');
-      if (searchTerms.length === 0) return testRuns;
-      
-      return testRuns.filter(run => {
-        const searchableFields = [
-          run.hostname,
-          run.protocol,
-          run.drive_model,
-          run.drive_type,
-          run.read_write_pattern,
-          run.test_name,
-          run.description,
-          run.block_size,
-          run.test_size,
-          run.queue_depth?.toString(),
-          run.duration?.toString(),
-          run.direct?.toString(),
-          run.sync?.toString(),
-          run.num_jobs?.toString()
-        ].filter(field => field != null).map(field => String(field).toLowerCase()).join(' ');
-        
-        return searchTerms.every(term => searchableFields.includes(term));
-      });
+  const [selectedRuns, setSelectedRuns] = useState<Set<number>>(new Set());
+  const [bulkEditState, setBulkEditState] = useState<BulkEditState>({
+    isOpen: false,
+    fields: {},
+    enabledFields: {
+      hostname: false,
+      protocol: false,
+      description: false,
+      test_name: false,
+      drive_type: false,
+      drive_model: false,
     }
-    
-    // Legacy client-side filtering logic (kept for fallback)
-    const hasSearchTerm = debouncedSearchTerm?.trim();
-    let searchTerms: string[] = [];
-    
-    if (hasSearchTerm) {
-      searchTerms = debouncedSearchTerm.toLowerCase().split(' ').filter(term => term.trim() !== '');
+  });
+  const [bulkDeleteState, setBulkDeleteState] = useState<BulkDeleteState>({
+    isOpen: false,
+  });
+  const [historyEditState, setHistoryEditState] = useState<HistoryEditState>({
+    isOpen: false,
+    group: null,
+    fields: {},
+    enabledFields: {
+      hostname: false,
+      protocol: false,
+      description: false,
+      test_name: false,
+      drive_type: false,
+      drive_model: false,
     }
-    
-    return testRuns.filter(run => {
-      // Group selection filtering (takes precedence when active)
-      if (selectedGroupRunIds.length > 0) {
-        if (!selectedGroupRunIds.includes(run.id)) return false;
+  });
+  const {
+    testRuns,
+    loading,
+    error,
+    filters,
+    activeFilters,
+    setActiveFilters,
+    clearFilters,
+  } = useServerSideTestRuns({ includeHistorical: true });
+
+  // Split latest vs historical early for easy memoisation
+  const latestRuns = useMemo(() => testRuns.filter(r => r.is_latest === 1), [testRuns]);
+  const historicalRuns = useMemo(() => testRuns.filter(r => r.is_latest === 0), [testRuns]);
+
+  // Group historical runs by hardware / test config key
+  const groupedHistory = useMemo(() => {
+    if (view !== 'history') return [];
+    const map: Record<string, { key: string; count: number; first: TestRun; last: TestRun; runs: TestRun[] }> = {};
+    historicalRuns.forEach(r => {
+      const k = groupKey(r);
+      const existing = map[k];
+      if (!existing) {
+        map[k] = { key: k, count: 1, first: r, last: r, runs: [r] };
       } else {
-        // Time series filtering (only when no group is selected)
-        if (timeSeriesFilter === 'with-history') {
-          // Only show historical runs (is_latest = 0)
-          if (run.is_latest === 1) return false;
-        } else if (timeSeriesFilter === 'latest-only') {
-          // Only show latest runs (is_latest = 1)
-          if (run.is_latest === 0) return false;
-        }
+        existing.count += 1;
+        existing.runs.push(r);
+        // track oldest / newest timestamps
+        if (new Date(r.timestamp) < new Date(existing.first.timestamp)) existing.first = r;
+        if (new Date(r.timestamp) > new Date(existing.last.timestamp)) existing.last = r;
       }
-      
-      // Date range filtering
-      if (fromDate || toDate) {
-        const runDate = new Date(run.timestamp);
-        
-        if (fromDate) {
-          const fromDateTime = new Date(fromDate);
-          fromDateTime.setHours(0, 0, 0, 0); // Start of day
-          if (runDate < fromDateTime) return false;
-        }
-        
-        if (toDate) {
-          const toDateTime = new Date(toDate);
-          toDateTime.setHours(23, 59, 59, 999); // End of day
-          if (runDate > toDateTime) return false;
-        }
-      }
-      
-      // Search term filtering
-      if (searchTerms.length === 0) return true;
-      
-      const searchableFields = [
-        run.hostname,
-        run.protocol,
-        run.drive_model,
-        run.drive_type,
-        run.read_write_pattern,
-        run.test_name,
-        run.description,
-        run.block_size,
-        run.test_size,
-        run.queue_depth?.toString(),
-        run.duration?.toString(),
-        run.direct?.toString(),
-        run.sync?.toString(),
-        run.num_jobs?.toString()
-      ].filter(field => field != null).map(field => String(field).toLowerCase()).join(' ');
-      
-      return searchTerms.every(term => searchableFields.includes(term));
     });
-  }, [testRuns, selectedGroupRunIds, timeSeriesFilter, fromDate, toDate, debouncedSearchTerm, useServerSideFiltering]);
+    return Object.values(map).sort((a, b) => b.count - a.count);
+  }, [historicalRuns, view]);
 
-  const sortedRuns = useMemo(() => [...filteredRuns].sort((a, b) => {
-    const aVal = a[sortField];
-    const bVal = b[sortField];
-    
-    if (aVal === undefined || aVal === null) return 1;
-    if (bVal === undefined || bVal === null) return -1;
-    
-    let comparison = 0;
-    if (typeof aVal === 'string' && typeof bVal === 'string') {
-      comparison = aVal.localeCompare(bVal);
-    } else if (typeof aVal === 'number' && typeof bVal === 'number') {
-      comparison = aVal - bVal;
-    } else {
-      comparison = String(aVal).localeCompare(String(bVal));
-    }
-    
-    return sortDirection === 'desc' ? -comparison : comparison;
-  }), [filteredRuns, sortField, sortDirection]);
-
-  // Limit displayed results for performance (only when not using server-side filtering)
-  const displayedRuns = useMemo(() => {
-    if (useServerSideFiltering) {
-      // No need to limit when using server-side filtering
-      return sortedRuns;
-    }
-    
-    if (showAllResults || sortedRuns.length <= displayLimit) {
-      return sortedRuns;
-    }
-    return sortedRuns.slice(0, displayLimit);
-  }, [sortedRuns, displayLimit, showAllResults, useServerSideFiltering]);
-
-  const hasMoreResults = !useServerSideFiltering && sortedRuns.length > displayLimit && !showAllResults;
-
-  // Group historical data for special view
-  const groupedHistoricalData = timeSeriesFilter === 'with-history' ? (() => {
-    const groups: Record<string, TestRun[]> = {};
-    
-    // Group by hostname, protocol, drive_model, drive_type, test pattern, block_size, queue_depth
-    filteredRuns.forEach(run => {
-      const key = `${run.hostname}-${run.protocol}-${run.drive_model}-${run.drive_type}-${run.read_write_pattern}-${run.block_size}-${run.queue_depth}`;
-      if (!groups[key]) {
-        groups[key] = [];
-      }
-      groups[key].push(run);
-    });
-    
-    // Convert to array with aggregated data
-    return Object.entries(groups).map(([key, runs]) => {
-      const sortedRuns = runs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      const firstRun = sortedRuns[0];
-      const lastRun = sortedRuns[sortedRuns.length - 1];
+  // Sort latest runs
+  const sortedLatestRuns = useMemo(() => {
+    return [...latestRuns].sort((a, b) => {
+      const aVal = a[sortField];
+      const bVal = b[sortField];
       
-      return {
-        key,
-        runs,
-        count: runs.length,
-        firstRun,
-        lastRun,
-        startDate: new Date(firstRun.timestamp),
-        endDate: new Date(lastRun.timestamp),
-        hostname: firstRun.hostname,
-        protocol: firstRun.protocol,
-        drive_model: firstRun.drive_model,
-        drive_type: firstRun.drive_type,
-        test_pattern: firstRun.read_write_pattern,
-        block_size: firstRun.block_size,
-        queue_depth: firstRun.queue_depth
-      };
-    }).sort((a, b) => b.count - a.count); // Sort by count descending
-  })() : [];
+      if (aVal === undefined || aVal === null) return 1;
+      if (bVal === undefined || bVal === null) return -1;
+      
+      let comparison = 0;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        comparison = aVal.localeCompare(bVal);
+      } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+        comparison = aVal - bVal;
+      } else {
+        comparison = String(aVal).localeCompare(String(bVal));
+      }
+      
+      return sortDirection === 'desc' ? -comparison : comparison;
+    });
+  }, [latestRuns, sortField, sortDirection]);
 
   const handleSort = (field: keyof TestRun) => {
     if (sortField === field) {
@@ -291,169 +151,9 @@ const Admin: React.FC = () => {
     }
   };
 
-  const handleSelectAll = useCallback(() => {
-    if (selectedRuns.size === displayedRuns.length) {
-      setSelectedRuns(new Set());
-    } else {
-      setSelectedRuns(new Set(displayedRuns.map(run => run.id)));
-    }
-  }, [selectedRuns.size, displayedRuns]);
-
-  const handleSelectRun = (runId: number) => {
-    const newSelected = new Set(selectedRuns);
-    if (newSelected.has(runId)) {
-      newSelected.delete(runId);
-    } else {
-      newSelected.add(runId);
-    }
-    setSelectedRuns(newSelected);
-  };
-
-  const startEdit = (run: TestRun) => {
-    setEditingState({
-      testRunId: run.id,
-      fields: {
-        hostname: run.hostname || '',
-        protocol: run.protocol || '',
-        description: run.description || '',
-        test_name: run.test_name || '',
-        drive_type: run.drive_type || '',
-        drive_model: run.drive_model || ''
-      }
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditingState({ testRunId: null, fields: {} });
-  };
-
-  const saveEdit = async () => {
-    if (!editingState.testRunId) return;
-    
-    try {
-      await updateTestRun(editingState.testRunId, editingState.fields);
-      setEditingState({ testRunId: null, fields: {} });
-      refreshTestRuns(true);
-    } catch (err) {
-      console.error('Failed to update test run:', err);
-    }
-  };
-
-  const startGroupEdit = (group: any) => {
-    setGroupEditingState({
-      groupKey: group.key,
-      fields: {
-        hostname: group.hostname || '',
-        protocol: group.protocol || '',
-        description: group.firstRun.description || '',
-        test_name: group.firstRun.test_name || '',
-        drive_type: group.drive_type || '',
-        drive_model: group.drive_model || ''
-      }
-    });
-  };
-
-  const cancelGroupEdit = () => {
-    setGroupEditingState({ groupKey: null, fields: {} });
-  };
-
-  const saveGroupEdit = async () => {
-    if (!groupEditingState.groupKey) return;
-    
-    // Find the group and get all test run IDs
-    const group = groupedHistoricalData.find(g => g.key === groupEditingState.groupKey);
-    if (!group) return;
-    
-    const testRunIds = group.runs.map(run => run.id);
-    
-    try {
-      await bulkUpdateTestRuns(testRunIds, groupEditingState.fields);
-      setGroupEditingState({ groupKey: null, fields: {} });
-      refreshTestRuns(true);
-    } catch (err) {
-      console.error('Failed to update group:', err);
-    }
-  };
-
-  const updateGroupEditField = (field: keyof EditableFields, value: string) => {
-    setGroupEditingState(prev => ({
-      ...prev,
-      fields: { ...prev.fields, [field]: value }
-    }));
-  };
-
-  const handleGroupClick = (group: any) => {
-    // Extract all test run IDs from the group
-    const runIds = group.runs.map((run: any) => run.id);
-    setSelectedGroupRunIds(runIds);
-    // Switch to regular table view to show the filtered runs
-    setTimeSeriesFilter('all');
-  };
-
-  const handleBulkEdit = async () => {
-    if (selectedRuns.size === 0) return;
-    
-    // Only include fields that are enabled for update
-    const fieldsToUpdate: EditableFields = {};
-    Object.entries(bulkEditEnabled).forEach(([field, enabled]) => {
-      if (enabled && bulkEditFields[field as keyof EditableFields] !== undefined) {
-        fieldsToUpdate[field as keyof EditableFields] = bulkEditFields[field as keyof EditableFields];
-      }
-    });
-    
-    // Guard against empty updates (e.g., user forgot to enable fields)
-    if (Object.keys(fieldsToUpdate).length === 0) {
-      alert('Please enable at least one field and provide a value to update.');
-      return;
-    }
-
-    try {
-      await bulkUpdateTestRuns(Array.from(selectedRuns), fieldsToUpdate);
-      setBulkEditModalOpen(false);
-      setBulkEditFields({});
-      setBulkEditEnabled({
-        hostname: false,
-        protocol: false,
-        description: false,
-        test_name: false,
-        drive_type: false,
-        drive_model: false,
-      });
-      setSelectedRuns(new Set());
-      refreshTestRuns(true);
-    } catch (err) {
-      console.error('Failed to bulk update test runs:', err);
-      alert(err instanceof Error ? err.message : 'Bulk update failed');
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedRuns.size === 0) return;
-    
-    try {
-      const result = await bulkDeleteTestRuns(Array.from(selectedRuns));
-      setBulkDeleteModalOpen(false);
-      setSelectedRuns(new Set());
-      
-      if (result.failed > 0) {
-        console.warn(`Failed to delete ${result.failed} out of ${result.total} test runs`);
-      }
-      
-      refreshTestRuns(true);
-    } catch (err) {
-      console.error('Failed to bulk delete test runs:', err);
-    }
-  };
-
-  const updateEditField = (field: keyof EditableFields, value: string) => {
-    setEditingState(prev => ({
-      ...prev,
-      fields: { ...prev.fields, [field]: value }
-    }));
-  };
-
-  const updateBulkEditField = (field: keyof EditableFields, value: string) => {
-    setBulkEditFields(prev => ({ ...prev, [field]: value }));
+  const SortIcon = ({ field }: { field: keyof TestRun }) => {
+    if (sortField !== field) return null;
+    return sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />;
   };
 
   // Helper function to find the most common value in an array
@@ -475,7 +175,7 @@ const Admin: React.FC = () => {
 
   // Get most common values from selected test runs
   const getCommonValuesFromSelection = (): EditableFields => {
-    const selectedTestRuns = testRuns.filter(run => selectedRuns.has(run.id));
+    const selectedTestRuns = sortedLatestRuns.filter(run => selectedRuns.has(run.id));
     
     return {
       hostname: getMostCommonValue(selectedTestRuns.map(run => run.hostname)),
@@ -487,52 +187,127 @@ const Admin: React.FC = () => {
     };
   };
 
-  // Prefill form when modal opens
-  const openBulkEditModal = () => {
-    const commonValues = getCommonValuesFromSelection();
-    setBulkEditFields(commonValues);
-    setBulkEditModalOpen(true);
-  };
-
-  // Handle checkbox change for enabling/disabling field updates
-  const handleFieldEnabledChange = (field: keyof EditableFields, enabled: boolean) => {
-    setBulkEditEnabled(prev => ({ ...prev, [field]: enabled }));
-    
-    if (enabled) {
-      // When enabling, update the field with the most common value
-      const selectedTestRuns = testRuns.filter(run => selectedRuns.has(run.id));
-      let values: (string | undefined)[] = [];
-      
-      switch (field) {
-        case 'hostname':
-          values = selectedTestRuns.map(run => run.hostname);
-          break;
-        case 'protocol':
-          values = selectedTestRuns.map(run => run.protocol);
-          break;
-        case 'description':
-          values = selectedTestRuns.map(run => run.description);
-          break;
-        case 'test_name':
-          values = selectedTestRuns.map(run => run.test_name);
-          break;
-        case 'drive_type':
-          values = selectedTestRuns.map(run => run.drive_type);
-          break;
-        case 'drive_model':
-          values = selectedTestRuns.map(run => run.drive_model);
-          break;
-      }
-      
-      const commonValue = getMostCommonValue(values);
-      setBulkEditFields(prev => ({ ...prev, [field]: commonValue }));
+  const handleSelectAll = () => {
+    if (selectedRuns.size === sortedLatestRuns.length) {
+      setSelectedRuns(new Set());
+    } else {
+      setSelectedRuns(new Set(sortedLatestRuns.map(run => run.id)));
     }
   };
 
-  // History line editing functions
-  const openHistoryEditModal = (group: any) => {
-    setSelectedHistoryGroup(group);
+  const handleSelectRun = (runId: number) => {
+    const newSelected = new Set(selectedRuns);
+    if (newSelected.has(runId)) {
+      newSelected.delete(runId);
+    } else {
+      newSelected.add(runId);
+    }
+    setSelectedRuns(newSelected);
+  };
+
+  const openBulkEditModal = () => {
+    const commonValues = getCommonValuesFromSelection();
+    setBulkEditState({
+      isOpen: true,
+      fields: commonValues,
+      enabledFields: {
+        hostname: false,
+        protocol: false,
+        description: false,
+        test_name: false,
+        drive_type: false,
+        drive_model: false,
+      }
+    });
+  };
+
+  const closeBulkEditModal = () => {
+    setBulkEditState(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const updateBulkEditField = (field: keyof EditableFields, value: string) => {
+    setBulkEditState(prev => ({
+      ...prev,
+      fields: { ...prev.fields, [field]: value }
+    }));
+  };
+
+  const toggleFieldEnabled = (field: keyof EditableFields) => {
+    setBulkEditState(prev => ({
+      ...prev,
+      enabledFields: { ...prev.enabledFields, [field]: !prev.enabledFields[field] }
+    }));
+  };
+
+  const handleBulkEdit = async () => {
+    if (selectedRuns.size === 0) return;
     
+    // Only include fields that are enabled for update
+    const fieldsToUpdate: EditableFields = {};
+    Object.entries(bulkEditState.enabledFields).forEach(([field, enabled]) => {
+      if (enabled && bulkEditState.fields[field as keyof EditableFields] !== undefined) {
+        fieldsToUpdate[field as keyof EditableFields] = bulkEditState.fields[field as keyof EditableFields];
+      }
+    });
+    
+    // Guard against empty updates
+    if (Object.keys(fieldsToUpdate).length === 0) {
+      alert('Please enable at least one field and provide a value to update.');
+      return;
+    }
+
+    try {
+      const result = await bulkUpdateTestRuns(Array.from(selectedRuns), fieldsToUpdate);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // Refresh the data after successful update
+      // TODO: Add refresh function to the hook
+      window.location.reload();
+      
+      closeBulkEditModal();
+      setSelectedRuns(new Set());
+    } catch (err) {
+      console.error('Failed to bulk update test runs:', err);
+      alert(err instanceof Error ? err.message : 'Bulk update failed');
+    }
+  };
+
+  const openBulkDeleteModal = () => {
+    setBulkDeleteState({ isOpen: true });
+  };
+
+  const closeBulkDeleteModal = () => {
+    setBulkDeleteState({ isOpen: false });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedRuns.size === 0) return;
+    
+    try {
+      const result = await deleteTestRuns(Array.from(selectedRuns));
+      
+      if (result.failed > 0) {
+        alert(`Successfully deleted ${result.successful} test runs, but failed to delete ${result.failed} runs.`);
+      } else {
+        alert(`Successfully deleted ${result.successful} test runs.`);
+      }
+      
+      // Refresh the data after successful deletion
+      window.location.reload();
+      
+      closeBulkDeleteModal();
+      setSelectedRuns(new Set());
+    } catch (err) {
+      console.error('Failed to bulk delete test runs:', err);
+      alert(err instanceof Error ? err.message : 'Bulk delete failed');
+    }
+  };
+
+  // History edit functions
+  const openHistoryEditModal = (group: any) => {
     // Get most common values from the group's runs
     const commonValues = {
       hostname: getMostCommonValue(group.runs.map((run: TestRun) => run.hostname)),
@@ -543,26 +318,47 @@ const Admin: React.FC = () => {
       drive_model: getMostCommonValue(group.runs.map((run: TestRun) => run.drive_model)),
     };
     
-    setHistoryEditFields(commonValues);
-    setHistoryEditEnabled({
-      hostname: false,
-      protocol: false,
-      description: false,
-      test_name: false,
-      drive_type: false,
-      drive_model: false,
+    setHistoryEditState({
+      isOpen: true,
+      group,
+      fields: commonValues,
+      enabledFields: {
+        hostname: false,
+        protocol: false,
+        description: false,
+        test_name: false,
+        drive_type: false,
+        drive_model: false,
+      }
     });
-    setHistoryEditModalOpen(true);
+  };
+
+  const closeHistoryEditModal = () => {
+    setHistoryEditState(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const updateHistoryEditField = (field: keyof EditableFields, value: string) => {
+    setHistoryEditState(prev => ({
+      ...prev,
+      fields: { ...prev.fields, [field]: value }
+    }));
+  };
+
+  const toggleHistoryFieldEnabled = (field: keyof EditableFields) => {
+    setHistoryEditState(prev => ({
+      ...prev,
+      enabledFields: { ...prev.enabledFields, [field]: !prev.enabledFields[field] }
+    }));
   };
 
   const handleHistoryEdit = async () => {
-    if (!selectedHistoryGroup) return;
+    if (!historyEditState.group) return;
     
     // Only include fields that are enabled for update
     const fieldsToUpdate: EditableFields = {};
-    Object.entries(historyEditEnabled).forEach(([field, enabled]) => {
-      if (enabled && historyEditFields[field as keyof EditableFields] !== undefined) {
-        fieldsToUpdate[field as keyof EditableFields] = historyEditFields[field as keyof EditableFields];
+    Object.entries(historyEditState.enabledFields).forEach(([field, enabled]) => {
+      if (enabled && historyEditState.fields[field as keyof EditableFields] !== undefined) {
+        fieldsToUpdate[field as keyof EditableFields] = historyEditState.fields[field as keyof EditableFields];
       }
     });
     
@@ -574,249 +370,474 @@ const Admin: React.FC = () => {
 
     try {
       // Update all runs in the history group
-      const testRunIds = selectedHistoryGroup.runs.map((run: TestRun) => run.id);
-      await bulkUpdateTestRuns(testRunIds, fieldsToUpdate);
-      setHistoryEditModalOpen(false);
-      setHistoryEditFields({});
-      setHistoryEditEnabled({
-        hostname: false,
-        protocol: false,
-        description: false,
-        test_name: false,
-        drive_type: false,
-        drive_model: false,
-      });
-      setSelectedHistoryGroup(null);
-      refreshTestRuns(true);
+      const testRunIds = historyEditState.group.runs.map((run: TestRun) => run.id);
+      const result = await bulkUpdateTestRuns(testRunIds, fieldsToUpdate);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // Refresh the data after successful update
+      window.location.reload();
+      
+      closeHistoryEditModal();
     } catch (err) {
       console.error('Failed to update history group:', err);
       alert(err instanceof Error ? err.message : 'History update failed');
     }
   };
 
-  const updateHistoryEditField = (field: keyof EditableFields, value: string) => {
-    setHistoryEditFields(prev => ({ ...prev, [field]: value }));
+  /* ----- rendering helpers ----- */
+  const renderFilters = () => {
+    if (!filters) return null;
+    return (
+      <div className="theme-card p-4 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Filter className="h-4 w-4 theme-text-accent" />
+          <h3 className="text-sm font-medium theme-text-primary">Filter Options</h3>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium theme-text-secondary whitespace-nowrap">Host:</label>
+            <select
+              value={activeFilters.hostnames[0] || ''}
+              onChange={e => setActiveFilters({ ...activeFilters, hostnames: e.target.value ? [e.target.value] : [] })}
+              className="theme-form-select text-sm px-3 py-1.5 min-w-32"
+            >
+              <option value="">All Hosts</option>
+              {filters.hostnames.map(h => (
+                <option key={h} value={h}>{h}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium theme-text-secondary whitespace-nowrap">Protocol:</label>
+            <select
+              value={activeFilters.protocols[0] || ''}
+              onChange={e => setActiveFilters({ ...activeFilters, protocols: e.target.value ? [e.target.value] : [] })}
+              className="theme-form-select text-sm px-3 py-1.5 min-w-32"
+            >
+              <option value="">All Protocols</option>
+              {filters.protocols.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium theme-text-secondary whitespace-nowrap">Drive Type:</label>
+            <select
+              value={activeFilters.drive_types[0] || ''}
+              onChange={e => setActiveFilters({ ...activeFilters, drive_types: e.target.value ? [e.target.value] : [] })}
+              className="theme-form-select text-sm px-3 py-1.5 min-w-32"
+            >
+              <option value="">All Drive Types</option>
+              {filters.drive_types.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+          {(activeFilters.hostnames.length + activeFilters.protocols.length + activeFilters.drive_types.length) > 0 && (
+            <Button
+              onClick={clearFilters}
+              variant="secondary"
+              size="sm"
+              className="text-xs"
+            >
+              Clear Filters
+            </Button>
+          )}
+        </div>
+      </div>
+    );
   };
 
-  const handleHistoryFieldEnabledChange = (field: keyof EditableFields, enabled: boolean) => {
-    setHistoryEditEnabled(prev => ({ ...prev, [field]: enabled }));
-    
-    if (enabled && selectedHistoryGroup) {
-      // When enabling, update the field with the most common value from the group
-      let values: (string | undefined)[] = [];
-      
-      switch (field) {
-        case 'hostname':
-          values = selectedHistoryGroup.runs.map((run: TestRun) => run.hostname);
-          break;
-        case 'protocol':
-          values = selectedHistoryGroup.runs.map((run: TestRun) => run.protocol);
-          break;
-        case 'description':
-          values = selectedHistoryGroup.runs.map((run: TestRun) => run.description);
-          break;
-        case 'test_name':
-          values = selectedHistoryGroup.runs.map((run: TestRun) => run.test_name);
-          break;
-        case 'drive_type':
-          values = selectedHistoryGroup.runs.map((run: TestRun) => run.drive_type);
-          break;
-        case 'drive_model':
-          values = selectedHistoryGroup.runs.map((run: TestRun) => run.drive_model);
-          break;
-      }
-      
-      const commonValue = getMostCommonValue(values);
-      setHistoryEditFields(prev => ({ ...prev, [field]: commonValue }));
-    }
-  };
+  const renderLatestTable = () => (
+    <div className="theme-card overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="theme-bg-secondary">
+            <tr>
+              <th className="px-4 py-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={selectedRuns.size === sortedLatestRuns.length && sortedLatestRuns.length > 0}
+                  onChange={handleSelectAll}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+              </th>
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
+                onClick={() => handleSort('id')}
+              >
+                <div className="flex items-center gap-1">
+                  ID
+                  <SortIcon field="id" />
+                </div>
+              </th>
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
+                onClick={() => handleSort('timestamp')}
+              >
+                <div className="flex items-center gap-1">
+                  Timestamp
+                  <SortIcon field="timestamp" />
+                </div>
+              </th>
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
+                onClick={() => handleSort('hostname')}
+              >
+                <div className="flex items-center gap-1">
+                  Host
+                  <SortIcon field="hostname" />
+                </div>
+              </th>
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
+                onClick={() => handleSort('protocol')}
+              >
+                <div className="flex items-center gap-1">
+                  Protocol
+                  <SortIcon field="protocol" />
+                </div>
+              </th>
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
+                onClick={() => handleSort('drive_model')}
+              >
+                <div className="flex items-center gap-1">
+                  Model
+                  <SortIcon field="drive_model" />
+                </div>
+              </th>
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
+                onClick={() => handleSort('drive_type')}
+              >
+                <div className="flex items-center gap-1">
+                  Type
+                  <SortIcon field="drive_type" />
+                </div>
+              </th>
+              <th 
+                className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
+                onClick={() => handleSort('read_write_pattern')}
+              >
+                <div className="flex items-center gap-1">
+                  Pattern
+                  <SortIcon field="read_write_pattern" />
+                </div>
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">
+                Config
+              </th>
+            </tr>
+          </thead>
+          <tbody className="theme-bg-card">
+            {sortedLatestRuns.map((run, index) => (
+              <React.Fragment key={run.id}>
+                {/* Main data row */}
+                <tr className={index % 2 === 0 ? 'theme-bg-secondary' : 'theme-bg-card'}>
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedRuns.has(run.id)}
+                      onChange={() => handleSelectRun(run.id)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs theme-text-primary">{run.id}</td>
+                  <td className="px-4 py-3 text-xs theme-text-secondary">
+                    {new Date(run.timestamp).toISOString().slice(0, 19).replace('T', ' ')}
+                  </td>
+                  <td className="px-4 py-3 text-sm theme-text-primary">{run.hostname}</td>
+                  <td className="px-4 py-3 text-sm theme-text-primary">{run.protocol}</td>
+                  <td className="px-4 py-3 text-sm theme-text-primary">{run.drive_model}</td>
+                  <td className="px-4 py-3 text-sm theme-text-primary">{run.drive_type}</td>
+                  <td className="px-4 py-3">
+                    {run.read_write_pattern ? (
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        run.read_write_pattern.includes('read') 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                          : 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                      }`}>
+                        {run.read_write_pattern}
+                      </span>
+                    ) : (
+                      <span className="text-sm theme-text-quaternary">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1 flex-wrap">
+                      {run.queue_depth && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          QD{run.queue_depth}
+                        </span>
+                      )}
+                      {run.block_size && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                          {run.block_size}
+                        </span>
+                      )}
+                      {run.direct !== undefined && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                          DIR{run.direct}
+                        </span>
+                      )}
+                      {run.sync !== undefined && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200">
+                          SYN{run.sync}
+                        </span>
+                      )}
+                      {run.test_size && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                          {run.test_size}
+                        </span>
+                      )}
+                      {run.duration && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                          {run.duration}s
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                
+                {/* Description row spanning all columns */}
+                <tr className={index % 2 === 0 ? 'theme-bg-secondary' : 'theme-bg-card'}>
+                  <td colSpan={10} className="px-4 pb-3 pt-1">
+                    <div className="space-y-1">
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs theme-text-quaternary font-medium mt-0.5 whitespace-nowrap">Test Name:</span>
+                        <div className="text-xs leading-relaxed break-words theme-text-secondary">
+                          {run.test_name || <span className="italic theme-text-quaternary">No test name</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs theme-text-quaternary font-medium mt-0.5 whitespace-nowrap">Description:</span>
+                        <div className="text-xs leading-relaxed break-words theme-text-secondary">
+                          {run.description || <span className="italic theme-text-quaternary">No description</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
-  if (loading) {
-    return <Loading className="min-h-screen" />;
-  }
+  const renderHistoryTable = () => (
+    <div className="theme-card overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="theme-bg-secondary">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">Configuration</th>
+              <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">First Run</th>
+              <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">Last Run</th>
+              <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">Count</th>
+              <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">rw</th>
+              <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">Config</th>
+              <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="theme-bg-card">
+            {groupedHistory.map((group, index) => (
+              <React.Fragment key={group.key}>
+                {/* Main group row */}
+                <tr className={index % 2 === 0 ? 'theme-bg-secondary' : 'theme-bg-card'}>
+                  <td className="px-4 py-3">
+                    <div className="max-w-md">
+                      <div className="text-sm theme-text-primary font-medium mb-1">
+                        {group.first.hostname} • {group.first.protocol}
+                      </div>
+                      <div className="text-xs theme-text-secondary">
+                        {group.first.drive_model} ({group.first.drive_type})
+                      </div>
+                      <div className="flex gap-1 mt-1">
+                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          {group.first.read_write_pattern}
+                        </span>
+                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                          {group.first.block_size}
+                        </span>
+                        <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                          QD{group.first.queue_depth}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs theme-text-secondary">
+                    {new Date(group.first.timestamp).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3 text-xs theme-text-secondary">
+                    {new Date(group.last.timestamp).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center px-3 py-1 text-sm font-medium rounded-md bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                      {group.count} runs
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {group.first.read_write_pattern ? (
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        group.first.read_write_pattern.includes('read') 
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                          : 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                      }`}>
+                        {group.first.read_write_pattern}
+                      </span>
+                    ) : (
+                      <span className="text-sm theme-text-quaternary">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1 flex-wrap">
+                      {group.first.queue_depth && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          QD{group.first.queue_depth}
+                        </span>
+                      )}
+                      {group.first.block_size && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                          {group.first.block_size}
+                        </span>
+                      )}
+                      {group.first.direct !== undefined && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                          DIR{group.first.direct}
+                        </span>
+                      )}
+                      {group.first.sync !== undefined && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200">
+                          SYN{group.first.sync}
+                        </span>
+                      )}
+                      {group.first.test_size && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                          {group.first.test_size}
+                        </span>
+                      )}
+                      {group.first.duration && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                          {group.first.duration}s
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Button 
+                      onClick={() => openHistoryEditModal(group)} 
+                      size="sm" 
+                      variant="outline"
+                      title="Edit all historical runs in this group"
+                    >
+                      Edit
+                    </Button>
+                  </td>
+                </tr>
+                
+                {/* Description row spanning all columns */}
+                <tr className={index % 2 === 0 ? 'theme-bg-secondary' : 'theme-bg-card'}>
+                  <td colSpan={12} className="px-4 pb-3 pt-1">
+                    <div className="space-y-1">
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs theme-text-quaternary font-medium mt-0.5 whitespace-nowrap">Test Name:</span>
+                        <div className="text-xs leading-relaxed break-words theme-text-secondary">
+                          {group.first.test_name || <span className="italic theme-text-quaternary">No test name</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs theme-text-quaternary font-medium mt-0.5 whitespace-nowrap">Description:</span>
+                        <div className="text-xs leading-relaxed break-words theme-text-secondary">
+                          {group.first.description || <span className="italic theme-text-quaternary">No description</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
-  if (error) {
-    return <ErrorDisplay error={error} onRetry={() => refreshTestRuns(true)} />;
-  }
+  /* ----- main render ----- */
+  if (loading) return <Loading className="min-h-screen" />;
+  if (error) return <ErrorDisplay error={error} onRetry={() => window.location.reload()} />;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Test Run Administration
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Manage test run metadata and configurations
-          </p>
-        </div>
-
-        {/* Controls */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-              <div className="relative">
-                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isSearching ? 'text-blue-500 animate-pulse' : 'text-gray-400'}`} />
-                <Input
-                  type="text"
-                  placeholder="Search test runs..."
-                  value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                  className={`pl-10 w-64 ${isSearching ? 'border-blue-300' : ''}`}
-                />
-                {isSearching && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Server-side filtering controls */}
-              {useServerSideFiltering && serverFilters && (
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    value={activeFilters.hostnames[0] || ''}
-                    onChange={(e) => setActiveFilters({
-                      ...activeFilters,
-                      hostnames: e.target.value ? [e.target.value] : []
-                    })}
-                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">All Hosts</option>
-                    {serverFilters.hostnames.map(hostname => (
-                      <option key={hostname} value={hostname}>{hostname}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={activeFilters.protocols[0] || ''}
-                    onChange={(e) => setActiveFilters({
-                      ...activeFilters,
-                      protocols: e.target.value ? [e.target.value] : []
-                    })}
-                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">All Protocols</option>
-                    {serverFilters.protocols.map(protocol => (
-                      <option key={protocol} value={protocol}>{protocol}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={activeFilters.drive_types[0] || ''}
-                    onChange={(e) => setActiveFilters({
-                      ...activeFilters,
-                      drive_types: e.target.value ? [e.target.value] : []
-                    })}
-                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">All Drive Types</option>
-                    {serverFilters.drive_types.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                  {hasServerFilters && (
-                    <Button
-                      onClick={clearServerFilters}
-                      variant="ghost"
-                      size="sm"
-                      className="text-gray-500 hover:text-gray-700"
-                    >
-                      Clear Filters
-                    </Button>
-                  )}
-                </div>
-              )}
-              
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <label htmlFor="fromDate" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                    From:
-                  </label>
-                  <input
-                    type="date"
-                    id="fromDate"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <label htmlFor="toDate" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                    To:
-                  </label>
-                  <input
-                    type="date"
-                    id="toDate"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                
-                {(fromDate || toDate) && (
-                  <Button
-                    onClick={() => {
-                      setFromDate('');
-                      setToDate('');
-                    }}
-                    variant="secondary"
-                    size="sm"
-                    className="text-xs"
-                  >
-                    Clear Dates
-                  </Button>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <label htmlFor="timeSeriesFilter" className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                    Filter:
-                  </label>
-                  <select
-                    id="timeSeriesFilter"
-                    value={timeSeriesFilter}
-                    onChange={(e) => setTimeSeriesFilter(e.target.value)}
-                    className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="all">All Test Runs</option>
-                    <option value="with-history">With Historical Data</option>
-                    <option value="latest-only">Latest Only (No History)</option>
-                  </select>
-                </div>
-                
-                <Button
-                  onClick={() => refreshTestRuns(true)}
-                  variant="secondary"
-                  size="sm"
-                  icon={RefreshCw}
-                  iconPosition="left"
-                  className="whitespace-nowrap"
-                >
-                  Refresh
-                </Button>
-                
-                {selectedGroupRunIds.length > 0 && (
-                  <Button
-                    onClick={() => setSelectedGroupRunIds([])}
-                    variant="outline"
-                    size="sm"
-                    className="whitespace-nowrap"
-                  >
-                    Clear Group Filter ({selectedGroupRunIds.length} runs)
-                  </Button>
-                )}
+    <div className="min-h-screen theme-bg-secondary">
+      {/* Header */}
+      <header className="theme-header shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center">
+              <Button
+                onClick={() => navigate('/')}
+                variant="ghost"
+                size="sm"
+                className="mr-4 flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Dashboard
+              </Button>
+              <Settings className="h-8 w-8 theme-text-accent mr-3" />
+              <h1 className="text-2xl font-bold theme-text-primary">
+                Test Run Administration
+              </h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center text-sm theme-text-secondary">
+                <Database className="h-4 w-4 mr-1" />
+                FIO Benchmark Analysis
               </div>
             </div>
-            
-            {selectedRuns.size > 0 && (
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* View Toggle */}
+        <div className="mb-6">
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => setView('latest')} 
+              variant={view === 'latest' ? 'primary' : 'secondary'}
+              className="flex items-center gap-2"
+            >
+              <BarChart3 className="h-4 w-4" />
+              Latest Runs ({latestRuns.length})
+            </Button>
+            <Button 
+              onClick={() => setView('history')} 
+              variant={view === 'history' ? 'primary' : 'secondary'}
+              className="flex items-center gap-2"
+            >
+              <History className="h-4 w-4" />
+              History ({groupedHistory.length})
+            </Button>
+          </div>
+        </div>
+
+        {/* Bulk Edit Controls */}
+        {view === 'latest' && selectedRuns.size > 0 && (
+          <div className="mb-4 p-4 theme-card">
+            <div className="flex items-center justify-between">
+              <span className="text-sm theme-text-secondary">
+                {selectedRuns.size} test run{selectedRuns.size !== 1 ? 's' : ''} selected
+              </span>
               <div className="flex gap-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400 py-2">
-                  {selectedRuns.size} selected
-                </span>
                 <Button
                   onClick={openBulkEditModal}
+                  variant="primary"
                   size="sm"
                   className="flex items-center gap-2"
                 >
@@ -824,940 +845,428 @@ const Admin: React.FC = () => {
                   Bulk Edit
                 </Button>
                 <Button
-                  onClick={() => setBulkDeleteModalOpen(true)}
-                  size="sm"
+                  onClick={openBulkDeleteModal}
                   variant="danger"
+                  size="sm"
                   className="flex items-center gap-2"
                 >
                   <Trash2 className="h-4 w-4" />
                   Bulk Delete
                 </Button>
               </div>
-            )}
+            </div>
           </div>
+        )}
+
+        {/* Filters */}
+        {renderFilters()}
+
+        {/* Results */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold theme-text-primary">
+              {view === 'latest' ? 'Latest Test Runs' : 'Historical Data Groups'}
+            </h2>
+            <div className="text-sm theme-text-secondary">
+              {view === 'latest' 
+                ? `Showing ${latestRuns.length} latest runs`
+                : `Showing ${groupedHistory.length} configuration groups`
+              }
+            </div>
+          </div>
+          {view === 'latest' ? renderLatestTable() : renderHistoryTable()}
         </div>
+      </main>
 
-
-        {/* Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
-            {timeSeriesFilter === 'with-history' ? (
-              /* Grouped Historical Data Table */
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Configuration
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Count
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Start Date
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      End Date
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Duration
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800">
-                  {groupedHistoricalData.map((group) => {
-                    const isGroupEditing = groupEditingState.groupKey === group.key;
-                    return (
-                      <React.Fragment key={group.key}>
-                        {/* Main group row */}
-                        <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
-                          <td className="px-4 py-3">
-                            <div className="flex flex-col gap-1">
-                              <div className="font-medium text-sm text-gray-900 dark:text-white">
-                                {isGroupEditing ? (
-                                  <div className="flex gap-2">
-                                    <Input
-                                      value={groupEditingState.fields.hostname || ''}
-                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateGroupEditField('hostname', e.target.value)}
-                                      className="flex-1"
-                                      size="sm"
-                                      placeholder="Hostname"
-                                    />
-                                    <span className="text-gray-500 py-1">•</span>
-                                    <Input
-                                      value={groupEditingState.fields.protocol || ''}
-                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateGroupEditField('protocol', e.target.value)}
-                                      className="flex-1"
-                                      size="sm"
-                                      placeholder="Protocol"
-                                    />
-                                  </div>
-                                ) : (
-                                  `${group.hostname} • ${group.protocol}`
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-600 dark:text-gray-400">
-                                {isGroupEditing ? (
-                                  <div className="flex gap-2">
-                                    <Input
-                                      value={groupEditingState.fields.drive_model || ''}
-                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateGroupEditField('drive_model', e.target.value)}
-                                      className="flex-1"
-                                      size="sm"
-                                      placeholder="Drive model"
-                                    />
-                                    <span className="text-gray-500 py-1">(</span>
-                                    <Input
-                                      value={groupEditingState.fields.drive_type || ''}
-                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateGroupEditField('drive_type', e.target.value)}
-                                      className="flex-1"
-                                      size="sm"
-                                      placeholder="Drive type"
-                                    />
-                                    <span className="text-gray-500 py-1">)</span>
-                                  </div>
-                                ) : (
-                                  `${group.drive_model} (${group.drive_type})`
-                                )}
-                              </div>
-                              <div className="flex gap-2 flex-wrap">
-                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                                  {group.test_pattern}
-                                </span>
-                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
-                                  {group.block_size}
-                                </span>
-                                <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                  QD{group.queue_depth}
-                                </span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => handleGroupClick(group)}
-                              className="inline-flex items-center px-3 py-1 text-sm font-medium rounded-md bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors duration-150 cursor-pointer"
-                              title="Click to view individual test runs"
-                            >
-                              {group.count} runs
-                            </button>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm text-gray-900 dark:text-white">
-                              {group.startDate.toISOString().split('T')[0]}
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {group.startDate.toLocaleTimeString('en-US', { hour12: false, timeStyle: 'short' })}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm text-gray-900 dark:text-white">
-                              {group.endDate.toISOString().split('T')[0]}
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {group.endDate.toLocaleTimeString('en-US', { hour12: false, timeStyle: 'short' })}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm text-gray-900 dark:text-white">
-                              {Math.ceil((group.endDate.getTime() - group.startDate.getTime()) / (1000 * 60 * 60 * 24))} days
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {((group.endDate.getTime() - group.startDate.getTime()) / (1000 * 60 * 60)).toFixed(1)} hours
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
-                              {isGroupEditing ? (
-                                <>
-                                  <Button onClick={saveGroupEdit} size="sm" variant="primary">
-                                    <Check className="h-3 w-3" />
-                                  </Button>
-                                  <Button onClick={cancelGroupEdit} size="sm" variant="secondary">
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                </>
-                              ) : (
-                                <>
-                                  <Button onClick={() => startGroupEdit(group)} size="sm" variant="secondary">
-                                    <Edit2 className="h-3 w-3" />
-                                  </Button>
-                                  <Button 
-                                    onClick={() => openHistoryEditModal(group)} 
-                                    size="sm" 
-                                    variant="outline"
-                                    title="Edit all historical runs in this group"
-                                  >
-                                    History Line Editable
-                                  </Button>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                        
-                        {/* Description row for group */}
-                        <tr className="bg-gray-50/50 dark:bg-gray-700/30 transition-colors duration-150">
-                          <td colSpan={6} className="px-4 pb-3 pt-1">
-                            {isGroupEditing ? (
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">Description:</span>
-                                <Input
-                                  value={groupEditingState.fields.description || ''}
-                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateGroupEditField('description', e.target.value)}
-                                  className="flex-1"
-                                  size="sm"
-                                  placeholder="Test description"
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex items-start gap-2">
-                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5 whitespace-nowrap">Description:</span>
-                                <div className="text-xs leading-relaxed break-words text-gray-600 dark:text-gray-400">
-                                  {group.firstRun.test_name || <span className="italic text-gray-400">No description</span>}
-                                </div>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              /* Regular Detailed Table */
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th className="px-4 py-3 text-left">
-                      <input
-                        type="checkbox"
-                        checked={selectedRuns.size === sortedRuns.length && sortedRuns.length > 0}
-                        onChange={handleSelectAll}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('id')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        ID {sortField === 'id' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('timestamp')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        Timestamp {sortField === 'timestamp' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('hostname')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        Hostname {sortField === 'hostname' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('protocol')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        Protocol {sortField === 'protocol' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('drive_type')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        Drive Type {sortField === 'drive_type' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('drive_model')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        Drive Model {sortField === 'drive_model' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('read_write_pattern')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        Test Pattern {sortField === 'read_write_pattern' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('block_size')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        BSz {sortField === 'block_size' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('test_size')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        TSz {sortField === 'test_size' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('duration')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        Dur {sortField === 'duration' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-auto min-w-24">
-                      Test Config
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      <button onClick={() => handleSort('is_latest')} className="hover:text-gray-700 dark:hover:text-gray-300">
-                        Status {sortField === 'is_latest' && (sortDirection === 'asc' ? '↑' : '↓')}
-                      </button>
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800">
-                  {displayedRuns.map((run) => {
-                    const isEditing = editingState.testRunId === run.id;
-                    const isSelected = selectedRuns.has(run.id);
-                    return (
-                      <React.Fragment key={run.id}>
-                        {/* Main data row */}
-                        <tr 
-                          className={`
-                            ${isSelected 
-                              ? 'bg-blue-50 dark:bg-blue-900/20' 
-                              : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-                            }
-                            transition-colors duration-150
-                          `}
-                        >
-                        <td className="px-4 py-3">
-                          <div className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={selectedRuns.has(run.id)}
-                              onChange={() => handleSelectRun(run.id)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                          </div>
-                        </td>
-                        <td className={`px-2 py-2 text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100 font-medium' : 'text-gray-900 dark:text-white'}`}>
-                          {run.id}
-                        </td>
-                        <td className={`px-4 py-3 text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'}`}>
-                          <div className="flex flex-col min-w-20 max-w-28">
-                            <span className="font-medium font-mono text-xs whitespace-nowrap">{new Date(run.timestamp).toISOString().split('T')[0]}</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{new Date(run.timestamp).toLocaleTimeString('en-US', { hour12: false, timeStyle: 'short' })}</span>
-                          </div>
-                        </td>
-                        <td className="px-2 py-2">
-                          {isEditing ? (
-                            <Input
-                              value={editingState.fields.hostname || ''}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('hostname', e.target.value)}
-                              className="w-full"
-                              size="sm"
-                            />
-                          ) : (
-                            <div className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'} min-w-32`}>
-                              <div className="whitespace-nowrap" title={run.hostname}>
-                                {run.hostname || '-'}
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {isEditing ? (
-                            <Input
-                              value={editingState.fields.protocol || ''}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('protocol', e.target.value)}
-                              className="w-full"
-                              size="sm"
-                            />
-                          ) : (
-                            <div className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'} max-w-20`}>
-                              <div className="truncate" title={run.protocol}>
-                                {run.protocol || '-'}
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {isEditing ? (
-                            <Input
-                              value={editingState.fields.drive_type || ''}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('drive_type', e.target.value)}
-                              className="w-full"
-                              size="sm"
-                            />
-                          ) : (
-                            <div className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'} max-w-20`}>
-                              <div className="truncate" title={run.drive_type}>
-                                {run.drive_type || '-'}
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {isEditing ? (
-                            <Input
-                              value={editingState.fields.drive_model || ''}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('drive_model', e.target.value)}
-                              className="w-full"
-                              size="sm"
-                            />
-                          ) : (
-                            <div className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'} max-w-28`}>
-                              <div className="truncate" title={run.drive_model}>
-                                {run.drive_model || '-'}
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {run.read_write_pattern ? (
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                              run.read_write_pattern.includes('read') 
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                : 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                            }`}>
-                              {run.read_write_pattern}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-2 py-2">
-                          <span className={`text-sm font-mono ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-600 dark:text-gray-300'}`}>
-                            {run.block_size || '-'}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2">
-                          <span className={`text-sm font-mono ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-600 dark:text-gray-300'}`}>
-                            {run.test_size || '-'}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2">
-                          <span className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-600 dark:text-gray-300'}`}>
-                            {run.duration ? `${run.duration}s` : '-'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="grid grid-cols-2 gap-2 w-fit">
-                            {run.queue_depth && (
-                              <div className="flex items-center justify-center px-0 py-0 text-[9px] font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 w-10 h-5">
-                                QD{run.queue_depth}
-                              </div>
-                            )}
-                            {run.direct !== undefined && (
-                              <div className="flex items-center justify-center px-0 py-0 text-[9px] font-medium rounded bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 w-10 h-5">
-                                DIR{run.direct}
-                              </div>
-                            )}
-                            {run.sync !== undefined && (
-                              <div className="flex items-center justify-center px-0 py-0 text-[9px] font-medium rounded bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200 w-10 h-5">
-                                SYN{run.sync}
-                              </div>
-                            )}
-                            {run.num_jobs && (
-                              <div className="flex items-center justify-center px-0 py-0 text-[9px] font-medium rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 w-10 h-5">
-                                NJ{run.num_jobs}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          {run.is_latest === 1 ? (
-                            <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                              Latest
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
-                              Historical
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 relative">
-                          {isEditing ? (
-                            <div className="flex gap-1">
-                              <Button onClick={saveEdit} size="sm" variant="primary">
-                                <Check className="h-3 w-3" />
-                              </Button>
-                              <Button onClick={cancelEdit} size="sm" variant="secondary">
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button onClick={() => startEdit(run)} size="sm" variant="secondary">
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </td>
-                        </tr>
-                        
-                        {/* Description row spanning all columns */}
-                        <tr className={`
-                          ${isSelected 
-                            ? 'bg-blue-50 dark:bg-blue-900/20' 
-                            : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-                          }
-                          transition-colors duration-150
-                        `}>
-                          <td colSpan={15} className="px-4 pb-3 pt-1">
-                            {isEditing ? (
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">Test Name:</span>
-                                  <Input
-                                    value={editingState.fields.test_name || ''}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('test_name', e.target.value)}
-                                    className="flex-1"
-                                    size="sm"
-                                    placeholder="Test name"
-                                  />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">Description:</span>
-                                  <Input
-                                    value={editingState.fields.description || ''}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('description', e.target.value)}
-                                    className="flex-1"
-                                    size="sm"
-                                    placeholder="Test description"
-                                  />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-1">
-                                <div className="flex items-start gap-2">
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5 whitespace-nowrap">Test Name:</span>
-                                  <div className={`text-xs leading-relaxed break-words ${isSelected ? 'text-blue-800 dark:text-blue-200' : 'text-gray-600 dark:text-gray-400'}`}>
-                                    {run.test_name || <span className="italic text-gray-400">No test name</span>}
-                                  </div>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5 whitespace-nowrap">Description:</span>
-                                  <div className={`text-xs leading-relaxed break-words ${isSelected ? 'text-blue-800 dark:text-blue-200' : 'text-gray-600 dark:text-gray-400'}`}>
-                                    {run.description || <span className="italic text-gray-400">No description</span>}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
+      {/* Bulk Edit Modal */}
+      <Modal
+        isOpen={bulkEditState.isOpen}
+        onClose={closeBulkEditModal}
+        title="Bulk Edit Test Runs"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm theme-text-secondary">
+            Update {selectedRuns.size} selected test runs. Check the fields you want to update with the common values.
+          </p>
+          
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="hostname-enabled"
+                  checked={bulkEditState.enabledFields.hostname}
+                  onChange={() => toggleFieldEnabled('hostname')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="hostname-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Hostname
+                </label>
+              </div>
+              <input
+                type="text"
+                value={bulkEditState.fields.hostname || ''}
+                onChange={(e) => updateBulkEditField('hostname', e.target.value)}
+                placeholder="Common hostname value"
+                disabled={!bulkEditState.enabledFields.hostname}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.hostname ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="protocol-enabled"
+                  checked={bulkEditState.enabledFields.protocol}
+                  onChange={() => toggleFieldEnabled('protocol')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="protocol-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Protocol
+                </label>
+              </div>
+              <input
+                type="text"
+                value={bulkEditState.fields.protocol || ''}
+                onChange={(e) => updateBulkEditField('protocol', e.target.value)}
+                placeholder="Common protocol value"
+                disabled={!bulkEditState.enabledFields.protocol}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.protocol ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="description-enabled"
+                  checked={bulkEditState.enabledFields.description}
+                  onChange={() => toggleFieldEnabled('description')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="description-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Description
+                </label>
+              </div>
+              <input
+                type="text"
+                value={bulkEditState.fields.description || ''}
+                onChange={(e) => updateBulkEditField('description', e.target.value)}
+                placeholder="Common description value"
+                disabled={!bulkEditState.enabledFields.description}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.description ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="test_name-enabled"
+                  checked={bulkEditState.enabledFields.test_name}
+                  onChange={() => toggleFieldEnabled('test_name')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="test_name-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Test Name
+                </label>
+              </div>
+              <input
+                type="text"
+                value={bulkEditState.fields.test_name || ''}
+                onChange={(e) => updateBulkEditField('test_name', e.target.value)}
+                placeholder="Common test name value"
+                disabled={!bulkEditState.enabledFields.test_name}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.test_name ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="drive_type-enabled"
+                  checked={bulkEditState.enabledFields.drive_type}
+                  onChange={() => toggleFieldEnabled('drive_type')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="drive_type-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Drive Type
+                </label>
+              </div>
+              <input
+                type="text"
+                value={bulkEditState.fields.drive_type || ''}
+                onChange={(e) => updateBulkEditField('drive_type', e.target.value)}
+                placeholder="Common drive type value"
+                disabled={!bulkEditState.enabledFields.drive_type}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.drive_type ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="drive_model-enabled"
+                  checked={bulkEditState.enabledFields.drive_model}
+                  onChange={() => toggleFieldEnabled('drive_model')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="drive_model-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Drive Model
+                </label>
+              </div>
+              <input
+                type="text"
+                value={bulkEditState.fields.drive_model || ''}
+                onChange={(e) => updateBulkEditField('drive_model', e.target.value)}
+                placeholder="Common drive model value"
+                disabled={!bulkEditState.enabledFields.drive_model}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.drive_model ? 'opacity-50' : ''}`}
+              />
+            </div>
           </div>
           
-          {/* Show More Results Button */}
-          {hasMoreResults && (
-            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-t">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Showing {displayedRuns.length} of {sortedRuns.length} results (limited for performance)
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => setShowAllResults(true)}
-                    variant="secondary"
-                    size="sm"
-                    className="text-xs"
-                  >
-                    Show All {sortedRuns.length} Results
-                  </Button>
-                  <Button
-                    onClick={() => setDisplayLimit(displayLimit + 500)}
-                    variant="primary"
-                    size="sm"
-                    className="text-xs"
-                  >
-                    Show 500 More
-                  </Button>
-                </div>
+          <div className="flex gap-3 pt-4">
+            <Button onClick={handleBulkEdit} className="flex-1">
+              Update {selectedRuns.size} Runs
+            </Button>
+            <Button 
+              onClick={closeBulkEditModal} 
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <Modal
+        isOpen={bulkDeleteState.isOpen}
+        onClose={closeBulkDeleteModal}
+        title="Confirm Bulk Delete"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 dark:bg-red-900 rounded-full">
+            <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+          </div>
+          
+          <div className="text-center">
+            <h3 className="text-lg font-medium theme-text-primary mb-2">
+              Delete {selectedRuns.size} Test Runs
+            </h3>
+            <p className="text-sm theme-text-secondary">
+              Are you sure you want to delete these {selectedRuns.size} test runs? This action cannot be undone.
+              All associated performance metrics and data will be permanently removed.
+            </p>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button 
+              onClick={handleBulkDelete} 
+              variant="danger"
+              className="flex-1"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete {selectedRuns.size} Runs
+            </Button>
+            <Button 
+              onClick={closeBulkDeleteModal} 
+              variant="secondary"
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* History Edit Modal */}
+      <Modal
+        isOpen={historyEditState.isOpen}
+        onClose={closeHistoryEditModal}
+        title="Edit History Line"
+        size="lg"
+      >
+        <div className="space-y-4">
+          {historyEditState.group && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                Editing {historyEditState.group.count} Historical Runs
+              </h4>
+              <div className="text-sm text-blue-800 dark:text-blue-200">
+                <p><strong>Configuration:</strong> {historyEditState.group.first.hostname} • {historyEditState.group.first.protocol}</p>
+                <p><strong>Drive:</strong> {historyEditState.group.first.drive_model} ({historyEditState.group.first.drive_type})</p>
+                <p><strong>Test Pattern:</strong> {historyEditState.group.first.read_write_pattern} • Block Size: {historyEditState.group.first.block_size} • Queue Depth: {historyEditState.group.first.queue_depth}</p>
+                <p><strong>Date Range:</strong> {new Date(historyEditState.group.first.timestamp).toISOString().split('T')[0]} to {new Date(historyEditState.group.last.timestamp).toISOString().split('T')[0]}</p>
               </div>
             </div>
           )}
+          
+          <p className="text-sm theme-text-secondary">
+            Update all {historyEditState.group?.count || 0} historical test runs in this group. Check the fields you want to update with the common values.
+          </p>
+          
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="history-hostname-enabled"
+                  checked={historyEditState.enabledFields.hostname}
+                  onChange={() => toggleHistoryFieldEnabled('hostname')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="history-hostname-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Hostname
+                </label>
+              </div>
+              <input
+                type="text"
+                value={historyEditState.fields.hostname || ''}
+                onChange={(e) => updateHistoryEditField('hostname', e.target.value)}
+                placeholder="Common hostname value"
+                disabled={!historyEditState.enabledFields.hostname}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!historyEditState.enabledFields.hostname ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="history-protocol-enabled"
+                  checked={historyEditState.enabledFields.protocol}
+                  onChange={() => toggleHistoryFieldEnabled('protocol')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="history-protocol-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Protocol
+                </label>
+              </div>
+              <input
+                type="text"
+                value={historyEditState.fields.protocol || ''}
+                onChange={(e) => updateHistoryEditField('protocol', e.target.value)}
+                placeholder="Common protocol value"
+                disabled={!historyEditState.enabledFields.protocol}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!historyEditState.enabledFields.protocol ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="history-description-enabled"
+                  checked={historyEditState.enabledFields.description}
+                  onChange={() => toggleHistoryFieldEnabled('description')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="history-description-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Description
+                </label>
+              </div>
+              <input
+                type="text"
+                value={historyEditState.fields.description || ''}
+                onChange={(e) => updateHistoryEditField('description', e.target.value)}
+                placeholder="Common description value"
+                disabled={!historyEditState.enabledFields.description}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!historyEditState.enabledFields.description ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="history-test_name-enabled"
+                  checked={historyEditState.enabledFields.test_name}
+                  onChange={() => toggleHistoryFieldEnabled('test_name')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="history-test_name-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Test Name
+                </label>
+              </div>
+              <input
+                type="text"
+                value={historyEditState.fields.test_name || ''}
+                onChange={(e) => updateHistoryEditField('test_name', e.target.value)}
+                placeholder="Common test name value"
+                disabled={!historyEditState.enabledFields.test_name}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!historyEditState.enabledFields.test_name ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="history-drive_type-enabled"
+                  checked={historyEditState.enabledFields.drive_type}
+                  onChange={() => toggleHistoryFieldEnabled('drive_type')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="history-drive_type-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Drive Type
+                </label>
+              </div>
+              <input
+                type="text"
+                value={historyEditState.fields.drive_type || ''}
+                onChange={(e) => updateHistoryEditField('drive_type', e.target.value)}
+                placeholder="Common drive type value"
+                disabled={!historyEditState.enabledFields.drive_type}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!historyEditState.enabledFields.drive_type ? 'opacity-50' : ''}`}
+              />
+            </div>
+            
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="history-drive_model-enabled"
+                  checked={historyEditState.enabledFields.drive_model}
+                  onChange={() => toggleHistoryFieldEnabled('drive_model')}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="history-drive_model-enabled" className="text-sm font-medium theme-text-primary">
+                  Update Drive Model
+                </label>
+              </div>
+              <input
+                type="text"
+                value={historyEditState.fields.drive_model || ''}
+                onChange={(e) => updateHistoryEditField('drive_model', e.target.value)}
+                placeholder="Common drive model value"
+                disabled={!historyEditState.enabledFields.drive_model}
+                className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!historyEditState.enabledFields.drive_model ? 'opacity-50' : ''}`}
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button onClick={handleHistoryEdit} className="flex-1">
+              Update {historyEditState.group?.count || 0} Historical Runs
+            </Button>
+            <Button 
+              onClick={closeHistoryEditModal} 
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+          </div>
         </div>
-
-        {/* Results summary */}
-        <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-          Showing {displayedRuns.length} of {sortedRuns.length} filtered results ({testRuns.length} total)
-          {selectedGroupRunIds.length > 0 ? ' (filtered from group)' :
-           timeSeriesFilter === 'with-history' ? ' (with historical data)' : 
-           timeSeriesFilter === 'latest-only' ? ' (latest only)' : 
-           ' (all data)'}
-        </div>
-
-        {/* Bulk Edit Modal */}
-        <Modal
-          isOpen={bulkEditModalOpen}
-          onClose={() => setBulkEditModalOpen(false)}
-          title="Bulk Edit Test Runs"
-          size="md"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Update {selectedRuns.size} selected test runs. Check the fields you want to update with the common values.
-            </p>
-            
-            <div className="space-y-3">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="hostname-enabled"
-                    checked={bulkEditEnabled.hostname}
-                    onChange={(e) => handleFieldEnabledChange('hostname', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="hostname-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Hostname
-                  </label>
-                </div>
-                <Input
-                  value={bulkEditFields.hostname || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateBulkEditField('hostname', e.target.value)}
-                  placeholder="Common hostname value"
-                  disabled={!bulkEditEnabled.hostname}
-                  className={`w-full ${!bulkEditEnabled.hostname ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="protocol-enabled"
-                    checked={bulkEditEnabled.protocol}
-                    onChange={(e) => handleFieldEnabledChange('protocol', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="protocol-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Protocol
-                  </label>
-                </div>
-                <Input
-                  value={bulkEditFields.protocol || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateBulkEditField('protocol', e.target.value)}
-                  placeholder="Common protocol value"
-                  disabled={!bulkEditEnabled.protocol}
-                  className={`w-full ${!bulkEditEnabled.protocol ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="description-enabled"
-                    checked={bulkEditEnabled.description}
-                    onChange={(e) => handleFieldEnabledChange('description', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="description-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Description
-                  </label>
-                </div>
-                <Input
-                  value={bulkEditFields.description || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateBulkEditField('description', e.target.value)}
-                  placeholder="Common description value"
-                  disabled={!bulkEditEnabled.description}
-                  className={`w-full ${!bulkEditEnabled.description ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="test_name-enabled"
-                    checked={bulkEditEnabled.test_name}
-                    onChange={(e) => handleFieldEnabledChange('test_name', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="test_name-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Test Name
-                  </label>
-                </div>
-                <Input
-                  value={bulkEditFields.test_name || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateBulkEditField('test_name', e.target.value)}
-                  placeholder="Common test name value"
-                  disabled={!bulkEditEnabled.test_name}
-                  className={`w-full ${!bulkEditEnabled.test_name ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="drive_type-enabled"
-                    checked={bulkEditEnabled.drive_type}
-                    onChange={(e) => handleFieldEnabledChange('drive_type', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="drive_type-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Drive Type
-                  </label>
-                </div>
-                <Input
-                  value={bulkEditFields.drive_type || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateBulkEditField('drive_type', e.target.value)}
-                  placeholder="Common drive type value"
-                  disabled={!bulkEditEnabled.drive_type}
-                  className={`w-full ${!bulkEditEnabled.drive_type ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="drive_model-enabled"
-                    checked={bulkEditEnabled.drive_model}
-                    onChange={(e) => handleFieldEnabledChange('drive_model', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="drive_model-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Drive Model
-                  </label>
-                </div>
-                <Input
-                  value={bulkEditFields.drive_model || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateBulkEditField('drive_model', e.target.value)}
-                  placeholder="Common drive model value"
-                  disabled={!bulkEditEnabled.drive_model}
-                  className={`w-full ${!bulkEditEnabled.drive_model ? 'opacity-50' : ''}`}
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-3 pt-4">
-              <Button onClick={handleBulkEdit} className="flex-1">
-                Update {selectedRuns.size} Runs
-              </Button>
-              <Button 
-                onClick={() => setBulkEditModalOpen(false)} 
-                variant="secondary"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Modal>
-
-        {/* Bulk Delete Confirmation Modal */}
-        <Modal
-          isOpen={bulkDeleteModalOpen}
-          onClose={() => setBulkDeleteModalOpen(false)}
-          title="Confirm Bulk Delete"
-          size="md"
-        >
-          <div className="space-y-4">
-            <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 dark:bg-red-900 rounded-full">
-              <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-            
-            <div className="text-center">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                Delete {selectedRuns.size} Test Runs
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Are you sure you want to delete these {selectedRuns.size} test runs? This action cannot be undone.
-                All associated performance metrics and data will be permanently removed.
-              </p>
-            </div>
-            
-            <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleBulkDelete} 
-                variant="danger"
-                className="flex-1"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete {selectedRuns.size} Runs
-              </Button>
-              <Button 
-                onClick={() => setBulkDeleteModalOpen(false)} 
-                variant="secondary"
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Modal>
-
-        {/* History Edit Modal */}
-        <Modal
-          isOpen={historyEditModalOpen}
-          onClose={() => setHistoryEditModalOpen(false)}
-          title="Edit History Line"
-          size="lg"
-        >
-          <div className="space-y-4">
-            {selectedHistoryGroup && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                  Editing {selectedHistoryGroup.count} Historical Runs
-                </h4>
-                <div className="text-sm text-blue-800 dark:text-blue-200">
-                  <p><strong>Configuration:</strong> {selectedHistoryGroup.hostname} • {selectedHistoryGroup.protocol}</p>
-                  <p><strong>Drive:</strong> {selectedHistoryGroup.drive_model} ({selectedHistoryGroup.drive_type})</p>
-                  <p><strong>Test Pattern:</strong> {selectedHistoryGroup.test_pattern} • Block Size: {selectedHistoryGroup.block_size} • Queue Depth: {selectedHistoryGroup.queue_depth}</p>
-                  <p><strong>Date Range:</strong> {selectedHistoryGroup.startDate.toISOString().split('T')[0]} to {selectedHistoryGroup.endDate.toISOString().split('T')[0]}</p>
-                </div>
-              </div>
-            )}
-            
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Update all {selectedHistoryGroup?.count || 0} historical test runs in this group. Check the fields you want to update with the common values.
-            </p>
-            
-            <div className="space-y-3">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="history-hostname-enabled"
-                    checked={historyEditEnabled.hostname}
-                    onChange={(e) => handleHistoryFieldEnabledChange('hostname', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="history-hostname-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Hostname
-                  </label>
-                </div>
-                <Input
-                  value={historyEditFields.hostname || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('hostname', e.target.value)}
-                  placeholder="Common hostname value"
-                  disabled={!historyEditEnabled.hostname}
-                  className={`w-full ${!historyEditEnabled.hostname ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="history-protocol-enabled"
-                    checked={historyEditEnabled.protocol}
-                    onChange={(e) => handleHistoryFieldEnabledChange('protocol', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="history-protocol-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Protocol
-                  </label>
-                </div>
-                <Input
-                  value={historyEditFields.protocol || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('protocol', e.target.value)}
-                  placeholder="Common protocol value"
-                  disabled={!historyEditEnabled.protocol}
-                  className={`w-full ${!historyEditEnabled.protocol ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="history-description-enabled"
-                    checked={historyEditEnabled.description}
-                    onChange={(e) => handleHistoryFieldEnabledChange('description', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="history-description-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Description
-                  </label>
-                </div>
-                <Input
-                  value={historyEditFields.description || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('description', e.target.value)}
-                  placeholder="Common description value"
-                  disabled={!historyEditEnabled.description}
-                  className={`w-full ${!historyEditEnabled.description ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="history-test_name-enabled"
-                    checked={historyEditEnabled.test_name}
-                    onChange={(e) => handleHistoryFieldEnabledChange('test_name', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="history-test_name-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Test Name
-                  </label>
-                </div>
-                <Input
-                  value={historyEditFields.test_name || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('test_name', e.target.value)}
-                  placeholder="Common test name value"
-                  disabled={!historyEditEnabled.test_name}
-                  className={`w-full ${!historyEditEnabled.test_name ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="history-drive_type-enabled"
-                    checked={historyEditEnabled.drive_type}
-                    onChange={(e) => handleHistoryFieldEnabledChange('drive_type', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="history-drive_type-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Drive Type
-                  </label>
-                </div>
-                <Input
-                  value={historyEditFields.drive_type || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('drive_type', e.target.value)}
-                  placeholder="Common drive type value"
-                  disabled={!historyEditEnabled.drive_type}
-                  className={`w-full ${!historyEditEnabled.drive_type ? 'opacity-50' : ''}`}
-                />
-              </div>
-              
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    id="history-drive_model-enabled"
-                    checked={historyEditEnabled.drive_model}
-                    onChange={(e) => handleHistoryFieldEnabledChange('drive_model', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="history-drive_model-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Update Drive Model
-                  </label>
-                </div>
-                <Input
-                  value={historyEditFields.drive_model || ''}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('drive_model', e.target.value)}
-                  placeholder="Common drive model value"
-                  disabled={!historyEditEnabled.drive_model}
-                  className={`w-full ${!historyEditEnabled.drive_model ? 'opacity-50' : ''}`}
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-3 pt-4">
-              <Button onClick={handleHistoryEdit} className="flex-1">
-                Update {selectedHistoryGroup?.count || 0} Historical Runs
-              </Button>
-              <Button 
-                onClick={() => setHistoryEditModalOpen(false)} 
-                variant="secondary"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      </div>
+      </Modal>
     </div>
   );
 };
 
-export default Admin;
+export default Admin; 
