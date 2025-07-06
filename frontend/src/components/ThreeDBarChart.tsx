@@ -28,14 +28,20 @@ interface ThreeDBarChartProps {
   onToggleMaximize?: () => void;
 }
 
+// Helper function to convert to number for sorting
+const toNumber = (value: string | number): number => {
+  if (typeof value === 'number') return value;
+  const num = parseFloat(value);
+  return isNaN(num) ? 0 : num;
+};
 
 export const ThreeDBarChart: React.FC<ThreeDBarChartProps> = ({ data, initialMetrics = ['iops'], isMaximized = false, onToggleMaximize }) => {
   const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>(initialMetrics);
   const [hovered, setHovered] = useState<{x: number, y: number, metric: MetricKey} | null>(null);
 
-  // Unique sorted axes
-  const xVals = Array.from(new Set(data.map(d => d.blocksize))).sort((a, b) => (a as any) - (b as any));
-  const yVals = Array.from(new Set(data.map(d => d.queuedepth))).sort((a, b) => (a as any) - (b as any));
+  // Unique sorted axes with proper numeric sorting
+  const xVals = Array.from(new Set(data.map(d => d.blocksize))).sort((a, b) => toNumber(a) - toNumber(b));
+  const yVals = Array.from(new Set(data.map(d => d.queuedepth))).sort((a, b) => toNumber(a) - toNumber(b));
 
   // Bar width/offset for multi-metric - thinner bars with more spacing
   const barWidth = 0.3;
@@ -281,12 +287,19 @@ export const ThreeDBarChart: React.FC<ThreeDBarChartProps> = ({ data, initialMet
           {data.map((d, i) => (
             selectedMetrics.map((metric, mIdx) => {
               const value = d[metric];
-              if (value == null) return null;
+              if (value == null || value === 0) return null;
+              
               // Normalize height for demo (should use max per metric)
               const max = Math.max(...data.map(dd => dd[metric] ?? 0));
               const height = max ? (value / max) * 3 : 0.1;
+              
+              // Use proper index calculation with type conversion
               const x = xVals.indexOf(d.blocksize) + metricOffset(mIdx);
               const y = yVals.indexOf(d.queuedepth);
+              
+              // Skip if position is invalid
+              if (x < 0 || y < 0) return null;
+              
               return (
                 <mesh
                   key={`${i}-${metric}`}
@@ -347,4 +360,4 @@ export const ThreeDBarChart: React.FC<ThreeDBarChartProps> = ({ data, initialMet
   );
 };
 
-export default ThreeDBarChart; 
+export default ThreeDBarChart;
