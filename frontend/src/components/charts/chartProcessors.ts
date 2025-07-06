@@ -3,6 +3,7 @@ import type { ChartTemplate, PerformanceData } from '../../types';
 import { sortBlockSizes } from '../../utils/sorting';
 import { formatBlockSize } from '../../services/data/formatters';
 import type { SortOption, GroupOption } from './ChartControls';
+import { chartConfig } from '../../services/config';
 
 export interface ProcessorOptions {
     sortBy: SortOption;
@@ -236,6 +237,30 @@ export const applySortingAndGrouping = (
     return sortedData;
 };
 
+// Enhanced color assignment for better grouping visualization
+const getColorsForGrouping = (groupCount: number, metricCount: number = 3): string[] => {
+    const colors = chartConfig.colors.primary;
+    const qualitativeColors = chartConfig.colors.schemes.qualitative;
+    
+    // Use qualitative colors for better distinction between groups
+    const groupColors = qualitativeColors.slice(0, groupCount);
+    
+    // For each group, assign colors for different metrics
+    const result: string[] = [];
+    groupColors.forEach((groupColor, groupIndex) => {
+        // Use different shades for different metrics within the same group
+        const metricColors = [
+            groupColor, // Primary color for first metric
+            colors[(groupIndex * 2 + 1) % colors.length], // Different color for second metric
+            colors[(groupIndex * 2 + 2) % colors.length], // Different color for third metric
+        ];
+        
+        result.push(...metricColors.slice(0, metricCount));
+    });
+    
+    return result;
+};
+
 // Process data for performance overview template
 export const processPerformanceOverview = (
     data: PerformanceData[],
@@ -317,11 +342,12 @@ export const processPerformanceOverview = (
     const labels = Array.from(allLabels);
 
     const datasets: ChartDataset[] = [];
+    const groupColors = getColorsForGrouping(groups.size, 3);
     let colorIndex = 0;
 
     // Create datasets for each group and metric
     Array.from(groups.entries()).forEach(([groupName, groupData]) => {
-        const groupColor = colors[colorIndex % colors.length];
+        const groupColor = groupColors[colorIndex];
         
         // IOPS dataset for this group
         const iopsData: number[] = [];
@@ -354,8 +380,8 @@ export const processPerformanceOverview = (
         datasets.push({
             label: `${groupName} - Avg Latency (ms)`,
             data: latencyData,
-            backgroundColor: colors[(colorIndex + 1) % colors.length],
-            borderColor: colors[(colorIndex + 1) % colors.length],
+            backgroundColor: groupColors[colorIndex + 1],
+            borderColor: groupColors[colorIndex + 1],
             borderWidth: 1,
             yAxisID: "y1",
             originalData: latencyOriginal as unknown as PerformanceData[],
@@ -373,8 +399,8 @@ export const processPerformanceOverview = (
         datasets.push({
             label: `${groupName} - Bandwidth (MB/s)`,
             data: bandwidthData,
-            backgroundColor: colors[(colorIndex + 2) % colors.length],
-            borderColor: colors[(colorIndex + 2) % colors.length],
+            backgroundColor: groupColors[colorIndex + 2],
+            borderColor: groupColors[colorIndex + 2],
             borderWidth: 1,
             yAxisID: "y2",
             originalData: bandwidthOriginal as unknown as PerformanceData[],
