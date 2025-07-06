@@ -131,12 +131,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(hostname),
                                     label: `${hostname} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.hostnames.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.hostnames
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
                                 : filters.hostnames.map((hostname) => ({
                                     value: String(hostname),
                                     label: String(hostname),
@@ -184,12 +186,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(protocol),
                                     label: `${protocol} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.protocols.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.protocols
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
                                 : filters.protocols.map((protocol) => ({
                                     value: String(protocol),
                                     label: String(protocol),
@@ -238,12 +242,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(type),
                                     label: `${type} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.drive_types.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.drive_types
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
                                 : filters.drive_types.map((type) => ({
                                     value: String(type),
                                     label: String(type),
@@ -291,12 +297,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(model),
                                     label: `${model} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.drive_models.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.drive_models
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
                                 : filters.drive_models.map((model) => ({
                                     value: String(model),
                                     label: String(model),
@@ -345,12 +353,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(pattern),
                                     label: `${pattern.replace(/_/g, " ").toUpperCase()} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.patterns.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label.replace(/_/g, " ").toUpperCase()} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.patterns
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label.replace(/_/g, " ").toUpperCase()} (${option.count})`,
+                                    }))
                                 : filters.patterns.map((pattern) => ({
                                     value: String(pattern),
                                     label: pattern.replace(/_/g, " ").toUpperCase(),
@@ -398,12 +408,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(size),
                                     label: `${size} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.block_sizes.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.block_sizes
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
                                 : sortBlockSizes(filters.block_sizes).map((size) => ({
                                     value: String(size),
                                     label: String(size),
@@ -452,12 +464,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(sync),
                                     label: `${sync} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.syncs.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.syncs
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
                                 : filters.syncs.map((sync) => ({
                                     value: String(sync),
                                     label: sync.toString(),
@@ -505,12 +519,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(qd),
                                     label: `${qd} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.queue_depths.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.queue_depths
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
                                 : filters.queue_depths.map((qd) => ({
                                     value: String(qd),
                                     label: qd.toString(),
@@ -559,12 +575,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(direct),
                                     label: `${direct} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.directs.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.directs
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
                                 : filters.directs.map((direct) => ({
                                     value: String(direct),
                                     label: direct.toString(),
@@ -607,21 +625,23 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     }}
                     options={
                         openDropdown === 'num_jobs'
-                            ? filters.num_jobs.map((jobs) => {
-                                const count = calculateAccurateCount('num_jobs', jobs);
+                            ? filters.num_jobs.map((numJob) => {
+                                const count = calculateAccurateCount('num_jobs', numJob);
                                 return {
-                                    value: String(jobs),
-                                    label: `${jobs} (${count})`,
+                                    value: String(numJob),
+                                    label: `${numJob} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.num_jobs.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
-                                : filters.num_jobs.map((jobs) => ({
-                                    value: String(jobs),
-                                    label: jobs.toString(),
+                                ? dynamicFilterOptions.num_jobs
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
+                                : filters.num_jobs.map((numJob) => ({
+                                    value: String(numJob),
+                                    label: numJob.toString(),
                                 }))
                     }
                     value={activeFilters.num_jobs.map((jobs) => ({
@@ -661,21 +681,23 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     }}
                     options={
                         openDropdown === 'test_sizes'
-                            ? filters.test_sizes.map((size) => {
-                                const count = calculateAccurateCount('test_sizes', size);
+                            ? filters.test_sizes.map((testSize) => {
+                                const count = calculateAccurateCount('test_sizes', testSize);
                                 return {
-                                    value: String(size),
-                                    label: `${size} (${count})`,
+                                    value: String(testSize),
+                                    label: `${testSize} (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.test_sizes.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
-                                : filters.test_sizes.map((size) => ({
-                                    value: String(size),
-                                    label: String(size),
+                                ? dynamicFilterOptions.test_sizes
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
+                                : filters.test_sizes.map((testSize) => ({
+                                    value: String(testSize),
+                                    label: String(testSize),
                                 }))
                     }
                     value={activeFilters.test_sizes.map((size) => ({
@@ -721,12 +743,14 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     value: String(duration),
                                     label: `${duration}s (${count})`,
                                 };
-                            })
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
                             : useDynamicFilters && dynamicFilterOptions
-                                ? dynamicFilterOptions.durations.map((option) => ({
-                                    value: String(option.value),
-                                    label: `${option.label} (${option.count})`,
-                                }))
+                                ? dynamicFilterOptions.durations
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
                                 : filters.durations.map((duration) => ({
                                     value: String(duration),
                                     label: `${duration}s`,
