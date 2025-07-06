@@ -147,7 +147,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.hostnames.map((hostname) => ({
                         value: String(hostname),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${hostname} (${dynamicFilterOptions.hostnames.find(opt => opt.value === hostname)?.count || 0})`
+                            ? `${hostname} (${filteredRuns.filter(run => run.hostname === hostname).length})`
                             : String(hostname),
                     }))}
                     onChange={(selected) =>
@@ -202,7 +202,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.protocols.map((protocol) => ({
                         value: String(protocol),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${protocol} (${dynamicFilterOptions.protocols.find(opt => opt.value === protocol)?.count || 0})`
+                            ? `${protocol} (${filteredRuns.filter(run => run.protocol === protocol).length})`
                             : String(protocol),
                     }))}
                     onChange={(selected) =>
@@ -258,7 +258,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.drive_types.map((type) => ({
                         value: String(type),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${type} (${dynamicFilterOptions.drive_types.find(opt => opt.value === type)?.count || 0})`
+                            ? `${type} (${filteredRuns.filter(run => run.drive_type === type).length})`
                             : String(type),
                     }))}
                     onChange={(selected) =>
@@ -313,7 +313,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.drive_models.map((model) => ({
                         value: String(model),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${model} (${dynamicFilterOptions.drive_models.find(opt => opt.value === model)?.count || 0})`
+                            ? `${model} (${filteredRuns.filter(run => run.drive_model === model).length})`
                             : String(model),
                     }))}
                     onChange={(selected) =>
@@ -424,7 +424,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.block_sizes.map((size) => ({
                         value: String(size),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${size} (${dynamicFilterOptions.block_sizes.find(opt => opt.value === size)?.count || 0})`
+                            ? `${size} (${filteredRuns.filter(run => run.block_size === size).length})`
                             : String(size),
                     }))}
                     onChange={(selected) =>
@@ -480,7 +480,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.syncs.map((sync) => ({
                         value: String(sync),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${sync} (${dynamicFilterOptions.syncs.find(opt => opt.value === sync)?.count || 0})`
+                            ? `${sync} (${filteredRuns.filter(run => run.sync === sync).length})`
                             : sync.toString(),
                     }))}
                     onChange={(selected) =>
@@ -535,7 +535,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.queue_depths.map((qd) => ({
                         value: String(qd),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${qd} (${dynamicFilterOptions.queue_depths.find(opt => opt.value === qd)?.count || 0})`
+                            ? `${qd} (${filteredRuns.filter(run => run.queue_depth === qd).length})`
                             : qd.toString(),
                     }))}
                     onChange={(selected) =>
@@ -591,7 +591,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.directs.map((direct) => ({
                         value: String(direct),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${direct} (${dynamicFilterOptions.directs.find(opt => opt.value === direct)?.count || 0})`
+                            ? `${direct} (${filteredRuns.filter(run => run.direct === direct).length})`
                             : direct.toString(),
                     }))}
                     onChange={(selected) =>
@@ -644,11 +644,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     label: numJob.toString(),
                                 }))
                     }
-                    value={activeFilters.num_jobs.map((jobs) => ({
-                        value: String(jobs),
+                    value={activeFilters.num_jobs.map((numJob) => ({
+                        value: String(numJob),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${jobs} (${dynamicFilterOptions.num_jobs.find(opt => opt.value === jobs)?.count || 0})`
-                            : jobs.toString(),
+                            ? `${numJob} (${filteredRuns.filter(run => run.num_jobs === numJob).length})`
+                            : numJob.toString(),
                     }))}
                     onChange={(selected) =>
                         onFilterChange('num_jobs', selected ? selected.map((s) => parseInt(s.value)) : [])
@@ -700,11 +700,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                                     label: String(testSize),
                                 }))
                     }
-                    value={activeFilters.test_sizes.map((size) => ({
-                        value: String(size),
+                    value={activeFilters.test_sizes.map((testSize) => ({
+                        value: String(testSize),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${size} (${dynamicFilterOptions.test_sizes.find(opt => opt.value === size)?.count || 0})`
-                            : String(size),
+                            ? `${testSize} (${filteredRuns.filter(run => run.test_size === testSize).length})`
+                            : String(testSize),
                     }))}
                     onChange={(selected) =>
                         onFilterChange('test_sizes', selected ? selected.map((s) => s.value) : [])
@@ -759,7 +759,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.durations.map((duration) => ({
                         value: String(duration),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${duration}s (${dynamicFilterOptions.durations.find(opt => opt.value === duration)?.count || 0})`
+                            ? `${duration}s (${filteredRuns.filter(run => run.duration === duration).length})`
                             : `${duration}s`,
                     }))}
                     onChange={(selected) =>
