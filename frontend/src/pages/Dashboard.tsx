@@ -35,6 +35,7 @@ export default function Dashboard() {
 		filteredRuns,
 		hasActiveFilters,
 		updateFilter,
+		clearAllFilters,
 	} = useTestRunFilters(testRuns);
 
 	// Memoize values to prevent unnecessary re-renders
@@ -79,14 +80,29 @@ export default function Dashboard() {
 		return enhancedPerformanceData.map(d => {
 			const metrics = (d as any).metrics;
 			const latency_percentiles = (d as any).latency_percentiles;
+			
+			// Extract IOPS value
+			const iops = metrics?.iops?.value || metrics?.combined?.iops?.value || 0;
+			
+			// Extract latency value (prefer p95, fallback to avg)
+			const latency = latency_percentiles?.combined?.p95?.value || 
+						   metrics?.avg_latency?.value || 
+						   metrics?.combined?.avg_latency?.value || 0;
+			
+			// Calculate bandwidth from metrics
+			const bandwidth = metrics?.bandwidth?.value || 
+							metrics?.combined?.bandwidth?.value || 
+							metrics?.throughput?.value || 
+							metrics?.combined?.throughput?.value || 0;
+			
 			return {
 				blocksize: d.block_size,
 				queuedepth: d.queue_depth,
-				iops: metrics?.combined?.iops?.value,
-				latency: latency_percentiles?.combined?.p95?.value,
-				throughput: undefined,
+				iops: iops,
+				latency: latency,
+				bandwidth: bandwidth,
 			};
-		});
+		}).filter(d => d.iops > 0 || d.latency > 0 || d.bandwidth > 0); // Only include data with valid metrics
 	}, [enhancedPerformanceData]);
 
 	// Memoize toggle maximize handler
@@ -143,6 +159,7 @@ export default function Dashboard() {
 						filteredRuns={filteredRuns}
 						hasActiveFilters={hasActiveFilters()}
 						onFilterChange={updateFilter}
+						onClearAllFilters={clearAllFilters}
 						loading={filtersLoading}
 					/>
 				</div>

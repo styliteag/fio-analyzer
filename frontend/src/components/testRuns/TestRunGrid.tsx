@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, Trash2, HardDrive, Network, Server, Activity } from 'lucide-react';
+import { Edit2, Trash2, HardDrive, Network, Server, Activity, Clock, Layers, Database, Zap } from 'lucide-react';
 import type { TestRun } from '../../types';
 
 interface TestRunGridProps {
@@ -60,6 +60,14 @@ const TestRunGrid: React.FC<TestRunGridProps> = ({
         return date.toLocaleDateString();
     };
 
+    // Helper function to format duration
+    const formatDuration = (duration: number) => {
+        if (duration < 60) return `${duration}s`;
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        return `${minutes}m${seconds > 0 ? ` ${seconds}s` : ''}`;
+    };
+
     return (
         <div className="mt-4">
             <div className="max-h-60 overflow-y-auto border theme-border-secondary rounded-md p-3 theme-bg-tertiary">
@@ -110,6 +118,49 @@ const TestRunGrid: React.FC<TestRunGridProps> = ({
                                     <span>{run.block_size}</span>
                                     <span>•</span>
                                     <span>QD{run.queue_depth}</span>
+                                </div>
+
+                                {/* Additional test parameters */}
+                                <div className="flex flex-wrap gap-1 theme-text-tertiary text-xs">
+                                    {/* Duration */}
+                                    {run.duration && (
+                                        <div className="flex items-center gap-1">
+                                            <Clock className="h-2 w-2" />
+                                            <span>{formatDuration(run.duration)}</span>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Sync */}
+                                    {run.sync !== undefined && (
+                                        <div className="flex items-center gap-1">
+                                            <Zap className="h-2 w-2" />
+                                            <span>Sync{run.sync}</span>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Direct */}
+                                    {run.direct !== undefined && (
+                                        <div className="flex items-center gap-1">
+                                            <Database className="h-2 w-2" />
+                                            <span>Direct{run.direct}</span>
+                                        </div>
+                                    )}
+                                    
+                                    {/* NumJobs */}
+                                    {run.num_jobs && (
+                                        <div className="flex items-center gap-1">
+                                            <Layers className="h-2 w-2" />
+                                            <span>Jobs{run.num_jobs}</span>
+                                        </div>
+                                    )}
+                                    
+                                    {/* TestSize */}
+                                    {run.test_size && (
+                                        <div className="flex items-center gap-1">
+                                            <Database className="h-2 w-2" />
+                                            <span>{run.test_size}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Hostname and protocol */}

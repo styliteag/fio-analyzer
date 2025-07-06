@@ -57,6 +57,12 @@ export interface FilterOptions {
 	block_sizes: (string | number)[];
 	hostnames: string[];
 	protocols: string[];
+	syncs: number[];
+	queue_depths: number[];
+	directs: number[];
+	num_jobs: number[];
+	test_sizes: string[];
+	durations: number[];
 }
 
 export interface ChartTemplate {

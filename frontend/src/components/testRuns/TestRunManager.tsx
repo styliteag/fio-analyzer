@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Settings, Check, X, Plus, Minus } from 'lucide-react';
 import { useTestRunSelection, TestRunSelectionOptions } from '../../hooks/useTestRunSelection';
 import { useTestRunOperations } from '../../hooks/useTestRunOperations';
+import { useTestRunFilters, type DynamicFilterOptions } from '../../hooks/useTestRunFilters';
 import type { TestRun, FilterOptions } from '../../types';
 import type { ActiveFilters } from '../../hooks/useTestRunFilters';
 import TestRunFilters from './TestRunFilters';
@@ -18,6 +19,7 @@ interface TestRunManagerProps {
     filteredRuns: TestRun[];
     hasActiveFilters: boolean;
     onFilterChange: (filterType: keyof ActiveFilters, values: (string | number)[]) => void;
+    onClearAllFilters?: () => void;
     filters: FilterOptions;
     loading: boolean;
     error: string | null;
@@ -32,6 +34,7 @@ const TestRunManager: React.FC<TestRunManagerProps> = ({
     filteredRuns,
     hasActiveFilters,
     onFilterChange,
+    onClearAllFilters,
     filters,
     loading,
     error,
@@ -45,6 +48,121 @@ const TestRunManager: React.FC<TestRunManagerProps> = ({
         autoSelectAll: autoSelectEnabled,
         autoSelectOnFilterChange: autoSelectEnabled,
     }), [autoSelectEnabled]);
+
+    // Calculate dynamic filter options based on current filtered runs
+    const dynamicFilterOptions = useMemo((): DynamicFilterOptions => {
+        const options: DynamicFilterOptions = {
+            drive_types: [],
+            drive_models: [],
+            patterns: [],
+            block_sizes: [],
+            hostnames: [],
+            protocols: [],
+            syncs: [],
+            queue_depths: [],
+            directs: [],
+            num_jobs: [],
+            test_sizes: [],
+            durations: [],
+        };
+
+        // Count occurrences for each field
+        const counts: Record<string, Record<string | number, number>> = {
+            drive_types: {},
+            drive_models: {},
+            patterns: {},
+            block_sizes: {},
+            hostnames: {},
+            protocols: {},
+            syncs: {},
+            queue_depths: {},
+            directs: {},
+            num_jobs: {},
+            test_sizes: {},
+            durations: {},
+        };
+
+        // Count occurrences in filtered runs
+        filteredRuns.forEach(run => {
+            // Drive types
+            if (run.drive_type) {
+                counts.drive_types[run.drive_type] = (counts.drive_types[run.drive_type] || 0) + 1;
+            }
+
+            // Drive models
+            if (run.drive_model) {
+                counts.drive_models[run.drive_model] = (counts.drive_models[run.drive_model] || 0) + 1;
+            }
+
+            // Patterns
+            if (run.read_write_pattern) {
+                counts.patterns[run.read_write_pattern] = (counts.patterns[run.read_write_pattern] || 0) + 1;
+            }
+
+            // Block sizes
+            if (run.block_size) {
+                counts.block_sizes[run.block_size] = (counts.block_sizes[run.block_size] || 0) + 1;
+            }
+
+            // Hostnames
+            if (run.hostname) {
+                counts.hostnames[run.hostname] = (counts.hostnames[run.hostname] || 0) + 1;
+            }
+
+            // Protocols
+            if (run.protocol) {
+                counts.protocols[run.protocol] = (counts.protocols[run.protocol] || 0) + 1;
+            }
+
+            // Sync
+            if (run.sync !== undefined) {
+                counts.syncs[run.sync] = (counts.syncs[run.sync] || 0) + 1;
+            }
+
+            // Queue depths
+            counts.queue_depths[run.queue_depth] = (counts.queue_depths[run.queue_depth] || 0) + 1;
+
+            // Direct
+            if (run.direct !== undefined) {
+                counts.directs[run.direct] = (counts.directs[run.direct] || 0) + 1;
+            }
+
+            // Num jobs
+            if (run.num_jobs) {
+                counts.num_jobs[run.num_jobs] = (counts.num_jobs[run.num_jobs] || 0) + 1;
+            }
+
+            // Test sizes
+            if (run.test_size) {
+                counts.test_sizes[run.test_size] = (counts.test_sizes[run.test_size] || 0) + 1;
+            }
+
+            // Durations
+            counts.durations[run.duration] = (counts.durations[run.duration] || 0) + 1;
+        });
+
+        // Convert counts to filter options
+        Object.keys(counts).forEach(field => {
+            const fieldCounts = counts[field];
+            options[field as keyof DynamicFilterOptions] = Object.entries(fieldCounts)
+                .map(([value, count]) => ({
+                    value: field === 'queue_depths' || field === 'durations' || field === 'syncs' || field === 'directs' || field === 'num_jobs' 
+                        ? parseInt(value) 
+                        : value,
+                    label: field === 'durations' ? `${value}s` : value,
+                    count
+                }))
+                .sort((a, b) => {
+                    // Sort by count descending, then by value
+                    if (b.count !== a.count) {
+                        return b.count - a.count;
+                    }
+                    return String(a.value).localeCompare(String(b.value));
+                });
+        });
+
+        return options;
+    }, [filteredRuns]);
 
     const {
         handleSelectAllMatching,
@@ -134,6 +252,19 @@ const TestRunManager: React.FC<TestRunManagerProps> = ({
                     </h2>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Clear All Filters Button */}
+                    {onClearAllFilters && (
+                        <button
+                            type="button"
+                            onClick={onClearAllFilters}
+                            className="flex items-center gap-1 px-2 py-1 text-xs theme-btn-secondary rounded transition-colors hover:theme-btn-secondary-hover"
+                            title="Clear all active filters"
+                        >
+                            <X size={12} />
+                            Clear All Filters
+                        </button>
+                    )}
+                    
                     {/* Auto-select toggle */}
                     <button
                         type="button"
@@ -157,6 +288,9 @@ const TestRunManager: React.FC<TestRunManagerProps> = ({
                     filters={filters}
                     activeFilters={activeFilters}
                     onFilterChange={onFilterChange}
+                    dynamicFilterOptions={dynamicFilterOptions}
+                    useDynamicFilters={true}
+                    onClearAllFilters={onClearAllFilters}
                 />
             </div>
 
