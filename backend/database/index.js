@@ -116,27 +116,6 @@ function initDb() {
             )
         `);
 
-        // Add new columns if they don't exist (for existing databases)
-        db.run(`ALTER TABLE test_runs ADD COLUMN hostname TEXT`, (err) => {
-            // Ignore error if column already exists
-        });
-        
-        db.run(`ALTER TABLE test_runs ADD COLUMN protocol TEXT`, (err) => {
-            // Ignore error if column already exists
-        });
-        
-        db.run(`ALTER TABLE test_runs ADD COLUMN description TEXT`, (err) => {
-            // Ignore error if column already exists
-        });
-        
-        db.run(`ALTER TABLE test_runs ADD COLUMN uploaded_file_path TEXT`, (err) => {
-            // Ignore error if column already exists
-        });
-        
-        db.run(`ALTER TABLE test_runs ADD COLUMN test_date TEXT`, (err) => {
-            // Ignore error if column already exists
-        });
-
         db.run(`
             CREATE TABLE IF NOT EXISTS performance_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
