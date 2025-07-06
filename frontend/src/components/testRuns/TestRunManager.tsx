@@ -180,6 +180,7 @@ const TestRunManager: React.FC<TestRunManagerProps> = ({
                     useDynamicFilters={true}
                     onClearAllFilters={onClearAllFilters}
                     testRuns={testRuns}
+                    filteredRuns={filteredRuns}
                 />
             </div>
 

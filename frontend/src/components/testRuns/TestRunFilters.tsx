@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { HardDrive, Clock, Layers, Database, Zap, X } from 'lucide-react';
 import { getSelectStyles } from '../../hooks/useThemeColors';
@@ -14,6 +14,7 @@ interface TestRunFiltersProps {
     useDynamicFilters?: boolean;
     onClearAllFilters?: () => void;
     testRuns?: TestRun[];
+    filteredRuns?: TestRun[];
 }
 
 const TestRunFilters: React.FC<TestRunFiltersProps> = ({
@@ -24,6 +25,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
     useDynamicFilters = false,
     onClearAllFilters,
     testRuns = [],
+    filteredRuns = [],
 }) => {
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const [filtersWhenOpened, setFiltersWhenOpened] = useState<ActiveFilters | null>(null);
@@ -56,6 +58,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
             // Apply all other filters except the open dropdown
             if (tempFilters.drive_types.length > 0 && !tempFilters.drive_types.includes(run.drive_type)) return;
             if (tempFilters.drive_models.length > 0 && !tempFilters.drive_models.includes(run.drive_model)) return;
+            if (tempFilters.patterns.length > 0 && (!run.read_write_pattern || !tempFilters.patterns.includes(run.read_write_pattern))) return;
             if (tempFilters.block_sizes.length > 0 && !tempFilters.block_sizes.includes(run.block_size)) return;
             if (tempFilters.hostnames.length > 0 && (!run.hostname || !tempFilters.hostnames.includes(run.hostname))) return;
             if (tempFilters.protocols.length > 0 && (!run.protocol || !tempFilters.protocols.includes(run.protocol))) return;
@@ -92,6 +95,13 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
         setCachedCounts(prev => ({ ...prev, [field]: counts }));
     };
 
+    useEffect(() => {
+        if (openDropdown && filtersWhenOpened) {
+            calculateAndCacheCounts(openDropdown as keyof ActiveFilters);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [openDropdown, filtersWhenOpened]);
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 mb-4">
             <div>
@@ -107,11 +117,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('hostnames');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('hostnames');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'hostnames'
@@ -160,11 +170,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('protocols');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('protocols');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'protocols'
@@ -214,11 +224,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('drive_types');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('drive_types');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'drive_types'
@@ -267,11 +277,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('drive_models');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('drive_models');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'drive_models'
@@ -320,11 +330,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('patterns');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('patterns');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         // When dropdown is open, show all options with accurate counts
@@ -349,7 +359,7 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     value={activeFilters.patterns.map((pattern) => ({
                         value: String(pattern),
                         label: useDynamicFilters && dynamicFilterOptions
-                            ? `${pattern.replace(/_/g, " ").toUpperCase()} (${dynamicFilterOptions.patterns.find(opt => opt.value === pattern)?.count || 0})`
+                            ? `${pattern.replace(/_/g, " ").toUpperCase()} (${filteredRuns.filter(run => run.read_write_pattern === pattern).length})`
                             : pattern.replace(/_/g, " ").toUpperCase(),
                     }))}
                     onChange={(selected) =>
@@ -374,11 +384,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('block_sizes');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('block_sizes');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'block_sizes'
@@ -428,11 +438,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('syncs');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('syncs');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'syncs'
@@ -481,11 +491,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('queue_depths');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('queue_depths');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'queue_depths'
@@ -535,11 +545,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('directs');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('directs');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'directs'
@@ -589,11 +599,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('num_jobs');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('num_jobs');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'num_jobs'
@@ -643,11 +653,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('test_sizes');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('test_sizes');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'test_sizes'
@@ -697,11 +707,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                     onMenuOpen={() => {
                         setOpenDropdown('durations');
                         setFiltersWhenOpened(activeFilters);
-                        calculateAndCacheCounts('durations');
                     }}
                     onMenuClose={() => {
                         setOpenDropdown(null);
                         setFiltersWhenOpened(null);
+                        setCachedCounts({});
                     }}
                     options={
                         openDropdown === 'durations'
