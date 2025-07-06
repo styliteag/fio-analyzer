@@ -52,6 +52,12 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
                 drive_types: [],
                 block_sizes: [],
                 patterns: [],
+                queue_depths: [],
+                syncs: [],
+                directs: [],
+                num_jobs: [],
+                test_sizes: [],
+                durations: [],
                 start_date: '',
                 end_date: '',
             };

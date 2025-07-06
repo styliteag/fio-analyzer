@@ -14,6 +14,7 @@ export {
     deleteTestRun,
     deleteTestRuns,
     fetchFilters,
+    convertActiveFiltersToOptions,
 } from './testRuns';
 
 export {

@@ -8,6 +8,12 @@ export interface TimeSeriesFilters {
     drive_types: string[];
     block_sizes: string[];
     patterns: string[];
+    queue_depths: number[];
+    syncs: number[];
+    directs: number[];
+    num_jobs: number[];
+    test_sizes: string[];
+    durations: number[];
     start_date: string;
     end_date: string;
 }
@@ -25,6 +31,12 @@ export const convertActiveFiltersToTimeSeriesFilters = (
         drive_types: activeFilters.drive_types,
         block_sizes: activeFilters.block_sizes.map(size => size.toString()),
         patterns: activeFilters.patterns,
+        queue_depths: activeFilters.queue_depths,
+        syncs: activeFilters.syncs,
+        directs: activeFilters.directs,
+        num_jobs: activeFilters.num_jobs,
+        test_sizes: activeFilters.test_sizes,
+        durations: activeFilters.durations,
         start_date: '',
         end_date: '',
     };
@@ -47,11 +59,11 @@ export const convertTimeSeriesFiltersToActiveFilters = (
             return isNaN(numValue) ? size : numValue;
         }),
         patterns: timeSeriesFilters.patterns,
-        syncs: [],
-        queue_depths: [],
-        directs: [],
-        num_jobs: [],
-        test_sizes: [],
-        durations: [],
+        queue_depths: timeSeriesFilters.queue_depths,
+        syncs: timeSeriesFilters.syncs,
+        directs: timeSeriesFilters.directs,
+        num_jobs: timeSeriesFilters.num_jobs,
+        test_sizes: timeSeriesFilters.test_sizes,
+        durations: timeSeriesFilters.durations,
     };
 };

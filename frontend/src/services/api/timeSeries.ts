@@ -15,6 +15,11 @@ export interface TimeSeriesHistoryOptions {
     blockSize?: string;
     readWritePattern?: string;
     queueDepth?: number;
+    testSize?: string;
+    sync?: number;
+    direct?: number;
+    numJobs?: number;
+    duration?: number;
 }
 
 export interface TimeSeriesTrendsOptions {
@@ -51,6 +56,11 @@ export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions =
         blockSize,
         readWritePattern,
         queueDepth,
+        testSize,
+        sync,
+        direct,
+        numJobs,
+        duration,
     } = options;
     
     const params = new URLSearchParams();
@@ -62,6 +72,11 @@ export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions =
     if (blockSize) params.append("block_size", blockSize);
     if (readWritePattern) params.append("read_write_pattern", readWritePattern);
     if (queueDepth !== undefined) params.append("queue_depth", queueDepth.toString());
+    if (testSize) params.append("test_size", testSize);
+    if (sync !== undefined) params.append("sync", sync.toString());
+    if (direct !== undefined) params.append("direct", direct.toString());
+    if (numJobs !== undefined) params.append("num_jobs", numJobs.toString());
+    if (duration !== undefined) params.append("duration", duration.toString());
     if (startDate) params.append("start_date", startDate);
     if (endDate) params.append("end_date", endDate);
     if (metricType) params.append("metric_type", metricType);

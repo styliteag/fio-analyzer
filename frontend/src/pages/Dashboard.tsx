@@ -4,10 +4,14 @@ import TestRunSelector from "../components/TestRunSelector";
 import { DashboardHeader, DashboardFooter, WelcomeGuide, ChartArea } from "../components/layout";
 import { usePerformanceData } from "../hooks";
 import { useTestRunFilters } from "../hooks/useTestRunFilters";
+import { useServerSideTestRuns } from "../hooks/useServerSideTestRuns";
 import { fetchTestRuns } from "../services/api/testRuns";
 import type { ChartTemplate, TestRun } from "../types";
 
 export default function Dashboard() {
+	// Feature flag for server-side filtering (can be toggled by environment or user preference)
+	const useServerSideFiltering = false; // Set to true to enable server-side filtering
+	
 	// Get the correct API documentation URL based on environment
 	const getApiDocsUrl = () => {
 		const apiBaseUrl = import.meta.env.VITE_API_URL || "";
@@ -29,14 +33,40 @@ export default function Dashboard() {
 	const [testRuns, setTestRuns] = useState<TestRun[]>([]);
 	const [filtersLoading, setFiltersLoading] = useState(true);
 
-	// Use shared filter state for both TestRunSelector and TimeSeriesContainer
+	// Traditional client-side filtering
 	const {
-		activeFilters,
-		filteredRuns,
-		hasActiveFilters,
-		updateFilter,
-		clearAllFilters,
+		activeFilters: clientFilters,
+		filteredRuns: clientFilteredRuns,
+		hasActiveFilters: clientHasActiveFilters,
+		updateFilter: clientUpdateFilter,
+		clearAllFilters: clientClearAllFilters,
 	} = useTestRunFilters(testRuns);
+
+	// Server-side filtering hook
+	const {
+		testRuns: serverTestRuns,
+		activeFilters: serverFilters,
+		setActiveFilters: setServerFilters,
+		clearFilters: clearServerFilters,
+		hasActiveFilters: serverHasActiveFilters,
+		loading: serverLoading,
+		error: _serverError,
+		filters: _serverFilterOptions
+	} = useServerSideTestRuns({ 
+		includeHistorical: false, 
+		autoFetch: useServerSideFiltering 
+	});
+
+	// Choose data source based on feature flag
+	const activeFilters = useServerSideFiltering ? serverFilters : clientFilters;
+	const filteredRuns = useServerSideFiltering ? serverTestRuns : clientFilteredRuns;
+	const hasActiveFilters = useServerSideFiltering ? serverHasActiveFilters : clientHasActiveFilters;
+	const updateFilter = useServerSideFiltering ? 
+		(filterType: any, values: any) => setServerFilters({...serverFilters, [filterType]: values}) : 
+		clientUpdateFilter;
+	const clearAllFilters = useServerSideFiltering ? clearServerFilters : clientClearAllFilters;
+	const dataLoading = useServerSideFiltering ? serverLoading : filtersLoading;
+	const allTestRuns = useServerSideFiltering ? serverTestRuns : testRuns;
 
 	// Memoize values to prevent unnecessary re-renders
 	const testRunIds = useMemo(() => selectedRuns.map(run => run.id), [selectedRuns]);
@@ -111,8 +141,14 @@ export default function Dashboard() {
 		[isChartMaximized]
 	);
 
-	// Load test runs function (lifted from TestRunSelector)
+	// Load test runs function (only for client-side filtering mode)
 	const loadTestRuns = useMemo(() => async () => {
+		if (useServerSideFiltering) {
+			// Server-side filtering handles data loading via useServerSideTestRuns hook
+			setFiltersLoading(false);
+			return;
+		}
+		
 		try {
 			setFiltersLoading(true);
 			const result = await fetchTestRuns();
@@ -124,9 +160,9 @@ export default function Dashboard() {
 		} finally {
 			setFiltersLoading(false);
 		}
-	}, []);
+	}, [useServerSideFiltering]);
 
-	// Load test runs on mount and refresh trigger
+	// Load test runs on mount and refresh trigger (only for client-side mode)
 	useEffect(() => {
 		loadTestRuns();
 	}, [loadTestRuns, refreshTrigger]);
@@ -154,13 +190,14 @@ export default function Dashboard() {
 						onSelectionChange={setSelectedRuns}
 						refreshTrigger={refreshTrigger}
 						// Pass shared filter state
-						testRuns={testRuns}
+						testRuns={allTestRuns}
 						activeFilters={activeFilters}
 						filteredRuns={filteredRuns}
-						hasActiveFilters={hasActiveFilters()}
+						hasActiveFilters={typeof hasActiveFilters === 'function' ? hasActiveFilters() : hasActiveFilters}
 						onFilterChange={updateFilter}
 						onClearAllFilters={clearAllFilters}
-						loading={filtersLoading}
+						// Pass loading state
+						loading={dataLoading}
 					/>
 				</div>
 

@@ -204,6 +204,36 @@ router.get('/latest', requireAdmin, (req, res) => {
  *           type: string
  *         description: Filter by metric type (iops, avg_latency, bandwidth)
  *         example: "iops"
+ *       - in: query
+ *         name: test_size
+ *         schema:
+ *           type: string
+ *         description: Filter by test size
+ *         example: "1m"
+ *       - in: query
+ *         name: sync
+ *         schema:
+ *           type: integer
+ *         description: Filter by sync value (0 or 1)
+ *         example: 1
+ *       - in: query
+ *         name: direct
+ *         schema:
+ *           type: integer
+ *         description: Filter by direct value (0 or 1)
+ *         example: 1
+ *       - in: query
+ *         name: num_jobs
+ *         schema:
+ *           type: integer
+ *         description: Filter by number of jobs
+ *         example: 4
+ *       - in: query
+ *         name: duration
+ *         schema:
+ *           type: integer
+ *         description: Filter by test duration in seconds
+ *         example: 30
  *     responses:
  *       200:
  *         description: Historical data retrieved successfully
@@ -243,13 +273,13 @@ router.get('/latest', requireAdmin, (req, res) => {
  *         description: Internal server error
  */
 router.get('/history', requireAdmin, (req, res) => {
-    const { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, start_date, end_date, metric_type } = req.query;
+    const { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, start_date, end_date, metric_type, test_size, sync, direct, num_jobs, duration } = req.query;
     
     logInfo('User requesting time-series history', {
         requestId: req.requestId,
         username: req.user.username,
         action: 'GET_TIMESERIES_HISTORY',
-        filters: { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, start_date, end_date, metric_type }
+        filters: { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, start_date, end_date, metric_type, test_size, sync, direct, num_jobs, duration }
     });
     
     let query = `
@@ -320,6 +350,31 @@ router.get('/history', requireAdmin, (req, res) => {
     if (metric_type) {
         query += ' AND pm.metric_type = ?';
         params.push(metric_type);
+    }
+    
+    if (test_size) {
+        query += ' AND tr.test_size = ?';
+        params.push(test_size);
+    }
+    
+    if (sync !== undefined && sync !== '') {
+        query += ' AND tr.sync = ?';
+        params.push(parseInt(sync));
+    }
+    
+    if (direct !== undefined && direct !== '') {
+        query += ' AND tr.direct = ?';
+        params.push(parseInt(direct));
+    }
+    
+    if (num_jobs) {
+        query += ' AND tr.num_jobs = ?';
+        params.push(parseInt(num_jobs));
+    }
+    
+    if (duration) {
+        query += ' AND tr.duration = ?';
+        params.push(parseInt(duration));
     }
     
     query += ' ORDER BY tr.timestamp DESC, tr.hostname, tr.protocol, tr.drive_model';
@@ -410,7 +465,7 @@ router.get('/history', requireAdmin, (req, res) => {
  *         description: Internal server error
  */
 router.get('/trends', requireAdmin, (req, res) => {
-    const { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, metric_type, days = 30 } = req.query;
+    const { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, metric_type, days = 30, test_size, sync, direct, num_jobs, duration } = req.query;
     
     if (!hostname || !protocol || !drive_model || !metric_type) {
         return res.status(400).json({ 
@@ -430,7 +485,12 @@ router.get('/trends', requireAdmin, (req, res) => {
         read_write_pattern,
         queue_depth,
         metric_type,
-        days
+        days,
+        test_size,
+        sync,
+        direct,
+        num_jobs,
+        duration
     });
     
     const cutoffDate = new Date();
@@ -457,6 +517,11 @@ router.get('/trends', requireAdmin, (req, res) => {
             ${block_size ? 'AND tr.block_size = ?' : ''}
             ${read_write_pattern ? 'AND tr.read_write_pattern = ?' : ''}
             ${queue_depth ? 'AND tr.queue_depth = ?' : ''}
+            ${test_size ? 'AND tr.test_size = ?' : ''}
+            ${sync !== undefined && sync !== '' ? 'AND tr.sync = ?' : ''}
+            ${direct !== undefined && direct !== '' ? 'AND tr.direct = ?' : ''}
+            ${num_jobs ? 'AND tr.num_jobs = ?' : ''}
+            ${duration ? 'AND tr.duration = ?' : ''}
             ORDER BY tr.timestamp
         ),
         with_moving_avg AS (
@@ -496,6 +561,11 @@ router.get('/trends', requireAdmin, (req, res) => {
     if (block_size) queryParams.push(block_size);
     if (read_write_pattern) queryParams.push(read_write_pattern);
     if (queue_depth) queryParams.push(parseInt(queue_depth));
+    if (test_size) queryParams.push(test_size);
+    if (sync !== undefined && sync !== '') queryParams.push(parseInt(sync));
+    if (direct !== undefined && direct !== '') queryParams.push(parseInt(direct));
+    if (num_jobs) queryParams.push(parseInt(num_jobs));
+    if (duration) queryParams.push(parseInt(duration));
     
     db.all(query, queryParams, (err, rows) => {
         if (err) {
@@ -513,7 +583,7 @@ router.get('/trends', requireAdmin, (req, res) => {
             username: req.user.username,
             action: 'GET_TREND_ANALYSIS',
             resultCount: rows.length,
-            analysisParams: { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, metric_type, days }
+            analysisParams: { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, metric_type, days, test_size, sync, direct, num_jobs, duration }
         });
         
         res.json(rows);

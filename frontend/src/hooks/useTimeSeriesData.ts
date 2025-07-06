@@ -152,6 +152,24 @@ export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
                                 if (filters.drive_types.length > 0) {
                                     queryOptions.driveType = filters.drive_types[0];
                                 }
+                                if (filters.queue_depths.length > 0) {
+                                    queryOptions.queueDepth = filters.queue_depths[0];
+                                }
+                                if (filters.test_sizes.length > 0) {
+                                    queryOptions.testSize = filters.test_sizes[0];
+                                }
+                                if (filters.syncs.length > 0) {
+                                    queryOptions.sync = filters.syncs[0];
+                                }
+                                if (filters.directs.length > 0) {
+                                    queryOptions.direct = filters.directs[0];
+                                }
+                                if (filters.num_jobs.length > 0) {
+                                    queryOptions.numJobs = filters.num_jobs[0];
+                                }
+                                if (filters.durations.length > 0) {
+                                    queryOptions.duration = filters.durations[0];
+                                }
                                 if (filters.start_date) queryOptions.startDate = filters.start_date;
                                 if (filters.end_date) queryOptions.endDate = filters.end_date;
                             }
