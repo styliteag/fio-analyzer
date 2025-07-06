@@ -132,7 +132,7 @@ async function processFioFile(jsonFilePath, metadata, options = {}) {
                 const duration = Math.round((job.job_runtime || 0) / 1000) || // Actual runtime in ms -> seconds
                                parseInt(opts.runtime || globalOpts.runtime || '0'); // Configured runtime in seconds
                 
-                const test_name = job.jobname || `fio_job_${jobIndex + 1}`;
+                const test_name = opts.name || job.jobname || `fio_job_${jobIndex + 1}`;
                 const rwmixread = parseInt(opts.rwmixread || '100');
 
                 // Extract job options for uniqueness and storage
