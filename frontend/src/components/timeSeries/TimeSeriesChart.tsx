@@ -57,6 +57,13 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
         timeRange,
     });
 
+    if (import.meta.env.DEV) {
+        // Expose for console inspection
+        // @ts-ignore
+        window.seriesData = seriesData;
+        console.log('seriesData sample', seriesData.slice(0, 2));
+    }
+
     const renderEmptyState = () => (
         <div className="h-full flex items-center justify-center">
             <div className="text-center">

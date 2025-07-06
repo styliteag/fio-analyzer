@@ -90,11 +90,13 @@ export const processMetricData = (
     const filteredData = data
         .filter((point) => point.metric_type === metricType)
         .map((point) => ({
-            x: point.timestamp,
+            x: point.timestamp, // keep ISO string for typing
             y: point.value,
-        }));
+        }))
+        // Ensure data is in chronological order; otherwise the line will jump back and forth
+        .sort((a, b) => new Date(a.x).getTime() - new Date(b.x).getTime());
 
-    return {
+    const dataset: ChartDataset = {
         label,
         data: filteredData,
         borderColor: baseColor,
@@ -106,6 +108,17 @@ export const processMetricData = (
         pointRadius: 2,
         pointHoverRadius: 6,
     };
+
+    // Hide vertical segments (duplicate timestamps)
+    (dataset as any).spanGaps = false;
+    (dataset as any).segment = {
+        borderWidth: (ctx: any) => {
+            // If two consecutive points share the same timestamp, skip drawing the connecting line
+            return ctx.p0.parsed.x === ctx.p1.parsed.x ? 0 : 2;
+        },
+    };
+
+    return dataset;
 };
 
 /**
