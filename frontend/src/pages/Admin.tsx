@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Edit2, Search, RefreshCw, X, Check, Trash2 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -30,6 +30,8 @@ interface GroupEditingState {
 const Admin: React.FC = () => {
   const { testRuns, loading, error, refreshTestRuns, updateTestRun, bulkUpdateTestRuns, bulkDeleteTestRuns } = useTestRuns();
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const isSearching = searchTerm !== debouncedSearchTerm;
   const [selectedRuns, setSelectedRuns] = useState<Set<number>>(new Set());
   const [editingState, setEditingState] = useState<EditingState>({ testRunId: null, fields: {} });
   const [groupEditingState, setGroupEditingState] = useState<GroupEditingState>({ groupKey: null, fields: {} });
@@ -50,71 +52,105 @@ const Admin: React.FC = () => {
   const [toDate, setToDate] = useState<string>('');
   const [timeSeriesFilter, setTimeSeriesFilter] = useState<string>('all');
   const [selectedGroupRunIds, setSelectedGroupRunIds] = useState<number[]>([]);
+  const [displayLimit, setDisplayLimit] = useState(500); // Limit displayed results for performance
+  const [showAllResults, setShowAllResults] = useState(false);
 
   useEffect(() => {
     refreshTestRuns(true); // Always include historical data for admin view
   }, [refreshTestRuns]);
 
-  const filteredRuns = testRuns.filter(run => {
-    // Group selection filtering (takes precedence when active)
-    if (selectedGroupRunIds.length > 0) {
-      if (!selectedGroupRunIds.includes(run.id)) return false;
-    } else {
-      // Time series filtering (only when no group is selected)
-      if (timeSeriesFilter === 'with-history') {
-        // Only show historical runs (is_latest = 0)
-        if (run.is_latest === 1) return false;
-      } else if (timeSeriesFilter === 'latest-only') {
-        // Only show latest runs (is_latest = 1)
-        if (run.is_latest === 0) return false;
-      }
-    }
-    
-    // Date range filtering
-    const runDate = new Date(run.timestamp);
-    
-    if (fromDate) {
-      const fromDateTime = new Date(fromDate);
-      fromDateTime.setHours(0, 0, 0, 0); // Start of day
-      if (runDate < fromDateTime) return false;
-    }
-    
-    if (toDate) {
-      const toDateTime = new Date(toDate);
-      toDateTime.setHours(23, 59, 59, 999); // End of day
-      if (runDate > toDateTime) return false;
-    }
-    
-    // Search term filtering
-    if (!searchTerm) return true;
-    
-    // Split search term by spaces and filter out empty strings
-    const searchTerms = searchTerm.toLowerCase().split(' ').filter(term => term.trim() !== '');
-    if (searchTerms.length === 0) return true;
-    
-    // Create a combined string of all searchable fields
-    const searchableFields = [
-      run.hostname,
-      run.protocol,
-      run.drive_model,
-      run.drive_type,
-      run.read_write_pattern,
-      run.test_name,
-      run.description,
-      run.block_size,
-      run.test_size,
-      run.queue_depth?.toString(),
-      run.duration?.toString(),
-      run.direct?.toString(),
-      run.sync?.toString(),
-      run.num_jobs?.toString()
-    ].filter(field => field != null).map(field => String(field).toLowerCase()).join(' ');
-    
-    // Check if ALL search terms are found in the combined fields
-    return searchTerms.every(term => searchableFields.includes(term));
-  });
+  // Debounce search term to improve performance - reduced delay for faster response
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 150); // Reduced to 150ms for faster response
 
-  const sortedRuns = [...filteredRuns].sort((a, b) => {
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Pre-compute search indexes for better performance
+  const searchIndexMap = useMemo(() => {
+    if (!debouncedSearchTerm) return new Map();
+    
+    const map = new Map<number, string>();
+    testRuns.forEach(run => {
+      // Create search index once per run
+      const searchableFields = [
+        run.hostname,
+        run.protocol,
+        run.drive_model,
+        run.drive_type,
+        run.read_write_pattern,
+        run.test_name,
+        run.description,
+        run.block_size,
+        run.test_size,
+        run.queue_depth?.toString(),
+        run.duration?.toString(),
+        run.direct?.toString(),
+        run.sync?.toString(),
+        run.num_jobs?.toString()
+      ].filter(field => field != null).map(field => String(field).toLowerCase()).join(' ');
+      
+      map.set(run.id, searchableFields);
+    });
+    
+    return map;
+  }, [testRuns, debouncedSearchTerm]);
+
+  const filteredRuns = useMemo(() => {
+    // Early exit if no search term
+    const hasSearchTerm = debouncedSearchTerm?.trim();
+    let searchTerms: string[] = [];
+    
+    if (hasSearchTerm) {
+      searchTerms = debouncedSearchTerm.toLowerCase().split(' ').filter(term => term.trim() !== '');
+    }
+    
+    return testRuns.filter(run => {
+      // Group selection filtering (takes precedence when active)
+      if (selectedGroupRunIds.length > 0) {
+        if (!selectedGroupRunIds.includes(run.id)) return false;
+      } else {
+        // Time series filtering (only when no group is selected)
+        if (timeSeriesFilter === 'with-history') {
+          // Only show historical runs (is_latest = 0)
+          if (run.is_latest === 1) return false;
+        } else if (timeSeriesFilter === 'latest-only') {
+          // Only show latest runs (is_latest = 1)
+          if (run.is_latest === 0) return false;
+        }
+      }
+      
+      // Date range filtering
+      if (fromDate || toDate) {
+        const runDate = new Date(run.timestamp);
+        
+        if (fromDate) {
+          const fromDateTime = new Date(fromDate);
+          fromDateTime.setHours(0, 0, 0, 0); // Start of day
+          if (runDate < fromDateTime) return false;
+        }
+        
+        if (toDate) {
+          const toDateTime = new Date(toDate);
+          toDateTime.setHours(23, 59, 59, 999); // End of day
+          if (runDate > toDateTime) return false;
+        }
+      }
+      
+      // Search term filtering (optimized with pre-computed indexes)
+      if (searchTerms.length === 0) return true;
+      
+      const searchableFields = searchIndexMap.get(run.id);
+      if (!searchableFields) return true;
+      
+      // Check if ALL search terms are found in the pre-computed search index
+      return searchTerms.every(term => searchableFields.includes(term));
+    });
+  }, [testRuns, selectedGroupRunIds, timeSeriesFilter, fromDate, toDate, searchIndexMap, debouncedSearchTerm]);
+
+  const sortedRuns = useMemo(() => [...filteredRuns].sort((a, b) => {
     const aVal = a[sortField];
     const bVal = b[sortField];
     
@@ -131,7 +167,17 @@ const Admin: React.FC = () => {
     }
     
     return sortDirection === 'desc' ? -comparison : comparison;
-  });
+  }), [filteredRuns, sortField, sortDirection]);
+
+  // Limit displayed results for performance
+  const displayedRuns = useMemo(() => {
+    if (showAllResults || sortedRuns.length <= displayLimit) {
+      return sortedRuns;
+    }
+    return sortedRuns.slice(0, displayLimit);
+  }, [sortedRuns, displayLimit, showAllResults]);
+
+  const hasMoreResults = sortedRuns.length > displayLimit && !showAllResults;
 
   // Group historical data for special view
   const groupedHistoricalData = timeSeriesFilter === 'with-history' ? (() => {
@@ -181,12 +227,12 @@ const Admin: React.FC = () => {
   };
 
   const handleSelectAll = useCallback(() => {
-    if (selectedRuns.size === sortedRuns.length) {
+    if (selectedRuns.size === displayedRuns.length) {
       setSelectedRuns(new Set());
     } else {
-      setSelectedRuns(new Set(sortedRuns.map(run => run.id)));
+      setSelectedRuns(new Set(displayedRuns.map(run => run.id)));
     }
-  }, [selectedRuns.size, sortedRuns]);
+  }, [selectedRuns.size, displayedRuns]);
 
   const handleSelectRun = (runId: number) => {
     const newSelected = new Set(selectedRuns);
@@ -437,14 +483,19 @@ const Admin: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isSearching ? 'text-blue-500 animate-pulse' : 'text-gray-400'}`} />
                 <Input
                   type="text"
                   placeholder="Search test runs..."
                   value={searchTerm}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-64"
+                  className={`pl-10 w-64 ${isSearching ? 'border-blue-300' : ''}`}
                 />
+                {isSearching && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                  </div>
+                )}
               </div>
               
               <div className="flex items-center gap-4">
@@ -812,7 +863,7 @@ const Admin: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800">
-                  {sortedRuns.map((run) => {
+                  {displayedRuns.map((run) => {
                     const isEditing = editingState.testRunId === run.id;
                     const isSelected = selectedRuns.has(run.id);
                     return (
@@ -1048,11 +1099,40 @@ const Admin: React.FC = () => {
               </table>
             )}
           </div>
+          
+          {/* Show More Results Button */}
+          {hasMoreResults && (
+            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-t">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  Showing {displayedRuns.length} of {sortedRuns.length} results (limited for performance)
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => setShowAllResults(true)}
+                    variant="secondary"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    Show All {sortedRuns.length} Results
+                  </Button>
+                  <Button
+                    onClick={() => setDisplayLimit(displayLimit + 500)}
+                    variant="primary"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    Show 500 More
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Results summary */}
         <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-          Showing {sortedRuns.length} of {testRuns.length} test runs
+          Showing {displayedRuns.length} of {sortedRuns.length} filtered results ({testRuns.length} total)
           {selectedGroupRunIds.length > 0 ? ' (filtered from group)' :
            timeSeriesFilter === 'with-history' ? ' (with historical data)' : 
            timeSeriesFilter === 'latest-only' ? ' (latest only)' : 
@@ -1135,6 +1215,28 @@ const Admin: React.FC = () => {
                   placeholder="Common description value"
                   disabled={!bulkEditEnabled.description}
                   className={`w-full ${!bulkEditEnabled.description ? 'opacity-50' : ''}`}
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="test_name-enabled"
+                    checked={bulkEditEnabled.test_name}
+                    onChange={(e) => handleFieldEnabledChange('test_name', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="test_name-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Update Test Name
+                  </label>
+                </div>
+                <Input
+                  value={bulkEditFields.test_name || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateBulkEditField('test_name', e.target.value)}
+                  placeholder="Common test name value"
+                  disabled={!bulkEditEnabled.test_name}
+                  className={`w-full ${!bulkEditEnabled.test_name ? 'opacity-50' : ''}`}
                 />
               </div>
               
