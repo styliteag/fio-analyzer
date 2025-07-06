@@ -1,5 +1,5 @@
 // Base API service with authentication and common functionality
-const API_BASE_URL = import.meta.env.VITE_API_URL || ".";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 export interface ApiResponse<T = any> {
     data?: T;
@@ -16,6 +16,7 @@ const getAuthHeaders = (): HeadersInit => {
             return {
                 Authorization: `Basic ${credentials}`,
                 "Content-Type": "application/json",
+                Accept: "application/json",
             };
         } catch {
             // If parsing fails, remove invalid auth data
@@ -24,6 +25,7 @@ const getAuthHeaders = (): HeadersInit => {
     }
     return {
         "Content-Type": "application/json",
+        Accept: "application/json",
     };
 };
 
@@ -65,6 +67,15 @@ export const apiCall = async <T>(
             return {
                 status: response.status,
                 error: `API Error: ${response.statusText}`,
+            };
+        }
+
+        // Ensure we only attempt JSON parsing when the content-type is JSON
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+            return {
+                status: response.status,
+                error: `Unexpected response format (content-type: ${contentType || 'unknown'})`,
             };
         }
 

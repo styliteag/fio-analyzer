@@ -30,7 +30,7 @@ interface GroupEditingState {
 
 const Admin: React.FC = () => {
   // Feature flag for server-side filtering (can be made configurable later)
-  const useServerSideFiltering = false;
+  const useServerSideFiltering = true;
   
   // Traditional client-side hook (fallback)
   const { 
@@ -80,6 +80,17 @@ const Admin: React.FC = () => {
     drive_model: false,
   });
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [historyEditModalOpen, setHistoryEditModalOpen] = useState(false);
+  const [historyEditFields, setHistoryEditFields] = useState<EditableFields>({});
+  const [historyEditEnabled, setHistoryEditEnabled] = useState<Record<keyof EditableFields, boolean>>({
+    hostname: false,
+    protocol: false,
+    description: false,
+    test_name: false,
+    drive_type: false,
+    drive_model: false,
+  });
+  const [selectedHistoryGroup, setSelectedHistoryGroup] = useState<any>(null);
   const [sortField, setSortField] = useState<keyof TestRun>('timestamp');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [fromDate, setFromDate] = useState<string>('');
@@ -518,6 +529,108 @@ const Admin: React.FC = () => {
     }
   };
 
+  // History line editing functions
+  const openHistoryEditModal = (group: any) => {
+    setSelectedHistoryGroup(group);
+    
+    // Get most common values from the group's runs
+    const commonValues = {
+      hostname: getMostCommonValue(group.runs.map((run: TestRun) => run.hostname)),
+      protocol: getMostCommonValue(group.runs.map((run: TestRun) => run.protocol)),
+      description: getMostCommonValue(group.runs.map((run: TestRun) => run.description)),
+      test_name: getMostCommonValue(group.runs.map((run: TestRun) => run.test_name)),
+      drive_type: getMostCommonValue(group.runs.map((run: TestRun) => run.drive_type)),
+      drive_model: getMostCommonValue(group.runs.map((run: TestRun) => run.drive_model)),
+    };
+    
+    setHistoryEditFields(commonValues);
+    setHistoryEditEnabled({
+      hostname: false,
+      protocol: false,
+      description: false,
+      test_name: false,
+      drive_type: false,
+      drive_model: false,
+    });
+    setHistoryEditModalOpen(true);
+  };
+
+  const handleHistoryEdit = async () => {
+    if (!selectedHistoryGroup) return;
+    
+    // Only include fields that are enabled for update
+    const fieldsToUpdate: EditableFields = {};
+    Object.entries(historyEditEnabled).forEach(([field, enabled]) => {
+      if (enabled && historyEditFields[field as keyof EditableFields] !== undefined) {
+        fieldsToUpdate[field as keyof EditableFields] = historyEditFields[field as keyof EditableFields];
+      }
+    });
+    
+    // Guard against empty updates
+    if (Object.keys(fieldsToUpdate).length === 0) {
+      alert('Please enable at least one field and provide a value to update.');
+      return;
+    }
+
+    try {
+      // Update all runs in the history group
+      const testRunIds = selectedHistoryGroup.runs.map((run: TestRun) => run.id);
+      await bulkUpdateTestRuns(testRunIds, fieldsToUpdate);
+      setHistoryEditModalOpen(false);
+      setHistoryEditFields({});
+      setHistoryEditEnabled({
+        hostname: false,
+        protocol: false,
+        description: false,
+        test_name: false,
+        drive_type: false,
+        drive_model: false,
+      });
+      setSelectedHistoryGroup(null);
+      refreshTestRuns(true);
+    } catch (err) {
+      console.error('Failed to update history group:', err);
+      alert(err instanceof Error ? err.message : 'History update failed');
+    }
+  };
+
+  const updateHistoryEditField = (field: keyof EditableFields, value: string) => {
+    setHistoryEditFields(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleHistoryFieldEnabledChange = (field: keyof EditableFields, enabled: boolean) => {
+    setHistoryEditEnabled(prev => ({ ...prev, [field]: enabled }));
+    
+    if (enabled && selectedHistoryGroup) {
+      // When enabling, update the field with the most common value from the group
+      let values: (string | undefined)[] = [];
+      
+      switch (field) {
+        case 'hostname':
+          values = selectedHistoryGroup.runs.map((run: TestRun) => run.hostname);
+          break;
+        case 'protocol':
+          values = selectedHistoryGroup.runs.map((run: TestRun) => run.protocol);
+          break;
+        case 'description':
+          values = selectedHistoryGroup.runs.map((run: TestRun) => run.description);
+          break;
+        case 'test_name':
+          values = selectedHistoryGroup.runs.map((run: TestRun) => run.test_name);
+          break;
+        case 'drive_type':
+          values = selectedHistoryGroup.runs.map((run: TestRun) => run.drive_type);
+          break;
+        case 'drive_model':
+          values = selectedHistoryGroup.runs.map((run: TestRun) => run.drive_model);
+          break;
+      }
+      
+      const commonValue = getMostCommonValue(values);
+      setHistoryEditFields(prev => ({ ...prev, [field]: commonValue }));
+    }
+  };
+
   if (loading) {
     return <Loading className="min-h-screen" />;
   }
@@ -856,20 +969,32 @@ const Admin: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            {isGroupEditing ? (
-                              <div className="flex gap-1">
-                                <Button onClick={saveGroupEdit} size="sm" variant="primary">
-                                  <Check className="h-3 w-3" />
-                                </Button>
-                                <Button onClick={cancelGroupEdit} size="sm" variant="secondary">
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button onClick={() => startGroupEdit(group)} size="sm" variant="secondary">
-                                <Edit2 className="h-3 w-3" />
-                              </Button>
-                            )}
+                            <div className="flex gap-2">
+                              {isGroupEditing ? (
+                                <>
+                                  <Button onClick={saveGroupEdit} size="sm" variant="primary">
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                  <Button onClick={cancelGroupEdit} size="sm" variant="secondary">
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button onClick={() => startGroupEdit(group)} size="sm" variant="secondary">
+                                    <Edit2 className="h-3 w-3" />
+                                  </Button>
+                                  <Button 
+                                    onClick={() => openHistoryEditModal(group)} 
+                                    size="sm" 
+                                    variant="outline"
+                                    title="Edit all historical runs in this group"
+                                  >
+                                    History Line Editable
+                                  </Button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                         
@@ -1450,6 +1575,180 @@ const Admin: React.FC = () => {
                 onClick={() => setBulkDeleteModalOpen(false)} 
                 variant="secondary"
                 className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* History Edit Modal */}
+        <Modal
+          isOpen={historyEditModalOpen}
+          onClose={() => setHistoryEditModalOpen(false)}
+          title="Edit History Line"
+          size="lg"
+        >
+          <div className="space-y-4">
+            {selectedHistoryGroup && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                  Editing {selectedHistoryGroup.count} Historical Runs
+                </h4>
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <p><strong>Configuration:</strong> {selectedHistoryGroup.hostname} • {selectedHistoryGroup.protocol}</p>
+                  <p><strong>Drive:</strong> {selectedHistoryGroup.drive_model} ({selectedHistoryGroup.drive_type})</p>
+                  <p><strong>Test Pattern:</strong> {selectedHistoryGroup.test_pattern} • Block Size: {selectedHistoryGroup.block_size} • Queue Depth: {selectedHistoryGroup.queue_depth}</p>
+                  <p><strong>Date Range:</strong> {selectedHistoryGroup.startDate.toISOString().split('T')[0]} to {selectedHistoryGroup.endDate.toISOString().split('T')[0]}</p>
+                </div>
+              </div>
+            )}
+            
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Update all {selectedHistoryGroup?.count || 0} historical test runs in this group. Check the fields you want to update with the common values.
+            </p>
+            
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="history-hostname-enabled"
+                    checked={historyEditEnabled.hostname}
+                    onChange={(e) => handleHistoryFieldEnabledChange('hostname', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="history-hostname-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Update Hostname
+                  </label>
+                </div>
+                <Input
+                  value={historyEditFields.hostname || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('hostname', e.target.value)}
+                  placeholder="Common hostname value"
+                  disabled={!historyEditEnabled.hostname}
+                  className={`w-full ${!historyEditEnabled.hostname ? 'opacity-50' : ''}`}
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="history-protocol-enabled"
+                    checked={historyEditEnabled.protocol}
+                    onChange={(e) => handleHistoryFieldEnabledChange('protocol', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="history-protocol-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Update Protocol
+                  </label>
+                </div>
+                <Input
+                  value={historyEditFields.protocol || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('protocol', e.target.value)}
+                  placeholder="Common protocol value"
+                  disabled={!historyEditEnabled.protocol}
+                  className={`w-full ${!historyEditEnabled.protocol ? 'opacity-50' : ''}`}
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="history-description-enabled"
+                    checked={historyEditEnabled.description}
+                    onChange={(e) => handleHistoryFieldEnabledChange('description', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="history-description-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Update Description
+                  </label>
+                </div>
+                <Input
+                  value={historyEditFields.description || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('description', e.target.value)}
+                  placeholder="Common description value"
+                  disabled={!historyEditEnabled.description}
+                  className={`w-full ${!historyEditEnabled.description ? 'opacity-50' : ''}`}
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="history-test_name-enabled"
+                    checked={historyEditEnabled.test_name}
+                    onChange={(e) => handleHistoryFieldEnabledChange('test_name', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="history-test_name-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Update Test Name
+                  </label>
+                </div>
+                <Input
+                  value={historyEditFields.test_name || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('test_name', e.target.value)}
+                  placeholder="Common test name value"
+                  disabled={!historyEditEnabled.test_name}
+                  className={`w-full ${!historyEditEnabled.test_name ? 'opacity-50' : ''}`}
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="history-drive_type-enabled"
+                    checked={historyEditEnabled.drive_type}
+                    onChange={(e) => handleHistoryFieldEnabledChange('drive_type', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="history-drive_type-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Update Drive Type
+                  </label>
+                </div>
+                <Input
+                  value={historyEditFields.drive_type || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('drive_type', e.target.value)}
+                  placeholder="Common drive type value"
+                  disabled={!historyEditEnabled.drive_type}
+                  className={`w-full ${!historyEditEnabled.drive_type ? 'opacity-50' : ''}`}
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="history-drive_model-enabled"
+                    checked={historyEditEnabled.drive_model}
+                    onChange={(e) => handleHistoryFieldEnabledChange('drive_model', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="history-drive_model-enabled" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Update Drive Model
+                  </label>
+                </div>
+                <Input
+                  value={historyEditFields.drive_model || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateHistoryEditField('drive_model', e.target.value)}
+                  placeholder="Common drive model value"
+                  disabled={!historyEditEnabled.drive_model}
+                  className={`w-full ${!historyEditEnabled.drive_model ? 'opacity-50' : ''}`}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 pt-4">
+              <Button onClick={handleHistoryEdit} className="flex-1">
+                Update {selectedHistoryGroup?.count || 0} Historical Runs
+              </Button>
+              <Button 
+                onClick={() => setHistoryEditModalOpen(false)} 
+                variant="secondary"
               >
                 Cancel
               </Button>
