@@ -167,3 +167,5 @@ PASSWORD=admin             # Authentication password
 BLOCK_SIZES=4k,64k,1M      # Test block sizes
 TEST_PATTERNS=read,write   # Test patterns
 ```
+
+also look at CLAUDE.md for instructions
