@@ -52,6 +52,11 @@ interface HistoryEditState {
   enabledFields: Record<keyof EditableFields, boolean>;
 }
 
+interface HistoryDeleteState {
+  isOpen: boolean;
+  group: any | null;
+}
+
 const Admin: React.FC = () => {
   const navigate = useNavigate();
   const [view, setView] = useState<'latest' | 'history'>('latest');
@@ -62,12 +67,12 @@ const Admin: React.FC = () => {
     isOpen: false,
     fields: {},
     enabledFields: {
-      hostname: false,
-      protocol: false,
-      description: false,
-      test_name: false,
-      drive_type: false,
-      drive_model: false,
+    hostname: false,
+    protocol: false,
+    description: false,
+    test_name: false,
+    drive_type: false,
+    drive_model: false,
     }
   });
   const [bulkDeleteState, setBulkDeleteState] = useState<BulkDeleteState>({
@@ -86,6 +91,10 @@ const Admin: React.FC = () => {
       drive_model: false,
     }
   });
+  const [historyDeleteState, setHistoryDeleteState] = useState<HistoryDeleteState>({
+    isOpen: false,
+    group: null,
+  });
   const {
     testRuns,
     loading,
@@ -94,6 +103,7 @@ const Admin: React.FC = () => {
     activeFilters,
     setActiveFilters,
     clearFilters,
+    refetch,
   } = useServerSideTestRuns({ includeHistorical: true });
 
   // Split latest vs historical early for easy memoisation
@@ -123,22 +133,22 @@ const Admin: React.FC = () => {
   // Sort latest runs
   const sortedLatestRuns = useMemo(() => {
     return [...latestRuns].sort((a, b) => {
-      const aVal = a[sortField];
-      const bVal = b[sortField];
-      
-      if (aVal === undefined || aVal === null) return 1;
-      if (bVal === undefined || bVal === null) return -1;
-      
-      let comparison = 0;
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        comparison = aVal.localeCompare(bVal);
-      } else if (typeof aVal === 'number' && typeof bVal === 'number') {
-        comparison = aVal - bVal;
-      } else {
-        comparison = String(aVal).localeCompare(String(bVal));
-      }
-      
-      return sortDirection === 'desc' ? -comparison : comparison;
+    const aVal = a[sortField];
+    const bVal = b[sortField];
+    
+    if (aVal === undefined || aVal === null) return 1;
+    if (bVal === undefined || bVal === null) return -1;
+    
+    let comparison = 0;
+    if (typeof aVal === 'string' && typeof bVal === 'string') {
+      comparison = aVal.localeCompare(bVal);
+    } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+      comparison = aVal - bVal;
+    } else {
+      comparison = String(aVal).localeCompare(String(bVal));
+    }
+    
+    return sortDirection === 'desc' ? -comparison : comparison;
     });
   }, [latestRuns, sortField, sortDirection]);
 
@@ -264,8 +274,7 @@ const Admin: React.FC = () => {
       }
       
       // Refresh the data after successful update
-      // TODO: Add refresh function to the hook
-      window.location.reload();
+      await refetch();
       
       closeBulkEditModal();
       setSelectedRuns(new Set());
@@ -290,13 +299,11 @@ const Admin: React.FC = () => {
       const result = await deleteTestRuns(Array.from(selectedRuns));
       
       if (result.failed > 0) {
-        alert(`Successfully deleted ${result.successful} test runs, but failed to delete ${result.failed} runs.`);
-      } else {
-        alert(`Successfully deleted ${result.successful} test runs.`);
+        console.warn(`Successfully deleted ${result.successful} test runs, but failed to delete ${result.failed} runs.`);
       }
       
       // Refresh the data after successful deletion
-      window.location.reload();
+      await refetch();
       
       closeBulkDeleteModal();
       setSelectedRuns(new Set());
@@ -378,7 +385,7 @@ const Admin: React.FC = () => {
       }
       
       // Refresh the data after successful update
-      window.location.reload();
+      await refetch();
       
       closeHistoryEditModal();
     } catch (err) {
@@ -387,10 +394,52 @@ const Admin: React.FC = () => {
     }
   };
 
+  // History delete functions
+  const openHistoryDeleteModal = (group: any) => {
+    setHistoryDeleteState({
+      isOpen: true,
+      group,
+    });
+  };
+
+  const closeHistoryDeleteModal = () => {
+    setHistoryDeleteState({ isOpen: false, group: null });
+  };
+
+  const handleHistoryDelete = async () => {
+    if (!historyDeleteState.group) return;
+
+    try {
+      // Find the latest run (is_latest = 1) and exclude it from deletion
+      const historicalRunsToDelete = historyDeleteState.group.runs.filter((run: TestRun) => run.is_latest === 0);
+      
+      if (historicalRunsToDelete.length === 0) {
+        console.warn('No historical runs to delete. Only the latest run will be kept.');
+        closeHistoryDeleteModal();
+        return;
+      }
+
+      const testRunIds = historicalRunsToDelete.map((run: TestRun) => run.id);
+      const result = await deleteTestRuns(testRunIds);
+      
+      if (result.failed > 0) {
+        console.warn(`Successfully deleted ${result.successful} historical runs, but failed to delete ${result.failed} runs.`);
+      }
+      
+      // Refresh the data after successful deletion
+      await refetch();
+      
+      closeHistoryDeleteModal();
+    } catch (err) {
+      console.error('Failed to delete history group:', err);
+      alert(err instanceof Error ? err.message : 'History deletion failed');
+    }
+  };
+
   /* ----- rendering helpers ----- */
   const renderFilters = () => {
     if (!filters) return null;
-    return (
+  return (
       <div className="theme-card p-4 mb-6">
         <div className="flex items-center gap-2 mb-4">
           <Filter className="h-4 w-4 theme-text-accent" />
@@ -399,55 +448,55 @@ const Admin: React.FC = () => {
         <div className="flex flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <label className="text-xs font-medium theme-text-secondary whitespace-nowrap">Host:</label>
-            <select
-              value={activeFilters.hostnames[0] || ''}
+                  <select
+                    value={activeFilters.hostnames[0] || ''}
               onChange={e => setActiveFilters({ ...activeFilters, hostnames: e.target.value ? [e.target.value] : [] })}
               className="theme-form-select text-sm px-3 py-1.5 min-w-32"
-            >
-              <option value="">All Hosts</option>
+                  >
+                    <option value="">All Hosts</option>
               {filters.hostnames.map(h => (
                 <option key={h} value={h}>{h}</option>
-              ))}
-            </select>
+                    ))}
+                  </select>
           </div>
           <div className="flex items-center gap-2">
             <label className="text-xs font-medium theme-text-secondary whitespace-nowrap">Protocol:</label>
-            <select
-              value={activeFilters.protocols[0] || ''}
+                  <select
+                    value={activeFilters.protocols[0] || ''}
               onChange={e => setActiveFilters({ ...activeFilters, protocols: e.target.value ? [e.target.value] : [] })}
               className="theme-form-select text-sm px-3 py-1.5 min-w-32"
-            >
-              <option value="">All Protocols</option>
+                  >
+                    <option value="">All Protocols</option>
               {filters.protocols.map(p => (
                 <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+                    ))}
+                  </select>
           </div>
           <div className="flex items-center gap-2">
             <label className="text-xs font-medium theme-text-secondary whitespace-nowrap">Drive Type:</label>
-            <select
-              value={activeFilters.drive_types[0] || ''}
+                  <select
+                    value={activeFilters.drive_types[0] || ''}
               onChange={e => setActiveFilters({ ...activeFilters, drive_types: e.target.value ? [e.target.value] : [] })}
               className="theme-form-select text-sm px-3 py-1.5 min-w-32"
-            >
-              <option value="">All Drive Types</option>
+                  >
+                    <option value="">All Drive Types</option>
               {filters.drive_types.map(type => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
           </div>
           {(activeFilters.hostnames.length + activeFilters.protocols.length + activeFilters.drive_types.length) > 0 && (
-            <Button
+                    <Button
               onClick={clearFilters}
               variant="secondary"
-              size="sm"
+                      size="sm"
               className="text-xs"
-            >
-              Clear Filters
-            </Button>
-          )}
-        </div>
-      </div>
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
+                </div>
     );
   };
 
@@ -458,7 +507,7 @@ const Admin: React.FC = () => {
           <thead className="theme-bg-secondary">
             <tr>
               <th className="px-4 py-3 text-left">
-                <input
+                  <input
                   type="checkbox"
                   checked={selectedRuns.size === sortedLatestRuns.length && sortedLatestRuns.length > 0}
                   onChange={handleSelectAll}
@@ -481,7 +530,7 @@ const Admin: React.FC = () => {
                 <div className="flex items-center gap-1">
                   Timestamp
                   <SortIcon field="timestamp" />
-                </div>
+              </div>
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
@@ -508,7 +557,7 @@ const Admin: React.FC = () => {
                 <div className="flex items-center gap-1">
                   Model
                   <SortIcon field="drive_model" />
-                </div>
+              </div>
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
@@ -517,7 +566,7 @@ const Admin: React.FC = () => {
                 <div className="flex items-center gap-1">
                   Type
                   <SortIcon field="drive_type" />
-                </div>
+            </div>
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
@@ -526,19 +575,19 @@ const Admin: React.FC = () => {
                 <div className="flex items-center gap-1">
                   Pattern
                   <SortIcon field="read_write_pattern" />
-                </div>
-              </th>
+              </div>
+                    </th>
               <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">
                 Config
-              </th>
-            </tr>
-          </thead>
+                    </th>
+                  </tr>
+                </thead>
           <tbody className="theme-bg-card">
             {sortedLatestRuns.map((run, index) => (
               <React.Fragment key={run.id}>
                 {/* Main data row */}
                 <tr className={index % 2 === 0 ? 'theme-bg-secondary' : 'theme-bg-card'}>
-                  <td className="px-4 py-3">
+                          <td className="px-4 py-3">
                     <input
                       type="checkbox"
                       checked={selectedRuns.has(run.id)}
@@ -577,17 +626,17 @@ const Admin: React.FC = () => {
                       {run.block_size && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
                           {run.block_size}
-                        </span>
+                                </span>
                       )}
                       {run.direct !== undefined && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
                           DIR{run.direct}
-                        </span>
+                                </span>
                       )}
                       {run.sync !== undefined && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200">
                           SYN{run.sync}
-                        </span>
+                                </span>
                       )}
                       {run.test_size && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
@@ -599,10 +648,10 @@ const Admin: React.FC = () => {
                           {run.duration}s
                         </span>
                       )}
-                    </div>
-                  </td>
-                </tr>
-                
+                            </div>
+                          </td>
+                        </tr>
+                        
                 {/* Description row spanning all columns */}
                 <tr className={index % 2 === 0 ? 'theme-bg-secondary' : 'theme-bg-card'}>
                   <td colSpan={10} className="px-4 pb-3 pt-1">
@@ -611,21 +660,21 @@ const Admin: React.FC = () => {
                         <span className="text-xs theme-text-quaternary font-medium mt-0.5 whitespace-nowrap">Test Name:</span>
                         <div className="text-xs leading-relaxed break-words theme-text-secondary">
                           {run.test_name || <span className="italic theme-text-quaternary">No test name</span>}
-                        </div>
+                              </div>
                       </div>
-                      <div className="flex items-start gap-2">
+                              <div className="flex items-start gap-2">
                         <span className="text-xs theme-text-quaternary font-medium mt-0.5 whitespace-nowrap">Description:</span>
                         <div className="text-xs leading-relaxed break-words theme-text-secondary">
                           {run.description || <span className="italic theme-text-quaternary">No description</span>}
-                        </div>
-                      </div>
+                                </div>
+                              </div>
                     </div>
-                  </td>
-                </tr>
-              </React.Fragment>
+                          </td>
+                        </tr>
+                      </React.Fragment>
             ))}
-          </tbody>
-        </table>
+                </tbody>
+              </table>
       </div>
     </div>
   );
@@ -643,21 +692,21 @@ const Admin: React.FC = () => {
               <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">rw</th>
               <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">Config</th>
               <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
+                  </tr>
+                </thead>
           <tbody className="theme-bg-card">
             {groupedHistory.map((group, index) => (
               <React.Fragment key={group.key}>
                 {/* Main group row */}
                 <tr className={index % 2 === 0 ? 'theme-bg-secondary' : 'theme-bg-card'}>
-                  <td className="px-4 py-3">
+                        <td className="px-4 py-3">
                     <div className="max-w-md">
                       <div className="text-sm theme-text-primary font-medium mb-1">
                         {group.first.hostname} • {group.first.protocol}
-                      </div>
+                          </div>
                       <div className="text-xs theme-text-secondary">
                         {group.first.drive_model} ({group.first.drive_type})
-                      </div>
+                          </div>
                       <div className="flex gap-1 mt-1">
                         <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                           {group.first.read_write_pattern}
@@ -668,49 +717,49 @@ const Admin: React.FC = () => {
                         <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                           QD{group.first.queue_depth}
                         </span>
-                      </div>
-                    </div>
-                  </td>
+                              </div>
+                            </div>
+                        </td>
                   <td className="px-4 py-3 text-xs theme-text-secondary">
                     {new Date(group.first.timestamp).toLocaleDateString()}
-                  </td>
+                        </td>
                   <td className="px-4 py-3 text-xs theme-text-secondary">
                     {new Date(group.last.timestamp).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3">
+                        </td>
+                        <td className="px-4 py-3">
                     <span className="inline-flex items-center px-3 py-1 text-sm font-medium rounded-md bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
                       {group.count} runs
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
+                        </td>
+                        <td className="px-4 py-3">
                     {group.first.read_write_pattern ? (
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                         group.first.read_write_pattern.includes('read') 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          : 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                      }`}>
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                : 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                            }`}>
                         {group.first.read_write_pattern}
-                      </span>
-                    ) : (
+                            </span>
+                          ) : (
                       <span className="text-sm theme-text-quaternary">-</span>
-                    )}
-                  </td>
+                          )}
+                        </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 flex-wrap">
                       {group.first.queue_depth && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                           QD{group.first.queue_depth}
-                        </span>
+                          </span>
                       )}
                       {group.first.block_size && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
                           {group.first.block_size}
-                        </span>
+                          </span>
                       )}
                       {group.first.direct !== undefined && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
                           DIR{group.first.direct}
-                        </span>
+                          </span>
                       )}
                       {group.first.sync !== undefined && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200">
@@ -726,45 +775,55 @@ const Admin: React.FC = () => {
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                           {group.first.duration}s
                         </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Button 
-                      onClick={() => openHistoryEditModal(group)} 
-                      size="sm" 
-                      variant="outline"
-                      title="Edit all historical runs in this group"
-                    >
-                      Edit
-                    </Button>
-                  </td>
-                </tr>
-                
-                {/* Description row spanning all columns */}
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => openHistoryEditModal(group)} 
+                        size="sm" 
+                        variant="outline"
+                        title="Edit all historical runs in this group"
+                      >
+                        Edit
+                              </Button>
+                      <Button 
+                        onClick={() => openHistoryDeleteModal(group)} 
+                        size="sm" 
+                        variant="danger"
+                        title="Delete all historical runs, keeping only the latest"
+                      >
+                        Delete History
+                              </Button>
+                            </div>
+                        </td>
+                        </tr>
+                        
+                        {/* Description row spanning all columns */}
                 <tr className={index % 2 === 0 ? 'theme-bg-secondary' : 'theme-bg-card'}>
                   <td colSpan={12} className="px-4 pb-3 pt-1">
-                    <div className="space-y-1">
-                      <div className="flex items-start gap-2">
+                              <div className="space-y-1">
+                                <div className="flex items-start gap-2">
                         <span className="text-xs theme-text-quaternary font-medium mt-0.5 whitespace-nowrap">Test Name:</span>
                         <div className="text-xs leading-relaxed break-words theme-text-secondary">
                           {group.first.test_name || <span className="italic theme-text-quaternary">No test name</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-2">
+                                  </div>
+                                </div>
+                                <div className="flex items-start gap-2">
                         <span className="text-xs theme-text-quaternary font-medium mt-0.5 whitespace-nowrap">Description:</span>
                         <div className="text-xs leading-relaxed break-words theme-text-secondary">
                           {group.first.description || <span className="italic theme-text-quaternary">No description</span>}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              </React.Fragment>
+                                  </div>
+                                </div>
+                              </div>
+                          </td>
+                        </tr>
+                      </React.Fragment>
             ))}
-          </tbody>
-        </table>
-      </div>
+                </tbody>
+              </table>
+          </div>
     </div>
   );
 
@@ -830,33 +889,33 @@ const Admin: React.FC = () => {
         {/* Bulk Edit Controls */}
         {view === 'latest' && selectedRuns.size > 0 && (
           <div className="mb-4 p-4 theme-card">
-            <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between">
               <span className="text-sm theme-text-secondary">
                 {selectedRuns.size} test run{selectedRuns.size !== 1 ? 's' : ''} selected
-              </span>
-              <div className="flex gap-2">
-                <Button
+                </span>
+                <div className="flex gap-2">
+                  <Button
                   onClick={openBulkEditModal}
                   variant="primary"
-                  size="sm"
+                    size="sm"
                   className="flex items-center gap-2"
-                >
+                  >
                   <Edit2 className="h-4 w-4" />
                   Bulk Edit
-                </Button>
-                <Button
+                  </Button>
+                  <Button
                   onClick={openBulkDeleteModal}
                   variant="danger"
-                  size="sm"
+                    size="sm"
                   className="flex items-center gap-2"
-                >
+                  >
                   <Trash2 className="h-4 w-4" />
                   Bulk Delete
-                </Button>
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Filters */}
         {renderFilters()}
@@ -872,219 +931,219 @@ const Admin: React.FC = () => {
                 ? `Showing ${latestRuns.length} latest runs`
                 : `Showing ${groupedHistory.length} configuration groups`
               }
-            </div>
+        </div>
           </div>
           {view === 'latest' ? renderLatestTable() : renderHistoryTable()}
         </div>
       </main>
 
-      {/* Bulk Edit Modal */}
-      <Modal
+        {/* Bulk Edit Modal */}
+        <Modal
         isOpen={bulkEditState.isOpen}
         onClose={closeBulkEditModal}
-        title="Bulk Edit Test Runs"
-        size="md"
-      >
-        <div className="space-y-4">
+          title="Bulk Edit Test Runs"
+          size="md"
+        >
+          <div className="space-y-4">
           <p className="text-sm theme-text-secondary">
-            Update {selectedRuns.size} selected test runs. Check the fields you want to update with the common values.
-          </p>
-          
-          <div className="space-y-3">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="hostname-enabled"
+              Update {selectedRuns.size} selected test runs. Check the fields you want to update with the common values.
+            </p>
+            
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="hostname-enabled"
                   checked={bulkEditState.enabledFields.hostname}
                   onChange={() => toggleFieldEnabled('hostname')}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
                 <label htmlFor="hostname-enabled" className="text-sm font-medium theme-text-primary">
-                  Update Hostname
-                </label>
-              </div>
+                    Update Hostname
+                  </label>
+                </div>
               <input
                 type="text"
                 value={bulkEditState.fields.hostname || ''}
                 onChange={(e) => updateBulkEditField('hostname', e.target.value)}
-                placeholder="Common hostname value"
+                  placeholder="Common hostname value"
                 disabled={!bulkEditState.enabledFields.hostname}
                 className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.hostname ? 'opacity-50' : ''}`}
-              />
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="protocol-enabled"
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="protocol-enabled"
                   checked={bulkEditState.enabledFields.protocol}
                   onChange={() => toggleFieldEnabled('protocol')}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
                 <label htmlFor="protocol-enabled" className="text-sm font-medium theme-text-primary">
-                  Update Protocol
-                </label>
-              </div>
+                    Update Protocol
+                  </label>
+                </div>
               <input
                 type="text"
                 value={bulkEditState.fields.protocol || ''}
                 onChange={(e) => updateBulkEditField('protocol', e.target.value)}
-                placeholder="Common protocol value"
+                  placeholder="Common protocol value"
                 disabled={!bulkEditState.enabledFields.protocol}
                 className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.protocol ? 'opacity-50' : ''}`}
-              />
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="description-enabled"
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="description-enabled"
                   checked={bulkEditState.enabledFields.description}
                   onChange={() => toggleFieldEnabled('description')}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
                 <label htmlFor="description-enabled" className="text-sm font-medium theme-text-primary">
-                  Update Description
-                </label>
-              </div>
+                    Update Description
+                  </label>
+                </div>
               <input
                 type="text"
                 value={bulkEditState.fields.description || ''}
                 onChange={(e) => updateBulkEditField('description', e.target.value)}
-                placeholder="Common description value"
+                  placeholder="Common description value"
                 disabled={!bulkEditState.enabledFields.description}
                 className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.description ? 'opacity-50' : ''}`}
-              />
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="test_name-enabled"
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="test_name-enabled"
                   checked={bulkEditState.enabledFields.test_name}
                   onChange={() => toggleFieldEnabled('test_name')}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
                 <label htmlFor="test_name-enabled" className="text-sm font-medium theme-text-primary">
-                  Update Test Name
-                </label>
-              </div>
+                    Update Test Name
+                  </label>
+                </div>
               <input
                 type="text"
                 value={bulkEditState.fields.test_name || ''}
                 onChange={(e) => updateBulkEditField('test_name', e.target.value)}
-                placeholder="Common test name value"
+                  placeholder="Common test name value"
                 disabled={!bulkEditState.enabledFields.test_name}
                 className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.test_name ? 'opacity-50' : ''}`}
-              />
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="drive_type-enabled"
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="drive_type-enabled"
                   checked={bulkEditState.enabledFields.drive_type}
                   onChange={() => toggleFieldEnabled('drive_type')}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
                 <label htmlFor="drive_type-enabled" className="text-sm font-medium theme-text-primary">
-                  Update Drive Type
-                </label>
-              </div>
+                    Update Drive Type
+                  </label>
+                </div>
               <input
                 type="text"
                 value={bulkEditState.fields.drive_type || ''}
                 onChange={(e) => updateBulkEditField('drive_type', e.target.value)}
-                placeholder="Common drive type value"
+                  placeholder="Common drive type value"
                 disabled={!bulkEditState.enabledFields.drive_type}
                 className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.drive_type ? 'opacity-50' : ''}`}
-              />
-            </div>
-            
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="drive_model-enabled"
+                />
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="drive_model-enabled"
                   checked={bulkEditState.enabledFields.drive_model}
                   onChange={() => toggleFieldEnabled('drive_model')}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
                 <label htmlFor="drive_model-enabled" className="text-sm font-medium theme-text-primary">
-                  Update Drive Model
-                </label>
-              </div>
+                    Update Drive Model
+                  </label>
+                </div>
               <input
                 type="text"
                 value={bulkEditState.fields.drive_model || ''}
                 onChange={(e) => updateBulkEditField('drive_model', e.target.value)}
-                placeholder="Common drive model value"
+                  placeholder="Common drive model value"
                 disabled={!bulkEditState.enabledFields.drive_model}
                 className={`w-full px-3 py-2 text-sm border rounded-md theme-form-input ${!bulkEditState.enabledFields.drive_model ? 'opacity-50' : ''}`}
-              />
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 pt-4">
+              <Button onClick={handleBulkEdit} className="flex-1">
+                Update {selectedRuns.size} Runs
+              </Button>
+              <Button 
+              onClick={closeBulkEditModal} 
+                variant="secondary"
+              >
+                Cancel
+              </Button>
             </div>
           </div>
-          
-          <div className="flex gap-3 pt-4">
-            <Button onClick={handleBulkEdit} className="flex-1">
-              Update {selectedRuns.size} Runs
-            </Button>
-            <Button 
-              onClick={closeBulkEditModal} 
-              variant="secondary"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        </Modal>
 
-      {/* Bulk Delete Confirmation Modal */}
-      <Modal
+        {/* Bulk Delete Confirmation Modal */}
+        <Modal
         isOpen={bulkDeleteState.isOpen}
         onClose={closeBulkDeleteModal}
-        title="Confirm Bulk Delete"
-        size="md"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 dark:bg-red-900 rounded-full">
-            <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
-          </div>
-          
-          <div className="text-center">
+          title="Confirm Bulk Delete"
+          size="md"
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 dark:bg-red-900 rounded-full">
+              <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+            </div>
+            
+            <div className="text-center">
             <h3 className="text-lg font-medium theme-text-primary mb-2">
-              Delete {selectedRuns.size} Test Runs
-            </h3>
+                Delete {selectedRuns.size} Test Runs
+              </h3>
             <p className="text-sm theme-text-secondary">
-              Are you sure you want to delete these {selectedRuns.size} test runs? This action cannot be undone.
-              All associated performance metrics and data will be permanently removed.
-            </p>
-          </div>
-          
-          <div className="flex gap-3 pt-4">
-            <Button 
-              onClick={handleBulkDelete} 
-              variant="danger"
-              className="flex-1"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete {selectedRuns.size} Runs
-            </Button>
-            <Button 
+                Are you sure you want to delete these {selectedRuns.size} test runs? This action cannot be undone.
+                All associated performance metrics and data will be permanently removed.
+              </p>
+            </div>
+            
+            <div className="flex gap-3 pt-4">
+              <Button 
+                onClick={handleBulkDelete} 
+                variant="danger"
+                className="flex-1"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete {selectedRuns.size} Runs
+              </Button>
+              <Button 
               onClick={closeBulkDeleteModal} 
-              variant="secondary"
-              className="flex-1"
-            >
-              Cancel
-            </Button>
+                variant="secondary"
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
 
       {/* History Edit Modal */}
       <Modal
@@ -1104,7 +1163,7 @@ const Admin: React.FC = () => {
                 <p><strong>Drive:</strong> {historyEditState.group.first.drive_model} ({historyEditState.group.first.drive_type})</p>
                 <p><strong>Test Pattern:</strong> {historyEditState.group.first.read_write_pattern} • Block Size: {historyEditState.group.first.block_size} • Queue Depth: {historyEditState.group.first.queue_depth}</p>
                 <p><strong>Date Range:</strong> {new Date(historyEditState.group.first.timestamp).toISOString().split('T')[0]} to {new Date(historyEditState.group.last.timestamp).toISOString().split('T')[0]}</p>
-              </div>
+      </div>
             </div>
           )}
           
@@ -1265,8 +1324,60 @@ const Admin: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* History Delete Confirmation Modal */}
+      <Modal
+        isOpen={historyDeleteState.isOpen}
+        onClose={closeHistoryDeleteModal}
+        title="Delete History"
+        size="md"
+      >
+        <div className="space-y-4">
+          {historyDeleteState.group && (
+            <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+              <h4 className="font-medium text-red-900 dark:text-red-100 mb-2">
+                Delete {historyDeleteState.group.runs.filter((run: TestRun) => run.is_latest === 0).length} Historical Runs
+              </h4>
+              <div className="text-sm text-red-800 dark:text-red-200">
+                <p><strong>Configuration:</strong> {historyDeleteState.group.first.hostname} • {historyDeleteState.group.first.protocol}</p>
+                <p><strong>Drive:</strong> {historyDeleteState.group.first.drive_model} ({historyDeleteState.group.first.drive_type})</p>
+                <p><strong>Test Pattern:</strong> {historyDeleteState.group.first.read_write_pattern} • Block Size: {historyDeleteState.group.first.block_size} • Queue Depth: {historyDeleteState.group.first.queue_depth}</p>
+                <p><strong>Date Range:</strong> {new Date(historyDeleteState.group.first.timestamp).toISOString().split('T')[0]} to {new Date(historyDeleteState.group.last.timestamp).toISOString().split('T')[0]}</p>
+              </div>
+            </div>
+          )}
+          
+          <div className="text-center">
+            <h3 className="text-lg font-medium theme-text-primary mb-2">
+              Delete Historical Runs
+            </h3>
+            <p className="text-sm theme-text-secondary">
+              This will delete all historical runs in this group, keeping only the latest run. 
+              This action cannot be undone. All associated performance metrics and data for the historical runs will be permanently removed.
+            </p>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button 
+              onClick={handleHistoryDelete} 
+              variant="danger"
+              className="flex-1"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete {historyDeleteState.group ? historyDeleteState.group.runs.filter((run: TestRun) => run.is_latest === 0).length : 0} Historical Runs
+            </Button>
+            <Button 
+              onClick={closeHistoryDeleteModal} 
+              variant="secondary"
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
 
-export default Admin; 
+export default Admin;
