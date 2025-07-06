@@ -51,7 +51,7 @@ const Admin: React.FC = () => {
     activeFilters,
     setActiveFilters,
     clearFilters: clearServerFilters,
-    refetch: _refetchServerData,
+    refetch: _refetchServerData, // eslint-disable-line @typescript-eslint/no-unused-vars
     hasActiveFilters: hasServerFilters,
     filters: serverFilters
   } = useServerSideTestRuns({ 

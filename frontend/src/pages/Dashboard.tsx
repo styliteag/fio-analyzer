@@ -50,8 +50,8 @@ export default function Dashboard() {
 		clearFilters: clearServerFilters,
 		hasActiveFilters: serverHasActiveFilters,
 		loading: serverLoading,
-		error: _serverError,
-		filters: _serverFilterOptions
+		error: _serverError, // eslint-disable-line @typescript-eslint/no-unused-vars
+		filters: _serverFilterOptions // eslint-disable-line @typescript-eslint/no-unused-vars
 	} = useServerSideTestRuns({ 
 		includeHistorical: false, 
 		autoFetch: useServerSideFiltering 

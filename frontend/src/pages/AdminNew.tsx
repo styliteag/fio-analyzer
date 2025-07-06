@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Settings, Database, Filter, RefreshCw, BarChart3, History, Search, ChevronUp, ChevronDown, Edit2, Check, X, Trash2, ArrowLeft } from 'lucide-react';
+import { Settings, Database, Filter, BarChart3, History, ChevronUp, ChevronDown, Edit2, Trash2, ArrowLeft } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Loading from '../components/ui/Loading';
 import ErrorDisplay from '../components/ui/ErrorDisplay';
