@@ -45,14 +45,26 @@ const Admin: React.FC = () => {
 
   const filteredRuns = testRuns.filter(run => {
     if (!searchTerm) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      run.hostname?.toLowerCase().includes(searchLower) ||
-      run.protocol?.toLowerCase().includes(searchLower) ||
-      run.drive_model?.toLowerCase().includes(searchLower) ||
-      run.drive_type?.toLowerCase().includes(searchLower) ||
-      run.read_write_pattern?.toLowerCase().includes(searchLower)
-    );
+    
+    // Split search term by spaces and filter out empty strings
+    const searchTerms = searchTerm.toLowerCase().split(' ').filter(term => term.trim() !== '');
+    if (searchTerms.length === 0) return true;
+    
+    // Create a combined string of all searchable fields
+    const searchableFields = [
+      run.hostname,
+      run.protocol,
+      run.drive_model,
+      run.drive_type,
+      run.read_write_pattern,
+      run.test_name,
+      run.block_size,
+      run.queue_depth?.toString(),
+      run.duration?.toString()
+    ].filter(field => field != null).map(field => String(field).toLowerCase()).join(' ');
+    
+    // Check if ALL search terms are found in the combined fields
+    return searchTerms.every(term => searchableFields.includes(term));
   });
 
   const sortedRuns = [...filteredRuns].sort((a, b) => {
@@ -330,6 +342,7 @@ const Admin: React.FC = () => {
           </div>
         </div>
 
+
         {/* Table */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
           <div className="overflow-x-auto">
@@ -355,41 +368,84 @@ const Admin: React.FC = () => {
                     </button>
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Hostname
+                    <button onClick={() => handleSort('hostname')} className="hover:text-gray-700 dark:hover:text-gray-300">
+                      Hostname {sortField === 'hostname' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </button>
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Protocol
+                    <button onClick={() => handleSort('protocol')} className="hover:text-gray-700 dark:hover:text-gray-300">
+                      Protocol {sortField === 'protocol' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </button>
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Description
+                    <button onClick={() => handleSort('drive_type')} className="hover:text-gray-700 dark:hover:text-gray-300">
+                      Drive Type {sortField === 'drive_type' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </button>
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Drive Type
+                    <button onClick={() => handleSort('drive_model')} className="hover:text-gray-700 dark:hover:text-gray-300">
+                      Drive Model {sortField === 'drive_model' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </button>
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Drive Model
+                    <button onClick={() => handleSort('read_write_pattern')} className="hover:text-gray-700 dark:hover:text-gray-300">
+                      Test Pattern {sortField === 'read_write_pattern' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <button onClick={() => handleSort('block_size')} className="hover:text-gray-700 dark:hover:text-gray-300">
+                      Block Size {sortField === 'block_size' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <button onClick={() => handleSort('queue_depth')} className="hover:text-gray-700 dark:hover:text-gray-300">
+                      Queue Depth {sortField === 'queue_depth' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <button onClick={() => handleSort('duration')} className="hover:text-gray-700 dark:hover:text-gray-300">
+                      Duration {sortField === 'duration' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </button>
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="bg-white dark:bg-gray-800">
                 {sortedRuns.map((run) => {
                   const isEditing = editingState.testRunId === run.id;
+                  const isSelected = selectedRuns.has(run.id);
                   return (
-                    <tr key={run.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <React.Fragment key={run.id}>
+                      {/* Main data row */}
+                      <tr 
+                        className={`
+                          ${isSelected 
+                            ? 'bg-blue-50 dark:bg-blue-900/20' 
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                          }
+                          transition-colors duration-150
+                        `}
+                      >
                       <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedRuns.has(run.id)}
-                          onChange={() => handleSelectRun(run.id)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedRuns.has(run.id)}
+                            onChange={() => handleSelectRun(run.id)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{run.id}</td>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                        {new Date(run.timestamp).toLocaleString()}
+                      <td className={`px-4 py-3 text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100 font-medium' : 'text-gray-900 dark:text-white'}`}>
+                        {run.id}
+                      </td>
+                      <td className={`px-4 py-3 text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'}`}>
+                        <div className="flex flex-col min-w-20 max-w-28">
+                          <span className="font-medium font-mono text-xs whitespace-nowrap">{new Date(run.timestamp).toISOString().split('T')[0]}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{new Date(run.timestamp).toLocaleTimeString('en-US', { hour12: false, timeStyle: 'short' })}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {isEditing ? (
@@ -400,7 +456,11 @@ const Admin: React.FC = () => {
                             size="sm"
                           />
                         ) : (
-                          <span className="text-sm text-gray-900 dark:text-white">{run.hostname || '-'}</span>
+                          <div className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'} min-w-32`}>
+                            <div className="whitespace-nowrap" title={run.hostname}>
+                              {run.hostname || '-'}
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -412,19 +472,11 @@ const Admin: React.FC = () => {
                             size="sm"
                           />
                         ) : (
-                          <span className="text-sm text-gray-900 dark:text-white">{run.protocol || '-'}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {isEditing ? (
-                          <Input
-                            value={editingState.fields.description || ''}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('description', e.target.value)}
-                            className="w-full"
-                            size="sm"
-                          />
-                        ) : (
-                          <span className="text-sm text-gray-900 dark:text-white">{run.test_name || '-'}</span>
+                          <div className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'} max-w-20`}>
+                            <div className="truncate" title={run.protocol}>
+                              {run.protocol || '-'}
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -436,7 +488,11 @@ const Admin: React.FC = () => {
                             size="sm"
                           />
                         ) : (
-                          <span className="text-sm text-gray-900 dark:text-white">{run.drive_type || '-'}</span>
+                          <div className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'} max-w-20`}>
+                            <div className="truncate" title={run.drive_type}>
+                              {run.drive_type || '-'}
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -448,8 +504,44 @@ const Admin: React.FC = () => {
                             size="sm"
                           />
                         ) : (
-                          <span className="text-sm text-gray-900 dark:text-white">{run.drive_model || '-'}</span>
+                          <div className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-900 dark:text-white'} max-w-28`}>
+                            <div className="truncate" title={run.drive_model}>
+                              {run.drive_model || '-'}
+                            </div>
+                          </div>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {run.read_write_pattern ? (
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            run.read_write_pattern.includes('read') 
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                              : 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                          }`}>
+                            {run.read_write_pattern}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-sm font-mono ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-600 dark:text-gray-300'}`}>
+                          {run.block_size || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {run.queue_depth ? (
+                          <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            QD{run.queue_depth}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-sm ${isSelected ? 'text-blue-900 dark:text-blue-100' : 'text-gray-600 dark:text-gray-300'}`}>
+                          {run.duration ? `${run.duration}s` : '-'}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         {isEditing ? (
@@ -467,7 +559,40 @@ const Admin: React.FC = () => {
                           </Button>
                         )}
                       </td>
-                    </tr>
+                      </tr>
+                      
+                      {/* Description row */}
+                      <tr className={`
+                        ${isSelected 
+                          ? 'bg-blue-50 dark:bg-blue-900/20' 
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }
+                        transition-colors duration-150
+                      `}>
+                        <td className="px-4 pb-3 pt-0"></td>
+                        <td colSpan={11} className="px-4 pb-3 pt-0">
+                          {isEditing ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">Description:</span>
+                              <Input
+                                value={editingState.fields.description || ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateEditField('description', e.target.value)}
+                                className="flex-1"
+                                size="sm"
+                                placeholder="Test description"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-2">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5 whitespace-nowrap">Description:</span>
+                              <div className={`text-xs leading-relaxed break-words ${isSelected ? 'text-blue-800 dark:text-blue-200' : 'text-gray-600 dark:text-gray-400'}`}>
+                                {run.test_name || <span className="italic text-gray-400">No description</span>}
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
