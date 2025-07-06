@@ -159,6 +159,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({
                         setGroupBy={setGroupBy}
                         showControls={showControlsPanel}
                         onToggleControls={() => setShowControlsPanel(!showControlsPanel)}
+                        data={data}
                     />
                 </div>
             )}

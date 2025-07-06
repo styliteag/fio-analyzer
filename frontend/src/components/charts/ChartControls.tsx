@@ -2,6 +2,7 @@
 import React from 'react';
 import { ArrowUpDown, Filter, Layers } from 'lucide-react';
 import { Select } from '../ui';
+import type { PerformanceData } from '../../types';
 
 export type SortOption = 
     | "name"
@@ -29,6 +30,72 @@ export type GroupOption =
     | "testsize"
     | "duration";
 
+// Helper function to get available group options based on data
+const getAvailableGroupOptions = (data: PerformanceData[]): { value: GroupOption; label: string }[] => {
+    const baseOptions = [
+        { value: "none" as GroupOption, label: "No Grouping" },
+        { value: "drive" as GroupOption, label: "Drive Model" },
+        { value: "test" as GroupOption, label: "Test Type" },
+        { value: "blocksize" as GroupOption, label: "Block Size" },
+    ];
+
+    // Check for protocol diversity
+    const protocols = new Set(data.map(item => item.protocol).filter(Boolean));
+    if (protocols.size > 1) {
+        baseOptions.push({ value: "protocol" as GroupOption, label: "Protocol" });
+    }
+
+    // Check for hostname diversity
+    const hostnames = new Set(data.map(item => item.hostname).filter(Boolean));
+    if (hostnames.size > 1) {
+        baseOptions.push({ value: "hostname" as GroupOption, label: "Hostname" });
+    }
+
+    // Check for queue depth diversity
+    const queueDepths = new Set(data.map(item => item.queue_depth || (item as any).iodepth).filter(d => d !== undefined && d !== null));
+    if (queueDepths.size > 1) {
+        baseOptions.push({ value: "queuedepth" as GroupOption, label: "Queue Depth" });
+    }
+
+    // Check for IO depth diversity (separate from queue depth)
+    const ioDepths = new Set(data.map(item => (item as any).iodepth).filter(d => d !== undefined && d !== null));
+    if (ioDepths.size > 1) {
+        baseOptions.push({ value: "iodepth" as GroupOption, label: "IO Depth" });
+    }
+
+    // Check for num jobs diversity
+    const numJobs = new Set(data.map(item => (item as any).num_jobs).filter(d => d !== undefined && d !== null));
+    if (numJobs.size > 1) {
+        baseOptions.push({ value: "numjobs" as GroupOption, label: "Number of Jobs" });
+    }
+
+    // Check for direct IO diversity
+    const directIO = new Set(data.map(item => (item as any).direct).filter(d => d !== undefined && d !== null));
+    if (directIO.size > 1) {
+        baseOptions.push({ value: "direct" as GroupOption, label: "Direct IO" });
+    }
+
+    // Check for sync mode diversity
+    const syncModes = new Set(data.map(item => (item as any).sync).filter(d => d !== undefined && d !== null));
+    if (syncModes.size > 1) {
+        baseOptions.push({ value: "sync" as GroupOption, label: "Sync Mode" });
+    }
+
+    // Check for test size diversity
+    const testSizes = new Set(data.map(item => (item as any).test_size).filter(Boolean));
+    if (testSizes.size > 1) {
+        baseOptions.push({ value: "testsize" as GroupOption, label: "Test Size" });
+    }
+
+    // Check for duration diversity
+    const durations = new Set(data.map(item => (item as any).duration).filter(d => d !== undefined && d !== null));
+    if (durations.size > 1) {
+        baseOptions.push({ value: "duration" as GroupOption, label: "Runtime" });
+    }
+
+    return baseOptions;
+};
+
 export interface ChartControlsProps {
     sortBy: SortOption;
     setSortBy: (sort: SortOption) => void;
@@ -38,6 +105,7 @@ export interface ChartControlsProps {
     setGroupBy: (group: GroupOption) => void;
     showControls: boolean;
     onToggleControls: () => void;
+    data?: PerformanceData[];
     className?: string;
 }
 
@@ -50,6 +118,7 @@ const ChartControls: React.FC<ChartControlsProps> = ({
     setGroupBy,
     showControls,
     onToggleControls,
+    data = [],
     className = '',
 }) => {
     const sortOptions = [
@@ -64,21 +133,7 @@ const ChartControls: React.FC<ChartControlsProps> = ({
         { value: "queuedepth", label: "Queue Depth" },
     ];
 
-    const groupOptions = [
-        { value: "none", label: "No Grouping" },
-        { value: "drive", label: "Drive Model" },
-        { value: "test", label: "Test Type" },
-        { value: "blocksize", label: "Block Size" },
-        { value: "protocol", label: "Protocol" },
-        { value: "hostname", label: "Hostname" },
-        { value: "queuedepth", label: "Queue Depth" },
-        { value: "iodepth", label: "IO Depth" },
-        { value: "numjobs", label: "Number of Jobs" },
-        { value: "direct", label: "Direct IO" },
-        { value: "sync", label: "Sync Mode" },
-        { value: "testsize", label: "Test Size" },
-        { value: "duration", label: "Runtime" },
-    ];
+    const groupOptions = getAvailableGroupOptions(data);
 
     return (
         <div className={className}>
