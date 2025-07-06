@@ -1,6 +1,7 @@
 // Chart data processing utilities
 import type { ChartTemplate, PerformanceData } from '../../types';
 import { sortBlockSizes } from '../../utils/sorting';
+import { formatBlockSize } from '../../services/data/formatters';
 import type { SortOption, GroupOption } from './ChartControls';
 
 export interface ProcessorOptions {
@@ -247,7 +248,7 @@ export const processPerformanceOverview = (
     // If no grouping, use the original simple approach
     if (groupBy === "none") {
         const labels = sortedData.map((item) => 
-            `${item.drive_model} - ${item.block_size} - ${item.read_write_pattern}`
+            `${item.drive_model} - ${formatBlockSize(item.block_size)} - ${item.read_write_pattern}`
         );
 
         const datasets = [
@@ -296,7 +297,7 @@ export const processPerformanceOverview = (
 
     // Helper function to create consistent labels for grouping
     const createItemLabel = (item: PerformanceData): string => {
-        let labelParts = [item.drive_model, item.block_size, item.read_write_pattern];
+        let labelParts = [item.drive_model, formatBlockSize(item.block_size), item.read_write_pattern];
         
         // Add the groupBy field to ensure X-axis separation when grouping
         const excludedFromLabel: GroupOption[] = ["none", "drive", "test", "blocksize"];
@@ -323,9 +324,12 @@ export const processPerformanceOverview = (
         const groupColor = colors[colorIndex % colors.length];
         
         // IOPS dataset for this group
-        const iopsData = labels.map(label => {
-            const item = groupData.find(item => createItemLabel(item) === label);
-            return item ? getMetricValue(item.metrics, "iops") : 0;
+        const iopsData: number[] = [];
+        const iopsOriginal: PerformanceData[] = [];
+        labels.forEach(label => {
+            const item = groupData.find(d => createItemLabel(d) === label);
+            iopsData.push(item ? getMetricValue(item.metrics, "iops") : 0);
+            iopsOriginal.push(item as any);
         });
 
         datasets.push({
@@ -335,13 +339,16 @@ export const processPerformanceOverview = (
             borderColor: groupColor,
             borderWidth: 1,
             yAxisID: "y",
-            originalData: groupData,
+            originalData: iopsOriginal as unknown as PerformanceData[],
         });
 
         // Latency dataset for this group
-        const latencyData = labels.map(label => {
-            const item = groupData.find(item => createItemLabel(item) === label);
-            return item ? getMetricValue(item.metrics, "avg_latency") : 0;
+        const latencyData: number[] = [];
+        const latencyOriginal: PerformanceData[] = [];
+        labels.forEach(label => {
+            const item = groupData.find(d => createItemLabel(d) === label);
+            latencyData.push(item ? getMetricValue(item.metrics, "avg_latency") : 0);
+            latencyOriginal.push(item as any);
         });
 
         datasets.push({
@@ -351,13 +358,16 @@ export const processPerformanceOverview = (
             borderColor: colors[(colorIndex + 1) % colors.length],
             borderWidth: 1,
             yAxisID: "y1",
-            originalData: groupData,
+            originalData: latencyOriginal as unknown as PerformanceData[],
         });
 
         // Bandwidth dataset for this group
-        const bandwidthData = labels.map(label => {
-            const item = groupData.find(item => createItemLabel(item) === label);
-            return item ? getMetricValue(item.metrics, "bandwidth") : 0;
+        const bandwidthData: number[] = [];
+        const bandwidthOriginal: PerformanceData[] = [];
+        labels.forEach(label => {
+            const item = groupData.find(d => createItemLabel(d) === label);
+            bandwidthData.push(item ? getMetricValue(item.metrics, "bandwidth") : 0);
+            bandwidthOriginal.push(item as any);
         });
 
         datasets.push({
@@ -367,7 +377,7 @@ export const processPerformanceOverview = (
             borderColor: colors[(colorIndex + 2) % colors.length],
             borderWidth: 1,
             yAxisID: "y2",
-            originalData: groupData,
+            originalData: bandwidthOriginal as unknown as PerformanceData[],
         });
 
         colorIndex += 3; // Move to next set of colors for the next group
@@ -585,9 +595,12 @@ export const processIOPSLatencyDual = (
     // Create datasets for each group
     Array.from(groups.entries()).forEach(([groupName, groupData]) => {
         // IOPS dataset for this group
-        const iopsData = labels.map(label => {
-            const item = groupData.find(item => createItemLabel(item) === label);
-            return item ? getMetricValue(item.metrics, "iops") : 0;
+        const iopsData: number[] = [];
+        const iopsOriginal: PerformanceData[] = [];
+        labels.forEach(label => {
+            const item = groupData.find(d => createItemLabel(d) === label);
+            iopsData.push(item ? getMetricValue(item.metrics, "iops") : 0);
+            iopsOriginal.push(item as any);
         });
 
         datasets.push({
@@ -597,13 +610,16 @@ export const processIOPSLatencyDual = (
             borderColor: colors[colorIndex % colors.length],
             borderWidth: 1,
             yAxisID: "y",
-            originalData: groupData,
+            originalData: iopsOriginal as unknown as PerformanceData[],
         });
 
         // Latency dataset for this group
-        const latencyData = labels.map(label => {
-            const item = groupData.find(item => createItemLabel(item) === label);
-            return item ? getMetricValue(item.metrics, "avg_latency") : 0;
+        const latencyData: number[] = [];
+        const latencyOriginal: PerformanceData[] = [];
+        labels.forEach(label => {
+            const item = groupData.find(d => createItemLabel(d) === label);
+            latencyData.push(item ? getMetricValue(item.metrics, "avg_latency") : 0);
+            latencyOriginal.push(item as any);
         });
 
         datasets.push({
@@ -614,7 +630,7 @@ export const processIOPSLatencyDual = (
             borderWidth: 1,
             yAxisID: "y1",
             type: "line",
-            originalData: groupData,
+            originalData: latencyOriginal as unknown as PerformanceData[],
         });
 
         colorIndex += 2; // Move to next set of colors for the next group

@@ -17,6 +17,7 @@ import 'chartjs-adapter-date-fns';
 import type { ChartTemplate } from '../../types';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import type { ChartData as CustomChartData, ChartDataset } from './chartProcessors';
+import { formatBlockSize } from '../../services/data/formatters';
 
 // Register Chart.js components
 ChartJS.register(
@@ -119,7 +120,7 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
                         const titleParts = [];
                         
                         // Add drive model and block size as primary identifier
-                        titleParts.push(`${originalData.drive_model} - ${originalData.block_size}`);
+                        titleParts.push(`${originalData.drive_model} - ${formatBlockSize(originalData.block_size)}`);
                         
                         // Add pattern if available
                         if (originalData.read_write_pattern) {
