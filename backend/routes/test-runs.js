@@ -31,8 +31,8 @@ router.use(requestIdMiddleware);
  * @swagger
  * /api/test-runs:
  *   get:
- *     summary: Get latest test runs (or all with historical data)
- *     description: Retrieve a list of FIO test runs. By default returns only the latest test for each unique configuration. Use include_historical=true to get all historical data.
+ *     summary: Get test runs with optional filtering
+ *     description: Retrieve a list of FIO test runs with comprehensive filtering capabilities. By default returns only the latest test for each unique configuration. Use include_historical=true to get all historical data.
  *     tags: [Test Runs]
  *     security:
  *       - basicAuth: []
@@ -44,6 +44,90 @@ router.use(requestIdMiddleware);
  *           type: boolean
  *         description: Include historical test runs (default false - only latest per configuration)
  *         example: false
+ *       - in: query
+ *         name: hostnames
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of hostnames to filter by
+ *         example: "server1,server2"
+ *       - in: query
+ *         name: protocols
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of protocols to filter by
+ *         example: "NVMe,SATA"
+ *       - in: query
+ *         name: drive_types
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of drive types to filter by
+ *         example: "SSD,HDD"
+ *       - in: query
+ *         name: drive_models
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of drive models to filter by
+ *         example: "Samsung 980 PRO,WD Black"
+ *       - in: query
+ *         name: patterns
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of test patterns to filter by
+ *         example: "read,write,randread,randwrite"
+ *       - in: query
+ *         name: block_sizes
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of block sizes to filter by
+ *         example: "4k,64k,1M"
+ *       - in: query
+ *         name: syncs
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of sync values to filter by
+ *         example: "0,1"
+ *       - in: query
+ *         name: queue_depths
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of queue depths to filter by
+ *         example: "1,4,16,32"
+ *       - in: query
+ *         name: directs
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of direct I/O values to filter by
+ *         example: "0,1"
+ *       - in: query
+ *         name: num_jobs
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of number of jobs to filter by
+ *         example: "1,4,8"
+ *       - in: query
+ *         name: test_sizes
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of test sizes to filter by
+ *         example: "1G,10G,100G"
+ *       - in: query
+ *         name: durations
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of test durations (in seconds) to filter by
+ *         example: "30,60,300"
  *     responses:
  *       200:
  *         description: List of test runs retrieved successfully
@@ -69,14 +153,31 @@ router.use(requestIdMiddleware);
 router.get('/', requireAdmin, (req, res) => {
     const includeHistorical = req.query.include_historical === 'true';
     
-    logInfo('User requesting test runs list', {
+    // Extract filter parameters from query string
+    const filters = {
+        hostnames: req.query.hostnames ? req.query.hostnames.split(',') : [],
+        protocols: req.query.protocols ? req.query.protocols.split(',') : [],
+        drive_types: req.query.drive_types ? req.query.drive_types.split(',') : [],
+        drive_models: req.query.drive_models ? req.query.drive_models.split(',') : [],
+        patterns: req.query.patterns ? req.query.patterns.split(',') : [],
+        block_sizes: req.query.block_sizes ? req.query.block_sizes.split(',') : [],
+        syncs: req.query.syncs ? req.query.syncs.split(',').map(s => parseInt(s)) : [],
+        queue_depths: req.query.queue_depths ? req.query.queue_depths.split(',').map(q => parseInt(q)) : [],
+        directs: req.query.directs ? req.query.directs.split(',').map(d => parseInt(d)) : [],
+        num_jobs: req.query.num_jobs ? req.query.num_jobs.split(',').map(n => parseInt(n)) : [],
+        test_sizes: req.query.test_sizes ? req.query.test_sizes.split(',') : [],
+        durations: req.query.durations ? req.query.durations.split(',').map(d => parseInt(d)) : []
+    };
+    
+    logInfo('User requesting test runs list with filters', {
         requestId: req.requestId,
         username: req.user.username,
         action: 'LIST_TEST_RUNS',
-        includeHistorical: includeHistorical
+        includeHistorical: includeHistorical,
+        filters: filters
     });
     
-    // Build query with optional is_latest filter
+    // Build base query
     let query = `
         SELECT id, timestamp, drive_model, drive_type, test_name, description,
                block_size, read_write_pattern, queue_depth, duration,
@@ -86,15 +187,108 @@ router.get('/', requireAdmin, (req, res) => {
         FROM test_runs
     `;
     
-    // Add WHERE clause to filter by is_latest unless historical data is requested
+    // Build WHERE conditions
+    const whereConditions = [];
+    const queryParams = [];
+    
+    // Add is_latest filter unless historical data is requested
     if (!includeHistorical) {
-        query += ` WHERE is_latest = 1`;
+        whereConditions.push('is_latest = 1');
+    }
+    
+    // Add hostname filter
+    if (filters.hostnames.length > 0) {
+        const placeholders = filters.hostnames.map(() => '?').join(',');
+        whereConditions.push(`hostname IN (${placeholders})`);
+        queryParams.push(...filters.hostnames);
+    }
+    
+    // Add protocol filter
+    if (filters.protocols.length > 0) {
+        const placeholders = filters.protocols.map(() => '?').join(',');
+        whereConditions.push(`protocol IN (${placeholders})`);
+        queryParams.push(...filters.protocols);
+    }
+    
+    // Add drive_type filter
+    if (filters.drive_types.length > 0) {
+        const placeholders = filters.drive_types.map(() => '?').join(',');
+        whereConditions.push(`drive_type IN (${placeholders})`);
+        queryParams.push(...filters.drive_types);
+    }
+    
+    // Add drive_model filter
+    if (filters.drive_models.length > 0) {
+        const placeholders = filters.drive_models.map(() => '?').join(',');
+        whereConditions.push(`drive_model IN (${placeholders})`);
+        queryParams.push(...filters.drive_models);
+    }
+    
+    // Add patterns (read_write_pattern) filter
+    if (filters.patterns.length > 0) {
+        const placeholders = filters.patterns.map(() => '?').join(',');
+        whereConditions.push(`read_write_pattern IN (${placeholders})`);
+        queryParams.push(...filters.patterns);
+    }
+    
+    // Add block_sizes filter (handle both string and numeric values)
+    if (filters.block_sizes.length > 0) {
+        const placeholders = filters.block_sizes.map(() => '?').join(',');
+        whereConditions.push(`block_size IN (${placeholders})`);
+        queryParams.push(...filters.block_sizes);
+    }
+    
+    // Add sync filter
+    if (filters.syncs.length > 0) {
+        const placeholders = filters.syncs.map(() => '?').join(',');
+        whereConditions.push(`sync IN (${placeholders})`);
+        queryParams.push(...filters.syncs);
+    }
+    
+    // Add queue_depths filter
+    if (filters.queue_depths.length > 0) {
+        const placeholders = filters.queue_depths.map(() => '?').join(',');
+        whereConditions.push(`queue_depth IN (${placeholders})`);
+        queryParams.push(...filters.queue_depths);
+    }
+    
+    // Add directs filter
+    if (filters.directs.length > 0) {
+        const placeholders = filters.directs.map(() => '?').join(',');
+        whereConditions.push(`direct IN (${placeholders})`);
+        queryParams.push(...filters.directs);
+    }
+    
+    // Add num_jobs filter
+    if (filters.num_jobs.length > 0) {
+        const placeholders = filters.num_jobs.map(() => '?').join(',');
+        whereConditions.push(`num_jobs IN (${placeholders})`);
+        queryParams.push(...filters.num_jobs);
+    }
+    
+    // Add test_sizes filter
+    if (filters.test_sizes.length > 0) {
+        const placeholders = filters.test_sizes.map(() => '?').join(',');
+        whereConditions.push(`test_size IN (${placeholders})`);
+        queryParams.push(...filters.test_sizes);
+    }
+    
+    // Add durations filter
+    if (filters.durations.length > 0) {
+        const placeholders = filters.durations.map(() => '?').join(',');
+        whereConditions.push(`duration IN (${placeholders})`);
+        queryParams.push(...filters.durations);
+    }
+    
+    // Add WHERE clause if there are conditions
+    if (whereConditions.length > 0) {
+        query += ' WHERE ' + whereConditions.join(' AND ');
     }
     
     query += ` ORDER BY timestamp DESC`;
     
     const db = getDatabase();
-    db.all(query, [], (err, rows) => {
+    db.all(query, queryParams, (err, rows) => {
         if (err) {
             logError('Database error fetching test runs', err, {
                 requestId: req.requestId,
@@ -110,7 +304,8 @@ router.get('/', requireAdmin, (req, res) => {
             username: req.user.username,
             action: 'LIST_TEST_RUNS',
             resultCount: rows.length,
-            includeHistorical: includeHistorical
+            includeHistorical: includeHistorical,
+            filtersApplied: Object.keys(filters).filter(key => filters[key].length > 0)
         });
         
         res.json(rows);
