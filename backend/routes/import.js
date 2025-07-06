@@ -218,7 +218,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
         const relativeFilePath = path.relative(path.join(__dirname, '..'), finalPath);
         
         // Create metadata file
-        const metadataPath = path.join(uploadDir, 'upload_' + timestamp + '.info');
+        const metadataPath = path.join(uploadDir, 'fio_results_' + timestamp + '.info');
         const metadata = {
             drive_model,
             drive_type,

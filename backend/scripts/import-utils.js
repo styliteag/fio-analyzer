@@ -420,7 +420,7 @@ async function discoverUploadedFiles(uploadsDir) {
                 scanDirectory(fullPath);
             } else if (item.endsWith('.json') && item.startsWith('fio_results_')) {
                 // Find corresponding .info file
-                const infoFile = item.replace('fio_results_', 'upload_').replace('.json', '.info');
+                const infoFile = item.replace('fio_results_', 'fio_results_').replace('.json', '.info');
                 const infoPath = path.join(dir, infoFile);
                 
                 if (fs.existsSync(infoPath)) {
