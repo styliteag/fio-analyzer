@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Select from 'react-select';
 import { HardDrive, Clock, Layers, Database, Zap, X } from 'lucide-react';
 import { getSelectStyles } from '../../hooks/useThemeColors';
 import { sortBlockSizes } from '../../utils/sorting';
-import type { FilterOptions } from '../../types';
+import type { FilterOptions, TestRun } from '../../types';
 import type { ActiveFilters, DynamicFilterOptions } from '../../hooks/useTestRunFilters';
 
 interface TestRunFiltersProps {
@@ -13,6 +13,7 @@ interface TestRunFiltersProps {
     dynamicFilterOptions?: DynamicFilterOptions;
     useDynamicFilters?: boolean;
     onClearAllFilters?: () => void;
+    testRuns?: TestRun[];
 }
 
 const TestRunFilters: React.FC<TestRunFiltersProps> = ({
@@ -22,7 +23,75 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
     dynamicFilterOptions,
     useDynamicFilters = false,
     onClearAllFilters,
+    testRuns = [],
 }) => {
+    const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    const [filtersWhenOpened, setFiltersWhenOpened] = useState<ActiveFilters | null>(null);
+    const [cachedCounts, setCachedCounts] = useState<Record<string, Record<string | number, number>>>({});
+
+    // Helper function to calculate accurate counts when a dropdown is open
+    const calculateAccurateCount = (field: keyof ActiveFilters, value: string | number) => {
+        if (!openDropdown || openDropdown !== field) {
+            return 0; // Use dynamic filtering when dropdown is closed
+        }
+
+        // Return cached count if available
+        if (cachedCounts[field] && cachedCounts[field][value] !== undefined) {
+            return cachedCounts[field][value];
+        }
+
+        return 0; // Fallback
+    };
+
+    // Calculate and cache counts when dropdown opens
+    const calculateAndCacheCounts = (field: keyof ActiveFilters) => {
+        if (!filtersWhenOpened) return;
+
+        const tempFilters = { ...filtersWhenOpened };
+        (tempFilters as any)[field] = [];
+
+        const counts: Record<string | number, number> = {};
+
+        testRuns.forEach((run: TestRun) => {
+            // Apply all other filters except the open dropdown
+            if (tempFilters.drive_types.length > 0 && !tempFilters.drive_types.includes(run.drive_type)) return;
+            if (tempFilters.drive_models.length > 0 && !tempFilters.drive_models.includes(run.drive_model)) return;
+            if (tempFilters.block_sizes.length > 0 && !tempFilters.block_sizes.includes(run.block_size)) return;
+            if (tempFilters.hostnames.length > 0 && (!run.hostname || !tempFilters.hostnames.includes(run.hostname))) return;
+            if (tempFilters.protocols.length > 0 && (!run.protocol || !tempFilters.protocols.includes(run.protocol))) return;
+            if (tempFilters.syncs.length > 0 && (run.sync === undefined || !tempFilters.syncs.includes(run.sync))) return;
+            if (tempFilters.queue_depths.length > 0 && !tempFilters.queue_depths.includes(run.queue_depth)) return;
+            if (tempFilters.directs.length > 0 && (run.direct === undefined || !tempFilters.directs.includes(run.direct))) return;
+            if (tempFilters.num_jobs.length > 0 && (!run.num_jobs || !tempFilters.num_jobs.includes(run.num_jobs))) return;
+            if (tempFilters.test_sizes.length > 0 && (!run.test_size || !tempFilters.test_sizes.includes(run.test_size))) return;
+            if (tempFilters.durations.length > 0 && !tempFilters.durations.includes(run.duration)) return;
+            
+            // Count occurrences for the field
+            let value: string | number | undefined;
+            switch (field) {
+                case 'drive_types': value = run.drive_type; break;
+                case 'drive_models': value = run.drive_model; break;
+                case 'patterns': value = run.read_write_pattern; break;
+                case 'block_sizes': value = run.block_size; break;
+                case 'hostnames': value = run.hostname; break;
+                case 'protocols': value = run.protocol; break;
+                case 'syncs': value = run.sync; break;
+                case 'queue_depths': value = run.queue_depth; break;
+                case 'directs': value = run.direct; break;
+                case 'num_jobs': value = run.num_jobs; break;
+                case 'test_sizes': value = run.test_size; break;
+                case 'durations': value = run.duration; break;
+                default: return;
+            }
+            
+            if (value !== undefined && value !== null) {
+                counts[value] = (counts[value] || 0) + 1;
+            }
+        });
+
+        setCachedCounts(prev => ({ ...prev, [field]: counts }));
+    };
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3 mb-4">
             <div>
@@ -31,16 +100,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('hostnames');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('hostnames');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.hostnames.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.hostnames.map((hostname) => ({
-                                value: String(hostname),
-                                label: String(hostname),
-                            }))
+                        openDropdown === 'hostnames'
+                            ? filters.hostnames.map((hostname) => {
+                                const count = calculateAccurateCount('hostnames', hostname);
+                                return {
+                                    value: String(hostname),
+                                    label: `${hostname} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.hostnames.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.hostnames.map((hostname) => ({
+                                    value: String(hostname),
+                                    label: String(hostname),
+                                }))
                     }
                     value={activeFilters.hostnames.map((hostname) => ({
                         value: String(hostname),
@@ -63,16 +153,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('protocols');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('protocols');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.protocols.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.protocols.map((protocol) => ({
-                                value: String(protocol),
-                                label: String(protocol),
-                            }))
+                        openDropdown === 'protocols'
+                            ? filters.protocols.map((protocol) => {
+                                const count = calculateAccurateCount('protocols', protocol);
+                                return {
+                                    value: String(protocol),
+                                    label: `${protocol} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.protocols.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.protocols.map((protocol) => ({
+                                    value: String(protocol),
+                                    label: String(protocol),
+                                }))
                     }
                     value={activeFilters.protocols.map((protocol) => ({
                         value: String(protocol),
@@ -96,16 +207,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('drive_types');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('drive_types');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.drive_types.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.drive_types.map((type) => ({
-                                value: String(type),
-                                label: String(type),
-                            }))
+                        openDropdown === 'drive_types'
+                            ? filters.drive_types.map((type) => {
+                                const count = calculateAccurateCount('drive_types', type);
+                                return {
+                                    value: String(type),
+                                    label: `${type} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.drive_types.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.drive_types.map((type) => ({
+                                    value: String(type),
+                                    label: String(type),
+                                }))
                     }
                     value={activeFilters.drive_types.map((type) => ({
                         value: String(type),
@@ -128,16 +260,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('drive_models');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('drive_models');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.drive_models.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.drive_models.map((model) => ({
-                                value: String(model),
-                                label: String(model),
-                            }))
+                        openDropdown === 'drive_models'
+                            ? filters.drive_models.map((model) => {
+                                const count = calculateAccurateCount('drive_models', model);
+                                return {
+                                    value: String(model),
+                                    label: `${model} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.drive_models.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.drive_models.map((model) => ({
+                                    value: String(model),
+                                    label: String(model),
+                                }))
                     }
                     value={activeFilters.drive_models.map((model) => ({
                         value: String(model),
@@ -160,16 +313,38 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('patterns');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('patterns');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.patterns.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label.replace(/_/g, " ").toUpperCase()} (${option.count})`,
-                            }))
-                            : filters.patterns.map((pattern) => ({
-                                value: String(pattern),
-                                label: pattern.replace(/_/g, " ").toUpperCase(),
-                            }))
+                        // When dropdown is open, show all options with accurate counts
+                        openDropdown === 'patterns' 
+                            ? filters.patterns.map((pattern) => {
+                                const count = calculateAccurateCount('patterns', pattern);
+                                return {
+                                    value: String(pattern),
+                                    label: `${pattern.replace(/_/g, " ").toUpperCase()} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.patterns.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label.replace(/_/g, " ").toUpperCase()} (${option.count})`,
+                                }))
+                                : filters.patterns.map((pattern) => ({
+                                    value: String(pattern),
+                                    label: pattern.replace(/_/g, " ").toUpperCase(),
+                                }))
                     }
                     value={activeFilters.patterns.map((pattern) => ({
                         value: String(pattern),
@@ -192,16 +367,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('block_sizes');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('block_sizes');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.block_sizes.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : sortBlockSizes(filters.block_sizes).map((size) => ({
-                                value: String(size),
-                                label: String(size),
-                            }))
+                        openDropdown === 'block_sizes'
+                            ? sortBlockSizes(filters.block_sizes).map((size) => {
+                                const count = calculateAccurateCount('block_sizes', size);
+                                return {
+                                    value: String(size),
+                                    label: `${size} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.block_sizes.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : sortBlockSizes(filters.block_sizes).map((size) => ({
+                                    value: String(size),
+                                    label: String(size),
+                                }))
                     }
                     value={activeFilters.block_sizes.map((size) => ({
                         value: String(size),
@@ -225,16 +421,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('syncs');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('syncs');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.syncs.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.syncs.map((sync) => ({
-                                value: String(sync),
-                                label: sync.toString(),
-                            }))
+                        openDropdown === 'syncs'
+                            ? filters.syncs.map((sync) => {
+                                const count = calculateAccurateCount('syncs', sync);
+                                return {
+                                    value: String(sync),
+                                    label: `${sync} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.syncs.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.syncs.map((sync) => ({
+                                    value: String(sync),
+                                    label: sync.toString(),
+                                }))
                     }
                     value={activeFilters.syncs.map((sync) => ({
                         value: String(sync),
@@ -257,16 +474,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('queue_depths');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('queue_depths');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.queue_depths.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.queue_depths.map((qd) => ({
-                                value: String(qd),
-                                label: qd.toString(),
-                            }))
+                        openDropdown === 'queue_depths'
+                            ? filters.queue_depths.map((qd) => {
+                                const count = calculateAccurateCount('queue_depths', qd);
+                                return {
+                                    value: String(qd),
+                                    label: `${qd} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.queue_depths.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.queue_depths.map((qd) => ({
+                                    value: String(qd),
+                                    label: qd.toString(),
+                                }))
                     }
                     value={activeFilters.queue_depths.map((qd) => ({
                         value: String(qd),
@@ -290,16 +528,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('directs');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('directs');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.directs.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.directs.map((direct) => ({
-                                value: String(direct),
-                                label: direct.toString(),
-                            }))
+                        openDropdown === 'directs'
+                            ? filters.directs.map((direct) => {
+                                const count = calculateAccurateCount('directs', direct);
+                                return {
+                                    value: String(direct),
+                                    label: `${direct} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.directs.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.directs.map((direct) => ({
+                                    value: String(direct),
+                                    label: direct.toString(),
+                                }))
                     }
                     value={activeFilters.directs.map((direct) => ({
                         value: String(direct),
@@ -323,16 +582,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('num_jobs');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('num_jobs');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.num_jobs.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.num_jobs.map((jobs) => ({
-                                value: String(jobs),
-                                label: jobs.toString(),
-                            }))
+                        openDropdown === 'num_jobs'
+                            ? filters.num_jobs.map((jobs) => {
+                                const count = calculateAccurateCount('num_jobs', jobs);
+                                return {
+                                    value: String(jobs),
+                                    label: `${jobs} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.num_jobs.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.num_jobs.map((jobs) => ({
+                                    value: String(jobs),
+                                    label: jobs.toString(),
+                                }))
                     }
                     value={activeFilters.num_jobs.map((jobs) => ({
                         value: String(jobs),
@@ -356,16 +636,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('test_sizes');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('test_sizes');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.test_sizes.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.test_sizes.map((size) => ({
-                                value: String(size),
-                                label: String(size),
-                            }))
+                        openDropdown === 'test_sizes'
+                            ? filters.test_sizes.map((size) => {
+                                const count = calculateAccurateCount('test_sizes', size);
+                                return {
+                                    value: String(size),
+                                    label: `${size} (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.test_sizes.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.test_sizes.map((size) => ({
+                                    value: String(size),
+                                    label: String(size),
+                                }))
                     }
                     value={activeFilters.test_sizes.map((size) => ({
                         value: String(size),
@@ -389,16 +690,37 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 </label>
                 <Select
                     isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('durations');
+                        setFiltersWhenOpened(activeFilters);
+                        calculateAndCacheCounts('durations');
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                    }}
                     options={
-                        useDynamicFilters && dynamicFilterOptions
-                            ? dynamicFilterOptions.durations.map((option) => ({
-                                value: String(option.value),
-                                label: `${option.label} (${option.count})`,
-                            }))
-                            : filters.durations.map((duration) => ({
-                                value: String(duration),
-                                label: `${duration}s`,
-                            }))
+                        openDropdown === 'durations'
+                            ? filters.durations.map((duration) => {
+                                const count = calculateAccurateCount('durations', duration);
+                                return {
+                                    value: String(duration),
+                                    label: `${duration}s (${count})`,
+                                };
+                            })
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? dynamicFilterOptions.durations.map((option) => ({
+                                    value: String(option.value),
+                                    label: `${option.label} (${option.count})`,
+                                }))
+                                : filters.durations.map((duration) => ({
+                                    value: String(duration),
+                                    label: `${duration}s`,
+                                }))
                     }
                     value={activeFilters.durations.map((duration) => ({
                         value: String(duration),

@@ -148,8 +148,8 @@ export const useTestRunFilters = (testRuns: TestRun[]) => {
             durations: [],
         };
 
-        // Count occurrences for each field
-        const counts: Record<string, Record<string | number, number>> = {
+        // Count occurrences for each field in ALL runs (not just filtered)
+        const allCounts: Record<string, Record<string | number, number>> = {
             drive_types: {},
             drive_models: {},
             patterns: {},
@@ -164,75 +164,151 @@ export const useTestRunFilters = (testRuns: TestRun[]) => {
             durations: {},
         };
 
-        // Count occurrences in filtered runs
-        filteredRuns.forEach(run => {
+        // Count occurrences in ALL runs to get all possible values
+        testRuns.forEach(run => {
             // Drive types
             if (run.drive_type) {
-                counts.drive_types[run.drive_type] = (counts.drive_types[run.drive_type] || 0) + 1;
+                allCounts.drive_types[run.drive_type] = (allCounts.drive_types[run.drive_type] || 0) + 1;
             }
 
             // Drive models
             if (run.drive_model) {
-                counts.drive_models[run.drive_model] = (counts.drive_models[run.drive_model] || 0) + 1;
+                allCounts.drive_models[run.drive_model] = (allCounts.drive_models[run.drive_model] || 0) + 1;
             }
 
             // Patterns
             if (run.read_write_pattern) {
-                counts.patterns[run.read_write_pattern] = (counts.patterns[run.read_write_pattern] || 0) + 1;
+                allCounts.patterns[run.read_write_pattern] = (allCounts.patterns[run.read_write_pattern] || 0) + 1;
             }
 
             // Block sizes
             if (run.block_size) {
-                counts.block_sizes[run.block_size] = (counts.block_sizes[run.block_size] || 0) + 1;
+                allCounts.block_sizes[run.block_size] = (allCounts.block_sizes[run.block_size] || 0) + 1;
             }
 
             // Hostnames
             if (run.hostname) {
-                counts.hostnames[run.hostname] = (counts.hostnames[run.hostname] || 0) + 1;
+                allCounts.hostnames[run.hostname] = (allCounts.hostnames[run.hostname] || 0) + 1;
             }
 
             // Protocols
             if (run.protocol) {
-                counts.protocols[run.protocol] = (counts.protocols[run.protocol] || 0) + 1;
+                allCounts.protocols[run.protocol] = (allCounts.protocols[run.protocol] || 0) + 1;
             }
 
             // Sync
             if (run.sync !== undefined) {
-                counts.syncs[run.sync] = (counts.syncs[run.sync] || 0) + 1;
+                allCounts.syncs[run.sync] = (allCounts.syncs[run.sync] || 0) + 1;
             }
 
             // Queue depths
-            counts.queue_depths[run.queue_depth] = (counts.queue_depths[run.queue_depth] || 0) + 1;
+            allCounts.queue_depths[run.queue_depth] = (allCounts.queue_depths[run.queue_depth] || 0) + 1;
 
             // Direct
             if (run.direct !== undefined) {
-                counts.directs[run.direct] = (counts.directs[run.direct] || 0) + 1;
+                allCounts.directs[run.direct] = (allCounts.directs[run.direct] || 0) + 1;
             }
 
             // Num jobs
             if (run.num_jobs) {
-                counts.num_jobs[run.num_jobs] = (counts.num_jobs[run.num_jobs] || 0) + 1;
+                allCounts.num_jobs[run.num_jobs] = (allCounts.num_jobs[run.num_jobs] || 0) + 1;
             }
 
             // Test sizes
             if (run.test_size) {
-                counts.test_sizes[run.test_size] = (counts.test_sizes[run.test_size] || 0) + 1;
+                allCounts.test_sizes[run.test_size] = (allCounts.test_sizes[run.test_size] || 0) + 1;
             }
 
             // Durations
-            counts.durations[run.duration] = (counts.durations[run.duration] || 0) + 1;
+            allCounts.durations[run.duration] = (allCounts.durations[run.duration] || 0) + 1;
         });
 
-        // Convert counts to filter options
-        Object.keys(counts).forEach(field => {
-            const fieldCounts = counts[field];
-            options[field as keyof DynamicFilterOptions] = Object.entries(fieldCounts)
-                .map(([value, count]) => ({
+        // Count occurrences in filtered runs for accurate counts
+        const filteredCounts: Record<string, Record<string | number, number>> = {
+            drive_types: {},
+            drive_models: {},
+            patterns: {},
+            block_sizes: {},
+            hostnames: {},
+            protocols: {},
+            syncs: {},
+            queue_depths: {},
+            directs: {},
+            num_jobs: {},
+            test_sizes: {},
+            durations: {},
+        };
+
+        filteredRuns.forEach(run => {
+            // Drive types
+            if (run.drive_type) {
+                filteredCounts.drive_types[run.drive_type] = (filteredCounts.drive_types[run.drive_type] || 0) + 1;
+            }
+
+            // Drive models
+            if (run.drive_model) {
+                filteredCounts.drive_models[run.drive_model] = (filteredCounts.drive_models[run.drive_model] || 0) + 1;
+            }
+
+            // Patterns
+            if (run.read_write_pattern) {
+                filteredCounts.patterns[run.read_write_pattern] = (filteredCounts.patterns[run.read_write_pattern] || 0) + 1;
+            }
+
+            // Block sizes
+            if (run.block_size) {
+                filteredCounts.block_sizes[run.block_size] = (filteredCounts.block_sizes[run.block_size] || 0) + 1;
+            }
+
+            // Hostnames
+            if (run.hostname) {
+                filteredCounts.hostnames[run.hostname] = (filteredCounts.hostnames[run.hostname] || 0) + 1;
+            }
+
+            // Protocols
+            if (run.protocol) {
+                filteredCounts.protocols[run.protocol] = (filteredCounts.protocols[run.protocol] || 0) + 1;
+            }
+
+            // Sync
+            if (run.sync !== undefined) {
+                filteredCounts.syncs[run.sync] = (filteredCounts.syncs[run.sync] || 0) + 1;
+            }
+
+            // Queue depths
+            filteredCounts.queue_depths[run.queue_depth] = (filteredCounts.queue_depths[run.queue_depth] || 0) + 1;
+
+            // Direct
+            if (run.direct !== undefined) {
+                filteredCounts.directs[run.direct] = (filteredCounts.directs[run.direct] || 0) + 1;
+            }
+
+            // Num jobs
+            if (run.num_jobs) {
+                filteredCounts.num_jobs[run.num_jobs] = (filteredCounts.num_jobs[run.num_jobs] || 0) + 1;
+            }
+
+            // Test sizes
+            if (run.test_size) {
+                filteredCounts.test_sizes[run.test_size] = (filteredCounts.test_sizes[run.test_size] || 0) + 1;
+            }
+
+            // Durations
+            filteredCounts.durations[run.duration] = (filteredCounts.durations[run.duration] || 0) + 1;
+        });
+
+        // Convert all counts to filter options, but use filtered counts for the display
+        Object.keys(allCounts).forEach(field => {
+            const allFieldCounts = allCounts[field];
+            const filteredFieldCounts = filteredCounts[field];
+            
+            options[field as keyof DynamicFilterOptions] = Object.entries(allFieldCounts)
+                .map(([value, _]) => ({
                     value: field === 'queue_depths' || field === 'durations' || field === 'syncs' || field === 'directs' || field === 'num_jobs' 
                         ? parseInt(value) 
                         : value,
                     label: field === 'durations' ? `${value}s` : value,
-                    count
+                    count: filteredFieldCounts[value] || 0 // Use filtered count, 0 if not in filtered results
                 }))
                 .sort((a, b) => {
                     // Sort by count descending, then by value
@@ -244,7 +320,7 @@ export const useTestRunFilters = (testRuns: TestRun[]) => {
         });
 
         return options;
-    }, [filteredRuns]);
+    }, [testRuns, filteredRuns]);
 
     const hasActiveFilters = useCallback(() => {
         return (
