@@ -286,13 +286,13 @@ async function processFioFile(jsonFilePath, metadata, options = {}) {
                                 insertFioMetrics(testRunId, job.write, 'write');
                             }
 
-                            // Insert latency percentiles
+                            // Insert p95 / p99 latency as metrics (ms)
                             if (job.read?.clat_ns?.percentile) {
-                                insertLatencyPercentilesFromJob(testRunId, job.read.clat_ns.percentile, 'read', requestId);
+                                insertPercentileMetrics(testRunId, job.read.clat_ns.percentile, 'read');
                             }
-                            
+
                             if (job.write?.clat_ns?.percentile) {
-                                insertLatencyPercentilesFromJob(testRunId, job.write.clat_ns.percentile, 'write', requestId);
+                                insertPercentileMetrics(testRunId, job.write.clat_ns.percentile, 'write');
                             }
 
                             resolve({ status: 'success', testRunId });
@@ -367,35 +367,27 @@ function insertFioMetrics(testRunId, data, operationType) {
 }
 
 /**
- * Insert latency percentiles from job data
+ * Insert 95th / 99th percentile latency values into performance_metrics (ns ⇒ ms)
  */
-function insertLatencyPercentilesFromJob(testRunId, percentiles, operationType, requestId) {
-    const db = getDatabase();
-    
+function insertPercentileMetrics(testRunId, percentiles, operationType) {
+    const map = { '95': 'p95_latency', '95.000000': 'p95_latency', '99': 'p99_latency', '99.000000': 'p99_latency' };
+
     Object.entries(percentiles).forEach(([percentile, latencyNs]) => {
+        const metricType = map[percentile];
+        if (!metricType) return; // Only care about 95 / 99
+
         if (latencyNs && typeof latencyNs === 'number' && latencyNs > 0) {
-            db.run(
-                'INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)',
-                [testRunId, operationType, parseFloat(percentile), Math.floor(latencyNs)],
-                (err) => {
-                    if (err) {
-                        logError('Error inserting latency percentile', err, {
-                            requestId,
-                            testRunId,
-                            percentile,
-                            latencyNs,
-                            operationType
-                        });
-                    }
+            // convert ns to ms
+            const valueMs = latencyNs / 1e6;
+            insertMetric(testRunId, metricType, valueMs, 'ms', operationType, (err) => {
+                if (err) {
+                    logError('Error inserting percentile metric', err, {
+                        testRunId,
+                        metricType,
+                        valueMs,
+                        operationType
+                    });
                 }
-            );
-        } else {
-            logWarning('Skipping invalid latency percentile', {
-                requestId,
-                testRunId,
-                percentile,
-                latencyNs,
-                reason: 'invalid_value'
             });
         }
     });
@@ -467,5 +459,5 @@ module.exports = {
     checkFileExistsInDb,
     discoverUploadedFiles,
     insertFioMetrics,
-    insertLatencyPercentilesFromJob
+    insertPercentileMetrics
 };
