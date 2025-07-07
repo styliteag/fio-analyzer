@@ -157,7 +157,7 @@ export default function Compare() {
 			});
 		});
 		return { labels: categories, datasets };
-	}, [perfData, selectedHosts, xParam, selectedMetrics]);
+	}, [perfData, xParam, selectedMetrics]);
 
 	const barOptions = useMemo(() => {
 		const options = {

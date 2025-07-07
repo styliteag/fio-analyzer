@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Check, HardDrive, Clock, Layers, Zap, Users } from 'lucide-react';
+import { Check, Clock, Layers, Zap, Users } from 'lucide-react';
 import type { ConfigurationComparison } from '../utils/configurationMatcher';
 import { getConfigurationSummary } from '../utils/configurationMatcher';
 

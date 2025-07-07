@@ -134,9 +134,6 @@ export default function Compare2() {
       const searchText = [
         config.block_size,
         config.read_write_pattern,
-        config.protocol,
-        config.drive_model,
-        config.drive_type,
         config.test_size
       ].join(' ').toLowerCase();
       

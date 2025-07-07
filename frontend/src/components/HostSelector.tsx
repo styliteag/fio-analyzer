@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import Select from 'react-select';
-import { fetchFilters } from '../services/api/testRuns';
 import { fetchTestRuns } from '../services/api/testRuns';
 import Loading from './ui/Loading';
 import { Check, Server, HardDrive } from 'lucide-react';

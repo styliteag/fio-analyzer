@@ -11,7 +11,7 @@ import {
 	Legend,
 } from "chart.js";
 import "chartjs-adapter-date-fns";
-import { DashboardHeader, DashboardFooter } from "../components/layout";
+import { DashboardHeader } from "../components/layout";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import Loading from "../components/ui/Loading";
@@ -45,11 +45,6 @@ export default function History() {
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	// Helper for footer links
-	const getApiDocsUrl = () => {
-		const apiBaseUrl = import.meta.env.VITE_API_URL || "";
-		return apiBaseUrl ? `${apiBaseUrl}/api-docs` : "/api-docs";
-	};
 
 	const getServerId = (s: ServerInfo) => `${s.hostname}|${s.protocol}|${s.drive_model}`;
 
@@ -112,7 +107,7 @@ export default function History() {
 			});
 		}
 		setLoading(false);
-	}, [selectedMetrics, days, selectedServerId]);
+	}, [selectedMetrics, days, selectedServerId, selectedConfigs.length]);
 
 	// Reload when dependencies change
 	useEffect(() => {
