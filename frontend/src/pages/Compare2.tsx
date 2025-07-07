@@ -30,6 +30,17 @@ export default function Compare2() {
     return uniqueValue.split('|')[0];
   }, []);
 
+  // Helper function to extract hardware details from unique value
+  const extractHardwareInfo = useCallback((uniqueValue: string) => {
+    const parts = uniqueValue.split('|');
+    return {
+      hostname: parts[0] || 'unknown',
+      protocol: parts[1] || 'unknown', 
+      driveType: parts[2] || 'unknown',
+      driveModel: parts[3] || 'unknown'
+    };
+  }, []);
+
   // Load data when hosts change
   const loadData = useCallback(async () => {
     if (selectedHosts.length < 2) {
@@ -45,6 +56,7 @@ export default function Compare2() {
     try {
       // Extract actual hostnames from unique values
       const actualHostnames = selectedHosts.map(extractHostname);
+      
       // Fetch test runs for selected hosts (latest per config only)
       const runsRes = await fetchTestRuns({
         hostnames: actualHostnames,
@@ -72,12 +84,24 @@ export default function Compare2() {
         throw new Error(perfRes.error);
       }
 
-      const perfData = perfRes.data || [];
-      setPerformanceData(perfData);
+      let perfData = perfRes.data || [];
+      
+      // Filter performance data to match selected host-hardware combinations
+      const filteredPerfData = perfData.filter(run => {
+        return selectedHosts.some(uniqueValue => {
+          const hardware = extractHardwareInfo(uniqueValue);
+          const matches = run.hostname === hardware.hostname &&
+                 (run.protocol || 'unknown') === hardware.protocol &&
+                 (run.drive_type || 'unknown') === hardware.driveType &&
+                 (run.drive_model || 'unknown') === hardware.driveModel;
+          return matches;
+        });
+      });
+      setPerformanceData(filteredPerfData);
 
       // Create comparable configurations (use actual hostnames)
       const configComparisons = createComparableConfigurations(
-        perfData,
+        filteredPerfData,
         actualHostnames,
         minCoverage
       );
@@ -93,7 +117,7 @@ export default function Compare2() {
     } finally {
       setLoading(false);
     }
-  }, [selectedHosts, minCoverage, extractHostname]);
+  }, [selectedHosts, minCoverage, extractHostname, extractHardwareInfo]);
 
   // Load data when dependencies change
   useEffect(() => {

@@ -25,14 +25,14 @@ interface MultiChartGridProps {
 
 interface ChartState {
   highlightedHost: string | null;
-  hiddenHosts: Set<string>;
+  hiddenHostLabels: Set<string>; // Now tracks full labels instead of just hostnames
   maximizedChart: string | null;
 }
 
 function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }: MultiChartGridProps) {
   const [chartState, setChartState] = useState<ChartState>({
     highlightedHost: null,
-    hiddenHosts: new Set(),
+    hiddenHostLabels: new Set(),
     maximizedChart: null
   });
 
@@ -42,15 +42,15 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
     setChartState(prev => ({ ...prev, highlightedHost: hostname }));
   }, []);
 
-  const toggleHostVisibility = useCallback((hostname: string) => {
+  const toggleHostVisibility = useCallback((hostLabel: string) => {
     setChartState(prev => {
-      const newHiddenHosts = new Set(prev.hiddenHosts);
-      if (newHiddenHosts.has(hostname)) {
-        newHiddenHosts.delete(hostname);
+      const newHiddenHostLabels = new Set(prev.hiddenHostLabels);
+      if (newHiddenHostLabels.has(hostLabel)) {
+        newHiddenHostLabels.delete(hostLabel);
       } else {
-        newHiddenHosts.add(hostname);
+        newHiddenHostLabels.add(hostLabel);
       }
-      return { ...prev, hiddenHosts: newHiddenHosts };
+      return { ...prev, hiddenHostLabels: newHiddenHostLabels };
     });
   }, []);
 
@@ -64,66 +64,80 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
   const chartData = useMemo(() => {
     if (!selectedComparison) return null;
 
-    const visibleHostData = selectedComparison.hostData.filter(
-      data => !chartState.hiddenHosts.has(data.hostname)
+    // Create unique IDs and labels for all hosts
+    const allHostInfo = selectedComparison.hostData.map((data, index) => {
+      const hostname = data.hostname;
+      const protocol = data.run.protocol || 'Unknown';
+      const driveType = data.run.drive_type || 'Unknown';
+      const driveModel = data.run.drive_model || 'Unknown';
+      const uniqueId = `${hostname}-${protocol}-${driveType}-${driveModel}-${index}`;
+      const displayLabel = `${hostname} (${protocol} - ${driveType} - ${driveModel})`;
+      return { uniqueId, displayLabel, data };
+    });
+
+    // Filter out hidden entries
+    const visibleHostInfo = allHostInfo.filter(info => 
+      !chartState.hiddenHostLabels.has(info.uniqueId)
     );
 
-    const hostnames = visibleHostData.map(data => data.hostname);
+    const visibleHostData = visibleHostInfo.map(info => info.data);
+    const hostLabels = visibleHostInfo.map(info => info.displayLabel);
     const colors = [
       '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
       '#ec4899', '#14b8a6', '#6366f1', '#f472b6', '#f87171'
     ];
 
-    const getBarColor = (hostname: string, baseColor: string) => {
+    const getBarColor = (index: number, baseColor: string) => {
       if (chartState.highlightedHost === null) return baseColor;
-      return chartState.highlightedHost === hostname ? baseColor : baseColor + '40';
+      const currentLabel = hostLabels[index];
+      return chartState.highlightedHost === currentLabel ? baseColor : baseColor + '40';
     };
 
     return {
       iops: {
-        labels: hostnames,
+        labels: hostLabels,
         datasets: [{
           label: 'IOPS',
           data: visibleHostData.map(data => data.metrics.iops || 0),
-          backgroundColor: hostnames.map((hostname, idx) => 
-            getBarColor(hostname, colors[idx % colors.length])
+          backgroundColor: hostLabels.map((_, idx) => 
+            getBarColor(idx, colors[idx % colors.length])
           ),
-          borderColor: hostnames.map((_, idx) => colors[idx % colors.length]),
+          borderColor: hostLabels.map((_, idx) => colors[idx % colors.length]),
           borderWidth: chartState.highlightedHost ? 2 : 1,
         }]
       },
       bandwidth: {
-        labels: hostnames,
+        labels: hostLabels,
         datasets: [{
           label: 'Bandwidth (MB/s)',
           data: visibleHostData.map(data => data.metrics.bandwidth || 0),
-          backgroundColor: hostnames.map((hostname, idx) => 
-            getBarColor(hostname, colors[idx % colors.length])
+          backgroundColor: hostLabels.map((_, idx) => 
+            getBarColor(idx, colors[idx % colors.length])
           ),
-          borderColor: hostnames.map((_, idx) => colors[idx % colors.length]),
+          borderColor: hostLabels.map((_, idx) => colors[idx % colors.length]),
           borderWidth: chartState.highlightedHost ? 2 : 1,
         }]
       },
       latency: {
-        labels: hostnames,
+        labels: hostLabels,
         datasets: [
           {
             label: 'P95 Latency (μs)',
             data: visibleHostData.map(data => data.metrics.p95_latency || 0),
-            backgroundColor: hostnames.map((hostname, idx) => 
-              getBarColor(hostname, colors[idx % colors.length])
+            backgroundColor: hostLabels.map((_, idx) => 
+              getBarColor(idx, colors[idx % colors.length])
             ),
-            borderColor: hostnames.map((_, idx) => colors[idx % colors.length]),
+            borderColor: hostLabels.map((_, idx) => colors[idx % colors.length]),
             borderWidth: chartState.highlightedHost ? 2 : 1,
             yAxisID: 'y',
           },
           {
             label: 'P99 Latency (μs)',
             data: visibleHostData.map(data => data.metrics.p99_latency || 0),
-            backgroundColor: hostnames.map((hostname, idx) => 
-              getBarColor(hostname, colors[idx % colors.length] + '80')
+            backgroundColor: hostLabels.map((_, idx) => 
+              getBarColor(idx, colors[idx % colors.length] + '80')
             ),
-            borderColor: hostnames.map((_, idx) => colors[idx % colors.length]),
+            borderColor: hostLabels.map((_, idx) => colors[idx % colors.length]),
             borderWidth: chartState.highlightedHost ? 2 : 1,
             yAxisID: 'y',
           }
@@ -155,12 +169,14 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
         padding: 8,
         callbacks: {
           afterLabel: (context: TooltipItem<'bar'>) => {
+            // Extract hostname from the full label format "hostname (protocol - type - model)"
+            const fullLabel = context.label as string;
+            const hostname = fullLabel.split(' (')[0];
             const hostData = selectedComparison?.hostData.find(
-              data => data.hostname === context.label
+              data => data.hostname === hostname
             );
             if (hostData) {
               return [
-                `Hardware: ${hostData.run.protocol} - ${hostData.run.drive_type} - ${hostData.run.drive_model}`,
                 `Test: ${hostData.run.test_name || 'N/A'}`,
                 `Timestamp: ${new Date(hostData.run.timestamp).toLocaleString()}`
               ];
@@ -187,9 +203,9 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
     onHover: (_, elements) => {
       if (elements.length > 0) {
         const elementIndex = elements[0].index;
-        const hostname = chartData?.iops.labels[elementIndex];
-        if (hostname && hostname !== chartState.highlightedHost) {
-          handleHostHighlight(hostname);
+        const hostLabel = chartData?.iops.labels[elementIndex];
+        if (hostLabel && hostLabel !== chartState.highlightedHost) {
+          handleHostHighlight(hostLabel);
         }
       } else if (chartState.highlightedHost) {
         handleHostHighlight(null);
@@ -238,24 +254,33 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
     <div className={className}>
       {/* Host controls */}
       <div className="mb-4 flex flex-wrap gap-2">
-        {selectedComparison.hostData.map(({ hostname }) => (
-          <Button
-            key={hostname}
-            variant={chartState.hiddenHosts.has(hostname) ? "outline" : "primary"}
-            size="sm"
-            onClick={() => toggleHostVisibility(hostname)}
-            className="flex items-center gap-1"
-          >
-            {chartState.hiddenHosts.has(hostname) ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-            {hostname}
-          </Button>
-        ))}
+        {selectedComparison.hostData.map(({ hostname, run }, index) => {
+          // Create a unique identifier including the array index to ensure uniqueness
+          const uniqueId = `${hostname}-${run.protocol}-${run.drive_type}-${run.drive_model}-${index}`;
+          const fullLabel = `${hostname} (${run.protocol} - ${run.drive_type} - ${run.drive_model})`;
+          const isHidden = chartState.hiddenHostLabels.has(uniqueId);
+          return (
+            <Button
+              key={uniqueId}
+              variant={isHidden ? "outline" : "primary"}
+              size="sm"
+              onClick={() => toggleHostVisibility(uniqueId)}
+              className="flex items-center gap-1 text-xs"
+              title={fullLabel}
+            >
+              {isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              <span className="truncate max-w-32">
+                {`${hostname} (${run.protocol} - ${run.drive_model})`}
+              </span>
+            </Button>
+          );
+        })}
       </div>
 
       {/* Chart grid */}
       {maximized ? (
         // Maximized view
-        <Card className="p-4 h-96">
+        <Card className="p-4 h-[70vh]">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold theme-text-primary">
               {charts.find(c => c.id === maximized)?.title}
@@ -268,7 +293,7 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
               <Maximize2 className="w-4 h-4" />
             </Button>
           </div>
-          <div className="h-80">
+          <div className="h-[calc(70vh-6rem)]">
             <Bar 
               data={charts.find(c => c.id === maximized)!.data} 
               options={charts.find(c => c.id === maximized)!.options} 
@@ -295,7 +320,7 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
                   <Maximize2 className="w-3 h-3" />
                 </Button>
               </div>
-              <div className="h-48">
+              <div className="h-80">
                 <Bar data={chart.data} options={chart.options} />
               </div>
             </Card>

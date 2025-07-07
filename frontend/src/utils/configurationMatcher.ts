@@ -110,21 +110,20 @@ export function createComparableConfigurations(
 
     const hostData: HostComparisonData[] = [];
     
-    for (const hostname of selectedHosts) {
-      const hostRun = group.runs.find(run => run.hostname === hostname);
-      if (hostRun) {
-        hostData.push({
-          hostname,
-          run: hostRun,
-          metrics: {
-            iops: hostRun.metrics.iops?.value,
-            bandwidth: hostRun.metrics.bandwidth?.value,
-            p95_latency: hostRun.metrics.p95_latency?.value,
-            p99_latency: hostRun.metrics.p99_latency?.value,
-            avg_latency: hostRun.metrics.avg_latency?.value
-          }
-        });
-      }
+    // Use the actual runs from the group instead of trying to find by hostname
+    // This ensures we get the exact runs that were filtered for specific hardware
+    for (const run of group.runs) {
+      hostData.push({
+        hostname: run.hostname || 'unknown',
+        run,
+        metrics: {
+          iops: run.metrics.iops?.value,
+          bandwidth: run.metrics.bandwidth?.value,
+          p95_latency: run.metrics.p95_latency?.value,
+          p99_latency: run.metrics.p99_latency?.value,
+          avg_latency: run.metrics.avg_latency?.value
+        }
+      });
     }
 
     if (hostData.length >= 2) { // Need at least 2 hosts to compare

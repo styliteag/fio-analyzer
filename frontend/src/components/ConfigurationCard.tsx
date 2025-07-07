@@ -106,9 +106,9 @@ function ConfigurationCard({ comparison, isSelected, onSelect, className = '' }:
       <div className="space-y-1">
         <div className="text-xs theme-text-secondary font-medium">Hosts with this config:</div>
         <div className="flex flex-wrap gap-1">
-          {hostData.map(({ hostname, run }) => (
+          {hostData.map(({ hostname, run }, index) => (
             <span
-              key={hostname}
+              key={`${hostname}-${run.protocol}-${run.drive_type}-${run.drive_model}-${run.id || index}`}
               className="inline-block px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-full"
               title={`${hostname} - ${run.protocol} - ${run.drive_type} - ${run.drive_model}`}
             >
