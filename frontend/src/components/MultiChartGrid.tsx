@@ -122,6 +122,16 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
         labels: hostLabels,
         datasets: [
           {
+            label: 'Avg Latency (μs)',
+            data: visibleHostData.map(data => data.metrics.avg_latency || 0),
+            backgroundColor: hostLabels.map((_, idx) => 
+              getBarColor(idx, colors[idx % colors.length] + '60')
+            ),
+            borderColor: hostLabels.map((_, idx) => colors[idx % colors.length]),
+            borderWidth: chartState.highlightedHost ? 2 : 1,
+            yAxisID: 'y',
+          },
+          {
             label: 'P95 Latency (μs)',
             data: visibleHostData.map(data => data.metrics.p95_latency || 0),
             backgroundColor: hostLabels.map((_, idx) => 
