@@ -320,6 +320,7 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
         
         console.log('Test run hostnames:', [...uniqueHostnames]);
         console.log('Time series server entries:', servers.length);
+        console.log('Time series server details:', servers.map(s => `${s.hostname}|${s.protocol}|${s.drive_model}`));
         console.log('Time series hostnames:', [...uniqueTimeSeriesHostnames]);
         console.log('Unique time series hostnames count:', uniqueTimeSeriesHostnames.size);
         
