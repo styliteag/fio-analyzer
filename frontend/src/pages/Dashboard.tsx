@@ -37,7 +37,7 @@ export default function Dashboard() {
 	const {
 		activeFilters: clientFilters,
 		filteredRuns: clientFilteredRuns,
-		hasActiveFilters: clientHasActiveFilters,
+		hasActiveFilters: _clientHasActiveFilters, // eslint-disable-line @typescript-eslint/no-unused-vars
 		updateFilter: clientUpdateFilter,
 		clearAllFilters: clientClearAllFilters,
 	} = useTestRunFilters(testRuns);
@@ -48,7 +48,7 @@ export default function Dashboard() {
 		activeFilters: serverFilters,
 		setActiveFilters: setServerFilters,
 		clearFilters: clearServerFilters,
-		hasActiveFilters: serverHasActiveFilters,
+		hasActiveFilters: _serverHasActiveFilters, // eslint-disable-line @typescript-eslint/no-unused-vars
 		loading: serverLoading,
 		error: _serverError, // eslint-disable-line @typescript-eslint/no-unused-vars
 		filters: _serverFilterOptions // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -60,7 +60,6 @@ export default function Dashboard() {
 	// Choose data source based on feature flag
 	const activeFilters = useServerSideFiltering ? serverFilters : clientFilters;
 	const filteredRuns = useServerSideFiltering ? serverTestRuns : clientFilteredRuns;
-	const hasActiveFilters = useServerSideFiltering ? serverHasActiveFilters : clientHasActiveFilters;
 	const updateFilter = useServerSideFiltering ? 
 		(filterType: any, values: any) => setServerFilters({...serverFilters, [filterType]: values}) : 
 		clientUpdateFilter;
@@ -193,7 +192,6 @@ export default function Dashboard() {
 						testRuns={allTestRuns}
 						activeFilters={activeFilters}
 						filteredRuns={filteredRuns}
-						hasActiveFilters={typeof hasActiveFilters === 'function' ? hasActiveFilters() : hasActiveFilters}
 						onFilterChange={updateFilter}
 						onClearAllFilters={clearAllFilters}
 						// Pass loading state

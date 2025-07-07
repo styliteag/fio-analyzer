@@ -36,7 +36,7 @@ export default function Performance() {
 	const {
 		activeFilters,
 		filteredRuns,
-		hasActiveFilters,
+		hasActiveFilters: _hasActiveFilters, // eslint-disable-line @typescript-eslint/no-unused-vars
 		updateFilter,
 		clearAllFilters,
 	} = useTestRunFilters(testRuns);
@@ -282,7 +282,6 @@ export default function Performance() {
 						testRuns={testRuns}
 						activeFilters={activeFilters}
 						filteredRuns={filteredRuns}
-						hasActiveFilters={hasActiveFilters()}
 						onFilterChange={updateFilter}
 						onClearAllFilters={clearAllFilters}
 						loading={loading}

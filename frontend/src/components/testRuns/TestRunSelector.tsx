@@ -12,7 +12,6 @@ interface TestRunSelectorProps {
     testRuns?: TestRun[];
     activeFilters?: ActiveFilters;
     filteredRuns?: TestRun[];
-    hasActiveFilters?: boolean;
     onFilterChange?: (filterType: keyof ActiveFilters, values: (string | number)[]) => void;
     onClearAllFilters?: () => void;
     loading?: boolean;
@@ -26,7 +25,6 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
     testRuns: propTestRuns = [],
     activeFilters: propActiveFilters,
     filteredRuns: propFilteredRuns = [],
-    hasActiveFilters: propHasActiveFilters = false,
     onFilterChange,
     onClearAllFilters,
     loading: propLoading = false,
@@ -64,7 +62,6 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
         durations: [],
     };
     const filteredRuns = propFilteredRuns;
-    const hasActiveFilters = propHasActiveFilters;
     const updateFilter = onFilterChange || (() => {});
     const clearAllFilters = onClearAllFilters || (() => {});
     const loading = propLoading;
@@ -86,10 +83,6 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
         loadFilters();
     }, [loadFilters, refreshTrigger]);
 
-    const handleRefresh = useCallback(() => {
-        loadFilters();
-    }, [loadFilters]);
-
     return (
         <TestRunManager
             selectedRuns={selectedRuns}
@@ -97,13 +90,11 @@ const TestRunSelector: React.FC<TestRunSelectorProps> = ({
             testRuns={testRuns}
             activeFilters={activeFilters}
             filteredRuns={filteredRuns}
-            hasActiveFilters={hasActiveFilters}
             onFilterChange={updateFilter}
             onClearAllFilters={clearAllFilters}
             filters={filters}
             loading={loading}
             error={error}
-            onRefresh={handleRefresh}
         />
     );
 };

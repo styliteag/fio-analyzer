@@ -1,15 +1,9 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { ChevronDown, ChevronUp, Settings, Check, X, Plus, Minus } from 'lucide-react';
-import { useTestRunSelection, TestRunSelectionOptions } from '../../hooks/useTestRunSelection';
-import { useTestRunOperations } from '../../hooks/useTestRunOperations';
+import React, { useState, useCallback } from 'react';
+import { Settings, Check, X } from 'lucide-react';
 import { useTestRunFilters } from '../../hooks/useTestRunFilters';
 import type { TestRun, FilterOptions } from '../../types';
 import type { ActiveFilters } from '../../hooks/useTestRunFilters';
 import TestRunFilters from './TestRunFilters';
-import TestRunGrid from './TestRunGrid';
-import TestRunActions from './TestRunActions';
-import BulkEditModal from '../BulkEditModal';
-import EditTestRunModal from '../EditTestRunModal';
 
 interface TestRunManagerProps {
     selectedRuns: TestRun[];
@@ -17,13 +11,11 @@ interface TestRunManagerProps {
     testRuns: TestRun[];
     activeFilters: ActiveFilters;
     filteredRuns: TestRun[];
-    hasActiveFilters: boolean;
     onFilterChange: (filterType: keyof ActiveFilters, values: (string | number)[]) => void;
     onClearAllFilters?: () => void;
     filters: FilterOptions;
     loading: boolean;
     error: string | null;
-    onRefresh: () => void;
 }
 
 const TestRunManager: React.FC<TestRunManagerProps> = ({
@@ -32,69 +24,16 @@ const TestRunManager: React.FC<TestRunManagerProps> = ({
     testRuns,
     activeFilters,
     filteredRuns,
-    hasActiveFilters,
     onFilterChange,
     onClearAllFilters,
     filters,
     loading,
     error,
-    onRefresh,
 }) => {
-    const [isSelectedRunsExpanded, setIsSelectedRunsExpanded] = useState(false);
     const [autoSelectEnabled, setAutoSelectEnabled] = useState(true);
-
-    // Configure auto-selection options
-    const selectionOptions: TestRunSelectionOptions = useMemo(() => ({
-        autoSelectAll: autoSelectEnabled,
-        autoSelectOnFilterChange: autoSelectEnabled,
-    }), [autoSelectEnabled]);
 
     // Use the hook to get dynamic filter options
     const { dynamicFilterOptions } = useTestRunFilters(testRuns);
-
-    const {
-        handleSelectAllMatching,
-        getUnselectedMatchingCount,
-        clearSelection,
-        isAutoSelectionActive,
-        toggleAutoSelection,
-    } = useTestRunSelection(selectedRuns, onSelectionChange, filteredRuns, selectionOptions);
-
-    const {
-        state: operationState,
-        handleEditTestRun,
-        handleCloseEditModal,
-        handleSaveTestRun,
-        handleBulkEdit,
-        handleCloseBulkEditModal,
-        handleBulkSave,
-        handleDeleteTestRun,
-        handleBulkDelete,
-    } = useTestRunOperations(
-        testRuns,
-        onRefresh,
-        selectedRuns,
-        onSelectionChange,
-        onRefresh
-    );
-
-    const handleDeleteWithAlert = useCallback(async (testRun: TestRun) => {
-        const result = await handleDeleteTestRun(testRun);
-        if (!result.success && result.error) {
-            alert(result.error);
-        }
-    }, [handleDeleteTestRun]);
-
-    const handleBulkDeleteWithAlert = useCallback(async () => {
-        const result = await handleBulkDelete();
-        if (result.error) {
-            alert(result.error);
-        }
-    }, [handleBulkDelete]);
-
-    const toggleSelectedRunsExpanded = useCallback(() => {
-        setIsSelectedRunsExpanded(!isSelectedRunsExpanded);
-    }, [isSelectedRunsExpanded]);
 
     const toggleAutoSelect = useCallback(() => {
         setAutoSelectEnabled(!autoSelectEnabled);
@@ -103,11 +42,6 @@ const TestRunManager: React.FC<TestRunManagerProps> = ({
             onSelectionChange(filteredRuns);
         }
     }, [autoSelectEnabled, filteredRuns, onSelectionChange]);
-
-    // Smart default for selected runs: collapsed when auto-selected, expanded when manually selected
-    const shouldShowSelectedRunsCollapsed = useMemo(() => {
-        return !isSelectedRunsExpanded && (isAutoSelectionActive || selectedRuns.length === 0);
-    }, [isSelectedRunsExpanded, isAutoSelectionActive, selectedRuns.length]);
 
     if (loading) {
         return (

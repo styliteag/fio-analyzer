@@ -1,399 +1,289 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { Line } from "react-chartjs-2";
+import {
+	Chart as ChartJS,
+	CategoryScale,
+	LinearScale,
+	PointElement,
+	LineElement,
+	TimeScale,
+	Tooltip,
+	Legend,
+} from "chart.js";
+import "chartjs-adapter-date-fns";
 import { DashboardHeader, DashboardFooter } from "../components/layout";
-import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
-import { useAuth } from "../contexts/AuthContext";
-import { ArrowLeft, History as HistoryIcon, Calendar, Filter, Download, Search, Clock } from "lucide-react";
-import { fetchTestRuns } from "../services/api/testRuns";
-import type { TestRun } from "../types";
+import {
+	fetchTimeSeriesHistory,
+	fetchTimeSeriesServers,
+	getTimeSeriesMetricTypes,
+} from "../services/api/timeSeries";
+import type { TimeSeriesDataPoint, ServerInfo } from "../types";
 
-interface HistoryStats {
-	totalTests: number;
-	oldestTest: string;
-	newestTest: string;
-	uniqueHosts: number;
-	testsByMonth: { [key: string]: number };
-}
+// Register chart.js pieces once
+ChartJS.register(
+	CategoryScale,
+	LinearScale,
+	PointElement,
+	LineElement,
+	TimeScale,
+	Tooltip,
+	Legend,
+);
 
 export default function History() {
-	const { } = useAuth();
-	const [historyStats, setHistoryStats] = useState<HistoryStats | null>(null);
-	const [recentTests, setRecentTests] = useState<TestRun[]>([]);
-	const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
-	const [loading, setLoading] = useState(true);
+	const [servers, setServers] = useState<ServerInfo[]>([]);
+	const [selectedServerId, setSelectedServerId] = useState<string>("");
+	const [configOptions, setConfigOptions] = useState<string[]>([]);
+	const [selectedConfig, setSelectedConfig] = useState<string>("");
+	const [metric, setMetric] = useState("iops");
+	const [days, setDays] = useState(30);
+	const [data, setData] = useState<TimeSeriesDataPoint[]>([]);
+	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	// Get the correct API documentation URL based on environment
+	// Helper for footer links
 	const getApiDocsUrl = () => {
 		const apiBaseUrl = import.meta.env.VITE_API_URL || "";
-		if (apiBaseUrl) {
-			return `${apiBaseUrl}/api-docs`;
-		} else {
-			return "/api-docs";
-		}
+		return apiBaseUrl ? `${apiBaseUrl}/api-docs` : "/api-docs";
 	};
 
-	// Load history data
-	const loadHistoryData = async () => {
-		try {
-			setLoading(true);
-			setError(null);
+	const getServerId = (s: ServerInfo) => `${s.hostname}|${s.protocol}|${s.drive_model}`;
 
-			// Calculate date range
-			const now = new Date();
-			let startDate: Date | undefined;
-			
-			switch (timeRange) {
-				case '7d':
-					startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-					break;
-				case '30d':
-					startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-					break;
-				case '90d':
-					startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-					break;
-				default:
-					startDate = undefined;
-			}
-
-			// Fetch historical test runs
-			const testRunsResult = await fetchTestRuns({ 
-				includeHistorical: true 
-			});
-
-			let allTests = testRunsResult.data || [];
-
-			// Filter by time range if specified
-			if (startDate) {
-				allTests = allTests.filter(test => 
-					test.timestamp && new Date(test.timestamp) >= startDate!
-				);
-			}
-
-			// Sort by timestamp (newest first)
-			const sortedTests = allTests
-				.filter(test => test.timestamp)
-				.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-			setRecentTests(sortedTests.slice(0, 50)); // Show latest 50 tests
-
-			// Calculate statistics
-			if (sortedTests.length > 0) {
-				const timestamps = sortedTests.map(t => new Date(t.timestamp));
-				const uniqueHosts = new Set(sortedTests
-					.filter(t => t.hostname)
-					.map(t => t.hostname)
-				);
-
-				// Group tests by month for trending
-				const testsByMonth: { [key: string]: number } = {};
-				sortedTests.forEach(test => {
-					const date = new Date(test.timestamp);
-					const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-					testsByMonth[monthKey] = (testsByMonth[monthKey] || 0) + 1;
-				});
-
-				setHistoryStats({
-					totalTests: sortedTests.length,
-					oldestTest: Math.min(...timestamps.map(d => d.getTime())).toString(),
-					newestTest: Math.max(...timestamps.map(d => d.getTime())).toString(),
-					uniqueHosts: uniqueHosts.size,
-					testsByMonth
-				});
-			} else {
-				setHistoryStats({
-					totalTests: 0,
-					oldestTest: '',
-					newestTest: '',
-					uniqueHosts: 0,
-					testsByMonth: {}
-				});
-			}
-
-		} catch (err) {
-			console.error('Failed to load history data:', err);
-			setError('Failed to load history data. Please try again.');
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	// Load data on component mount and when time range changes
+	// Fetch list of servers once
 	useEffect(() => {
-		loadHistoryData();
-	}, [timeRange]);
+		const fetchServers = async () => {
+			const res = await fetchTimeSeriesServers();
+			if (!res.error) {
+				setServers(res.data || []);
+			}
+		};
+		fetchServers();
+	}, []);
 
-	const handleRefresh = () => {
-		loadHistoryData();
-	};
+	const load = useCallback(async () => {
+		setLoading(true);
+		setError(null);
 
-	const formatRelativeTime = (timestamp: string): string => {
-		const now = new Date();
-		const past = new Date(timestamp);
-		const diffMs = now.getTime() - past.getTime();
-		const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-		const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-		
-		if (diffDays > 30) {
-			return past.toLocaleDateString();
-		} else if (diffDays > 0) {
-			return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-		} else if (diffHours > 0) {
-			return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-		} else {
-			return 'Recent';
+		const opts: any = { metricType: metric, days };
+		if (selectedServerId) {
+			const parts = selectedServerId.split("|");
+			const hostname = parts[0];
+			const protocol = parts[1];
+			const drive_model = parts[2];
+			
+			opts.hostname = hostname;
+			// Only add protocol/drive_model if they're not undefined
+			if (protocol && protocol !== 'undefined') {
+				opts.protocol = protocol;
+			}
+			if (drive_model && drive_model !== 'undefined') {
+				opts.driveModel = drive_model;
+			}
 		}
-	};
+		if (selectedConfig) {
+			const [pattern, bs, qd] = selectedConfig.split("|");
+			opts.readWritePattern = pattern;
+			opts.blockSize = bs;
+			opts.queueDepth = parseInt(qd, 10);
+		}
 
-	const timeRangeOptions = [
-		{ value: '7d' as const, label: 'Last 7 days' },
-		{ value: '30d' as const, label: 'Last 30 days' },
-		{ value: '90d' as const, label: 'Last 90 days' },
-		{ value: 'all' as const, label: 'All time' }
-	];
+		const res = await fetchTimeSeriesHistory(opts);
+		if (res.error) {
+			setError(res.error);
+			setData([]);
+			setConfigOptions([]);
+		} else {
+			const newData = res.data || [];
+			setData(newData);
+			// Recompute config options
+			const unique = new Set<string>();
+			newData.forEach((d) => {
+				unique.add(`${d.read_write_pattern}|${d.block_size}|${d.queue_depth}`);
+			});
+			setConfigOptions(Array.from(unique));
+			// Reset selectedConfig if no longer valid
+			if (selectedConfig && !unique.has(selectedConfig)) {
+				setSelectedConfig("");
+			}
+		}
+		setLoading(false);
+	}, [metric, days, selectedServerId, selectedConfig]);
+
+	// Reload when dependencies change
+	useEffect(() => {
+		load();
+	}, [load]);
+
+	// Build chart.js dataset structure
+	const chartData = useMemo(() => {
+		const filtered = selectedConfig
+			? data.filter((d) => `${d.read_write_pattern}|${d.block_size}|${d.queue_depth}` === selectedConfig)
+			: data;
+
+		const palette = [
+			"#3b82f6",
+			"#10b981",
+			"#f59e0b",
+			"#ef4444",
+			"#8b5cf6",
+			"#ec4899",
+			"#14b8a6",
+		];
+		const map: Record<string, { label: string; data: { x: string; y: number }[]; color: string }> = {};
+		let colorIdx = 0;
+		filtered.forEach((d) => {
+			const key = `${d.hostname || "unknown"}-${d.drive_model}`;
+			if (!map[key]) {
+				map[key] = {
+					label: key,
+					data: [],
+					color: palette[colorIdx % palette.length],
+				};
+				colorIdx += 1;
+			}
+			map[key].data.push({ x: d.timestamp, y: d.value });
+		});
+		return {
+			datasets: Object.values(map).map((ds) => ({
+				label: ds.label,
+				data: ds.data,
+				borderColor: ds.color,
+				backgroundColor: ds.color,
+				fill: false,
+				tension: 0.3,
+				pointRadius: 1,
+				pointHoverRadius: 3,
+			})),
+		};
+	}, [data, selectedConfig]);
+
+	const chartOptions = useMemo(() => {
+		const timeUnit: "day" | "week" = days <= 7 ? "day" : "week";
+		return {
+			responsive: true,
+			maintainAspectRatio: false,
+			scales: {
+				x: {
+					type: "time" as const,
+					time: { unit: timeUnit },
+					title: { display: true, text: "Time" },
+				},
+				y: {
+					beginAtZero: false,
+					title: { display: true, text: metric.toUpperCase() },
+				},
+			},
+			plugins: {
+				legend: { display: true, position: "bottom" as const },
+			},
+		} as const;
+	}, [days, metric]);
 
 	return (
-		<div className="min-h-screen theme-bg-secondary transition-colors">
-			<DashboardHeader />
-
-			{/* Navigation */}
-			<div className="w-full px-4 sm:px-6 lg:px-8 pt-4 pb-2">
-				<div className="flex items-center gap-4">
-					<Button
-						variant="outline"
-						onClick={() => window.location.href = "/"}
-						className="flex items-center gap-2"
-					>
-						<ArrowLeft className="w-4 h-4" />
-						Back to Home
-					</Button>
-					<h1 className="text-2xl font-bold theme-text-primary">
-						Test History
-					</h1>
-				</div>
-			</div>
-
-			{/* Main Content */}
-			<main className="w-full px-4 sm:px-6 lg:px-8 py-6">
-				{/* Page Description */}
-				<div className="mb-8">
-					<p className="theme-text-secondary text-lg">
-						Browse and analyze your historical FIO test results and performance trends over time.
-					</p>
-				</div>
-
-				{/* Controls */}
-				<div className="mb-8">
-					<div className="flex flex-wrap gap-4 items-center">
-						<Button
-							onClick={handleRefresh}
-							disabled={loading}
-							className="flex items-center gap-2"
+		<div className="h-screen theme-bg-secondary flex">
+			{/* Sidebar with controls */}
+			<div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-6 overflow-y-auto">
+				<h2 className="text-xl font-bold theme-text-primary mb-6">History Controls</h2>
+				
+				<div className="space-y-4">
+					<div>
+						<label className="block text-sm font-medium theme-text-primary mb-2">Server</label>
+						<select
+							value={selectedServerId}
+							onChange={(e) => setSelectedServerId(e.target.value)}
+							className="w-full px-3 py-2 border rounded theme-bg-primary theme-text-primary"
 						>
-							<HistoryIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-							{loading ? "Loading..." : "Refresh"}
-						</Button>
+							<option value="">All Servers</option>
+							{servers.map((s) => (
+								<option key={getServerId(s)} value={getServerId(s)}>
+									{s.hostname} • {s.protocol} • {s.drive_model}
+								</option>
+							))}
+						</select>
+					</div>
 
-						{/* Time Range Selector */}
-						<div className="flex items-center gap-2">
-							<Calendar className="w-4 h-4 theme-text-secondary" />
-							<span className="theme-text-secondary text-sm">Time Range:</span>
+					{configOptions.length > 0 && (
+						<div>
+							<label className="block text-sm font-medium theme-text-primary mb-2">Test Configuration</label>
 							<select
-								value={timeRange}
-								onChange={(e) => setTimeRange(e.target.value as any)}
-								className="px-3 py-1 rounded border theme-border-primary theme-bg-primary theme-text-primary text-sm"
+								value={selectedConfig}
+								onChange={(e) => setSelectedConfig(e.target.value)}
+								className="w-full px-3 py-2 border rounded theme-bg-primary theme-text-primary"
 							>
-								{timeRangeOptions.map(option => (
-									<option key={option.value} value={option.value}>
-										{option.label}
-									</option>
-								))}
+								<option value="">All Test Runs</option>
+								{configOptions.map((c) => {
+									const [pattern, bs, qd] = c.split("|");
+									return (
+										<option key={c} value={c}>
+											{pattern} / {bs} / qd{qd}
+										</option>
+									);
+								})}
 							</select>
 						</div>
+					)}
 
-						<Button
-							variant="outline"
-							onClick={() => window.location.href = "/admin"}
-							className="flex items-center gap-2"
+					<div>
+						<label className="block text-sm font-medium theme-text-primary mb-2">Metric</label>
+						<select
+							value={metric}
+							onChange={(e) => setMetric(e.target.value)}
+							className="w-full px-3 py-2 border rounded theme-bg-primary theme-text-primary"
 						>
-							<Filter className="w-4 h-4" />
-							Advanced Filters
-						</Button>
+							{getTimeSeriesMetricTypes().map((m) => (
+								<option key={m.value} value={m.value}>
+									{m.label}
+								</option>
+							))}
+						</select>
 					</div>
+
+					<div>
+						<label className="block text-sm font-medium theme-text-primary mb-2">Time Range</label>
+						<select
+							value={days}
+							onChange={(e) => setDays(parseInt(e.target.value, 10))}
+							className="w-full px-3 py-2 border rounded theme-bg-primary theme-text-primary"
+						>
+							{[7, 30, 90, 365].map((d) => (
+								<option key={d} value={d}>
+									Last {d} days
+								</option>
+							))}
+						</select>
+					</div>
+
+					<Button onClick={load} disabled={loading} className="w-full">
+						{loading ? "Loading..." : "Refresh Data"}
+					</Button>
 				</div>
 
-				{/* Error Display */}
 				{error && (
-					<div className="mb-8">
-						<ErrorDisplay 
-							error={error} 
-							onRetry={handleRefresh}
-							showRetry={true}
-						/>
+					<div className="mt-4">
+						<ErrorDisplay error={error} onRetry={load} showRetry />
 					</div>
 				)}
+			</div>
 
-				{/* History Statistics */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-					<Card className="p-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="theme-text-secondary text-sm font-medium">
-									Total Tests
-								</p>
-								<p className="theme-text-primary text-2xl font-bold mt-1">
-									{loading ? <Loading size="sm" /> : historyStats?.totalTests.toLocaleString() || "---"}
-								</p>
-							</div>
-							<div className="text-blue-600 dark:text-blue-400 opacity-80">
-								<HistoryIcon className="w-8 h-8" />
-							</div>
-						</div>
-					</Card>
-
-					<Card className="p-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="theme-text-secondary text-sm font-medium">
-									Unique Hosts
-								</p>
-								<p className="theme-text-primary text-2xl font-bold mt-1">
-									{loading ? <Loading size="sm" /> : historyStats?.uniqueHosts.toString() || "---"}
-								</p>
-							</div>
-							<div className="text-green-600 dark:text-green-400 opacity-80">
-								<Search className="w-8 h-8" />
-							</div>
-						</div>
-					</Card>
-
-					<Card className="p-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="theme-text-secondary text-sm font-medium">
-									Oldest Test
-								</p>
-								<p className="theme-text-primary text-lg font-bold mt-1">
-									{loading ? <Loading size="sm" /> : 
-										historyStats?.oldestTest ? 
-											new Date(parseInt(historyStats.oldestTest)).toLocaleDateString() : 
-											"---"
-									}
-								</p>
-							</div>
-							<div className="text-purple-600 dark:text-purple-400 opacity-80">
-								<Clock className="w-8 h-8" />
-							</div>
-						</div>
-					</Card>
-
-					<Card className="p-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<p className="theme-text-secondary text-sm font-medium">
-									Latest Test
-								</p>
-								<p className="theme-text-primary text-lg font-bold mt-1">
-									{loading ? <Loading size="sm" /> : 
-										historyStats?.newestTest ? 
-											formatRelativeTime(new Date(parseInt(historyStats.newestTest)).toISOString()) : 
-											"---"
-									}
-								</p>
-							</div>
-							<div className="text-orange-600 dark:text-orange-400 opacity-80">
-								<Calendar className="w-8 h-8" />
-							</div>
+			{/* Main chart area */}
+			<div className="flex-1 flex flex-col">
+				<DashboardHeader />
+				<div className="flex-1 p-4 flex flex-col">
+					<Card className="flex-1 p-2">
+						<div className="h-full w-full" style={{ minHeight: '600px' }}>
+							{loading ? (
+								<Loading />
+							) : (
+								<Line data={chartData} options={chartOptions} />
+							)}
 						</div>
 					</Card>
 				</div>
-
-				{/* Recent Tests Table */}
-				<Card className="p-6">
-					<div className="flex items-center justify-between mb-4">
-						<h2 className="text-xl font-semibold theme-text-primary flex items-center gap-2">
-							<HistoryIcon className="w-5 h-5" />
-							Recent Test History
-						</h2>
-						<Button
-							variant="outline"
-							className="flex items-center gap-2"
-						>
-							<Download className="w-4 h-4" />
-							Export
-						</Button>
-					</div>
-					
-					<div className="space-y-4">
-						{loading ? (
-							<div className="space-y-3">
-								{Array.from({ length: 5 }).map((_, index) => (
-									<div key={index} className="flex items-center justify-between py-3 border-b theme-border-primary">
-										<div className="flex items-center space-x-4">
-											<div className="animate-pulse h-4 bg-gray-300 rounded w-24 theme-bg-tertiary" />
-											<div className="animate-pulse h-4 bg-gray-300 rounded w-32 theme-bg-tertiary" />
-											<div className="animate-pulse h-4 bg-gray-300 rounded w-20 theme-bg-tertiary" />
-										</div>
-										<div className="animate-pulse h-4 bg-gray-300 rounded w-16 theme-bg-tertiary" />
-									</div>
-								))}
-							</div>
-						) : recentTests.length > 0 ? (
-							<div className="overflow-x-auto">
-								<table className="w-full">
-									<thead>
-										<tr className="border-b theme-border-primary">
-											<th className="text-left py-2 theme-text-primary font-medium">Date</th>
-											<th className="text-left py-2 theme-text-primary font-medium">Hostname</th>
-											<th className="text-left py-2 theme-text-primary font-medium">Test Name</th>
-											<th className="text-left py-2 theme-text-primary font-medium">Pattern</th>
-											<th className="text-left py-2 theme-text-primary font-medium">Block Size</th>
-											<th className="text-left py-2 theme-text-primary font-medium">Drive Type</th>
-											<th className="text-right py-2 theme-text-primary font-medium">Duration</th>
-										</tr>
-									</thead>
-									<tbody>
-										{recentTests.map((test, index) => (
-											<tr key={test.id || index} className="border-b theme-border-primary last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-												<td className="py-3 theme-text-secondary">
-													{formatRelativeTime(test.timestamp)}
-												</td>
-												<td className="py-3 theme-text-primary font-medium">
-													{test.hostname || 'Unknown'}
-												</td>
-												<td className="py-3 theme-text-secondary">
-													{test.test_name || test.description || 'N/A'}
-												</td>
-												<td className="py-3 theme-text-secondary">
-													{test.read_write_pattern}
-												</td>
-												<td className="py-3 theme-text-secondary">
-													{test.block_size}
-												</td>
-												<td className="py-3 theme-text-secondary">
-													{test.drive_type || 'N/A'}
-												</td>
-												<td className="py-3 theme-text-secondary text-right">
-													{test.duration ? `${test.duration}s` : 'N/A'}
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						) : (
-							<p className="theme-text-secondary text-center py-8">
-								No test history found for the selected time range
-							</p>
-						)}
-					</div>
-				</Card>
-			</main>
-
-			<DashboardFooter getApiDocsUrl={getApiDocsUrl} />
+			</div>
 		</div>
 	);
 }
