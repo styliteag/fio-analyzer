@@ -4,6 +4,7 @@ export * from './testRuns';
 export * from './performance';
 export * from './timeSeries';
 export * from './upload';
+export * from './dashboard';
 
 // Re-export commonly used functions for backward compatibility
 export { 
@@ -35,3 +36,8 @@ export {
     validateUploadMetadata,
     validateUploadFile,
 } from './upload';
+
+export {
+    fetchDashboardStats,
+    fetchQuickStats,
+} from './dashboard';
