@@ -160,9 +160,9 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
             );
             if (hostData) {
               return [
-                `Drive: ${hostData.run.drive_model}`,
-                `Protocol: ${hostData.run.protocol}`,
-                `Test: ${hostData.run.test_name || 'N/A'}`
+                `Hardware: ${hostData.run.protocol} - ${hostData.run.drive_type} - ${hostData.run.drive_model}`,
+                `Test: ${hostData.run.test_name || 'N/A'}`,
+                `Timestamp: ${new Date(hostData.run.timestamp).toLocaleString()}`
               ];
             }
             return [];

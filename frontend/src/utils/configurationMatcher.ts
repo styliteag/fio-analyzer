@@ -10,7 +10,6 @@ export interface Configuration {
   num_jobs: number;
   test_size: string;
   duration: number;
-  protocol: string;
 }
 
 export interface ConfigurationGroup {
@@ -48,8 +47,7 @@ export function createConfigurationId(run: PerformanceData): string {
     (run as any).sync || 0,
     (run as any).num_jobs || 1,
     (run as any).test_size || 'unknown',
-    (run as any).duration || 0,
-    run.protocol || 'unknown'
+    (run as any).duration || 0
   ].join('|');
 }
 
@@ -63,8 +61,7 @@ export function extractConfiguration(run: PerformanceData): Configuration {
     sync: (run as any).sync || 0,
     num_jobs: (run as any).num_jobs || 1,
     test_size: (run as any).test_size || 'unknown',
-    duration: (run as any).duration || 0,
-    protocol: run.protocol || 'unknown'
+    duration: (run as any).duration || 0
   };
 }
 
@@ -152,7 +149,6 @@ export function formatConfigurationLabel(config: Configuration): string {
     `${config.block_size}`,
     config.read_write_pattern,
     `QD${config.queue_depth}`,
-    config.protocol !== 'unknown' ? config.protocol : null,
     config.direct === 1 ? 'Direct' : null,
     config.sync === 1 ? 'Sync' : null,
     config.num_jobs > 1 ? `${config.num_jobs} jobs` : null,
@@ -166,7 +162,6 @@ export function formatConfigurationLabel(config: Configuration): string {
 export function getConfigurationSummary(config: Configuration): {
   primary: string;
   secondary: string;
-  protocol: string;
 } {
   return {
     primary: `${config.block_size} ${config.read_write_pattern} QD${config.queue_depth}`,
@@ -176,7 +171,6 @@ export function getConfigurationSummary(config: Configuration): {
       config.num_jobs > 1 ? `${config.num_jobs} jobs` : null,
       config.test_size !== 'unknown' ? config.test_size : null,
       config.duration > 0 ? `${config.duration}s` : null
-    ].filter(Boolean).join(', ') || 'Standard',
-    protocol: config.protocol !== 'unknown' ? config.protocol : 'N/A'
+    ].filter(Boolean).join(', ') || 'Standard'
   };
 }

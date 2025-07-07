@@ -60,11 +60,10 @@ function ConfigurationCard({ comparison, isSelected, onSelect, className = '' }:
         </div>
       </div>
 
-      {/* Protocol info */}
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-        <HardDrive className="w-4 h-4 theme-text-secondary" />
-        <span className="text-xs theme-text-secondary truncate">
-          Protocol: {summary.protocol}
+      {/* Test parameters only - no hardware info */}
+      <div className="mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+        <span className="text-xs theme-text-secondary">
+          Test Configuration (hardware-agnostic)
         </span>
       </div>
 
@@ -103,16 +102,20 @@ function ConfigurationCard({ comparison, isSelected, onSelect, className = '' }:
         </div>
       </div>
 
-      {/* Host coverage indicators */}
-      <div className="flex flex-wrap gap-1">
-        {hostData.map(({ hostname }) => (
-          <span
-            key={hostname}
-            className="inline-block px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-full"
-          >
-            {hostname}
-          </span>
-        ))}
+      {/* Host coverage indicators with hardware diversity */}
+      <div className="space-y-1">
+        <div className="text-xs theme-text-secondary font-medium">Hosts with this config:</div>
+        <div className="flex flex-wrap gap-1">
+          {hostData.map(({ hostname, run }) => (
+            <span
+              key={hostname}
+              className="inline-block px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-full"
+              title={`${hostname} - ${run.protocol} - ${run.drive_type} - ${run.drive_model}`}
+            >
+              {hostname}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* All hosts indicator */}

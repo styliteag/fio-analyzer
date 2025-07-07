@@ -8,9 +8,11 @@ import { Check, Server, HardDrive } from 'lucide-react';
 interface HostOption {
   value: string;
   label: string;
+  hostname: string;
+  protocol: string;
+  driveType: string;
+  driveModel: string;
   testCount?: number;
-  driveTypes?: string[];
-  protocols?: string[];
 }
 
 interface HostSelectorProps {
@@ -19,22 +21,50 @@ interface HostSelectorProps {
   className?: string;
 }
 
+// Helper function to extract hostname from unique value
+function extractHostname(uniqueValue: string): string {
+  return uniqueValue.split('|')[0];
+}
+
 export default function HostSelector({ selectedHosts, onHostsChange, className = '' }: HostSelectorProps) {
   const [hostOptions, setHostOptions] = useState<HostOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewData, setPreviewData] = useState<Record<string, { count: number; configs: number }>>({});
 
-  // Load available hosts
+  // Load available hosts with hardware details
   useEffect(() => {
     const loadHosts = async () => {
       try {
         setLoading(true);
-        const res = await fetchFilters();
-        if (res.data?.hostnames) {
-          const options: HostOption[] = res.data.hostnames.map(hostname => ({
-            value: hostname,
-            label: hostname
-          }));
+        
+        // Get all test runs to extract hostname + hardware combinations
+        const res = await fetchTestRuns({ includeHistorical: false });
+        if (res.data) {
+          // Create a map to track unique hostname + hardware combinations
+          const hostMap = new Map<string, HostOption>();
+          
+          for (const run of res.data) {
+            const hostname = run.hostname || 'unknown';
+            const protocol = run.protocol || 'unknown';
+            const driveType = run.drive_type || 'unknown';
+            const driveModel = run.drive_model || 'unknown';
+            
+            // Create a unique key for this hostname + hardware combination
+            const hostKey = `${hostname}|${protocol}|${driveType}|${driveModel}`;
+            
+            if (!hostMap.has(hostKey)) {
+              hostMap.set(hostKey, {
+                value: hostKey, // Use unique hostKey as value
+                label: `${hostname} - ${protocol} - ${driveType} - ${driveModel}`,
+                hostname,
+                protocol,
+                driveType,
+                driveModel
+              });
+            }
+          }
+          
+          const options = Array.from(hostMap.values()).sort((a, b) => a.label.localeCompare(b.label));
           setHostOptions(options);
         }
       } catch (error) {
@@ -56,17 +86,21 @@ export default function HostSelector({ selectedHosts, onHostsChange, className =
       }
 
       try {
+        // Extract actual hostnames from unique values
+        const actualHostnames = selectedHosts.map(extractHostname);
         const res = await fetchTestRuns({ 
-          hostnames: selectedHosts,
+          hostnames: actualHostnames,
           includeHistorical: false // Only latest per config
         });
         
         if (res.data) {
           const preview: Record<string, { count: number; configs: number }> = {};
           
-          for (const hostname of selectedHosts) {
+          // Group preview data by unique host-hardware combinations
+          for (const uniqueValue of selectedHosts) {
+            const hostname = extractHostname(uniqueValue);
             const hostRuns = res.data.filter(run => run.hostname === hostname);
-            preview[hostname] = {
+            preview[uniqueValue] = {
               count: hostRuns.length,
               configs: new Set(hostRuns.map(run => 
                 `${run.block_size}|${run.read_write_pattern}|${run.queue_depth}`
@@ -139,7 +173,10 @@ export default function HostSelector({ selectedHosts, onHostsChange, className =
     <div className="flex items-center justify-between w-full">
       <div className="flex items-center gap-2">
         <Server className="w-4 h-4 text-blue-600" />
-        <span className="font-medium">{option.label}</span>
+        <div className="flex flex-col">
+          <span className="font-medium text-sm">{option.hostname}</span>
+          <span className="text-xs text-gray-500">{option.protocol} - {option.driveType} - {option.driveModel}</span>
+        </div>
       </div>
       {selectedHosts.includes(option.value) && (
         <Check className="w-4 h-4 text-green-600" />
@@ -194,18 +231,27 @@ export default function HostSelector({ selectedHosts, onHostsChange, className =
             Selected Hosts ({selectedHosts.length})
           </h4>
           <div className="space-y-2 max-h-32 overflow-y-auto">
-            {selectedHosts.map(hostname => {
-              const preview = previewData[hostname];
+            {selectedHosts.map(uniqueValue => {
+              const preview = previewData[uniqueValue];
+              const hostOption = hostOptions.find(opt => opt.value === uniqueValue);
+              const hostname = extractHostname(uniqueValue);
               return (
                 <div
-                  key={hostname}
+                  key={uniqueValue}
                   className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
                 >
                   <div className="flex items-center gap-2">
                     <Server className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm font-medium theme-text-primary">
-                      {hostname}
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium theme-text-primary">
+                        {hostname}
+                      </span>
+                      {hostOption && (
+                        <span className="text-xs theme-text-secondary">
+                          {hostOption.protocol} - {hostOption.driveType} - {hostOption.driveModel}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {preview && (
                     <div className="flex items-center gap-3 text-xs theme-text-secondary">

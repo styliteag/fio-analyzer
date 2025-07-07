@@ -25,6 +25,11 @@ export default function Compare2() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Helper function to extract hostname from unique value
+  const extractHostname = useCallback((uniqueValue: string): string => {
+    return uniqueValue.split('|')[0];
+  }, []);
+
   // Load data when hosts change
   const loadData = useCallback(async () => {
     if (selectedHosts.length < 2) {
@@ -38,9 +43,11 @@ export default function Compare2() {
     setError(null);
 
     try {
+      // Extract actual hostnames from unique values
+      const actualHostnames = selectedHosts.map(extractHostname);
       // Fetch test runs for selected hosts (latest per config only)
       const runsRes = await fetchTestRuns({
-        hostnames: selectedHosts,
+        hostnames: actualHostnames,
         includeHistorical: false
       });
 
@@ -68,10 +75,10 @@ export default function Compare2() {
       const perfData = perfRes.data || [];
       setPerformanceData(perfData);
 
-      // Create comparable configurations
+      // Create comparable configurations (use actual hostnames)
       const configComparisons = createComparableConfigurations(
         perfData,
-        selectedHosts,
+        actualHostnames,
         minCoverage
       );
 
@@ -86,7 +93,7 @@ export default function Compare2() {
     } finally {
       setLoading(false);
     }
-  }, [selectedHosts, minCoverage]);
+  }, [selectedHosts, minCoverage, extractHostname]);
 
   // Load data when dependencies change
   useEffect(() => {
@@ -191,8 +198,9 @@ export default function Compare2() {
                 Matching Criteria
               </h3>
               <div className="text-xs theme-text-secondary space-y-1">
-                <p><strong>Matches:</strong> Block size, I/O pattern, queue depth, direct, sync, jobs, test size, duration, protocol</p>
-                <p><strong>Ignores:</strong> Hostname, drive model, drive type, runtime</p>
+                <p><strong>Matches:</strong> Block size, I/O pattern, queue depth, direct, sync, jobs, test size, duration</p>
+                <p><strong>Ignores:</strong> Hostname, protocol, drive model, drive type, runtime</p>
+                <p className="text-green-600 dark:text-green-400"><strong>Result:</strong> Compare same workloads across different hardware</p>
               </div>
             </Card>
 
