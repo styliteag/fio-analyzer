@@ -40,17 +40,36 @@ router.get('/servers', requireAdmin, (req, res) => {
     
     const db = getDatabase();
     db.all(`
-        SELECT 
+        SELECT
             hostname,
-            protocol,
-            drive_model,
-            COUNT(*) as test_count,
-            MAX(timestamp) as last_test_time,
-            MIN(timestamp) as first_test_time
-        FROM test_runs 
-        WHERE hostname IS NOT NULL AND protocol IS NOT NULL
-        GROUP BY hostname, protocol, drive_model
-        ORDER BY hostname, protocol, drive_model
+            COUNT(*) AS config_count,
+            SUM(run_count) AS total_runs,
+            MAX(last_test_time) AS last_test_time,
+            MIN(first_test_time) AS first_test_time
+        FROM (
+            SELECT
+                hostname,
+                COUNT(*) AS run_count,
+                MAX(timestamp) AS last_test_time,
+                MIN(timestamp) AS first_test_time
+            FROM test_runs
+            WHERE hostname IS NOT NULL
+              AND protocol IS NOT NULL
+              AND drive_model IS NOT NULL
+            GROUP BY
+                hostname,
+                protocol,
+                drive_model,
+                drive_type,
+                read_write_pattern,
+                block_size,
+                queue_depth
+            HAVING
+                COUNT(*) >= 2
+                AND SUM(CASE WHEN is_latest = 1 THEN 1 ELSE 0 END) >= 1
+        )
+        GROUP BY hostname
+        ORDER BY hostname;
     `, [], (err, rows) => {
         if (err) {
             logError('Database error fetching time-series servers', err, {
