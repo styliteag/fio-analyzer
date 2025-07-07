@@ -3,6 +3,8 @@ import { LoginForm } from "./components/LoginForm";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
+import Performance from "./pages/Performance";
+import History from "./pages/History";
 import Upload from "./pages/Upload";
 import Admin from "./pages/Admin";
 
@@ -27,6 +29,8 @@ const ProtectedApp = () => {
 		<Routes>
 			<Route path="/" element={<Home />} />
 			<Route path="/dashboard" element={<Dashboard />} />
+			<Route path="/performance" element={<Performance />} />
+			<Route path="/history" element={<History />} />
 			<Route path="/upload" element={<Upload />} />
 			<Route path="/admin" element={<Admin />} />
 		</Routes>

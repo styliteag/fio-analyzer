@@ -5,7 +5,7 @@ import Button from "../components/ui/Button";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import { useAuth } from "../contexts/AuthContext";
-import { Activity, Database, TrendingUp, Upload, Users, Settings, BarChart3, RefreshCw } from "lucide-react";
+import { Activity, Database, TrendingUp, Upload, Users, Settings, BarChart3, RefreshCw, Zap, History } from "lucide-react";
 import { fetchDashboardStats, type DashboardStats } from "../services/api/dashboard";
 
 
@@ -81,8 +81,8 @@ export default function Home() {
 			color: "text-indigo-600 dark:text-indigo-400"
 		},
 		{
-			title: "Total Hostnames",
-			value: stats?.totalHostnames.toString() || "---",
+			title: "Total Hostnames / with History",
+			value: stats ? `${stats.totalHostnames} / ${stats.hostnamesWithHistory}` : "---",
 			icon: Users,
 			color: "text-red-600 dark:text-red-400"
 		}
@@ -100,13 +100,29 @@ export default function Home() {
 						Welcome back, {username || 'User'}!
 					</h1>
 					<p className="theme-text-secondary text-lg">
-						Storage Performance Analytics Dashboard - New Backend Edition
+						Storage Performance Analytics Dashboard
 					</p>
 				</div>
 
 				{/* Quick Actions */}
 				<div className="mb-8">
 					<div className="flex flex-wrap gap-4">
+						<Button
+							variant="outline"
+							onClick={() => window.location.href = "/performance"}
+							className="flex items-center gap-2"
+						>
+							<Zap className="w-4 h-4" />
+							Performance Analytics
+						</Button>
+						<Button
+							variant="outline"
+							onClick={() => window.location.href = "/history"}
+							className="flex items-center gap-2"
+						>
+							<History className="w-4 h-4" />
+							Test History
+						</Button>
 						<Button
 							onClick={handleRefreshStats}
 							disabled={loading}
@@ -286,13 +302,40 @@ export default function Home() {
 						<h2 className="text-xl font-semibold theme-text-primary mb-4">
 							Quick Links
 						</h2>
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+							<a
+								href="/performance"
+								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+							>
+								<div className="flex items-center gap-2 mb-2">
+									<Zap className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+									<h3 className="font-medium theme-text-primary">Performance Analytics</h3>
+								</div>
+								<p className="theme-text-secondary text-sm">
+									Real-time metrics and system performance
+								</p>
+							</a>
+							<a
+								href="/history"
+								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+							>
+								<div className="flex items-center gap-2 mb-2">
+									<History className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+									<h3 className="font-medium theme-text-primary">Test History</h3>
+								</div>
+								<p className="theme-text-secondary text-sm">
+									Browse and analyze historical test data
+								</p>
+							</a>
 							<a
 								href="/dashboard"
 								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
 							>
-								<h3 className="font-medium theme-text-primary">Classic Dashboard</h3>
-								<p className="theme-text-secondary text-sm mt-1">
+								<div className="flex items-center gap-2 mb-2">
+									<BarChart3 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+									<h3 className="font-medium theme-text-primary">Advanced Dashboard</h3>
+								</div>
+								<p className="theme-text-secondary text-sm">
 									Advanced analytics and visualization
 								</p>
 							</a>
@@ -300,9 +343,24 @@ export default function Home() {
 								href="/upload"
 								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
 							>
-								<h3 className="font-medium theme-text-primary">Upload Data</h3>
-								<p className="theme-text-secondary text-sm mt-1">
+								<div className="flex items-center gap-2 mb-2">
+									<Upload className="w-5 h-5 text-green-600 dark:text-green-400" />
+									<h3 className="font-medium theme-text-primary">Upload Data</h3>
+								</div>
+								<p className="theme-text-secondary text-sm">
 									Upload new FIO test results
+								</p>
+							</a>
+							<a
+								href="/admin"
+								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+							>
+								<div className="flex items-center gap-2 mb-2">
+									<Settings className="w-5 h-5 text-red-600 dark:text-red-400" />
+									<h3 className="font-medium theme-text-primary">Admin Panel</h3>
+								</div>
+								<p className="theme-text-secondary text-sm">
+									Manage users and system settings
 								</p>
 							</a>
 							<a
@@ -311,18 +369,12 @@ export default function Home() {
 								rel="noopener noreferrer"
 								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
 							>
-								<h3 className="font-medium theme-text-primary">API Documentation</h3>
-								<p className="theme-text-secondary text-sm mt-1">
+								<div className="flex items-center gap-2 mb-2">
+									<Database className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+									<h3 className="font-medium theme-text-primary">API Documentation</h3>
+								</div>
+								<p className="theme-text-secondary text-sm">
 									Interactive API reference
-								</p>
-							</a>
-							<a
-								href="/admin"
-								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-							>
-								<h3 className="font-medium theme-text-primary">Admin Panel</h3>
-								<p className="theme-text-secondary text-sm mt-1">
-									Manage users and system settings
 								</p>
 							</a>
 						</div>

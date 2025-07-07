@@ -12,6 +12,7 @@ export interface DashboardStats {
     avgLatency: number;
     lastUpload: string;
     totalHostnames: number;
+    hostnamesWithHistory: number;
     recentActivity: ActivityItem[];
     systemStatus: SystemStatus;
 }
@@ -310,6 +311,18 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
         );
         const totalHostnames = uniqueHostnames.size;
         
+        // Count unique hostnames with time series history from /api/time-series/servers
+        const uniqueTimeSeriesHostnames = new Set(servers
+            .filter(server => server.hostname)
+            .map(server => server.hostname)
+        );
+        const hostnamesWithHistory = uniqueTimeSeriesHostnames.size;
+        
+        console.log('Test run hostnames:', [...uniqueHostnames]);
+        console.log('Time series server entries:', servers.length);
+        console.log('Time series hostnames:', [...uniqueTimeSeriesHostnames]);
+        console.log('Unique time series hostnames count:', uniqueTimeSeriesHostnames.size);
+        
         return {
             totalTestRuns,
             activeServers,
@@ -317,6 +330,7 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
             avgLatency,
             lastUpload,
             totalHostnames,
+            hostnamesWithHistory,
             recentActivity,
             systemStatus
         };
