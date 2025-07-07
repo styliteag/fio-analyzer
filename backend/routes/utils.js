@@ -230,50 +230,36 @@ router.delete('/database/clear', requireAdmin, (req, res) => {
                 return res.status(500).json({ error: err.message });
             }
             
-            db.get('SELECT COUNT(*) as count FROM latency_percentiles', [], (err, percentilesCount) => {
-                if (err) {
-                    logError('Error getting percentiles count', err, {
-                        requestId: req.requestId,
-                        username: req.user.username,
-                        action: 'CLEAR_DATABASE'
-                    });
-                    return res.status(500).json({ error: err.message });
-                }
-                
-                // Clear all tables
-                db.serialize(() => {
-                    db.run('DELETE FROM latency_percentiles');
-                    db.run('DELETE FROM performance_metrics');
-                    db.run('DELETE FROM test_runs', function(err) {
-                        if (err) {
-                            logError('Error clearing database', err, {
-                                requestId: req.requestId,
-                                username: req.user.username,
-                                action: 'CLEAR_DATABASE'
-                            });
-                            res.status(500).json({ error: err.message });
-                            return;
-                        }
-                        
-                        logInfo('Database cleared successfully', {
+            // Clear tables
+            db.serialize(() => {
+                db.run('DELETE FROM performance_metrics');
+                db.run('DELETE FROM test_runs', function(err) {
+                    if (err) {
+                        logError('Error clearing database', err, {
                             requestId: req.requestId,
                             username: req.user.username,
-                            action: 'CLEAR_DATABASE',
-                            deletedRecords: {
-                                test_runs: testRunsCount.count,
-                                performance_metrics: metricsCount.count,
-                                latency_percentiles: percentilesCount.count
-                            }
+                            action: 'CLEAR_DATABASE'
                         });
-                        
-                        res.json({
-                            message: 'Database cleared successfully',
-                            deleted_records: {
-                                test_runs: testRunsCount.count,
-                                performance_metrics: metricsCount.count,
-                                latency_percentiles: percentilesCount.count
-                            }
-                        });
+                        res.status(500).json({ error: err.message });
+                        return;
+                    }
+                    
+                    logInfo('Database cleared successfully', {
+                        requestId: req.requestId,
+                        username: req.user.username,
+                        action: 'CLEAR_DATABASE',
+                        deletedRecords: {
+                            test_runs: testRunsCount.count,
+                            performance_metrics: metricsCount.count
+                        }
+                    });
+                    
+                    res.json({
+                        message: 'Database cleared successfully',
+                        deleted_records: {
+                            test_runs: testRunsCount.count,
+                            performance_metrics: metricsCount.count
+                        }
                     });
                 });
             });

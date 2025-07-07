@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { getDatabase, updateLatestFlags, insertMetric, insertLatencyPercentiles } = require('../database');
+const { getDatabase, updateLatestFlags, insertMetric, insertLatencyPercentiles, insertPercentileMetrics } = require('../database');
 const { requireAuth } = require('../auth');
 const { logInfo, logError, logWarning, requestIdMiddleware } = require('../utils');
 
@@ -565,137 +565,12 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                     insertFioMetrics(testRunId, job.write, 'write');
                 }
 
-                // Insert latency percentiles
+                // Insert p95/p99 latency values as metrics
                 if (job.read?.clat_ns?.percentile) {
-                    logInfo('Inserting read latency percentiles', {
-                        requestId: req.requestId,
-                        jobIndex: jobIndex + 1,
-                        testRunId,
-                        percentileCount: Object.keys(job.read.clat_ns.percentile).length,
-                        hardware: {
-                            driveModel: drive_model,
-                            driveType: drive_type,
-                            hostname: hostname || 'unknown',
-                            protocol: protocol || 'unknown'
-                        }
-                    });
-                    
-                    // Insert each percentile individually
-                    const percentiles = job.read.clat_ns.percentile;
-                    let percentileCount = 0;
-                    const totalPercentiles = Object.keys(percentiles).length;
-                    
-                    Object.entries(percentiles).forEach(([percentile, latencyNs]) => {
-                        if (latencyNs && typeof latencyNs === 'number' && latencyNs > 0) {
-                            db.run(
-                                'INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)',
-                                [testRunId, 'read', parseFloat(percentile), Math.floor(latencyNs)],
-                                (err) => {
-                                    if (err) {
-                                        logError('Error inserting read latency percentile', err, {
-                                            requestId: req.requestId,
-                                            testRunId,
-                                            percentile,
-                                            latencyNs,
-                                            operationType: 'read'
-                                        });
-                                    }
-                                    percentileCount++;
-                                    if (percentileCount === totalPercentiles) {
-                                        logInfo('Read latency percentiles insertion completed', {
-                                            requestId: req.requestId,
-                                            testRunId,
-                                            inserted: percentileCount,
-                                            total: totalPercentiles
-                                        });
-                                    }
-                                }
-                            );
-                        } else {
-                            logWarning('Skipping invalid read latency percentile', {
-                                requestId: req.requestId,
-                                testRunId,
-                                percentile,
-                                latencyNs,
-                                reason: 'invalid_value'
-                            });
-                            percentileCount++;
-                            if (percentileCount === totalPercentiles) {
-                                logInfo('Read latency percentiles insertion completed', {
-                                    requestId: req.requestId,
-                                    testRunId,
-                                    inserted: percentileCount,
-                                    total: totalPercentiles
-                                });
-                            }
-                        }
-                    });
+                    insertPercentileMetrics(testRunId, job.read.clat_ns.percentile, 'read');
                 }
-                
                 if (job.write?.clat_ns?.percentile) {
-                    logInfo('Inserting write latency percentiles', {
-                        requestId: req.requestId,
-                        jobIndex: jobIndex + 1,
-                        testRunId,
-                        percentileCount: Object.keys(job.write.clat_ns.percentile).length,
-                        hardware: {
-                            driveModel: drive_model,
-                            driveType: drive_type,
-                            hostname: hostname || 'unknown',
-                            protocol: protocol || 'unknown'
-                        }
-                    });
-                    
-                    // Insert each percentile individually
-                    const percentiles = job.write.clat_ns.percentile;
-                    let percentileCount = 0;
-                    const totalPercentiles = Object.keys(percentiles).length;
-                    
-                    Object.entries(percentiles).forEach(([percentile, latencyNs]) => {
-                        if (latencyNs && typeof latencyNs === 'number' && latencyNs > 0) {
-                            db.run(
-                                'INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)',
-                                [testRunId, 'write', parseFloat(percentile), Math.floor(latencyNs)],
-                                (err) => {
-                                    if (err) {
-                                        logError('Error inserting write latency percentile', err, {
-                                            requestId: req.requestId,
-                                            testRunId,
-                                            percentile,
-                                            latencyNs,
-                                            operationType: 'write'
-                                        });
-                                    }
-                                    percentileCount++;
-                                    if (percentileCount === totalPercentiles) {
-                                        logInfo('Write latency percentiles insertion completed', {
-                                            requestId: req.requestId,
-                                            testRunId,
-                                            inserted: percentileCount,
-                                            total: totalPercentiles
-                                        });
-                                    }
-                                }
-                            );
-                        } else {
-                            logWarning('Skipping invalid write latency percentile', {
-                                requestId: req.requestId,
-                                testRunId,
-                                percentile,
-                                latencyNs,
-                                reason: 'invalid_value'
-                            });
-                            percentileCount++;
-                            if (percentileCount === totalPercentiles) {
-                                logInfo('Write latency percentiles insertion completed', {
-                                    requestId: req.requestId,
-                                    testRunId,
-                                    inserted: percentileCount,
-                                    total: totalPercentiles
-                                });
-                            }
-                        }
-                    });
+                    insertPercentileMetrics(testRunId, job.write.clat_ns.percentile, 'write');
                 }
 
                 completedJobs++;

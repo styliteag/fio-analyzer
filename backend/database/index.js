@@ -128,17 +128,6 @@ function initDb() {
             )
         `);
 
-        db.run(`
-            CREATE TABLE IF NOT EXISTS latency_percentiles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                test_run_id INTEGER NOT NULL,
-                operation_type TEXT NOT NULL,
-                percentile REAL NOT NULL,
-                latency_ns INTEGER NOT NULL,
-                FOREIGN KEY (test_run_id) REFERENCES test_runs (id)
-            )
-        `);
-
         // Create composite index for uniqueness checks
         db.run(`
             CREATE INDEX IF NOT EXISTS idx_test_runs_unique_key 

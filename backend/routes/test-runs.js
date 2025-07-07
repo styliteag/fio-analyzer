@@ -943,11 +943,11 @@ router.delete('/:id', requireAdmin, (req, res) => {
     
     const db = getDatabase();
     
-    // Delete in order: latency_percentiles, performance_metrics, then test_runs
+    // Delete performance_metrics then test_runs
     db.serialize(() => {
-        db.run('DELETE FROM latency_percentiles WHERE test_run_id = ?', [parseInt(id)], (err) => {
+        db.run('DELETE FROM performance_metrics WHERE test_run_id = ?', [parseInt(id)], (err) => {
             if (err) {
-                logError('Error deleting latency percentiles', err, {
+                logError('Error deleting performance metrics', err, {
                     requestId: req.requestId,
                     username: req.user.username,
                     action: 'DELETE_TEST_RUN',
@@ -956,9 +956,9 @@ router.delete('/:id', requireAdmin, (req, res) => {
                 return res.status(500).json({ error: err.message });
             }
             
-            db.run('DELETE FROM performance_metrics WHERE test_run_id = ?', [parseInt(id)], (err) => {
+            db.run('DELETE FROM test_runs WHERE id = ?', [parseInt(id)], function(err) {
                 if (err) {
-                    logError('Error deleting performance metrics', err, {
+                    logError('Error deleting test run', err, {
                         requestId: req.requestId,
                         username: req.user.username,
                         action: 'DELETE_TEST_RUN',
@@ -967,36 +967,24 @@ router.delete('/:id', requireAdmin, (req, res) => {
                     return res.status(500).json({ error: err.message });
                 }
                 
-                db.run('DELETE FROM test_runs WHERE id = ?', [parseInt(id)], function(err) {
-                    if (err) {
-                        logError('Error deleting test run', err, {
-                            requestId: req.requestId,
-                            username: req.user.username,
-                            action: 'DELETE_TEST_RUN',
-                            testRunId: id
-                        });
-                        return res.status(500).json({ error: err.message });
-                    }
-                    
-                    if (this.changes === 0) {
-                        logWarning('Test run not found for deletion', {
-                            requestId: req.requestId,
-                            username: req.user.username,
-                            action: 'DELETE_TEST_RUN',
-                            testRunId: id
-                        });
-                        return res.status(404).json({ error: 'Test run not found' });
-                    }
-                    
-                    logInfo('Test run deleted successfully', {
+                if (this.changes === 0) {
+                    logWarning('Test run not found for deletion', {
                         requestId: req.requestId,
                         username: req.user.username,
                         action: 'DELETE_TEST_RUN',
                         testRunId: id
                     });
-                    
-                    res.json({ message: 'Test run deleted successfully' });
+                    return res.status(404).json({ error: 'Test run not found' });
+                }
+                
+                logInfo('Test run deleted successfully', {
+                    requestId: req.requestId,
+                    username: req.user.username,
+                    action: 'DELETE_TEST_RUN',
+                    testRunId: id
                 });
+                
+                res.json({ message: 'Test run deleted successfully' });
             });
         });
     });

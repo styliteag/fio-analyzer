@@ -34,8 +34,7 @@ A full-stack web application that analyzes and visualizes FIO (Flexible I/O Test
 ### 🗄️ **Data Management**
 - SQLite database with comprehensive schema
 - Test run management with edit/delete capabilities
-- Performance metrics with operation-type separation
-- Detailed latency percentile storage
+- Performance metrics with operation-type separation, including p95/p99 latency values
 
 ### 🔐 **Authentication & Security**
 - Role-based access control (admin vs upload-only users)
@@ -147,10 +146,45 @@ For local development with separate frontend/backend:
 The application uses SQLite for data storage. The database is initialized automatically when the backend server starts, creating:
 
 - **`test_runs`** - Test execution metadata including drive info, test parameters, hostname, protocol, and description
-- **`performance_metrics`** - Performance data (IOPS, latency, throughput) with operation type separation
-- **`latency_percentiles`** - Detailed latency percentile data for performance analysis
+- **`performance_metrics`** - All performance data (IOPS, avg_latency, bandwidth, p95_latency, p99_latency) with operation-type separation
 
 Sample data is populated automatically if the database is empty.
+
+#### Migrating Old Databases (≤ v0.9)
+Older databases stored latency percentiles in a dedicated table `latency_percentiles`. Use the script below once to migrate existing records into `performance_metrics` and drop the obsolete table:
+
+```sql
+BEGIN;
+
+INSERT INTO performance_metrics
+        (test_run_id, metric_type, value, unit, operation_type)
+SELECT  lp.test_run_id,
+        CASE lp.percentile
+             WHEN 95 THEN 'p95_latency'
+             WHEN 99 THEN 'p99_latency'
+        END                                    AS metric_type,
+        ROUND(lp.latency_ns / 1e6, 3)          AS value,
+        'ms'                                   AS unit,
+        lp.operation_type
+FROM    latency_percentiles lp
+WHERE   lp.percentile IN (95,99)
+  AND NOT EXISTS (
+        SELECT 1
+        FROM   performance_metrics pm
+        WHERE  pm.test_run_id   = lp.test_run_id
+          AND  pm.metric_type   = CASE lp.percentile
+                                     WHEN 95 THEN 'p95_latency'
+                                     WHEN 99 THEN 'p99_latency'
+                                  END
+          AND  pm.operation_type = lp.operation_type
+);
+
+DROP TABLE IF EXISTS latency_percentiles;
+
+COMMIT;
+```
+
+After migration, restart the backend and the new percentile metrics will be available through all `/api/time-series/` endpoints.
 
 ## Usage
 
