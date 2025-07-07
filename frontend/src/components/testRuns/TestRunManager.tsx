@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Settings, Check, X } from 'lucide-react';
 import { useTestRunFilters } from '../../hooks/useTestRunFilters';
 import type { TestRun, FilterOptions } from '../../types';
@@ -34,6 +34,13 @@ const TestRunManager: React.FC<TestRunManagerProps> = ({
 
     // Use the hook to get dynamic filter options
     const { dynamicFilterOptions } = useTestRunFilters(testRuns);
+
+    // Auto-select runs whenever filtered list changes and toggle is enabled
+    useEffect(() => {
+        if (autoSelectEnabled) {
+            onSelectionChange(filteredRuns);
+        }
+    }, [autoSelectEnabled, filteredRuns, onSelectionChange]);
 
     const toggleAutoSelect = useCallback(() => {
         setAutoSelectEnabled(!autoSelectEnabled);
