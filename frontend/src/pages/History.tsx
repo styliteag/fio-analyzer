@@ -38,8 +38,8 @@ export default function History() {
 	const [servers, setServers] = useState<ServerInfo[]>([]);
 	const [selectedServerId, setSelectedServerId] = useState<string>("");
 	const [configOptions, setConfigOptions] = useState<string[]>([]);
-	const [selectedConfig, setSelectedConfig] = useState<string>("");
-	const [metric, setMetric] = useState("iops");
+	const [selectedConfigs, setSelectedConfigs] = useState<string[]>([]);
+	const [selectedMetrics, setSelectedMetrics] = useState<string[]>(["iops"]);
 	const [days, setDays] = useState(30);
 	const [data, setData] = useState<TimeSeriesDataPoint[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -68,7 +68,10 @@ export default function History() {
 		setLoading(true);
 		setError(null);
 
-		const opts: any = { metricType: metric, days };
+		const opts: any = { days };
+		if (selectedMetrics.length === 1) {
+			opts.metricType = selectedMetrics[0];
+		}
 		if (selectedServerId) {
 			const parts = selectedServerId.split("|");
 			const hostname = parts[0];
@@ -84,11 +87,8 @@ export default function History() {
 				opts.driveModel = drive_model;
 			}
 		}
-		if (selectedConfig) {
-			const [pattern, bs, qd] = selectedConfig.split("|");
-			opts.readWritePattern = pattern;
-			opts.blockSize = bs;
-			opts.queueDepth = parseInt(qd, 10);
+		if (selectedConfigs.length > 0) {
+			// Do not filter by config on API level; we'll filter client-side to support multi-select
 		}
 
 		const res = await fetchTimeSeriesHistory(opts);
@@ -105,13 +105,14 @@ export default function History() {
 				unique.add(`${d.read_write_pattern}|${d.block_size}|${d.queue_depth}`);
 			});
 			setConfigOptions(Array.from(unique));
-			// Reset selectedConfig if no longer valid
-			if (selectedConfig && !unique.has(selectedConfig)) {
-				setSelectedConfig("");
-			}
+			// Reset selectedConfigs only if invalid selections exist to avoid unnecessary re-renders
+			setSelectedConfigs((prev) => {
+				const filtered = prev.filter((cfg) => unique.has(cfg));
+				return filtered.length === prev.length ? prev : filtered;
+			});
 		}
 		setLoading(false);
-	}, [metric, days, selectedServerId, selectedConfig]);
+	}, [selectedMetrics, days, selectedServerId]);
 
 	// Reload when dependencies change
 	useEffect(() => {
@@ -120,9 +121,12 @@ export default function History() {
 
 	// Build chart.js dataset structure
 	const chartData = useMemo(() => {
-		const filtered = selectedConfig
-			? data.filter((d) => `${d.read_write_pattern}|${d.block_size}|${d.queue_depth}` === selectedConfig)
+		let filtered = selectedConfigs.length > 0
+			? data.filter((d) => selectedConfigs.includes(`${d.read_write_pattern}|${d.block_size}|${d.queue_depth}`))
 			: data;
+		if (selectedMetrics.length > 0) {
+			filtered = filtered.filter((d) => selectedMetrics.includes(d.metric_type));
+		}
 
 		const palette = [
 			"#3b82f6",
@@ -136,7 +140,7 @@ export default function History() {
 		const map: Record<string, { label: string; data: { x: string; y: number }[]; color: string }> = {};
 		let colorIdx = 0;
 		filtered.forEach((d) => {
-			const key = `${d.hostname || "unknown"}-${d.drive_model}`;
+			const key = `${d.read_write_pattern}/${d.block_size}/qd${d.queue_depth}-${d.metric_type}`;
 			if (!map[key]) {
 				map[key] = {
 					label: key,
@@ -159,7 +163,7 @@ export default function History() {
 				pointHoverRadius: 3,
 			})),
 		};
-	}, [data, selectedConfig]);
+	}, [data, selectedConfigs, selectedMetrics]);
 
 	const chartOptions = useMemo(() => {
 		const timeUnit: "day" | "week" = days <= 7 ? "day" : "week";
@@ -174,14 +178,14 @@ export default function History() {
 				},
 				y: {
 					beginAtZero: false,
-					title: { display: true, text: metric.toUpperCase() },
+					title: { display: true, text: selectedMetrics.join(", ").toUpperCase() },
 				},
 			},
 			plugins: {
 				legend: { display: true, position: "bottom" as const },
 			},
 		} as const;
-	}, [days, metric]);
+	}, [days, selectedMetrics]);
 
 	return (
 		<div className="h-screen theme-bg-secondary flex">
@@ -206,33 +210,38 @@ export default function History() {
 						</select>
 					</div>
 
-					{configOptions.length > 0 && (
-						<div>
-							<label className="block text-sm font-medium theme-text-primary mb-2">Test Configuration</label>
-							<select
-								value={selectedConfig}
-								onChange={(e) => setSelectedConfig(e.target.value)}
-								className="w-full px-3 py-2 border rounded theme-bg-primary theme-text-primary"
-							>
-								<option value="">All Test Runs</option>
-								{configOptions.map((c) => {
-									const [pattern, bs, qd] = c.split("|");
-									return (
-										<option key={c} value={c}>
-											{pattern} / {bs} / qd{qd}
-										</option>
-									);
-								})}
-							</select>
-						</div>
-					)}
+					<div>
+						<label className="block text-sm font-medium theme-text-primary mb-2">Test Configurations</label>
+						<select
+							multiple
+							value={selectedConfigs}
+							onChange={(e) => {
+								const selections = Array.from(e.target.selectedOptions).map((o) => o.value);
+								setSelectedConfigs(selections);
+							}}
+							className="w-full px-3 py-2 border rounded theme-bg-primary theme-text-primary h-32"
+						>
+							{configOptions.map((c) => {
+								const [pattern, bs, qd] = c.split("|");
+								return (
+									<option key={c} value={c}>
+										{pattern} / {bs} / qd{qd}
+									</option>
+								);
+							})}
+						</select>
+					</div>
 
 					<div>
-						<label className="block text-sm font-medium theme-text-primary mb-2">Metric</label>
+						<label className="block text-sm font-medium theme-text-primary mb-2">Metrics</label>
 						<select
-							value={metric}
-							onChange={(e) => setMetric(e.target.value)}
-							className="w-full px-3 py-2 border rounded theme-bg-primary theme-text-primary"
+							multiple
+							value={selectedMetrics}
+							onChange={(e) => {
+								const selections = Array.from(e.target.selectedOptions).map((o) => o.value);
+								setSelectedMetrics(selections);
+							}}
+							className="w-full px-3 py-2 border rounded theme-bg-primary theme-text-primary h-32"
 						>
 							{getTimeSeriesMetricTypes().map((m) => (
 								<option key={m.value} value={m.value}>
