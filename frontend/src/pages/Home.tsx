@@ -5,7 +5,7 @@ import Button from "../components/ui/Button";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import { useAuth } from "../contexts/AuthContext";
-import { Activity, Database, TrendingUp, Upload, Users, Settings, BarChart3, RefreshCw, Zap, History } from "lucide-react";
+import { Activity, Database, TrendingUp, Upload, Users, Settings, BarChart3, RefreshCw, Zap, History, Microscope } from "lucide-react";
 import { fetchDashboardStats, type DashboardStats } from "../services/api/dashboard";
 
 
@@ -130,6 +130,14 @@ export default function Home() {
 						>
 							<History className="w-4 h-4" />
 							Compare
+						</Button>
+						<Button
+							variant="outline"
+							onClick={() => window.location.href = "/compare2"}
+							className="flex items-center gap-2"
+						>
+							<Microscope className="w-4 h-4" />
+							Advanced Host Comparison
 						</Button>
 						<Button
 							onClick={handleRefreshStats}

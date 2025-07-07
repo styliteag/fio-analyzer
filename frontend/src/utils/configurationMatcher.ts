@@ -1,0 +1,182 @@
+import type { PerformanceData } from '../types';
+
+export interface Configuration {
+  id: string;
+  block_size: string | number;
+  read_write_pattern: string;
+  queue_depth: number;
+  direct: number;
+  sync: number;
+  num_jobs: number;
+  test_size: string;
+  duration: number;
+  protocol: string;
+}
+
+export interface ConfigurationGroup {
+  config: Configuration;
+  runs: PerformanceData[];
+  hostCount: number;
+  hosts: string[];
+}
+
+export interface HostComparisonData {
+  hostname: string;
+  run: PerformanceData;
+  metrics: {
+    iops?: number;
+    bandwidth?: number;
+    p95_latency?: number;
+    p99_latency?: number;
+    avg_latency?: number;
+  };
+}
+
+export interface ConfigurationComparison {
+  config: Configuration;
+  hostData: HostComparisonData[];
+  hasAllHosts: boolean;
+  coverage: number; // percentage of selected hosts that have this config
+}
+
+export function createConfigurationId(run: PerformanceData): string {
+  return [
+    run.block_size,
+    run.read_write_pattern,
+    run.queue_depth,
+    (run as any).direct || 0,
+    (run as any).sync || 0,
+    (run as any).num_jobs || 1,
+    (run as any).test_size || 'unknown',
+    (run as any).duration || 0,
+    run.protocol || 'unknown'
+  ].join('|');
+}
+
+export function extractConfiguration(run: PerformanceData): Configuration {
+  return {
+    id: createConfigurationId(run),
+    block_size: run.block_size,
+    read_write_pattern: run.read_write_pattern,
+    queue_depth: run.queue_depth,
+    direct: (run as any).direct || 0,
+    sync: (run as any).sync || 0,
+    num_jobs: (run as any).num_jobs || 1,
+    test_size: (run as any).test_size || 'unknown',
+    duration: (run as any).duration || 0,
+    protocol: run.protocol || 'unknown'
+  };
+}
+
+export function groupRunsByConfiguration(runs: PerformanceData[]): ConfigurationGroup[] {
+  const configMap = new Map<string, ConfigurationGroup>();
+
+  for (const run of runs) {
+    const config = extractConfiguration(run);
+    const configId = config.id;
+
+    if (!configMap.has(configId)) {
+      configMap.set(configId, {
+        config,
+        runs: [],
+        hostCount: 0,
+        hosts: []
+      });
+    }
+
+    const group = configMap.get(configId)!;
+    group.runs.push(run);
+    
+    const hostname = run.hostname || 'unknown';
+    if (!group.hosts.includes(hostname)) {
+      group.hosts.push(hostname);
+      group.hostCount++;
+    }
+  }
+
+  return Array.from(configMap.values()).sort((a, b) => b.hostCount - a.hostCount);
+}
+
+export function createComparableConfigurations(
+  runs: PerformanceData[], 
+  selectedHosts: string[],
+  minHostCoverage: number = 0.3 // At least 30% of hosts must have this configuration
+): ConfigurationComparison[] {
+  const groups = groupRunsByConfiguration(runs);
+  const comparisons: ConfigurationComparison[] = [];
+
+  for (const group of groups) {
+    const coverage = group.hostCount / selectedHosts.length;
+    
+    // Skip configs that don't meet minimum coverage
+    if (coverage < minHostCoverage) continue;
+
+    const hostData: HostComparisonData[] = [];
+    
+    for (const hostname of selectedHosts) {
+      const hostRun = group.runs.find(run => run.hostname === hostname);
+      if (hostRun) {
+        hostData.push({
+          hostname,
+          run: hostRun,
+          metrics: {
+            iops: hostRun.metrics.iops?.value,
+            bandwidth: hostRun.metrics.bandwidth?.value,
+            p95_latency: hostRun.metrics.p95_latency?.value,
+            p99_latency: hostRun.metrics.p99_latency?.value,
+            avg_latency: hostRun.metrics.avg_latency?.value
+          }
+        });
+      }
+    }
+
+    if (hostData.length >= 2) { // Need at least 2 hosts to compare
+      comparisons.push({
+        config: group.config,
+        hostData,
+        hasAllHosts: hostData.length === selectedHosts.length,
+        coverage
+      });
+    }
+  }
+
+  return comparisons.sort((a, b) => {
+    // Sort by coverage first, then by number of hosts
+    if (b.coverage !== a.coverage) return b.coverage - a.coverage;
+    return b.hostData.length - a.hostData.length;
+  });
+}
+
+export function formatConfigurationLabel(config: Configuration): string {
+  const parts = [
+    `${config.block_size}`,
+    config.read_write_pattern,
+    `QD${config.queue_depth}`,
+    config.protocol !== 'unknown' ? config.protocol : null,
+    config.direct === 1 ? 'Direct' : null,
+    config.sync === 1 ? 'Sync' : null,
+    config.num_jobs > 1 ? `${config.num_jobs} jobs` : null,
+    config.test_size !== 'unknown' ? config.test_size : null,
+    config.duration > 0 ? `${config.duration}s` : null
+  ].filter(Boolean);
+
+  return parts.join(' | ');
+}
+
+export function getConfigurationSummary(config: Configuration): {
+  primary: string;
+  secondary: string;
+  protocol: string;
+} {
+  return {
+    primary: `${config.block_size} ${config.read_write_pattern} QD${config.queue_depth}`,
+    secondary: [
+      config.direct === 1 ? 'Direct' : null,
+      config.sync === 1 ? 'Sync' : null,
+      config.num_jobs > 1 ? `${config.num_jobs} jobs` : null,
+      config.test_size !== 'unknown' ? config.test_size : null,
+      config.duration > 0 ? `${config.duration}s` : null
+    ].filter(Boolean).join(', ') || 'Standard',
+    protocol: config.protocol !== 'unknown' ? config.protocol : 'N/A'
+  };
+}
