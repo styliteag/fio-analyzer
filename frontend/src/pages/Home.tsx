@@ -124,6 +124,14 @@ export default function Home() {
 							Test History
 						</Button>
 						<Button
+							variant="outline"
+							onClick={() => window.location.href = "/compare"}
+							className="flex items-center gap-2"
+						>
+							<History className="w-4 h-4" />
+							Compare
+						</Button>
+						<Button
 							onClick={handleRefreshStats}
 							disabled={loading}
 							className="flex items-center gap-2"
