@@ -99,10 +99,10 @@ export default function Compare2() {
       });
       setPerformanceData(filteredPerfData);
 
-      // Create comparable configurations (use actual hostnames)
+      // Create comparable configurations (use selected host-hardware combination count)
       const configComparisons = createComparableConfigurations(
         filteredPerfData,
-        actualHostnames,
+        selectedHosts.length,
         minCoverage
       );
 
