@@ -199,34 +199,6 @@ export default function Performance() {
 
 			{/* Main Content */}
 			<main className="w-full px-4 sm:px-6 lg:px-8 py-6">
-				{/* Page Description */}
-				<div className="mb-8">
-					<p className="theme-text-secondary text-lg">
-						Analyze and explore your FIO test runs data. Select specific test runs to examine patterns, configurations, and system characteristics.
-					</p>
-				</div>
-
-				{/* Actions */}
-				<div className="mb-8">
-					<div className="flex flex-wrap gap-4">
-						<Button
-							onClick={handleRefresh}
-							disabled={loading}
-							className="flex items-center gap-2"
-						>
-							<Activity className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-							{loading ? "Loading..." : "Refresh Data"}
-						</Button>
-						<Button
-							variant="outline"
-							onClick={() => window.location.href = "/dashboard"}
-							className="flex items-center gap-2"
-						>
-							<TrendingUp className="w-4 h-4" />
-							Visualize Data
-						</Button>
-					</div>
-				</div>
 
 				{/* Error Display */}
 				{error && (
@@ -239,8 +211,29 @@ export default function Performance() {
 					</div>
 				)}
 
+
+				{/* Test Run Selector */}
+				<Card className="p-6">
+					<h2 className="text-xl font-semibold theme-text-primary mb-4 flex items-center gap-2">
+						<Server className="w-5 h-5" />
+						Test Run Selection
+					</h2>
+					<TestRunSelector
+						selectedRuns={selectedRuns}
+						onSelectionChange={setSelectedRuns}
+						refreshTrigger={refreshTrigger}
+						testRuns={testRuns}
+						activeFilters={activeFilters}
+						filteredRuns={filteredRuns}
+						hasActiveFilters={hasActiveFilters()}
+						onFilterChange={updateFilter}
+						onClearAllFilters={clearAllFilters}
+						loading={loading}
+					/>
+				</Card>
+				{/* Graphs */}
 				{/* Performance Metrics Grid */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 mt-4">
 					{metricCards.map((metric, index) => (
 						<Card key={index} className="p-6">
 							<div className="flex items-center justify-between">
@@ -262,29 +255,10 @@ export default function Performance() {
 						</Card>
 					))}
 				</div>
-
-				{/* Test Run Selector */}
-				<Card className="p-6">
-					<h2 className="text-xl font-semibold theme-text-primary mb-4 flex items-center gap-2">
-						<Server className="w-5 h-5" />
-						Test Run Selection
-					</h2>
-					<TestRunSelector
-						selectedRuns={selectedRuns}
-						onSelectionChange={setSelectedRuns}
-						refreshTrigger={refreshTrigger}
-						testRuns={testRuns}
-						activeFilters={activeFilters}
-						filteredRuns={filteredRuns}
-						hasActiveFilters={hasActiveFilters()}
-						onFilterChange={updateFilter}
-						onClearAllFilters={clearAllFilters}
-						loading={loading}
-					/>
-				</Card>
 			</main>
 
 			<DashboardFooter getApiDocsUrl={getApiDocsUrl} />
 		</div>
+		
 	);
 }
