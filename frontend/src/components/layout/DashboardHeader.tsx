@@ -12,10 +12,23 @@ export const DashboardHeader: React.FC = () => {
         <header className="theme-header shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-16">
+                
                     <div className="flex items-center">
-                        <Activity className="h-8 w-8 theme-text-accent mr-3" />
+                        <button
+                            onClick={() => navigate("/")}
+                            className="hover:theme-text-accent transition-colors"
+                            title="Go to Home"
+                        >
+                            <Activity className="h-8 w-8 theme-text-accent mr-3" />
+                        </button>
                         <h1 className="text-2xl font-bold theme-text-primary">
-                            Storage Performance Visualizer
+                            <button
+                                onClick={() => navigate("/")}
+                                className="hover:theme-text-accent transition-colors"
+                                title="Go to Home"
+                            >
+                                Storage Performance Visualizer
+                            </button>
                         </h1>
                     </div>
                     <div className="flex items-center space-x-4">
