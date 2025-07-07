@@ -4,27 +4,39 @@ import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
+import TestRunSelector from "../components/TestRunSelector";
 import { useAuth } from "../contexts/AuthContext";
+import { useTestRunFilters } from "../hooks/useTestRunFilters";
 import { ArrowLeft, TrendingUp, Activity, Zap, Timer, HardDrive, Server } from "lucide-react";
-import { fetchTimeSeriesLatest, fetchTimeSeriesServers } from "../services/api/timeSeries";
 import { fetchTestRuns } from "../services/api/testRuns";
-import type { ServerInfo } from "../types";
+import type { TestRun } from "../types";
 
-interface PerformanceMetrics {
-	totalIOPS: number;
-	avgLatency: number;
-	maxIOPS: number;
-	minLatency: number;
-	activeSystems: number;
-	testsToday: number;
+interface TestRunMetrics {
+	totalRuns: number;
+	uniqueHostnames: number;
+	uniqueDriveModels: number;
+	dateRange: string;
+	commonPatterns: string[];
+	commonBlockSizes: string[];
 }
 
 export default function Performance() {
-	const { } = useAuth();
-	const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
-	const [servers, setServers] = useState<ServerInfo[]>([]);
+	useAuth(); // Ensure authentication context is available
+	const [metrics, setMetrics] = useState<TestRunMetrics | null>(null);
+	const [testRuns, setTestRuns] = useState<TestRun[]>([]);
+	const [selectedRuns, setSelectedRuns] = useState<TestRun[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+	// Filter state for test runs
+	const {
+		activeFilters,
+		filteredRuns,
+		hasActiveFilters,
+		updateFilter,
+		clearAllFilters,
+	} = useTestRunFilters(testRuns);
 
 	// Get the correct API documentation URL based on environment
 	const getApiDocsUrl = () => {
@@ -36,112 +48,131 @@ export default function Performance() {
 		}
 	};
 
-	// Load performance data
-	const loadPerformanceData = async () => {
+	// Load test runs data
+	const loadTestRuns = async () => {
 		try {
 			setLoading(true);
 			setError(null);
 
-			// Fetch data in parallel
-			const [latestResult, serversResult, recentRunsResult] = await Promise.allSettled([
-				fetchTimeSeriesLatest(),
-				fetchTimeSeriesServers(),
-				fetchTestRuns({ includeHistorical: false })
-			]);
-
-			// Extract data from results
-			const latest = latestResult.status === 'fulfilled' ? latestResult.value.data || [] : [];
-			const serverList = serversResult.status === 'fulfilled' ? serversResult.value.data || [] : [];
-			const recentRuns = recentRunsResult.status === 'fulfilled' ? recentRunsResult.value.data || [] : [];
-
-			setServers(serverList);
-
-			// Calculate performance metrics
-			const iopsData = latest.filter(d => d.metric_type === 'iops' && d.value > 0);
-			const latencyData = latest.filter(d => d.metric_type === 'avg_latency' && d.value > 0);
-
-			const totalIOPS = iopsData.reduce((sum, d) => sum + d.value, 0);
-			const avgLatency = latencyData.length > 0 
-				? latencyData.reduce((sum, d) => sum + d.value, 0) / latencyData.length 
-				: 0;
-			const maxIOPS = iopsData.length > 0 ? Math.max(...iopsData.map(d => d.value)) : 0;
-			const minLatency = latencyData.length > 0 ? Math.min(...latencyData.map(d => d.value)) : 0;
-			const activeSystems = serverList.filter(s => s.test_count > 0).length;
-
-			// Count tests from today
-			const today = new Date().toISOString().split('T')[0];
-			const testsToday = recentRuns.filter(run => 
-				run.timestamp && run.timestamp.startsWith(today)
-			).length;
-
-			setMetrics({
-				totalIOPS: Math.round(totalIOPS),
-				avgLatency: Math.round(avgLatency * 10) / 10,
-				maxIOPS: Math.round(maxIOPS),
-				minLatency: Math.round(minLatency * 10) / 10,
-				activeSystems,
-				testsToday
-			});
+			const result = await fetchTestRuns({ includeHistorical: true });
+			
+			if (result.error) {
+				setError(result.error);
+			} else if (result.data) {
+				setTestRuns(result.data);
+				calculateTestRunMetrics(result.data);
+			}
 
 		} catch (err) {
-			console.error('Failed to load performance data:', err);
-			setError('Failed to load performance data. Please try again.');
+			console.error('Failed to load test runs:', err);
+			setError('Failed to load test runs data. Please try again.');
 		} finally {
 			setLoading(false);
 		}
 	};
 
+	// Calculate metrics from test runs
+	const calculateTestRunMetrics = (runs: TestRun[]) => {
+		if (runs.length === 0) {
+			setMetrics(null);
+			return;
+		}
+
+		const uniqueHostnames = new Set(runs.filter(r => r.hostname).map(r => r.hostname));
+		const uniqueDriveModels = new Set(runs.filter(r => r.drive_model).map(r => r.drive_model));
+		
+		// Get common patterns and block sizes
+		const patternCounts = runs.reduce((acc, run) => {
+			if (run.read_write_pattern) {
+				acc[run.read_write_pattern] = (acc[run.read_write_pattern] || 0) + 1;
+			}
+			return acc;
+		}, {} as Record<string, number>);
+		
+		const blockSizeCounts = runs.reduce((acc, run) => {
+			if (run.block_size) {
+				acc[run.block_size] = (acc[run.block_size] || 0) + 1;
+			}
+			return acc;
+		}, {} as Record<string, number>);
+
+		const topPatterns = Object.entries(patternCounts)
+			.sort(([,a], [,b]) => b - a)
+			.slice(0, 3)
+			.map(([pattern]) => pattern);
+
+		const topBlockSizes = Object.entries(blockSizeCounts)
+			.sort(([,a], [,b]) => b - a)
+			.slice(0, 3)
+			.map(([size]) => size);
+
+		// Calculate date range
+		const timestamps = runs.filter(r => r.timestamp).map(r => new Date(r.timestamp));
+		const dateRange = timestamps.length > 0 
+			? `${new Date(Math.min(...timestamps.map(d => d.getTime()))).toLocaleDateString()} - ${new Date(Math.max(...timestamps.map(d => d.getTime()))).toLocaleDateString()}`
+			: 'No date range';
+
+		setMetrics({
+			totalRuns: runs.length,
+			uniqueHostnames: uniqueHostnames.size,
+			uniqueDriveModels: uniqueDriveModels.size,
+			dateRange,
+			commonPatterns: topPatterns,
+			commonBlockSizes: topBlockSizes
+		});
+	};
+
 	// Load data on component mount
 	useEffect(() => {
-		loadPerformanceData();
-	}, []);
+		loadTestRuns();
+	}, [refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const handleRefresh = () => {
-		loadPerformanceData();
+		setRefreshTrigger(prev => prev + 1);
 	};
 
 	const metricCards = [
 		{
-			title: "Total IOPS",
-			value: metrics?.totalIOPS.toLocaleString() || "---",
+			title: "Total Test Runs",
+			value: metrics?.totalRuns.toLocaleString() || "---",
+			icon: Activity,
+			color: "text-blue-600 dark:text-blue-400",
+			description: "Total test runs in dataset"
+		},
+		{
+			title: "Unique Hostnames",
+			value: metrics?.uniqueHostnames.toString() || "---",
+			icon: Server,
+			color: "text-green-600 dark:text-green-400",
+			description: "Different systems tested"
+		},
+		{
+			title: "Drive Models",
+			value: metrics?.uniqueDriveModels.toString() || "---",
+			icon: HardDrive,
+			color: "text-purple-600 dark:text-purple-400",
+			description: "Different drive models tested"
+		},
+		{
+			title: "Selected Runs",
+			value: selectedRuns.length.toLocaleString() || "0",
 			icon: Zap,
 			color: "text-yellow-600 dark:text-yellow-400",
-			description: "Combined IOPS across all systems"
+			description: "Currently selected test runs"
 		},
 		{
-			title: "Average Latency",
-			value: metrics?.avgLatency ? `${metrics.avgLatency}ms` : "---",
-			icon: Timer,
-			color: "text-blue-600 dark:text-blue-400",
-			description: "Mean response time"
-		},
-		{
-			title: "Peak IOPS",
-			value: metrics?.maxIOPS.toLocaleString() || "---",
+			title: "Common Patterns",
+			value: metrics?.commonPatterns.slice(0, 2).join(', ') || "---",
 			icon: TrendingUp,
-			color: "text-green-600 dark:text-green-400",
-			description: "Highest IOPS recorded"
-		},
-		{
-			title: "Best Latency",
-			value: metrics?.minLatency ? `${metrics.minLatency}ms` : "---",
-			icon: Activity,
-			color: "text-purple-600 dark:text-purple-400",
-			description: "Lowest latency achieved"
-		},
-		{
-			title: "Active Systems",
-			value: metrics?.activeSystems.toString() || "---",
-			icon: Server,
 			color: "text-indigo-600 dark:text-indigo-400",
-			description: "Systems with test data"
+			description: "Most frequent test patterns"
 		},
 		{
-			title: "Tests Today",
-			value: metrics?.testsToday.toString() || "---",
-			icon: HardDrive,
+			title: "Common Block Sizes",
+			value: metrics?.commonBlockSizes.slice(0, 2).join(', ') || "---",
+			icon: Timer,
 			color: "text-red-600 dark:text-red-400",
-			description: "Tests run in the last 24h"
+			description: "Most frequent block sizes"
 		}
 	];
 
@@ -161,7 +192,7 @@ export default function Performance() {
 						Back to Home
 					</Button>
 					<h1 className="text-2xl font-bold theme-text-primary">
-						Performance Analytics
+						Test Run Analytics
 					</h1>
 				</div>
 			</div>
@@ -171,7 +202,7 @@ export default function Performance() {
 				{/* Page Description */}
 				<div className="mb-8">
 					<p className="theme-text-secondary text-lg">
-						Real-time performance metrics and system analytics from your FIO testing infrastructure.
+						Analyze and explore your FIO test runs data. Select specific test runs to examine patterns, configurations, and system characteristics.
 					</p>
 				</div>
 
@@ -192,7 +223,7 @@ export default function Performance() {
 							className="flex items-center gap-2"
 						>
 							<TrendingUp className="w-4 h-4" />
-							Advanced Charts
+							Visualize Data
 						</Button>
 					</div>
 				</div>
@@ -232,55 +263,24 @@ export default function Performance() {
 					))}
 				</div>
 
-				{/* Server Performance Summary */}
+				{/* Test Run Selector */}
 				<Card className="p-6">
 					<h2 className="text-xl font-semibold theme-text-primary mb-4 flex items-center gap-2">
 						<Server className="w-5 h-5" />
-						Server Performance Summary
+						Test Run Selection
 					</h2>
-					<div className="space-y-4">
-						{loading ? (
-							<div className="space-y-3">
-								{Array.from({ length: 3 }).map((_, index) => (
-									<div key={index} className="flex items-center justify-between py-2">
-										<div className="animate-pulse h-4 bg-gray-300 rounded w-1/3 theme-bg-tertiary" />
-										<div className="animate-pulse h-4 bg-gray-300 rounded w-1/4 theme-bg-tertiary" />
-									</div>
-								))}
-							</div>
-						) : servers.length > 0 ? (
-							<div className="overflow-x-auto">
-								<table className="w-full">
-									<thead>
-										<tr className="border-b theme-border-primary">
-											<th className="text-left py-2 theme-text-primary font-medium">Hostname</th>
-											<th className="text-left py-2 theme-text-primary font-medium">Protocol</th>
-											<th className="text-left py-2 theme-text-primary font-medium">Drive Model</th>
-											<th className="text-right py-2 theme-text-primary font-medium">Test Count</th>
-											<th className="text-right py-2 theme-text-primary font-medium">Last Test</th>
-										</tr>
-									</thead>
-									<tbody>
-										{servers.slice(0, 10).map((server, index) => (
-											<tr key={index} className="border-b theme-border-primary last:border-0">
-												<td className="py-2 theme-text-primary font-medium">{server.hostname}</td>
-												<td className="py-2 theme-text-secondary">{server.protocol}</td>
-												<td className="py-2 theme-text-secondary">{server.drive_model}</td>
-												<td className="py-2 theme-text-secondary text-right">{server.test_count}</td>
-												<td className="py-2 theme-text-secondary text-right">
-													{server.last_test_time ? new Date(server.last_test_time).toLocaleDateString() : 'N/A'}
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						) : (
-							<p className="theme-text-secondary text-center py-8">
-								No server data available
-							</p>
-						)}
-					</div>
+					<TestRunSelector
+						selectedRuns={selectedRuns}
+						onSelectionChange={setSelectedRuns}
+						refreshTrigger={refreshTrigger}
+						testRuns={testRuns}
+						activeFilters={activeFilters}
+						filteredRuns={filteredRuns}
+						hasActiveFilters={hasActiveFilters()}
+						onFilterChange={updateFilter}
+						onClearAllFilters={clearAllFilters}
+						loading={loading}
+					/>
 				</Card>
 			</main>
 
