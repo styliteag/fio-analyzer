@@ -2,6 +2,7 @@ import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import { LoginForm } from "./components/LoginForm";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 import Upload from "./pages/Upload";
 import Admin from "./pages/Admin";
 
@@ -24,7 +25,8 @@ const ProtectedApp = () => {
 
 	return (
 		<Routes>
-			<Route path="/" element={<Dashboard />} />
+			<Route path="/" element={<Home />} />
+			<Route path="/dashboard" element={<Dashboard />} />
 			<Route path="/upload" element={<Upload />} />
 			<Route path="/admin" element={<Admin />} />
 		</Routes>
