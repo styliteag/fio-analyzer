@@ -1,15 +1,16 @@
-import { useState, useEffect } from "react";
-import { DashboardHeader, DashboardFooter } from "../components/layout";
+import { useState, useEffect, useMemo } from "react";
+import { DashboardHeader, DashboardFooter, ChartArea } from "../components/layout";
+import TemplateSelector from "../components/TemplateSelector";
 import Card from "../components/ui/Card";
-import Button from "../components/ui/Button";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import TestRunSelector from "../components/TestRunSelector";
 import { useAuth } from "../contexts/AuthContext";
 import { useTestRunFilters } from "../hooks/useTestRunFilters";
-import { ArrowLeft, TrendingUp, Activity, Zap, Timer, HardDrive, Server } from "lucide-react";
+import { usePerformanceData } from "../hooks";
+import { TrendingUp, Activity, Zap, Timer, HardDrive, Server } from "lucide-react";
 import { fetchTestRuns } from "../services/api/testRuns";
-import type { TestRun } from "../types";
+import type { TestRun, ChartTemplate } from "../types";
 
 interface TestRunMetrics {
 	totalRuns: number;
@@ -28,6 +29,8 @@ export default function Performance() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [refreshTrigger, setRefreshTrigger] = useState(0);
+	const [selectedTemplate, setSelectedTemplate] = useState<ChartTemplate | null>(null);
+	const [isChartMaximized, setIsChartMaximized] = useState(false);
 
 	// Filter state for test runs
 	const {
@@ -37,6 +40,73 @@ export default function Performance() {
 		updateFilter,
 		clearAllFilters,
 	} = useTestRunFilters(testRuns);
+
+	// Memoize values to prevent unnecessary re-renders
+	const testRunIds = useMemo(() => selectedRuns.map(run => run.id), [selectedRuns]);
+	const metricTypes = useMemo(() => 
+		selectedTemplate?.metrics || ["iops", "avg_latency", "bandwidth"], 
+		[selectedTemplate?.metrics]
+	);
+	const shouldAutoFetch = useMemo(() => 
+		selectedRuns.length > 0 && selectedTemplate !== null, 
+		[selectedRuns.length, selectedTemplate]
+	);
+
+	// Use performance data hook with stable options
+	const hookOptions = useMemo(() => ({
+		testRunIds,
+		metricTypes,
+		autoFetch: shouldAutoFetch,
+	}), [testRunIds, metricTypes, shouldAutoFetch]);
+	
+	const { data: performanceData, loading: dataLoading } = usePerformanceData(hookOptions);
+
+	// Enhance performance data with queue_depth from selected runs
+	const enhancedPerformanceData = useMemo(() => {
+		if (!performanceData || performanceData.length === 0) {
+			return [];
+		}
+		
+		return performanceData.map((perfData) => {
+			const correspondingRun = selectedRuns.find(
+				(run) => run.id === perfData.id,
+			);
+			return {
+				...perfData,
+				queue_depth: correspondingRun?.queue_depth || 1,
+			};
+		});
+	}, [performanceData, selectedRuns]);
+
+	// Memoize 3D chart data transformation
+	const threeDChartData = useMemo(() => {
+		return enhancedPerformanceData.map(d => {
+			const metrics = (d as any).metrics;
+			const latency_percentiles = (d as any).latency_percentiles;
+			
+			// Extract IOPS value
+			const iops = metrics?.iops?.value || metrics?.combined?.iops?.value || 0;
+			
+			// Extract latency value (prefer p95, fallback to avg)
+			const latency = latency_percentiles?.combined?.p95?.value || 
+						   metrics?.avg_latency?.value || 
+						   metrics?.combined?.avg_latency?.value || 0;
+			
+			// Calculate bandwidth from metrics
+			const bandwidth = metrics?.bandwidth?.value || 
+							metrics?.combined?.bandwidth?.value || 
+							metrics?.throughput?.value || 
+							metrics?.combined?.throughput?.value || 0;
+			
+			return {
+				blocksize: d.block_size,
+				queuedepth: d.queue_depth,
+				iops: iops,
+				latency: latency,
+				bandwidth: bandwidth,
+			};
+		}).filter(d => d.iops > 0 || d.latency > 0 || d.bandwidth > 0); // Only include data with valid metrics
+	}, [enhancedPerformanceData]);
 
 	// Get the correct API documentation URL based on environment
 	const getApiDocsUrl = () => {
@@ -131,6 +201,10 @@ export default function Performance() {
 		setRefreshTrigger(prev => prev + 1);
 	};
 
+	const handleToggleMaximize = () => {
+		setIsChartMaximized(prev => !prev);
+	};
+
 	const metricCards = [
 		{
 			title: "Total Test Runs",
@@ -180,23 +254,6 @@ export default function Performance() {
 		<div className="min-h-screen theme-bg-secondary transition-colors">
 			<DashboardHeader />
 
-			{/* Navigation */}
-			<div className="w-full px-4 sm:px-6 lg:px-8 pt-4 pb-2">
-				<div className="flex items-center gap-4">
-					<Button
-						variant="outline"
-						onClick={() => window.location.href = "/"}
-						className="flex items-center gap-2"
-					>
-						<ArrowLeft className="w-4 h-4" />
-						Back to Home
-					</Button>
-					<h1 className="text-2xl font-bold theme-text-primary">
-						Test Run Analytics
-					</h1>
-				</div>
-			</div>
-
 			{/* Main Content */}
 			<main className="w-full px-4 sm:px-6 lg:px-8 py-6">
 
@@ -231,7 +288,60 @@ export default function Performance() {
 						loading={loading}
 					/>
 				</Card>
-				{/* Graphs */}
+				{/* Graphs Section */}
+				<div className="mb-8 mt-4">
+					
+					{/* Two Column Layout for Template Selector and Charts */}
+					<div className={`w-full ${isChartMaximized ? "hidden" : "grid grid-cols-12 gap-6"}`}>
+						{/* Left Column - Template Selector (25%) */}
+						<div className="col-span-3">
+							<TemplateSelector
+								selectedTemplate={selectedTemplate}
+								onTemplateSelect={setSelectedTemplate}
+							/>
+						</div>
+
+						{/* Right Column - Chart Visualization (75%) */}
+						<div className="col-span-9">
+							{selectedTemplate ? (
+								<ChartArea
+									selectedTemplate={selectedTemplate}
+									enhancedPerformanceData={enhancedPerformanceData}
+									threeDChartData={threeDChartData}
+									isChartMaximized={isChartMaximized}
+									handleToggleMaximize={handleToggleMaximize}
+									loading={dataLoading}
+									sharedFilters={activeFilters}
+								/>
+							) : (
+								<Card className="p-8">
+									<div className="text-center">
+										<TrendingUp className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+										<h3 className="text-lg font-semibold theme-text-primary mb-2">
+											Select a Chart Template
+										</h3>
+										<p className="theme-text-secondary">
+											Choose a chart template from the left panel to visualize your selected test runs data.
+										</p>
+									</div>
+								</Card>
+							)}
+						</div>
+					</div>
+
+					{/* Maximized Chart */}
+					{isChartMaximized && selectedTemplate && (
+						<ChartArea
+							selectedTemplate={selectedTemplate}
+							enhancedPerformanceData={enhancedPerformanceData}
+							threeDChartData={threeDChartData}
+							isChartMaximized={isChartMaximized}
+							handleToggleMaximize={handleToggleMaximize}
+							loading={dataLoading}
+							sharedFilters={activeFilters}
+						/>
+					)}
+				</div>
 				{/* Performance Metrics Grid */}
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 mt-4">
 					{metricCards.map((metric, index) => (
