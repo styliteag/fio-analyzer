@@ -96,18 +96,13 @@ export function groupRunsByConfiguration(runs: PerformanceData[]): Configuration
 
 export function createComparableConfigurations(
   runs: PerformanceData[], 
-  selectedHosts: string[],
+  selectedHostHardwareCombinations: number,
   minHostCoverage: number = 0.3 // At least 30% of hosts must have this configuration
 ): ConfigurationComparison[] {
   const groups = groupRunsByConfiguration(runs);
   const comparisons: ConfigurationComparison[] = [];
 
   for (const group of groups) {
-    const coverage = group.hostCount / selectedHosts.length;
-    
-    // Skip configs that don't meet minimum coverage
-    if (coverage < minHostCoverage) continue;
-
     const hostData: HostComparisonData[] = [];
     
     // Use the actual runs from the group instead of trying to find by hostname
@@ -126,11 +121,17 @@ export function createComparableConfigurations(
       });
     }
 
+    // Calculate coverage based on the number of host-hardware combinations that have this config
+    const coverage = hostData.length / selectedHostHardwareCombinations;
+    
+    // Skip configs that don't meet minimum coverage
+    if (coverage < minHostCoverage) continue;
+
     if (hostData.length >= 2) { // Need at least 2 hosts to compare
       comparisons.push({
         config: group.config,
         hostData,
-        hasAllHosts: hostData.length === selectedHosts.length,
+        hasAllHosts: hostData.length === selectedHostHardwareCombinations,
         coverage
       });
     }

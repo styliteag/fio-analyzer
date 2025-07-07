@@ -60,13 +60,6 @@ function ConfigurationCard({ comparison, isSelected, onSelect, className = '' }:
         </div>
       </div>
 
-      {/* Test parameters only - no hardware info */}
-      <div className="mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-        <span className="text-xs theme-text-secondary">
-          Test Configuration (hardware-agnostic)
-        </span>
-      </div>
-
       {/* Metrics grid */}
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="flex items-center gap-1">
