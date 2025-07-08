@@ -53,7 +53,6 @@ export default function Dashboard() {
 		error: _serverError, // eslint-disable-line @typescript-eslint/no-unused-vars
 		filters: _serverFilterOptions // eslint-disable-line @typescript-eslint/no-unused-vars
 	} = useServerSideTestRuns({ 
-		includeHistorical: false, 
 		autoFetch: useServerSideFiltering 
 	});
 

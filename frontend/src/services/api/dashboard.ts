@@ -214,7 +214,7 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
     try {
         // Fetch data in parallel
         const [testRunsResult, serversResult, latestResult] = await Promise.allSettled([
-            fetchTestRuns({ includeHistorical: true }),
+            fetchTestRuns(),
             fetchTimeSeriesServers(),
             fetchTimeSeriesLatest()
         ]);
@@ -345,7 +345,7 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
 // Fetch quick stats for the loading state
 export const fetchQuickStats = async () => {
     try {
-        const result = await fetchTestRuns({ includeHistorical: false });
+        const result = await fetchTestRuns();
         const testRuns = result.data || [];
         
         return {

@@ -5,7 +5,6 @@ import type { TestRun, FilterOptions } from '../types';
 import type { ActiveFilters } from './useTestRunFilters';
 
 export interface UseServerSideTestRunsOptions {
-    includeHistorical?: boolean;
     debounceMs?: number;
     autoFetch?: boolean;
 }
@@ -41,7 +40,6 @@ export const useServerSideTestRuns = (
     options: UseServerSideTestRunsOptions = {}
 ): UseServerSideTestRunsResult => {
     const { 
-        includeHistorical = false, 
         debounceMs = 300,
         autoFetch = true 
     } = options;
@@ -73,7 +71,7 @@ export const useServerSideTestRuns = (
             setLoading(true);
             setError(null);
 
-            const options = convertActiveFiltersToOptions(debouncedFilters, includeHistorical);
+            const options = convertActiveFiltersToOptions(debouncedFilters);
             const response = await fetchTestRuns(options);
             
             if (response.data) {
@@ -87,7 +85,7 @@ export const useServerSideTestRuns = (
         } finally {
             setLoading(false);
         }
-    }, [debouncedFilters, includeHistorical]);
+    }, [debouncedFilters]);
 
     // Fetch filter options
     const fetchFiltersData = useCallback(async () => {

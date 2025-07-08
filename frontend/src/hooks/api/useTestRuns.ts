@@ -10,7 +10,7 @@ export interface UseTestRunsResult {
     loading: boolean;
     error: string | null;
     refetch: () => Promise<void>;
-    refreshTestRuns: (includeHistorical?: boolean) => Promise<void>;
+    refreshTestRuns: () => Promise<void>;
     updateTestRun: (id: number, updates: TestRunUpdateData) => Promise<boolean>;
     bulkUpdateTestRuns: (ids: number[], updates: TestRunUpdateData) => Promise<boolean>;
     deleteTestRunData: (id: number) => Promise<boolean>;
@@ -31,12 +31,12 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchTestRunsData = useCallback(async (includeHistorical = false) => {
+    const fetchTestRunsData = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
             
-            const response = await fetchTestRuns({ includeHistorical });
+            const response = await fetchTestRuns();
             if (response.data) {
                 setTestRuns(response.data);
             } else {

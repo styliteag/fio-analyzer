@@ -48,9 +48,8 @@ export const authenticatedFetch = async (
 };
 
 // API functions
-export const fetchTestRuns = async (includeHistorical: boolean = false) => {
-	const params = includeHistorical ? "?include_historical=true" : "";
-	const response = await authenticatedFetch(`/api/test-runs${params}`);
+export const fetchTestRuns = async () => {
+	const response = await authenticatedFetch(`/api/test-runs`);
 	if (!response.ok) {
 		throw new Error("Failed to fetch test runs");
 	}

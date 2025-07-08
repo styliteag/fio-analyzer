@@ -12,7 +12,6 @@ export interface TestRunUpdateData {
 }
 
 export interface TestRunsOptions {
-    includeHistorical?: boolean;
     // Server-side filtering options
     hostnames?: string[];
     protocols?: string[];
@@ -31,7 +30,6 @@ export interface TestRunsOptions {
 // Fetch test runs with optional historical data and server-side filtering
 export const fetchTestRuns = async (options: TestRunsOptions = {}) => {
     const { 
-        includeHistorical = false,
         hostnames,
         protocols,
         drive_types,
@@ -48,11 +46,7 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}) => {
     
     // Build query parameters
     const queryParams = new URLSearchParams();
-    
-    if (includeHistorical) {
-        queryParams.append('include_historical', 'true');
-    }
-    
+        
     // Add filter parameters if they exist and have values
     if (hostnames && hostnames.length > 0) {
         queryParams.append('hostnames', hostnames.join(','));
@@ -99,10 +93,9 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}) => {
 
 // Helper function to convert ActiveFilters to TestRunsOptions
 export const convertActiveFiltersToOptions = (
-    activeFilters: ActiveFilters, 
-    includeHistorical = false
+    activeFilters: ActiveFilters
 ): TestRunsOptions => {
-    const options: TestRunsOptions = { includeHistorical };
+    const options: TestRunsOptions = {};
     
     // Only include filters that have values
     if (activeFilters.hostnames.length > 0) {

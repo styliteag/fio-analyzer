@@ -9,7 +9,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTestRunFilters } from "../hooks/useTestRunFilters";
 import { usePerformanceData } from "../hooks";
 import { TrendingUp, Activity, Zap, Timer, HardDrive, Server } from "lucide-react";
-import { fetchTimeSeriesAll } from "../utils/api";
+import { fetchTestRuns } from "../utils/api";
 import type { TestRun, ChartTemplate } from "../types";
 
 interface TestRunMetrics {
@@ -124,7 +124,7 @@ export default function Performance() {
 			setLoading(true);
 			setError(null);
 
-			const result = await fetchTimeSeriesAll();
+			const result = await fetchTestRuns();
 			
 			if (result) {
 				setTestRuns(result);

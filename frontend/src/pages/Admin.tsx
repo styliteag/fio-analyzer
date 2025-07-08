@@ -118,7 +118,7 @@ const Admin: React.FC = () => {
     setActiveFilters,
     clearFilters,
     refetch,
-  } = useServerSideTestRuns({ includeHistorical: true });
+  } = useServerSideTestRuns();
 
   // Split latest vs historical early for easy memoisation
   const latestRuns = useMemo(() => testRuns.filter(r => r.is_latest === 1), [testRuns]);
@@ -1444,7 +1444,7 @@ const Admin: React.FC = () => {
       >
         <div className="space-y-4">
           <p className="text-sm theme-text-secondary">
-            Import all uploaded FIO JSON files from the uploads directory. This will process all files that haven't been imported yet.
+            Import all uploaded FIO JSON files from the uploads directory. This will process all files that haven&apos;t been imported yet.
           </p>
           
           <div className="space-y-3">

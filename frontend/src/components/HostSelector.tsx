@@ -37,7 +37,7 @@ export default function HostSelector({ selectedHosts, onHostsChange, className =
         setLoading(true);
         
         // Get all test runs to extract hostname + hardware combinations
-        const res = await fetchTestRuns({ includeHistorical: false });
+        const res = await fetchTestRuns();
         if (res.data) {
           // Create a map to track unique hostname + hardware combinations
           const hostMap = new Map<string, HostOption>();
@@ -89,7 +89,7 @@ export default function HostSelector({ selectedHosts, onHostsChange, className =
         const actualHostnames = selectedHosts.map(extractHostname);
         const res = await fetchTestRuns({ 
           hostnames: actualHostnames,
-          includeHistorical: false // Only latest per config
+          // Only latest per config
         });
         
         if (res.data) {

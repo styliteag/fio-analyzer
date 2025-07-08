@@ -60,7 +60,7 @@ export default function Compare2() {
       // Fetch test runs for selected hosts (latest per config only)
       const runsRes = await fetchTestRuns({
         hostnames: actualHostnames,
-        includeHistorical: false
+
       });
 
       if (runsRes.error) {
