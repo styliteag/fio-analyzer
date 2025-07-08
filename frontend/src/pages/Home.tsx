@@ -141,11 +141,11 @@ export default function Home() {
 						</Button>
 						<Button
 							variant="outline"
-							onClick={() => window.location.href = "/host/redshark"}
+							onClick={() => window.location.href = "/host"}
 							className="flex items-center gap-2"
 						>
 							<Server className="w-4 h-4" />
-							Host Analysis (Demo)
+							Host Analysis
 						</Button>
 						<Button
 							onClick={handleRefreshStats}
@@ -388,7 +388,7 @@ export default function Home() {
 								</p>
 							</a>
 							<a
-								href="/host/redshark"
+								href="/host"
 								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
 							>
 								<div className="flex items-center gap-2 mb-2">

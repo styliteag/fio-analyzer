@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Server, HardDrive, Zap, Activity, ArrowLeft, RefreshCw, BarChart3, Radar, TrendingUp, Box } from 'lucide-react';
+import { Server, HardDrive, Zap, Activity, ArrowLeft, RefreshCw, BarChart3, Radar, TrendingUp, Box, ChevronDown } from 'lucide-react';
 import { DashboardHeader, DashboardFooter } from '../components/layout';
 import { Card, Button, Loading, ErrorDisplay } from '../components/ui';
-import { fetchHostAnalysis, type HostAnalysisData } from '../services/api/hostAnalysis';
+import { fetchHostAnalysis, getHostList, type HostAnalysisData } from '../services/api/hostAnalysis';
 import PerformanceMatrix from '../components/host/PerformanceMatrix';
 import DriveRadarChart from '../components/host/DriveRadarChart';
 import PerformanceScatterPlot from '../components/host/PerformanceScatterPlot';
@@ -17,6 +17,11 @@ const Host: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
+    // Host selection states
+    const [availableHosts, setAvailableHosts] = useState<string[]>([]);
+    const [loadingHosts, setLoadingHosts] = useState(true);
+    const [selectedHost, setSelectedHost] = useState<string>('');
+    
     // Filter states
     const [selectedBlockSizes, setSelectedBlockSizes] = useState<string[]>([]);
     const [selectedPatterns, setSelectedPatterns] = useState<string[]>([]);
@@ -27,10 +32,33 @@ const Host: React.FC = () => {
     const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'radar' | 'scatter' | '3d'>('overview');
     const [matrixMetric, setMatrixMetric] = useState<'iops' | 'avg_latency' | 'bandwidth'>('iops');
 
+    // Load available hosts
+    const loadHostList = async () => {
+        try {
+            setLoadingHosts(true);
+            const hosts = await getHostList();
+            setAvailableHosts(hosts);
+            
+            // Auto-select host from URL or first available host
+            if (hostname && hosts.includes(hostname)) {
+                setSelectedHost(hostname);
+            } else if (!hostname && hosts.length > 0) {
+                setSelectedHost(hosts[0]);
+                navigate(`/host/${hosts[0]}`, { replace: true });
+            }
+        } catch (err) {
+            console.error('Failed to load host list:', err);
+            setError('Failed to load available hosts');
+        } finally {
+            setLoadingHosts(false);
+        }
+    };
+
     // Load host analysis data
-    const loadHostData = async () => {
-        if (!hostname) {
-            setError('No hostname provided');
+    const loadHostData = async (targetHost?: string) => {
+        const hostToLoad = targetHost || selectedHost || hostname;
+        
+        if (!hostToLoad) {
             setLoading(false);
             return;
         }
@@ -38,7 +66,7 @@ const Host: React.FC = () => {
         try {
             setLoading(true);
             setError(null);
-            const data = await fetchHostAnalysis(hostname);
+            const data = await fetchHostAnalysis(hostToLoad);
             setHostData(data);
         } catch (err) {
             console.error('Failed to load host analysis:', err);
@@ -48,9 +76,34 @@ const Host: React.FC = () => {
         }
     };
 
+    // Handle host selection change
+    const handleHostChange = (newHost: string) => {
+        setSelectedHost(newHost);
+        navigate(`/host/${newHost}`);
+        loadHostData(newHost);
+        // Reset filters when switching hosts
+        resetFilters();
+    };
+
+    // Load host list on component mount
     useEffect(() => {
-        loadHostData();
+        loadHostList();
+    }, []);
+
+    // Load host data when hostname changes
+    useEffect(() => {
+        if (hostname && hostname !== selectedHost) {
+            setSelectedHost(hostname);
+            loadHostData(hostname);
+        }
     }, [hostname]);
+
+    // Load host data when selected host changes (after host list is loaded)
+    useEffect(() => {
+        if (selectedHost && !loadingHosts) {
+            loadHostData(selectedHost);
+        }
+    }, [selectedHost, loadingHosts]);
 
     // Filter drives based on selected criteria
     const filteredDrives = useMemo(() => {
@@ -75,7 +128,7 @@ const Host: React.FC = () => {
         setSelectedProtocols([]);
     };
 
-    if (loading) {
+    if (loadingHosts || (loading && !selectedHost)) {
         return (
             <div className="min-h-screen theme-bg-secondary">
                 <DashboardHeader />
@@ -94,7 +147,7 @@ const Host: React.FC = () => {
                 <main className="container mx-auto px-4 py-8">
                     <ErrorDisplay 
                         error={error}
-                        onRetry={loadHostData}
+                        onRetry={() => selectedHost ? loadHostData(selectedHost) : loadHostList()}
                         showRetry={true}
                     />
                 </main>
@@ -103,13 +156,13 @@ const Host: React.FC = () => {
         );
     }
 
-    if (!hostData) {
+    if (availableHosts.length === 0) {
         return (
             <div className="min-h-screen theme-bg-secondary">
                 <DashboardHeader />
                 <main className="container mx-auto px-4 py-8">
                     <div className="text-center">
-                        <p className="theme-text-secondary">No host data available</p>
+                        <p className="theme-text-secondary">No hosts available for analysis</p>
                     </div>
                 </main>
                 <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
@@ -124,29 +177,52 @@ const Host: React.FC = () => {
             <main className="container mx-auto px-4 py-8">
                 {/* Header Section */}
                 <div className="mb-8">
-                    <div className="flex items-center gap-4 mb-4">
-                        <Button
-                            variant="outline"
-                            onClick={() => navigate('/')}
-                            className="flex items-center gap-2"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                            Back to Home
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={loadHostData}
-                            className="flex items-center gap-2"
-                        >
-                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                            Refresh
-                        </Button>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
+                        <div className="flex items-center gap-4">
+                            <Button
+                                variant="outline"
+                                onClick={() => navigate('/')}
+                                className="flex items-center gap-2"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                                Back to Home
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => selectedHost && loadHostData(selectedHost)}
+                                disabled={loading}
+                                className="flex items-center gap-2"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                                Refresh
+                            </Button>
+                        </div>
+
+                        {/* Host Selector */}
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium theme-text-secondary">Select Host:</span>
+                            <div className="relative">
+                                <select
+                                    value={selectedHost}
+                                    onChange={(e) => handleHostChange(e.target.value)}
+                                    className="appearance-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-2 pr-8 text-sm theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    disabled={loadingHosts}
+                                >
+                                    {availableHosts.map(host => (
+                                        <option key={host} value={host}>
+                                            {host}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 theme-text-secondary pointer-events-none" />
+                            </div>
+                        </div>
                     </div>
                     
                     <div className="flex items-center gap-3 mb-2">
                         <Server className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                         <h1 className="text-3xl font-bold theme-text-primary">
-                            {hostData.hostname}
+                            {selectedHost || 'Host Analysis'}
                         </h1>
                     </div>
                     <p className="theme-text-secondary text-lg">
@@ -154,6 +230,16 @@ const Host: React.FC = () => {
                     </p>
                 </div>
 
+                {/* Loading state for host data */}
+                {loading && selectedHost && (
+                    <div className="flex justify-center py-12">
+                        <Loading />
+                    </div>
+                )}
+
+                {/* Content when host data is available */}
+                {!loading && hostData && (
+                <>
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     <Card className="p-6">
@@ -426,6 +512,8 @@ const Host: React.FC = () => {
                         </Card>
                     </div>
                 </div>
+                </>
+                )}
             </main>
             
             <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
