@@ -121,3 +121,44 @@ export const getSupportedProtocols = () => [
     "SMB",
     "FC",
 ];
+
+export interface BulkImportOptions {
+    overwrite?: boolean;
+    dryRun?: boolean;
+}
+
+export interface BulkImportResponse {
+    message: string;
+    statistics: {
+        totalFiles: number;
+        processedFiles: number;
+        totalTestRuns: number;
+        skippedFiles: number;
+        errorFiles: number;
+    };
+    dryRunResults?: Array<{
+        path: string;
+        metadata: any;
+    }>;
+}
+
+// Bulk import all uploaded FIO files
+export const bulkImportFioData = async (options: BulkImportOptions = {}): Promise<BulkImportResponse> => {
+    const response = await fetch('/api/import/bulk', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            overwrite: options.overwrite || false,
+            dryRun: options.dryRun || false,
+        }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Bulk import failed');
+    }
+
+    return response.json();
+};

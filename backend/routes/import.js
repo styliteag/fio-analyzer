@@ -5,6 +5,7 @@ const fs = require('fs');
 const { getDatabase, updateLatestFlags, insertMetric, insertMetricAll } = require('../database');
 const { requireAuth } = require('../auth');
 const { logInfo, logError, logWarning, requestIdMiddleware } = require('../utils');
+const { processFioFile, discoverUploadedFiles } = require('../scripts/import-utils');
 
 const router = express.Router();
 
@@ -672,5 +673,241 @@ function insertFioMetricsAll(testRunId, data, operationType) {
         });
     });
 }
+
+/**
+ * @swagger
+ * /api/import/bulk:
+ *   post:
+ *     summary: Bulk import all uploaded FIO files
+ *     description: Process all uploaded FIO JSON files in the uploads directory
+ *     tags: [Import]
+ *     security:
+ *       - basicAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               overwrite:
+ *                 type: boolean
+ *                 description: Whether to overwrite existing files
+ *                 default: false
+ *               dryRun:
+ *                 type: boolean
+ *                 description: Preview what would be imported without making changes
+ *                 default: false
+ *     responses:
+ *       200:
+ *         description: Bulk import completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Bulk import completed. Processed 5 files, 20 test runs imported."
+ *                 statistics:
+ *                   type: object
+ *                   properties:
+ *                     totalFiles:
+ *                       type: integer
+ *                       example: 5
+ *                     processedFiles:
+ *                       type: integer
+ *                       example: 5
+ *                     totalTestRuns:
+ *                       type: integer
+ *                       example: 20
+ *                     skippedFiles:
+ *                       type: integer
+ *                       example: 0
+ *                     errorFiles:
+ *                       type: integer
+ *                       example: 0
+ *       401:
+ *         description: Unauthorized - Authentication required
+ *       500:
+ *         description: Internal server error
+ */
+router.post('/bulk', requireAuth, async (req, res) => {
+    const startTime = Date.now();
+    const { overwrite = false, dryRun = false } = req.body;
+
+    try {
+        logInfo('Bulk import request started', {
+            requestId: req.requestId,
+            username: req.user.username,
+            userRole: req.user.role,
+            action: 'BULK_IMPORT_FIO_RESULTS',
+            options: {
+                overwrite,
+                dryRun
+            }
+        });
+
+        if (dryRun) {
+            logInfo('Bulk import dry run mode', {
+                requestId: req.requestId,
+                username: req.user.username
+            });
+        }
+
+        if (overwrite) {
+            logInfo('Bulk import overwrite mode enabled', {
+                requestId: req.requestId,
+                username: req.user.username
+            });
+        }
+
+        // Discover uploaded files
+        const uploadsDir = path.join(__dirname, '..', 'uploads');
+        
+        if (!fs.existsSync(uploadsDir)) {
+            logError('Bulk import failed - uploads directory does not exist', null, {
+                requestId: req.requestId,
+                username: req.user.username,
+                uploadsDir
+            });
+            return res.status(400).json({ error: 'Uploads directory does not exist' });
+        }
+
+        const filePairs = await discoverUploadedFiles(uploadsDir);
+
+        if (filePairs.length === 0) {
+            logInfo('Bulk import - no files found', {
+                requestId: req.requestId,
+                username: req.user.username
+            });
+            return res.json({
+                message: 'No FIO JSON files found to import.',
+                statistics: {
+                    totalFiles: 0,
+                    processedFiles: 0,
+                    totalTestRuns: 0,
+                    skippedFiles: 0,
+                    errorFiles: 0
+                }
+            });
+        }
+
+        logInfo('Bulk import - files discovered', {
+            requestId: req.requestId,
+            username: req.user.username,
+            fileCount: filePairs.length
+        });
+
+        if (dryRun) {
+            const dryRunResults = filePairs.map(pair => ({
+                path: pair.jsonPath,
+                metadata: pair.metadata
+            }));
+
+            return res.json({
+                message: `Dry run completed. ${filePairs.length} files would be processed.`,
+                statistics: {
+                    totalFiles: filePairs.length,
+                    processedFiles: 0,
+                    totalTestRuns: 0,
+                    skippedFiles: 0,
+                    errorFiles: 0
+                },
+                dryRunResults
+            });
+        }
+
+        // Process files in chronological order
+        let totalProcessed = 0;
+        let totalSuccess = 0;
+        let totalSkipped = 0;
+        let totalErrors = 0;
+        let totalTestRuns = 0;
+
+        for (let i = 0; i < filePairs.length; i++) {
+            const pair = filePairs[i];
+            const fileNumber = i + 1;
+
+            try {
+                logInfo('Bulk import - processing file', {
+                    requestId: req.requestId,
+                    username: req.user.username,
+                    fileNumber,
+                    totalFiles: filePairs.length,
+                    filePath: pair.jsonPath,
+                    metadata: pair.metadata
+                });
+
+                // Process the file
+                const result = await processFioFile(pair.jsonPath, pair.metadata, {
+                    overwrite,
+                    requestId: `${req.requestId}-${fileNumber}`
+                });
+
+                totalProcessed++;
+                totalTestRuns += result.testRuns.length;
+
+                if (result.skipped > 0) {
+                    totalSkipped += result.skipped;
+                }
+
+                logInfo('Bulk import - file processed successfully', {
+                    requestId: req.requestId,
+                    username: req.user.username,
+                    fileNumber,
+                    totalFiles: filePairs.length,
+                    testRunsImported: result.testRuns.length,
+                    skippedJobs: result.skipped
+                });
+
+            } catch (error) {
+                totalErrors++;
+                logError('Bulk import - file processing failed', error, {
+                    requestId: req.requestId,
+                    username: req.user.username,
+                    fileNumber,
+                    totalFiles: filePairs.length,
+                    filePath: pair.jsonPath
+                });
+            }
+        }
+
+        const totalTime = Date.now() - startTime;
+
+        logInfo('Bulk import completed', {
+            requestId: req.requestId,
+            username: req.user.username,
+            statistics: {
+                totalFiles: filePairs.length,
+                processedFiles: totalProcessed,
+                totalTestRuns,
+                skippedFiles: totalSkipped,
+                errorFiles: totalErrors
+            },
+            totalTime: `${totalTime}ms`
+        });
+
+        res.json({
+            message: `Bulk import completed. Processed ${totalProcessed} files, ${totalTestRuns} test runs imported.`,
+            statistics: {
+                totalFiles: filePairs.length,
+                processedFiles: totalProcessed,
+                totalTestRuns,
+                skippedFiles: totalSkipped,
+                errorFiles: totalErrors
+            }
+        });
+
+    } catch (error) {
+        const totalTime = Date.now() - startTime;
+        logError('Bulk import failed with exception', error, {
+            requestId: req.requestId,
+            username: req.user?.username,
+            totalTime: `${totalTime}ms`
+        });
+        res.status(500).json({ error: error.message });
+    }
+});
 
 module.exports = router;

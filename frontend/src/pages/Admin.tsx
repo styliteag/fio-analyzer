@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Settings, Database, Filter, BarChart3, History, ChevronUp, ChevronDown, Edit2, Trash2, ArrowLeft } from 'lucide-react';
+import { Settings, Database, Filter, BarChart3, History, ChevronUp, ChevronDown, Edit2, Trash2, ArrowLeft, Upload } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Loading from '../components/ui/Loading';
 import ErrorDisplay from '../components/ui/ErrorDisplay';
 import Modal from '../components/ui/Modal';
 import { useServerSideTestRuns } from '../hooks/useServerSideTestRuns';
 import { bulkUpdateTestRuns, deleteTestRuns } from '../services/api/testRuns';
+import { bulkImportFioData } from '../services/api/upload';
 import { useNavigate } from 'react-router-dom';
 import type { TestRun } from '../types';
 
@@ -57,6 +58,13 @@ interface HistoryDeleteState {
   group: any | null;
 }
 
+interface BulkImportState {
+  isOpen: boolean;
+  overwrite: boolean;
+  dryRun: boolean;
+  loading: boolean;
+}
+
 const Admin: React.FC = () => {
   const navigate = useNavigate();
   const [view, setView] = useState<'latest' | 'history'>('latest');
@@ -94,6 +102,12 @@ const Admin: React.FC = () => {
   const [historyDeleteState, setHistoryDeleteState] = useState<HistoryDeleteState>({
     isOpen: false,
     group: null,
+  });
+  const [bulkImportState, setBulkImportState] = useState<BulkImportState>({
+    isOpen: false,
+    overwrite: false,
+    dryRun: false,
+    loading: false,
   });
   const {
     testRuns,
@@ -433,6 +447,42 @@ const Admin: React.FC = () => {
     } catch (err) {
       console.error('Failed to delete history group:', err);
       alert(err instanceof Error ? err.message : 'History deletion failed');
+    }
+  };
+
+  const openBulkImportModal = () => {
+    setBulkImportState(prev => ({ ...prev, isOpen: true }));
+  };
+
+  const closeBulkImportModal = () => {
+    setBulkImportState(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleBulkImport = async () => {
+    setBulkImportState(prev => ({ ...prev, loading: true }));
+
+    try {
+      const result = await bulkImportFioData({
+        overwrite: bulkImportState.overwrite,
+        dryRun: bulkImportState.dryRun,
+      });
+
+      // Refresh data if not dry run
+      if (!bulkImportState.dryRun) {
+        refetch();
+      }
+
+      // Close modal
+      closeBulkImportModal();
+
+      // Show success message
+      alert(result.message);
+
+    } catch (err) {
+      console.error('Bulk import failed:', err);
+      alert(err instanceof Error ? err.message : 'Bulk import failed');
+    } finally {
+      setBulkImportState(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -882,6 +932,14 @@ const Admin: React.FC = () => {
             >
               <History className="h-4 w-4" />
               History ({groupedHistory.length})
+            </Button>
+            <Button 
+              onClick={openBulkImportModal}
+              variant="secondary"
+              className="flex items-center gap-2 ml-auto"
+            >
+              <Upload className="h-4 w-4" />
+              Bulk Import
             </Button>
           </div>
         </div>
@@ -1370,6 +1428,85 @@ const Admin: React.FC = () => {
               onClick={closeHistoryDeleteModal} 
               variant="secondary"
               className="flex-1"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk Import Modal */}
+      <Modal
+        isOpen={bulkImportState.isOpen}
+        onClose={closeBulkImportModal}
+        title="Bulk Import FIO Files"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm theme-text-secondary">
+            Import all uploaded FIO JSON files from the uploads directory. This will process all files that haven't been imported yet.
+          </p>
+          
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="overwrite-enabled"
+                checked={bulkImportState.overwrite}
+                onChange={(e) => setBulkImportState(prev => ({ ...prev, overwrite: e.target.checked }))}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="overwrite-enabled" className="text-sm font-medium theme-text-primary">
+                Overwrite existing files
+              </label>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="dry-run-enabled"
+                checked={bulkImportState.dryRun}
+                onChange={(e) => setBulkImportState(prev => ({ ...prev, dryRun: e.target.checked }))}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="dry-run-enabled" className="text-sm font-medium theme-text-primary">
+                Dry run (preview only)
+              </label>
+            </div>
+          </div>
+          
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+            <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+              Import Options
+            </h4>
+            <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+              <p><strong>Overwrite:</strong> {bulkImportState.overwrite ? 'Yes - will reimport existing files' : 'No - will skip existing files'}</p>
+              <p><strong>Dry Run:</strong> {bulkImportState.dryRun ? 'Yes - will only preview what would be imported' : 'No - will actually import files'}</p>
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button 
+              onClick={handleBulkImport} 
+              disabled={bulkImportState.loading}
+              className="flex-1"
+            >
+              {bulkImportState.loading ? (
+                <>
+                  <Loading className="h-4 w-4 mr-2" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {bulkImportState.dryRun ? 'Preview Import' : 'Start Import'}
+                </>
+              )}
+            </Button>
+            <Button 
+              onClick={closeBulkImportModal} 
+              variant="secondary"
+              disabled={bulkImportState.loading}
             >
               Cancel
             </Button>

@@ -35,6 +35,7 @@ export {
     uploadFioData,
     validateUploadMetadata,
     validateUploadFile,
+    bulkImportFioData,
 } from './upload';
 
 export {
