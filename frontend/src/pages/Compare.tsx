@@ -8,8 +8,9 @@ import {
 	Tooltip,
 	Legend,
 } from "chart.js";
-import { fetchFilters, fetchTestRuns } from "../services/api/testRuns";
+import { fetchFilters } from "../services/api/testRuns";
 import { fetchPerformanceData } from "../services/api/performance";
+import { fetchTimeSeriesAll } from "../utils/api";
 import type { PerformanceData, FilterOptions } from "../types";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
@@ -84,8 +85,8 @@ export default function Compare() {
 		setError(null);
 		setChartKey(prev => prev + 1);
 		try {
-			// latest per config only (includeHistorical false)
-			const runsRes = await fetchTestRuns({
+			// Get all historical data for comparison
+			const runsRes = await fetchTimeSeriesAll({
 				hostnames: selectedHosts,
 				drive_types: selectedDriveTypes,
 				drive_models: selectedDriveModels,
@@ -98,10 +99,8 @@ export default function Compare() {
 				num_jobs: selectedNumJobs,
 				test_sizes: selectedTestSizes,
 				durations: selectedDurations,
-				includeHistorical: true,
 			});
-			if (runsRes.error) throw new Error(runsRes.error);
-			const runIds = (runsRes.data || []).map((r) => r.id);
+			const runIds = (runsRes || []).map((r: any) => r.id);
 			if (runIds.length === 0) {
 				setPerfData([]);
 				setLoading(false);
