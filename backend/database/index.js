@@ -112,6 +112,12 @@ function initDb() {
                 test_size TEXT,
                 sync INTEGER,
                 iodepth INTEGER,
+                -- Performance metrics directly in main table
+                avg_latency REAL,
+                bandwidth REAL,
+                iops REAL,
+                p95_latency REAL,
+                p99_latency REAL,
                 -- Uniqueness tracking (kept for migration purposes)
                 is_latest INTEGER DEFAULT 1
             )
@@ -148,36 +154,16 @@ function initDb() {
                 test_size TEXT,
                 sync INTEGER,
                 iodepth INTEGER,
+                -- Performance metrics directly in main table
+                avg_latency REAL,
+                bandwidth REAL,
+                iops REAL,
+                p95_latency REAL,
+                p99_latency REAL,
                 -- Uniqueness tracking (always 1 for latest-only table)
                 is_latest INTEGER DEFAULT 1,
                 -- Unique constraint to ensure only one latest entry per configuration
                 UNIQUE(hostname, protocol, drive_type, drive_model, block_size, read_write_pattern, queue_depth, num_jobs, direct, test_size, sync, iodepth, duration)
-            )
-        `);
-
-        // Create performance_metrics for test_runs (latest data)
-        db.run(`
-            CREATE TABLE IF NOT EXISTS performance_metrics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                test_run_id INTEGER NOT NULL,
-                metric_type TEXT NOT NULL,
-                value REAL NOT NULL,
-                unit TEXT NOT NULL,
-                operation_type TEXT,
-                FOREIGN KEY (test_run_id) REFERENCES test_runs (id)
-            )
-        `);
-
-        // Create performance_metrics_all for test_runs_all (all historical data)
-        db.run(`
-            CREATE TABLE IF NOT EXISTS performance_metrics_all (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                test_run_id INTEGER NOT NULL,
-                metric_type TEXT NOT NULL,
-                value REAL NOT NULL,
-                unit TEXT NOT NULL,
-                operation_type TEXT,
-                FOREIGN KEY (test_run_id) REFERENCES test_runs_all (id)
             )
         `);
 
@@ -202,18 +188,6 @@ function initDb() {
             CREATE INDEX IF NOT EXISTS idx_test_runs_config_lookup 
             ON test_runs (hostname, protocol, drive_type, drive_model)
         `);
-
-        // Index for performance metrics by test_run_id and metric_type (both tables)
-        db.run(`
-            CREATE INDEX IF NOT EXISTS idx_performance_metrics_test_metric 
-            ON performance_metrics (test_run_id, metric_type, operation_type)
-        `);
-
-        db.run(`
-            CREATE INDEX IF NOT EXISTS idx_performance_metrics_all_test_metric 
-            ON performance_metrics_all (test_run_id, metric_type, operation_type)
-        `);
-
 
         // Create view for latest test results per server
         db.run(`
@@ -259,23 +233,73 @@ function initDb() {
                     return;
                 }
 
-                if (row.count > 0 && allRow.count === 0) {
-                    console.log('Migrating existing data to new dual-table structure...');
-                    migrateToNewSchema(() => {
+                // Check if old performance_metrics tables exist (indicates we need simplified schema migration)
+                db.all(`
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' 
+                    AND name IN ('performance_metrics', 'performance_metrics_all')
+                `, (err, oldTables) => {
+                    if (err) {
+                        console.error(err.message);
+                        return;
+                    }
+
+                    const hasOldMetricsTables = oldTables.length > 0;
+
+                    if (hasOldMetricsTables) {
+                        console.log('Detected old performance_metrics tables. Running simplified schema migration...');
+                        runSimplifiedSchemaMigration(() => {
+                            showServerReady(8000);
+                        });
+                    } else if (row.count > 0 && allRow.count === 0) {
+                        console.log('Migrating existing data to new dual-table structure...');
+                        migrateToNewSchema(() => {
+                            showServerReady(8000);
+                        });
+                    } else if (row.count === 0 && allRow.count === 0) {
+                        console.log('Populating sample data...');
+                        console.log('Estimated data: ~60 test runs with performance metrics (simplified schema)');
+                        populateSampleData(() => {
+                            showServerReady(8000);
+                        });
+                    } else {
                         showServerReady(8000);
-                    });
-                } else if (row.count === 0 && allRow.count === 0) {
-                    console.log('Populating sample data...');
-                    console.log('Estimated data: ~60 test runs with ~300 metrics (reduced for faster startup)');
-                    populateSampleData(() => {
-                        showServerReady(8000);
-                    });
-                } else {
-                    showServerReady(8000);
-                }
+                    }
+                });
             });
         });
     });
+}
+
+function runSimplifiedSchemaMigration(callback) {
+    console.log('Starting simplified schema migration...');
+    
+    // Read the migration SQL from the file
+    const fs = require('fs');
+    const path = require('path');
+    const migrationPath = path.join(__dirname, '..', 'scripts', 'migrate-to-simplified-schema.sql');
+    
+    try {
+        const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+        
+        // Execute the migration
+        db.exec(migrationSQL, (err) => {
+            if (err) {
+                console.error('Migration failed:', err.message);
+                return;
+            }
+            
+            console.log('Simplified schema migration completed successfully!');
+            console.log('- Removed performance_metrics and performance_metrics_all tables');
+            console.log('- Added metric columns directly to test_runs and test_runs_all');
+            console.log('- Updated indexes for better performance');
+            
+            callback();
+        });
+    } catch (error) {
+        console.error('Failed to read migration file:', error.message);
+        callback();
+    }
 }
 
 // Migration function to move data from single-table to dual-table structure
@@ -485,7 +509,12 @@ function populateSampleData(callback) {
             directIO, // direct: 0 or 1
             testSize, // test_size
             syncMode, // sync: 0 or 1
-            iodepth // iodepth
+            iodepth, // iodepth
+            fakeLatency, // avg_latency
+            fakeBandwidth, // bandwidth
+            fakeIops, // iops
+            fakeLatency * 1.25, // p95_latency
+            fakeLatency * 1.5 // p99_latency
         ];
 
         // Insert into test_runs_all first (always succeeds)
@@ -495,8 +524,9 @@ function populateSampleData(callback) {
                 block_size, read_write_pattern, queue_depth, duration, 
                 fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, 
                 usr_cpu, sys_cpu, hostname, protocol, description,
-                output_file, num_jobs, direct, test_size, sync, iodepth
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                output_file, num_jobs, direct, test_size, sync, iodepth,
+                avg_latency, bandwidth, iops, p95_latency, p99_latency
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, testParams, function(err) {
             if (err) {
                 console.error('Error inserting test run to test_runs_all:', err);
@@ -520,8 +550,9 @@ function populateSampleData(callback) {
                     block_size, read_write_pattern, queue_depth, duration, 
                     fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, 
                     usr_cpu, sys_cpu, hostname, protocol, description,
-                    output_file, num_jobs, direct, test_size, sync, iodepth
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    output_file, num_jobs, direct, test_size, sync, iodepth,
+                    avg_latency, bandwidth, iops, p95_latency, p99_latency
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, testParams, function(err) {
                 if (err) {
                     console.error('Error inserting test run to test_runs:', err);
@@ -547,90 +578,15 @@ function populateSampleData(callback) {
 
 // Insert performance metrics and latency percentiles for all test runs
 function insertMetricsForAllTests(testRunIds, testRunIdsAll, callback) {
-    let metricsInserted = 0;
-    const totalMetrics = (testRunIds.length + testRunIdsAll.length) * 4; // ~4 metrics per test run (IOPS, latency, bandwidth, latency percentiles)
-
-    // Insert metrics for test_runs (latest)
-    testRunIds.forEach(testRun => {
-        const { id, data, iops, latency, bandwidth } = testRun;
-
-        // Insert IOPS metric
-        insertMetric(id, 'iops', iops, 'IOPS', data.pattern.includes('read') ? 'read' : 'write', () => {
-            metricsInserted++;
-            checkCompletion();
-        });
-
-        // Insert latency metric
-        insertMetric(id, 'avg_latency', latency, 'ms', data.pattern.includes('read') ? 'read' : 'write', () => {
-            metricsInserted++;
-            checkCompletion();
-        });
-
-        // Insert bandwidth metric
-        insertMetric(id, 'bandwidth', bandwidth, 'MB/s', data.pattern.includes('read') ? 'read' : 'write', () => {
-            metricsInserted++;
-            checkCompletion();
-        });
-
-        // Note: latency percentiles tables removed as they were unused
-    });
-
-    // Insert metrics for test_runs_all (all historical)
-    testRunIdsAll.forEach(testRun => {
-        const { id, data, iops, latency, bandwidth } = testRun;
-
-        // Insert IOPS metric into performance_metrics_all
-        insertMetricAll(id, 'iops', iops, 'IOPS', data.pattern.includes('read') ? 'read' : 'write', () => {
-            metricsInserted++;
-            checkCompletion();
-        });
-
-        // Insert latency metric into performance_metrics_all
-        insertMetricAll(id, 'avg_latency', latency, 'ms', data.pattern.includes('read') ? 'read' : 'write', () => {
-            metricsInserted++;
-            checkCompletion();
-        });
-
-        // Insert bandwidth metric into performance_metrics_all
-        insertMetricAll(id, 'bandwidth', bandwidth, 'MB/s', data.pattern.includes('read') ? 'read' : 'write', () => {
-            metricsInserted++;
-            checkCompletion();
-        });
-
-        // Note: latency percentiles tables removed as they were unused
-    });
-
-    function checkCompletion() {
-        if (metricsInserted >= totalMetrics) {
-            console.log(`Sample data generation complete: ${testRunIds.length} latest test runs, ${testRunIdsAll.length} historical test runs, ~${totalMetrics} metrics`);
-            callback();
-        }
-    }
+    // Since metrics are now stored directly in the main tables, we don't need separate insertion
+    console.log(`Sample data generation complete: ${testRunIds.length} latest test runs, ${testRunIdsAll.length} historical test runs`);
+    console.log('Performance metrics are now stored directly in the main tables');
+    callback();
 }
-
-// Insert a single performance metric into performance_metrics (latest)
-function insertMetric(testRunId, metricType, value, unit, operationType, callback) {
-    db.run(
-        'INSERT INTO performance_metrics (test_run_id, metric_type, value, unit, operation_type) VALUES (?, ?, ?, ?, ?)',
-        [testRunId, metricType, value, unit, operationType],
-        callback
-    );
-}
-
-// Insert a single performance metric into performance_metrics_all (historical)
-function insertMetricAll(testRunId, metricType, value, unit, operationType, callback) {
-    db.run(
-        'INSERT INTO performance_metrics_all (test_run_id, metric_type, value, unit, operation_type) VALUES (?, ?, ?, ?, ?)',
-        [testRunId, metricType, value, unit, operationType],
-        callback
-    );
-}
-
 
 module.exports = {
     initDatabase,
     getDatabase,
     updateLatestFlags,
-    insertMetric,
-    insertMetricAll
+    insertMetricsForAllTests
 };

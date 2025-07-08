@@ -134,7 +134,8 @@ router.get('/all', requireAdmin, (req, res) => {
                block_size, read_write_pattern, queue_depth, duration,
                fio_version, job_runtime, rwmixread, total_ios_read, 
                total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-               output_file, num_jobs, direct, test_size, sync, iodepth, is_latest
+               output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+               avg_latency, bandwidth, iops, p95_latency, p99_latency
         FROM test_runs_all
     `;
 
@@ -559,11 +560,12 @@ router.get('/history', requireAdmin, (req, res) => {
             tr.block_size,
             tr.read_write_pattern,
             tr.queue_depth,
-            pm.metric_type,
-            pm.value,
-            pm.unit
+            tr.avg_latency,
+            tr.bandwidth,
+            tr.iops,
+            tr.p95_latency,
+            tr.p99_latency
         FROM test_runs_all tr
-        JOIN performance_metrics_all pm ON tr.id = pm.test_run_id
         WHERE tr.hostname IS NOT NULL AND tr.protocol IS NOT NULL
     `;
 
@@ -612,11 +614,6 @@ router.get('/history', requireAdmin, (req, res) => {
     if (end_date) {
         query += ' AND tr.timestamp <= ?';
         params.push(end_date);
-    }
-
-    if (metric_type) {
-        query += ' AND pm.metric_type = ?';
-        params.push(metric_type);
     }
 
     if (test_size) {
@@ -770,15 +767,27 @@ router.get('/trends', requireAdmin, (req, res) => {
                 tr.block_size,
                 tr.read_write_pattern,
                 tr.queue_depth,
-                pm.value,
-                pm.unit,
+                CASE 
+                    WHEN ? = 'avg_latency' THEN tr.avg_latency
+                    WHEN ? = 'bandwidth' THEN tr.bandwidth
+                    WHEN ? = 'iops' THEN tr.iops
+                    WHEN ? = 'p95_latency' THEN tr.p95_latency
+                    WHEN ? = 'p99_latency' THEN tr.p99_latency
+                    ELSE NULL
+                END as value,
+                CASE 
+                    WHEN ? = 'avg_latency' THEN 'ms'
+                    WHEN ? = 'bandwidth' THEN 'MB/s'
+                    WHEN ? = 'iops' THEN 'IOPS'
+                    WHEN ? = 'p95_latency' THEN 'ms'
+                    WHEN ? = 'p99_latency' THEN 'ms'
+                    ELSE 'N/A'
+                END as unit,
                 ROW_NUMBER() OVER (ORDER BY tr.timestamp) as rn
             FROM test_runs_all tr
-            JOIN performance_metrics_all pm ON tr.id = pm.test_run_id
             WHERE tr.hostname = ? 
             AND tr.protocol = ?
             AND tr.drive_model = ?
-            AND pm.metric_type = ?
             AND tr.timestamp >= ?
             ${drive_type ? 'AND tr.drive_type = ?' : ''}
             ${block_size ? 'AND tr.block_size = ?' : ''}
@@ -821,7 +830,11 @@ router.get('/trends', requireAdmin, (req, res) => {
     `;
 
     const db = getDatabase();
-    const queryParams = [hostname, protocol, drive_model, metric_type, cutoffDate.toISOString()];
+    const queryParams = [
+        metric_type, metric_type, metric_type, metric_type, metric_type, // For CASE statements
+        metric_type, metric_type, metric_type, metric_type, metric_type, // For unit CASE statements
+        hostname, protocol, drive_model, cutoffDate.toISOString()
+    ];
 
     // Add optional filter parameters
     if (drive_type) queryParams.push(drive_type);

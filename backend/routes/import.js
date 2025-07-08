@@ -400,6 +400,24 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                     iodepth
                 ];
 
+                // Calculate performance metrics from job data
+                const readData = job.read || {};
+                const writeData = job.write || {};
+                
+                // Use read data if available, otherwise write data, otherwise null
+                const avgLatency = (readData.lat_ns?.mean || writeData.lat_ns?.mean) ? 
+                    (readData.lat_ns?.mean || writeData.lat_ns?.mean) / 1000000 : null; // Convert ns to ms
+                const bandwidth = (readData.bw_bytes || writeData.bw_bytes) ? 
+                    (readData.bw_bytes || writeData.bw_bytes) / (1024 * 1024) : null; // Convert to MB/s
+                const iops = readData.iops || writeData.iops || null;
+                const p95Latency = (readData.lat_ns?.percentile?.p95 || writeData.lat_ns?.percentile?.p95) ? 
+                    (readData.lat_ns?.percentile?.p95 || writeData.lat_ns?.percentile?.p95) / 1000000 : null;
+                const p99Latency = (readData.lat_ns?.percentile?.p99 || writeData.lat_ns?.percentile?.p99) ? 
+                    (readData.lat_ns?.percentile?.p99 || writeData.lat_ns?.percentile?.p99) / 1000000 : null;
+
+                // Add performance metrics to insertData
+                const insertDataWithMetrics = [...insertData, avgLatency, bandwidth, iops, p95Latency, p99Latency];
+
                 // Insert test run into latest table with is_latest = 1 (use REPLACE to handle duplicates)
                 const insertTestRun = `
                     INSERT OR REPLACE INTO test_runs 
@@ -407,8 +425,9 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                      read_write_pattern, queue_depth, duration, fio_version, 
                      job_runtime, rwmixread, total_ios_read, total_ios_write, 
                      usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path,
-                     output_file, num_jobs, direct, test_size, sync, iodepth, is_latest)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                     output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                     avg_latency, bandwidth, iops, p95_latency, p99_latency)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
                 `;
 
                 // Insert test run into historical table with is_latest = 1
@@ -418,12 +437,13 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                      read_write_pattern, queue_depth, duration, fio_version, 
                      job_runtime, rwmixread, total_ios_read, total_ios_write, 
                      usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path,
-                     output_file, num_jobs, direct, test_size, sync, iodepth, is_latest)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                     output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                     avg_latency, bandwidth, iops, p95_latency, p99_latency)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
                 `;
 
                 const db = getDatabase();
-                db.run(insertTestRun, [...insertData], function(err) {
+                db.run(insertTestRun, insertDataWithMetrics, function(err) {
                 if (err) {
                     logError('Database insertion failed for job', err, {
                         requestId: req.requestId,
@@ -473,7 +493,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                 const testRunId = this.lastID;
 
                 // Now insert into test_runs_all (historical data)
-                db.run(insertTestRunAll, [...insertData], function(errAll) {
+                db.run(insertTestRunAll, insertDataWithMetrics, function(errAll) {
                     const testRunIdAll = this.lastID;
 
                     if (errAll) {
@@ -506,49 +526,8 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                     importedTestRuns.push(testRunId);
                     successfulDbInserts++;
 
-                    // Insert performance metrics for read operations into both tables
-                    if (job.read && job.read.iops > 0) {
-                        logInfo('Inserting read metrics to both tables', {
-                            requestId: req.requestId,
-                            jobIndex: jobIndex + 1,
-                            testRunId,
-                            testRunIdAll,
-                            readIOPS: job.read.iops,
-                            readLatency: job.read.lat_ns?.mean,
-                            readBandwidth: job.read.bw_bytes,
-                            hardware: {
-                                driveModel: drive_model,
-                                driveType: drive_type,
-                                hostname: hostname || 'unknown',
-                                protocol: protocol || 'unknown'
-                            }
-                        });
-                        insertFioMetrics(testRunId, job.read, 'read'); // Latest table
-                        if (testRunIdAll) insertFioMetricsAll(testRunIdAll, job.read, 'read'); // Historical table
-                    }
-
-                    // Insert performance metrics for write operations into both tables
-                    if (job.write && job.write.iops > 0) {
-                        logInfo('Inserting write metrics to both tables', {
-                            requestId: req.requestId,
-                            jobIndex: jobIndex + 1,
-                            testRunId,
-                            testRunIdAll,
-                            writeIOPS: job.write.iops,
-                            writeLatency: job.write.lat_ns?.mean,
-                            writeBandwidth: job.write.bw_bytes,
-                            hardware: {
-                                driveModel: drive_model,
-                                driveType: drive_type,
-                                hostname: hostname || 'unknown',
-                                protocol: protocol || 'unknown'
-                            }
-                        });
-                        insertFioMetrics(testRunId, job.write, 'write'); // Latest table
-                        if (testRunIdAll) insertFioMetricsAll(testRunIdAll, job.write, 'write'); // Historical table
-                    }
-
-                    // Note: latency percentiles tables removed as they were unused by API endpoints
+                    // Performance metrics are now included in the main INSERT statements
+                    // No need for separate metric insertion
 
                     completedJobs++;
                     if (completedJobs === jobs.length) {
@@ -601,76 +580,28 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
 });
 
 function insertFioMetrics(testRunId, data, operationType) {
-    const metrics = [
-        [testRunId, 'iops', data.iops, 'IOPS', operationType],
-        [testRunId, 'avg_latency', data.lat_ns.mean / 1000000, 'ms', operationType], // Convert ns to ms
-        [testRunId, 'bandwidth', data.bw_bytes / (1024 * 1024), 'MB/s', operationType] // Convert bytes/s to MB/s
-    ];
-
-    metrics.forEach(metric => {
-        insertMetric(metric[0], metric[1], metric[2], metric[3], metric[4], (err) => {
-            if (err) {
-                logError('Error inserting metric', err, {
-                    testRunId,
-                    operationType,
-                    metricType: metric[1],
-                    value: metric[2],
-                    unit: metric[3],
-                    dbOperation: 'INSERT_METRIC',
-                    hardware: {
-                        // Note: We don't have direct access to hardware info here,
-                        // but the parent function logs will show the context
-                        testRunId: testRunId
-                    }
-                });
-            } else {
-                logInfo('Metric inserted successfully', {
-                    testRunId,
-                    operationType,
-                    metricType: metric[1],
-                    value: metric[2],
-                    unit: metric[3],
-                    dbOperation: 'INSERT_METRIC',
-                    success: true
-                });
-            }
-        });
+    // Since metrics are now stored directly in the main table, we don't need separate insertion
+    // The metrics are already included when the test run is inserted
+    logInfo('Metrics are now stored directly in the main table', {
+        testRunId,
+        operationType,
+        iops: data.iops,
+        avg_latency: data.lat_ns.mean / 1000000,
+        bandwidth: data.bw_bytes / (1024 * 1024),
+        dbOperation: 'METRICS_INCLUDED_IN_MAIN_TABLE'
     });
 }
 
 function insertFioMetricsAll(testRunId, data, operationType) {
-    const metrics = [
-        [testRunId, 'iops', data.iops, 'IOPS', operationType],
-        [testRunId, 'avg_latency', data.lat_ns.mean / 1000000, 'ms', operationType], // Convert ns to ms
-        [testRunId, 'bandwidth', data.bw_bytes / (1024 * 1024), 'MB/s', operationType] // Convert bytes/s to MB/s
-    ];
-
-    metrics.forEach(metric => {
-        insertMetricAll(metric[0], metric[1], metric[2], metric[3], metric[4], (err) => {
-            if (err) {
-                logError('Error inserting metric to historical table', err, {
-                    testRunId,
-                    operationType,
-                    metricType: metric[1],
-                    value: metric[2],
-                    unit: metric[3],
-                    dbOperation: 'INSERT_METRIC_ALL',
-                    hardware: {
-                        testRunId: testRunId
-                    }
-                });
-            } else {
-                logInfo('Metric inserted successfully to historical table', {
-                    testRunId,
-                    operationType,
-                    metricType: metric[1],
-                    value: metric[2],
-                    unit: metric[3],
-                    dbOperation: 'INSERT_METRIC_ALL',
-                    success: true
-                });
-            }
-        });
+    // Since metrics are now stored directly in the main table, we don't need separate insertion
+    // The metrics are already included when the test run is inserted
+    logInfo('Metrics are now stored directly in the main table (historical)', {
+        testRunId,
+        operationType,
+        iops: data.iops,
+        avg_latency: data.lat_ns.mean / 1000000,
+        bandwidth: data.bw_bytes / (1024 * 1024),
+        dbOperation: 'METRICS_INCLUDED_IN_MAIN_TABLE_ALL'
     });
 }
 

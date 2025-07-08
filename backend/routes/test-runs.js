@@ -386,7 +386,8 @@ router.get('/', requireAdmin, (req, res) => {
                block_size, read_write_pattern, queue_depth, duration,
                fio_version, job_runtime, rwmixread, total_ios_read, 
                total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-               output_file, num_jobs, direct, test_size, sync, iodepth, is_latest
+               output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+               avg_latency, bandwidth, iops, p95_latency, p99_latency
         FROM test_runs
     `;
 
@@ -566,11 +567,10 @@ router.get('/performance-data', requireAdmin, (req, res) => {
             tr.block_size, tr.read_write_pattern, tr.timestamp, tr.queue_depth,
             tr.hostname, tr.protocol, tr.output_file, tr.num_jobs, tr.direct, 
             tr.test_size, tr.sync, tr.iodepth, tr.duration,
-            pm.metric_type, pm.value, pm.unit, pm.operation_type
+            tr.avg_latency, tr.bandwidth, tr.iops, tr.p95_latency, tr.p99_latency
         FROM test_runs tr
-        JOIN performance_metrics pm ON tr.id = pm.test_run_id
         WHERE tr.id IN (${placeholders})
-        ORDER BY tr.id, pm.metric_type
+        ORDER BY tr.id
     `;
 
     const db = getDatabase();
@@ -584,36 +584,32 @@ router.get('/performance-data', requireAdmin, (req, res) => {
 
         for (const row of rows) {
             const run_id = row.id;
-            if (!data[run_id]) {
-                data[run_id] = {
-                    id: run_id,
-                    drive_model: row.drive_model,
-                    drive_type: row.drive_type,
-                    test_name: row.test_name,
-                    description: row.description,
-                    block_size: row.block_size,
-                    read_write_pattern: row.read_write_pattern,
-                    timestamp: row.timestamp,
-                    queue_depth: row.queue_depth,
-                    hostname: row.hostname,
-                    protocol: row.protocol,
-                    output_file: row.output_file,
-                    num_jobs: row.num_jobs,
-                    direct: row.direct,
-                    test_size: row.test_size,
-                    sync: row.sync,
-                    iodepth: row.iodepth,
-                    duration: row.duration,
-                    metrics: {}
-                };
-            }
-
-            // Create the metric key (e.g., "iops", "avg_latency", "bandwidth")
-            const metricKey = row.metric_type;
-            data[run_id].metrics[metricKey] = {
-                value: row.value,
-                unit: row.unit,
-                operation_type: row.operation_type
+            data[run_id] = {
+                id: run_id,
+                drive_model: row.drive_model,
+                drive_type: row.drive_type,
+                test_name: row.test_name,
+                description: row.description,
+                block_size: row.block_size,
+                read_write_pattern: row.read_write_pattern,
+                timestamp: row.timestamp,
+                queue_depth: row.queue_depth,
+                hostname: row.hostname,
+                protocol: row.protocol,
+                output_file: row.output_file,
+                num_jobs: row.num_jobs,
+                direct: row.direct,
+                test_size: row.test_size,
+                sync: row.sync,
+                iodepth: row.iodepth,
+                duration: row.duration,
+                metrics: {
+                    avg_latency: row.avg_latency ? { value: row.avg_latency, unit: 'ms' } : null,
+                    bandwidth: row.bandwidth ? { value: row.bandwidth, unit: 'MB/s' } : null,
+                    iops: row.iops ? { value: row.iops, unit: 'IOPS' } : null,
+                    p95_latency: row.p95_latency ? { value: row.p95_latency, unit: 'ms' } : null,
+                    p99_latency: row.p99_latency ? { value: row.p99_latency, unit: 'ms' } : null
+                }
             };
         }
 
@@ -680,7 +676,8 @@ router.get('/:id', requireAdmin, (req, res) => {
                block_size, read_write_pattern, queue_depth, duration,
                fio_version, job_runtime, rwmixread, total_ios_read, 
                total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-               output_file, num_jobs, direct, test_size, sync, iodepth, is_latest
+               output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+               avg_latency, bandwidth, iops, p95_latency, p99_latency
         FROM test_runs
         WHERE id = ?
     `;
