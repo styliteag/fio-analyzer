@@ -1043,42 +1043,87 @@ router.put('/bulk', requireAdmin, (req, res) => {
     const placeholders = testRunIds.map(() => '?').join(',');
     const whereValues = testRunIds.map(id => parseInt(id));
 
-    const query = `
+    // Update both test_runs_all and test_runs tables to keep them in sync
+    const updateTestRunsAll = `
         UPDATE test_runs_all 
         SET ${setParts.join(', ')}
         WHERE id IN (${placeholders})
     `;
 
-    db.run(query, [...values, ...whereValues], function(err) {
-        if (err) {
-            logError('Database error in bulk time-series update', err, {
-                requestId: req.requestId,
-                username: req.user.username,
-                action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
-                testRunIds
+    const updateTestRuns = `
+        UPDATE test_runs 
+        SET ${setParts.join(', ')}
+        WHERE id IN (${placeholders})
+    `;
+
+    // Execute both updates in a transaction
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        
+        // Update test_runs_all first
+        db.run(updateTestRunsAll, [...values, ...whereValues], function(err) {
+            if (err) {
+                logError('Database error updating test_runs_all', err, {
+                    requestId: req.requestId,
+                    username: req.user.username,
+                    action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
+                    testRunIds
+                });
+                db.run('ROLLBACK');
+                res.status(500).json({ error: err.message });
+                return;
+            }
+
+            const updatedCountAll = this.changes;
+
+            // Update test_runs
+            db.run(updateTestRuns, [...values, ...whereValues], function(err) {
+                if (err) {
+                    logError('Database error updating test_runs', err, {
+                        requestId: req.requestId,
+                        username: req.user.username,
+                        action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
+                        testRunIds
+                    });
+                    db.run('ROLLBACK');
+                    res.status(500).json({ error: err.message });
+                    return;
+                }
+
+                const updatedCountRuns = this.changes;
+                const totalUpdated = Math.min(updatedCountAll, updatedCountRuns);
+                const failedCount = testRunIds.length - totalUpdated;
+
+                db.run('COMMIT', [], function(err) {
+                    if (err) {
+                        logError('Database error committing transaction', err, {
+                            requestId: req.requestId,
+                            username: req.user.username,
+                            action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
+                            testRunIds
+                        });
+                        res.status(500).json({ error: err.message });
+                        return;
+                    }
+
+                    logInfo('Bulk time-series test run update completed', {
+                        requestId: req.requestId,
+                        username: req.user.username,
+                        action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
+                        requestedCount: testRunIds.length,
+                        updatedCount: totalUpdated,
+                        failedCount,
+                        updatedFields: submittedFields,
+                        newValues: updates
+                    });
+
+                    res.json({
+                        message: `Successfully updated ${totalUpdated} time-series test runs`,
+                        updated: totalUpdated,
+                        failed: failedCount
+                    });
+                });
             });
-            res.status(500).json({ error: err.message });
-            return;
-        }
-
-        const updatedCount = this.changes;
-        const failedCount = testRunIds.length - updatedCount;
-
-        logInfo('Bulk time-series test run update completed', {
-            requestId: req.requestId,
-            username: req.user.username,
-            action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
-            requestedCount: testRunIds.length,
-            updatedCount,
-            failedCount,
-            updatedFields: submittedFields,
-            newValues: updates
-        });
-
-        res.json({
-            message: `Successfully updated ${updatedCount} time-series test runs`,
-            updated: updatedCount,
-            failed: failedCount
         });
     });
 });
