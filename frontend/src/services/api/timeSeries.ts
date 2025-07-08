@@ -118,6 +118,15 @@ export const bulkUpdateTimeSeries = async (testRunIds: number[], updates: Record
     });
 };
 
+// Bulk delete time-series test runs from history
+export const deleteTimeSeriesRuns = async (testRunIds: number[]) => {
+    return apiCall<{ deleted: number; notFound: number }>("/api/time-series/delete", {
+        method: "DELETE",
+        body: JSON.stringify({ testRunIds }),
+        headers: { "Content-Type": "application/json" },
+    });
+};
+
 // Helper to get common time range options
 export const getTimeRangeOptions = () => [
     { label: "Last 24 hours", hours: 24 },

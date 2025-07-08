@@ -314,8 +314,6 @@ router.get('/servers', requireAdmin, (req, res) => {
                 read_write_pattern,
                 block_size,
                 queue_depth
-            HAVING
-                COUNT(*) >= 2
         )
         GROUP BY hostname
         ORDER BY hostname;
@@ -1126,6 +1124,84 @@ router.put('/bulk', requireAdmin, (req, res) => {
             });
         });
     });
+});
+
+/**
+ * @swagger
+ * /api/time-series/delete:
+ *   delete:
+ *     summary: Bulk delete time-series test runs
+ *     description: Delete multiple time-series test runs from history (test_runs_all)
+ *     tags: [Time Series]
+ *     security:
+ *       - basicAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - testRunIds
+ *             properties:
+ *               testRunIds:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                 description: Array of test run IDs to delete
+ *                 example: [1, 2, 3, 4]
+ *     responses:
+ *       200:
+ *         description: Test runs deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 deleted:
+ *                   type: integer
+ *                 notFound:
+ *                   type: integer
+ *       400:
+ *         description: Bad request - Invalid fields or missing data
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
+router.delete('/delete', requireAdmin, (req, res) => {
+    const { testRunIds } = req.body;
+    if (!testRunIds || !Array.isArray(testRunIds) || testRunIds.length === 0) {
+        return res.status(400).json({ error: 'testRunIds array is required and must not be empty' });
+    }
+    const db = getDatabase();
+    const placeholders = testRunIds.map(() => '?').join(',');
+    db.run(
+        `DELETE FROM test_runs_all WHERE id IN (${placeholders})`,
+        testRunIds,
+        function (err) {
+            if (err) {
+                logError('Database error deleting time-series test runs', err, {
+                    requestId: req.requestId,
+                    username: req.user.username,
+                    action: 'DELETE_TIME_SERIES_TEST_RUNS',
+                    testRunIds
+                });
+                return res.status(500).json({ error: err.message });
+            }
+            const deleted = this.changes;
+            const notFound = testRunIds.length - deleted;
+            logInfo('Bulk time-series test run delete completed', {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'DELETE_TIME_SERIES_TEST_RUNS',
+                requestedCount: testRunIds.length,
+                deleted,
+                notFound
+            });
+            res.json({ deleted, notFound });
+        }
+    );
 });
 
 module.exports = router;
