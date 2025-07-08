@@ -314,6 +314,8 @@ router.get('/servers', requireAdmin, (req, res) => {
                 read_write_pattern,
                 block_size,
                 queue_depth
+            HAVING
+                COUNT(*) >= 2
         )
         GROUP BY hostname
         ORDER BY hostname;
@@ -1048,12 +1050,6 @@ router.put('/bulk', requireAdmin, (req, res) => {
         WHERE id IN (${placeholders})
     `;
 
-    const updateTestRuns = `
-        UPDATE test_runs 
-        SET ${setParts.join(', ')}
-        WHERE id IN (${placeholders})
-    `;
-
     // Execute both updates in a transaction
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
@@ -1074,52 +1070,35 @@ router.put('/bulk', requireAdmin, (req, res) => {
 
             const updatedCountAll = this.changes;
 
-            // Update test_runs
-            db.run(updateTestRuns, [...values, ...whereValues], function(err) {
+
+            const updatedCountRuns = this.changes;
+            const totalUpdated = Math.min(updatedCountAll, updatedCountRuns);
+            const failedCount = testRunIds.length - totalUpdated;
+            db.run('COMMIT', [], function(err) {
                 if (err) {
-                    logError('Database error updating test_runs', err, {
+                    logError('Database error committing transaction', err, {
                         requestId: req.requestId,
                         username: req.user.username,
                         action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
                         testRunIds
                     });
-                    db.run('ROLLBACK');
                     res.status(500).json({ error: err.message });
                     return;
                 }
-
-                const updatedCountRuns = this.changes;
-                const totalUpdated = Math.min(updatedCountAll, updatedCountRuns);
-                const failedCount = testRunIds.length - totalUpdated;
-
-                db.run('COMMIT', [], function(err) {
-                    if (err) {
-                        logError('Database error committing transaction', err, {
-                            requestId: req.requestId,
-                            username: req.user.username,
-                            action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
-                            testRunIds
-                        });
-                        res.status(500).json({ error: err.message });
-                        return;
-                    }
-
-                    logInfo('Bulk time-series test run update completed', {
-                        requestId: req.requestId,
-                        username: req.user.username,
-                        action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
-                        requestedCount: testRunIds.length,
-                        updatedCount: totalUpdated,
-                        failedCount,
-                        updatedFields: submittedFields,
-                        newValues: updates
-                    });
-
-                    res.json({
-                        message: `Successfully updated ${totalUpdated} time-series test runs`,
-                        updated: totalUpdated,
-                        failed: failedCount
-                    });
+                logInfo('Bulk time-series test run update completed', {
+                    requestId: req.requestId,
+                    username: req.user.username,
+                    action: 'BULK_UPDATE_TIME_SERIES_TEST_RUNS',
+                    requestedCount: testRunIds.length,
+                    updatedCount: totalUpdated,
+                    failedCount,
+                    updatedFields: submittedFields,
+                    newValues: updates
+                });
+                res.json({
+                    message: `Successfully updated ${totalUpdated} time-series test runs`,
+                    updated: totalUpdated,
+                    failed: failedCount
                 });
             });
         });
