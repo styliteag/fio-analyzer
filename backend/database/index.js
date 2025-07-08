@@ -81,6 +81,43 @@ function updateLatestFlags(testRun, callback) {
 // Database schema initialization
 function initDb() {
     db.serialize(() => {
+        // Create test_runs_all table for all historical data
+        db.run(`
+            CREATE TABLE IF NOT EXISTS test_runs_all (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                test_date TEXT,
+                drive_model TEXT NOT NULL,
+                drive_type TEXT NOT NULL,
+                test_name TEXT NOT NULL,
+                block_size INTEGER NOT NULL,
+                read_write_pattern TEXT NOT NULL,
+                queue_depth INTEGER NOT NULL,
+                duration INTEGER NOT NULL,
+                fio_version TEXT,
+                job_runtime INTEGER,
+                rwmixread INTEGER,
+                total_ios_read INTEGER,
+                total_ios_write INTEGER,
+                usr_cpu REAL,
+                sys_cpu REAL,
+                hostname TEXT,
+                protocol TEXT,
+                description TEXT,
+                uploaded_file_path TEXT,
+                -- Job options fields moved from job_options table
+                output_file TEXT,
+                num_jobs INTEGER,
+                direct INTEGER,
+                test_size TEXT,
+                sync INTEGER,
+                iodepth INTEGER,
+                -- Uniqueness tracking (kept for migration purposes)
+                is_latest INTEGER DEFAULT 1
+            )
+        `);
+
+        // Create test_runs table for latest data only with unique constraints
         db.run(`
             CREATE TABLE IF NOT EXISTS test_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,11 +148,14 @@ function initDb() {
                 test_size TEXT,
                 sync INTEGER,
                 iodepth INTEGER,
-                -- Uniqueness tracking
-                is_latest INTEGER DEFAULT 1
+                -- Uniqueness tracking (always 1 for latest-only table)
+                is_latest INTEGER DEFAULT 1,
+                -- Unique constraint to ensure only one latest entry per configuration
+                UNIQUE(hostname, protocol, drive_type, drive_model, block_size, read_write_pattern, queue_depth, num_jobs, direct, test_size, sync, iodepth, duration)
             )
         `);
 
+        // Create performance_metrics for test_runs (latest data)
         db.run(`
             CREATE TABLE IF NOT EXISTS performance_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,36 +168,74 @@ function initDb() {
             )
         `);
 
-        // Create composite index for uniqueness checks
+        // Create performance_metrics_all for test_runs_all (all historical data)
         db.run(`
-            CREATE INDEX IF NOT EXISTS idx_test_runs_unique_key 
-            ON test_runs (drive_type, drive_model, hostname, protocol, block_size, read_write_pattern, output_file, num_jobs, direct, test_size, sync, iodepth)
+            CREATE TABLE IF NOT EXISTS performance_metrics_all (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_run_id INTEGER NOT NULL,
+                metric_type TEXT NOT NULL,
+                value REAL NOT NULL,
+                unit TEXT NOT NULL,
+                operation_type TEXT,
+                FOREIGN KEY (test_run_id) REFERENCES test_runs_all (id)
+            )
         `);
 
-        // Time-series database optimizations for efficient queries
-        
-        // Index for time-series queries by server (hostname+protocol) and timestamp
+        // Create indexes for test_runs_all (historical data queries)
         db.run(`
-            CREATE INDEX IF NOT EXISTS idx_test_runs_timeseries 
-            ON test_runs (hostname, protocol, timestamp DESC)
+            CREATE INDEX IF NOT EXISTS idx_test_runs_all_timestamp 
+            ON test_runs_all (timestamp DESC)
         `);
-        
-        // Index for time-series queries by server, drive model, and timestamp
+
         db.run(`
-            CREATE INDEX IF NOT EXISTS idx_test_runs_server_drive_time 
-            ON test_runs (hostname, protocol, drive_model, timestamp DESC)
+            CREATE INDEX IF NOT EXISTS idx_test_runs_all_host_protocol_time 
+            ON test_runs_all (hostname, protocol, timestamp DESC)
         `);
-        
-        // Index for performance metrics by test_run_id and metric_type
+
+        db.run(`
+            CREATE INDEX IF NOT EXISTS idx_test_runs_all_config_filter 
+            ON test_runs_all (hostname, protocol, drive_type, drive_model, block_size, read_write_pattern, queue_depth)
+        `);
+
+        // Create indexes for test_runs (latest data queries)
+        db.run(`
+            CREATE INDEX IF NOT EXISTS idx_test_runs_config_lookup 
+            ON test_runs (hostname, protocol, drive_type, drive_model)
+        `);
+
+        // Index for performance metrics by test_run_id and metric_type (both tables)
         db.run(`
             CREATE INDEX IF NOT EXISTS idx_performance_metrics_test_metric 
             ON performance_metrics (test_run_id, metric_type, operation_type)
         `);
         
-        // Index for timestamp-based queries (historical data)
         db.run(`
-            CREATE INDEX IF NOT EXISTS idx_test_runs_timestamp 
-            ON test_runs (timestamp DESC)
+            CREATE INDEX IF NOT EXISTS idx_performance_metrics_all_test_metric 
+            ON performance_metrics_all (test_run_id, metric_type, operation_type)
+        `);
+
+        // Create latency_percentiles table for test_runs (latest data)
+        db.run(`
+            CREATE TABLE IF NOT EXISTS latency_percentiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_run_id INTEGER NOT NULL,
+                operation_type TEXT NOT NULL,
+                percentile REAL NOT NULL,
+                latency_ns INTEGER NOT NULL,
+                FOREIGN KEY (test_run_id) REFERENCES test_runs (id)
+            )
+        `);
+
+        // Create latency_percentiles_all table for test_runs_all (all historical data)
+        db.run(`
+            CREATE TABLE IF NOT EXISTS latency_percentiles_all (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_run_id INTEGER NOT NULL,
+                operation_type TEXT NOT NULL,
+                percentile REAL NOT NULL,
+                latency_ns INTEGER NOT NULL,
+                FOREIGN KEY (test_run_id) REFERENCES test_runs_all (id)
+            )
         `);
         
         // Create view for latest test results per server
@@ -190,20 +268,165 @@ function initDb() {
             WHERE rn = 1
         `);
 
+        // Check if we need to migrate data from old single-table structure
         db.get('SELECT COUNT(*) as count FROM test_runs', (err, row) => {
             if (err) {
                 console.error(err.message);
                 return;
             }
-            if (row.count === 0) {
-                console.log('Populating sample data...');
-                console.log('Estimated data: ~60 test runs with ~300 metrics (reduced for faster startup)');
-                populateSampleData(() => {
+            
+            // Check if test_runs_all is empty (indicates we need migration)
+            db.get('SELECT COUNT(*) as count FROM test_runs_all', (err, allRow) => {
+                if (err) {
+                    console.error(err.message);
+                    return;
+                }
+                
+                if (row.count > 0 && allRow.count === 0) {
+                    console.log('Migrating existing data to new dual-table structure...');
+                    migrateToNewSchema(() => {
+                        showServerReady(8000);
+                    });
+                } else if (row.count === 0 && allRow.count === 0) {
+                    console.log('Populating sample data...');
+                    console.log('Estimated data: ~60 test runs with ~300 metrics (reduced for faster startup)');
+                    populateSampleData(() => {
+                        showServerReady(8000);
+                    });
+                } else {
                     showServerReady(8000);
-                });
-            } else {
-                showServerReady(8000);
+                }
+            });
+        });
+    });
+}
+
+// Migration function to move data from single-table to dual-table structure
+function migrateToNewSchema(callback) {
+    console.log('Starting migration to dual-table structure...');
+    
+    db.serialize(() => {
+        // Step 1: Copy all data from test_runs to test_runs_all
+        db.run(`
+            INSERT INTO test_runs_all 
+            SELECT * FROM test_runs
+        `, (err) => {
+            if (err) {
+                console.error('Error copying data to test_runs_all:', err);
+                return callback();
             }
+            console.log('Copied all test_runs to test_runs_all');
+            
+            // Step 2: Copy all performance_metrics to performance_metrics_all
+            db.run(`
+                INSERT INTO performance_metrics_all 
+                SELECT * FROM performance_metrics
+            `, (err) => {
+                if (err) {
+                    console.error('Error copying performance_metrics:', err);
+                    return callback();
+                }
+                console.log('Copied all performance_metrics to performance_metrics_all');
+                
+                // Step 3: Copy latency_percentiles if they exist
+                db.run(`
+                    INSERT INTO latency_percentiles_all 
+                    SELECT * FROM latency_percentiles
+                `, (err) => {
+                    // Don't fail if latency_percentiles doesn't exist
+                    if (err && !err.message.includes('no such table')) {
+                        console.error('Error copying latency_percentiles:', err);
+                    } else if (!err) {
+                        console.log('Copied all latency_percentiles to latency_percentiles_all');
+                    }
+                    
+                    // Step 4: Clear test_runs and performance_metrics to rebuild with latest only
+                    db.run('DELETE FROM performance_metrics', (err) => {
+                        if (err) {
+                            console.error('Error clearing performance_metrics:', err);
+                            return callback();
+                        }
+                        
+                        db.run('DELETE FROM latency_percentiles', (err) => {
+                            // Don't fail if table doesn't exist
+                            
+                            db.run('DELETE FROM test_runs', (err) => {
+                                if (err) {
+                                    console.error('Error clearing test_runs:', err);
+                                    return callback();
+                                }
+                                
+                                // Step 5: Rebuild test_runs with only latest entries per configuration
+                                rebuildLatestOnlyTables(callback);
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+}
+
+// Rebuild test_runs and related tables with only latest entries
+function rebuildLatestOnlyTables(callback) {
+    console.log('Rebuilding latest-only tables...');
+    
+    // Insert only the latest test run for each unique configuration
+    const query = `
+        INSERT INTO test_runs 
+        SELECT * FROM test_runs_all tr1
+        WHERE tr1.id = (
+            SELECT tr2.id 
+            FROM test_runs_all tr2 
+            WHERE tr2.hostname = tr1.hostname 
+            AND tr2.protocol = tr1.protocol 
+            AND tr2.drive_type = tr1.drive_type 
+            AND tr2.drive_model = tr1.drive_model 
+            AND tr2.block_size = tr1.block_size 
+            AND tr2.read_write_pattern = tr1.read_write_pattern 
+            AND tr2.queue_depth = tr1.queue_depth 
+            AND tr2.num_jobs = tr1.num_jobs 
+            AND tr2.direct = tr1.direct 
+            AND tr2.test_size = tr1.test_size 
+            AND tr2.sync = tr1.sync 
+            AND tr2.iodepth = tr1.iodepth 
+            AND tr2.duration = tr1.duration
+            ORDER BY tr2.timestamp DESC 
+            LIMIT 1
+        )
+    `;
+    
+    db.run(query, (err) => {
+        if (err) {
+            console.error('Error rebuilding test_runs with latest data:', err);
+            return callback();
+        }
+        
+        // Copy corresponding performance metrics
+        db.run(`
+            INSERT INTO performance_metrics 
+            SELECT pma.* FROM performance_metrics_all pma
+            JOIN test_runs tr ON pma.test_run_id = tr.id
+        `, (err) => {
+            if (err) {
+                console.error('Error copying latest performance metrics:', err);
+                return callback();
+            }
+            
+            // Copy corresponding latency percentiles
+            db.run(`
+                INSERT INTO latency_percentiles 
+                SELECT lpa.* FROM latency_percentiles_all lpa
+                JOIN test_runs tr ON lpa.test_run_id = tr.id
+            `, (err) => {
+                // Don't fail if no latency percentiles exist
+                if (err && !err.message.includes('no such table')) {
+                    console.error('Error copying latest latency percentiles:', err);
+                }
+                
+                console.log('Migration to dual-table structure completed successfully!');
+                callback();
+            });
         });
     });
 }
@@ -263,93 +486,124 @@ function populateSampleData(callback) {
         }
     }
 
-    db.serialize(() => {
-        // Insert all test runs first
-        const testRunIds = [];
-        let testRunsInserted = 0;
+    // Process data in a simpler way to avoid statement finalization issues
+    const testRunIds = [];
+    const testRunIdsAll = [];
+    let testRunsInserted = 0;
+    
+    const insertNextTestRun = (index) => {
+        if (index >= testRunsData.length) {
+            console.log('All test runs inserted, now inserting metrics...');
+            insertMetricsForAllTests(testRunIds, testRunIdsAll, callback);
+            return;
+        }
         
-        const stmt = db.prepare(`
-            INSERT INTO test_runs (
+        const data = testRunsData[index];
+        
+        // Calculate realistic test results based on drive type
+        const fakeIops = Math.floor(getBaseIops(data.drive_type, data.pattern, data.block_size) * (0.8 + Math.random() * 0.4));
+        const fakeLatency = getBaseLatency(data.drive_type, data.pattern) * (0.8 + Math.random() * 0.4);
+        const fakeBandwidth = Math.floor(getBaseBandwidth(data.drive_type, data.pattern, data.block_size) * (0.8 + Math.random() * 0.4));
+        
+        // Generate realistic job option values
+        const numJobs = [1, 2, 4, 8][Math.floor(Math.random() * 4)]; // 1, 2, 4, or 8 jobs
+        const directIO = Math.random() > 0.5 ? 1 : 0; // 50% chance of direct IO
+        const syncMode = Math.random() > 0.7 ? 1 : 0; // 30% chance of sync mode
+        const testSizes = ["1M", "10M", "100M", "1G"];
+        const testSize = testSizes[Math.floor(Math.random() * testSizes.length)];
+        const iodepth = [1, 4, 8, 16, 32][Math.floor(Math.random() * 5)]; // Common iodepth values
+        
+        const testParams = [
+            data.timestamp,
+            data.testDate.toISOString(),
+            data.drive_model,
+            data.drive_type,
+            data.test_name,
+            data.block_size,
+            data.pattern,
+            data.queue_depth,
+            30, // duration: 30 seconds
+            "fio-3.28", // fio_version
+            30000, // job_runtime: 30000ms
+            data.pattern.includes('read') ? 100 : 0, // rwmixread
+            data.pattern.includes('read') ? fakeIops * 30 : 0, // total_ios_read
+            data.pattern.includes('write') ? fakeIops * 30 : 0, // total_ios_write
+            5.2 + Math.random() * 3, // usr_cpu: 5-8%
+            2.1 + Math.random() * 2, // sys_cpu: 2-4%
+            data.server.hostname,
+            data.server.protocol,
+            `Simulated ${data.pattern} test on ${data.drive_model} drive`,
+            "testfile.bin", // output_file
+            numJobs, // num_jobs
+            directIO, // direct: 0 or 1
+            testSize, // test_size
+            syncMode, // sync: 0 or 1
+            iodepth // iodepth
+        ];
+        
+        // Insert into test_runs_all first (always succeeds)
+        db.run(`
+            INSERT INTO test_runs_all (
                 timestamp, test_date, drive_model, drive_type, test_name, 
                 block_size, read_write_pattern, queue_depth, duration, 
                 fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, 
                 usr_cpu, sys_cpu, hostname, protocol, description,
                 output_file, num_jobs, direct, test_size, sync, iodepth
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        
-        testRunsData.forEach((data, index) => {
-            // Calculate realistic test results based on drive type
-            const fakeIops = Math.floor(getBaseIops(data.drive_type, data.pattern, data.block_size) * (0.8 + Math.random() * 0.4));
-            const fakeLatency = getBaseLatency(data.drive_type, data.pattern) * (0.8 + Math.random() * 0.4);
-            const fakeBandwidth = Math.floor(getBaseBandwidth(data.drive_type, data.pattern, data.block_size) * (0.8 + Math.random() * 0.4));
+        `, testParams, function(err) {
+            if (err) {
+                console.error('Error inserting test run to test_runs_all:', err);
+                insertNextTestRun(index + 1);
+                return;
+            }
             
-            // Generate realistic job option values
-            const numJobs = [1, 2, 4, 8][Math.floor(Math.random() * 4)]; // 1, 2, 4, or 8 jobs
-            const directIO = Math.random() > 0.5 ? 1 : 0; // 50% chance of direct IO
-            const syncMode = Math.random() > 0.7 ? 1 : 0; // 30% chance of sync mode
-            const testSizes = ["1M", "10M", "100M", "1G"];
-            const testSize = testSizes[Math.floor(Math.random() * testSizes.length)];
-            const iodepth = [1, 4, 8, 16, 32][Math.floor(Math.random() * 5)]; // Common iodepth values
+            const allId = this.lastID;
+            testRunIdsAll.push({
+                id: allId,
+                data: data,
+                iops: fakeIops,
+                latency: fakeLatency,
+                bandwidth: fakeBandwidth
+            });
             
-            stmt.run([
-                data.timestamp,
-                data.testDate.toISOString(),
-                data.drive_model,
-                data.drive_type,
-                data.test_name,
-                data.block_size,
-                data.pattern,
-                data.queue_depth,
-                30, // duration: 30 seconds
-                "fio-3.28", // fio_version
-                30000, // job_runtime: 30000ms
-                data.pattern.includes('read') ? 100 : 0, // rwmixread
-                data.pattern.includes('read') ? fakeIops * 30 : 0, // total_ios_read
-                data.pattern.includes('write') ? fakeIops * 30 : 0, // total_ios_write
-                5.2 + Math.random() * 3, // usr_cpu: 5-8%
-                2.1 + Math.random() * 2, // sys_cpu: 2-4%
-                data.server.hostname,
-                data.server.protocol,
-                `Simulated ${data.pattern} test on ${data.drive_model} drive`,
-                "testfile.bin", // output_file
-                numJobs, // num_jobs
-                directIO, // direct: 0 or 1
-                testSize, // test_size
-                syncMode, // sync: 0 or 1
-                iodepth // iodepth
-            ], function(err) {
+            // Try to insert into test_runs (may fail due to unique constraint)
+            db.run(`
+                INSERT OR REPLACE INTO test_runs (
+                    timestamp, test_date, drive_model, drive_type, test_name, 
+                    block_size, read_write_pattern, queue_depth, duration, 
+                    fio_version, job_runtime, rwmixread, total_ios_read, total_ios_write, 
+                    usr_cpu, sys_cpu, hostname, protocol, description,
+                    output_file, num_jobs, direct, test_size, sync, iodepth
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, testParams, function(err) {
                 if (err) {
-                    console.error('Error inserting test run:', err);
-                    return;
+                    console.error('Error inserting test run to test_runs:', err);
+                } else {
+                    testRunIds.push({
+                        id: this.lastID,
+                        data: data,
+                        iops: fakeIops,
+                        latency: fakeLatency,
+                        bandwidth: fakeBandwidth
+                    });
                 }
                 
-                // Store the test run ID for metrics insertion
-                testRunIds.push({
-                    id: this.lastID,
-                    data: data,
-                    iops: fakeIops,
-                    latency: fakeLatency,
-                    bandwidth: fakeBandwidth
-                });
-                
-                testRunsInserted++;
-                if (testRunsInserted === testRunsData.length) {
-                    insertMetricsForAllTests(testRunIds, callback);
-                }
+                // Continue with next test run
+                insertNextTestRun(index + 1);
             });
         });
-        
-        stmt.finalize();
-    });
+    };
+    
+    // Start the sequential insertion
+    insertNextTestRun(0);
 }
 
 // Insert performance metrics and latency percentiles for all test runs
-function insertMetricsForAllTests(testRunIds, callback) {
+function insertMetricsForAllTests(testRunIds, testRunIdsAll, callback) {
     let metricsInserted = 0;
-    const totalMetrics = testRunIds.length * 4; // ~4 metrics per test run (IOPS, latency, bandwidth, latency percentiles)
+    const totalMetrics = (testRunIds.length + testRunIdsAll.length) * 4; // ~4 metrics per test run (IOPS, latency, bandwidth, latency percentiles)
     
-    // Insert metrics for each test run
+    // Insert metrics for test_runs (latest)
     testRunIds.forEach(testRun => {
         const { id, data, iops, latency, bandwidth } = testRun;
         
@@ -378,18 +632,56 @@ function insertMetricsForAllTests(testRunIds, callback) {
         });
     });
     
+    // Insert metrics for test_runs_all (all historical)
+    testRunIdsAll.forEach(testRun => {
+        const { id, data, iops, latency, bandwidth } = testRun;
+        
+        // Insert IOPS metric into performance_metrics_all
+        insertMetricAll(id, 'iops', iops, 'IOPS', data.pattern.includes('read') ? 'read' : 'write', () => {
+            metricsInserted++;
+            checkCompletion();
+        });
+        
+        // Insert latency metric into performance_metrics_all
+        insertMetricAll(id, 'avg_latency', latency, 'ms', data.pattern.includes('read') ? 'read' : 'write', () => {
+            metricsInserted++;
+            checkCompletion();
+        });
+        
+        // Insert bandwidth metric into performance_metrics_all
+        insertMetricAll(id, 'bandwidth', bandwidth, 'MB/s', data.pattern.includes('read') ? 'read' : 'write', () => {
+            metricsInserted++;
+            checkCompletion();
+        });
+        
+        // Insert latency percentiles into latency_percentiles_all
+        insertLatencyPercentilesAll(id, data.pattern.includes('read') ? 'read' : 'write', latency, () => {
+            metricsInserted++;
+            checkCompletion();
+        });
+    });
+    
     function checkCompletion() {
         if (metricsInserted >= totalMetrics) {
-            console.log(`Sample data generation complete: ${testRunIds.length} test runs, ~${totalMetrics} metrics`);
+            console.log(`Sample data generation complete: ${testRunIds.length} latest test runs, ${testRunIdsAll.length} historical test runs, ~${totalMetrics} metrics`);
             callback();
         }
     }
 }
 
-// Insert a single performance metric
+// Insert a single performance metric into performance_metrics (latest)
 function insertMetric(testRunId, metricType, value, unit, operationType, callback) {
     db.run(
         'INSERT INTO performance_metrics (test_run_id, metric_type, value, unit, operation_type) VALUES (?, ?, ?, ?, ?)',
+        [testRunId, metricType, value, unit, operationType],
+        callback
+    );
+}
+
+// Insert a single performance metric into performance_metrics_all (historical)
+function insertMetricAll(testRunId, metricType, value, unit, operationType, callback) {
+    db.run(
+        'INSERT INTO performance_metrics_all (test_run_id, metric_type, value, unit, operation_type) VALUES (?, ?, ?, ?, ?)',
         [testRunId, metricType, value, unit, operationType],
         callback
     );
@@ -450,10 +742,67 @@ function insertLatencyPercentiles(testRunId, operationType, baseLatency, callbac
     });
 }
 
+// Insert latency percentiles for a test run into latency_percentiles_all (historical)
+function insertLatencyPercentilesAll(testRunId, operationType, baseLatency, callback) {
+    const percentiles = [
+        { percentile: 50.0, multiplier: 1.0 },
+        { percentile: 90.0, multiplier: 1.5 },
+        { percentile: 95.0, multiplier: 2.0 },
+        { percentile: 99.0, multiplier: 3.0 },
+        { percentile: 99.9, multiplier: 5.0 }
+    ];
+    
+    let inserted = 0;
+    let errors = 0;
+    
+    percentiles.forEach(p => {
+        const latencyNs = Math.floor(baseLatency * p.multiplier * 1000000); // Convert ms to ns
+        
+        // Ensure latency is valid
+        if (latencyNs > 0) {
+            db.run(
+                'INSERT INTO latency_percentiles_all (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)',
+                [testRunId, operationType, p.percentile, latencyNs],
+                (err) => {
+                    if (err) {
+                        logError('Error inserting latency percentile to all table', err, {
+                            testRunId,
+                            operationType,
+                            percentile: p.percentile,
+                            latencyNs,
+                            baseLatency
+                        });
+                        errors++;
+                    }
+                    inserted++;
+                    if (inserted === percentiles.length && callback) {
+                        callback(errors > 0 ? new Error(`${errors} percentile insertions failed`) : null);
+                    }
+                }
+            );
+        } else {
+            logWarning('Skipping invalid latency percentile for all table', {
+                testRunId,
+                operationType,
+                percentile: p.percentile,
+                latencyNs,
+                baseLatency,
+                reason: 'invalid_latency'
+            });
+            inserted++;
+            if (inserted === percentiles.length && callback) {
+                callback(errors > 0 ? new Error(`${errors} percentile insertions failed`) : null);
+            }
+        }
+    });
+}
+
 module.exports = {
     initDatabase,
     getDatabase,
     updateLatestFlags,
     insertMetric,
-    insertLatencyPercentiles
+    insertMetricAll,
+    insertLatencyPercentiles,
+    insertLatencyPercentilesAll
 };
