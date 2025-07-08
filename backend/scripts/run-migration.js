@@ -2,13 +2,13 @@
 
 /**
  * Database Migration Script for Dual-Table Architecture
- * 
+ *
  * This script converts the old single-table database structure to the new
  * dual-table architecture that separates latest vs historical data.
- * 
+ *
  * Usage:
  *   node run-migration.js [database-path]
- * 
+ *
  * If no database path is provided, it will use the default location.
  */
 
@@ -116,7 +116,7 @@ class DatabaseMigrator {
     }
 
     async validateMigration() {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve, _reject) => {
             fs.readFile(VALIDATION_SQL_PATH, 'utf8', (err, sql) => {
                 if (err) {
                     console.warn('Validation SQL not found, skipping validation');
@@ -125,7 +125,7 @@ class DatabaseMigrator {
                 }
 
                 console.log('\nRunning migration validation...');
-                
+
                 // Split SQL into individual statements and execute them
                 const statements = sql.split(';').filter(stmt => stmt.trim().length > 0);
                 let currentIndex = 0;
@@ -197,13 +197,13 @@ class DatabaseMigrator {
             console.log('3. Run VACUUM to optimize the database:');
             console.log(`   sqlite3 "${this.dbPath}" "VACUUM;"`);
 
-        } catch (error) {
-            console.error('\n❌ Migration failed:', error.message);
+        } catch (_error) {
+            console.error('\n❌ Migration failed:', _error.message);
             console.error('\nRecommendations:');
             console.error('1. Restore from backup if one was created');
             console.error('2. Check the error message above for specific issues');
             console.error('3. Ensure the database is not in use by another process');
-            throw error;
+            throw _error;
         } finally {
             await this.close();
         }
@@ -213,18 +213,18 @@ class DatabaseMigrator {
 // Main execution
 async function main() {
     const dbPath = process.argv[2];
-    
+
     if (dbPath && !fs.existsSync(dbPath)) {
         console.error(`Error: Database file not found: ${dbPath}`);
         process.exit(1);
     }
 
     const migrator = new DatabaseMigrator(dbPath);
-    
+
     try {
         await migrator.migrate();
         process.exit(0);
-    } catch (error) {
+    } catch {
         console.error('\nMigration failed. Please check the error message above.');
         process.exit(1);
     }

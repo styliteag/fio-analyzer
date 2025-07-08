@@ -1,6 +1,6 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
+// const path = require('path'); // Unused import
+// const fs = require('fs'); // Unused import
 const { getDatabase } = require('../database');
 const { requireAdmin } = require('../auth');
 const { logInfo, logError, requestIdMiddleware } = require('../utils');
@@ -68,9 +68,9 @@ router.get('/filters', requireAdmin, (req, res) => {
         username: req.user.username,
         action: 'GET_FILTER_OPTIONS'
     });
-    
+
     const db = getDatabase();
-    
+
     // Get all unique values for filter dropdowns
     const queries = [
         'SELECT DISTINCT drive_model FROM test_runs WHERE drive_model IS NOT NULL ORDER BY drive_model',
@@ -86,11 +86,11 @@ router.get('/filters', requireAdmin, (req, res) => {
         'SELECT DISTINCT test_size FROM test_runs WHERE test_size IS NOT NULL ORDER BY test_size',
         'SELECT DISTINCT duration FROM test_runs WHERE duration IS NOT NULL ORDER BY duration'
     ];
-    
+
     const results = {};
     const keys = ['drive_models', 'drive_types', 'hostnames', 'protocols', 'block_sizes', 'patterns', 'syncs', 'queue_depths', 'directs', 'num_jobs', 'test_sizes', 'durations'];
     let completed = 0;
-    
+
     queries.forEach((query, index) => {
         db.all(query, [], (err, rows) => {
             if (err) {
@@ -103,10 +103,10 @@ router.get('/filters', requireAdmin, (req, res) => {
                 res.status(500).json({ error: err.message });
                 return;
             }
-            
+
             const fieldName = Object.keys(rows[0] || {})[0];
             results[keys[index]] = rows.map(row => row[fieldName]);
-            
+
             completed++;
             if (completed === queries.length) {
                 logInfo('Filter options retrieved successfully', {
@@ -115,7 +115,7 @@ router.get('/filters', requireAdmin, (req, res) => {
                     action: 'GET_FILTER_OPTIONS',
                     filterCounts: Object.keys(results).map(key => `${key}:${results[key].length}`).join(', ')
                 });
-                
+
                 res.json(results);
             }
         });
@@ -206,9 +206,9 @@ router.delete('/database/clear', requireAdmin, (req, res) => {
         username: req.user.username,
         action: 'CLEAR_DATABASE'
     });
-    
+
     const db = getDatabase();
-    
+
     // Get counts before deletion
     db.get('SELECT COUNT(*) as count FROM test_runs', [], (err, testRunsCount) => {
         if (err) {
@@ -219,7 +219,7 @@ router.delete('/database/clear', requireAdmin, (req, res) => {
             });
             return res.status(500).json({ error: err.message });
         }
-        
+
         db.get('SELECT COUNT(*) as count FROM performance_metrics', [], (err, metricsCount) => {
             if (err) {
                 logError('Error getting metrics count', err, {
@@ -229,7 +229,7 @@ router.delete('/database/clear', requireAdmin, (req, res) => {
                 });
                 return res.status(500).json({ error: err.message });
             }
-            
+
             // Clear tables
             db.serialize(() => {
                 db.run('DELETE FROM performance_metrics');
@@ -243,7 +243,7 @@ router.delete('/database/clear', requireAdmin, (req, res) => {
                         res.status(500).json({ error: err.message });
                         return;
                     }
-                    
+
                     logInfo('Database cleared successfully', {
                         requestId: req.requestId,
                         username: req.user.username,
@@ -253,7 +253,7 @@ router.delete('/database/clear', requireAdmin, (req, res) => {
                             performance_metrics: metricsCount.count
                         }
                     });
-                    
+
                     res.json({
                         message: 'Database cleared successfully',
                         deleted_records: {

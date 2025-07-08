@@ -8,57 +8,31 @@ function generateRequestId() {
 // Enhanced logging functions with structured output
 function logInfo(message, metadata = {}) {
     const timestamp = new Date().toISOString();
-    const logEntry = {
-        timestamp,
-        level: 'INFO',
-        message,
-        ...metadata
-    };
     console.log(`[${timestamp}] INFO  ${message} | ${Object.entries(metadata).map(([k, v]) => `${k}=${v}`).join(' ')}`);
 }
 
 function logError(message, error, metadata = {}) {
     const timestamp = new Date().toISOString();
-    const logEntry = {
-        timestamp,
-        level: 'ERROR',
-        message,
-        error: error?.message || error,
-        stack: error?.stack,
-        ...metadata
-    };
     console.error(`[${timestamp}] ERROR ${message} | error=${error?.message || error} | ${Object.entries(metadata).map(([k, v]) => `${k}=${v}`).join(' ')}`);
 }
 
 function logWarning(message, metadata = {}) {
     const timestamp = new Date().toISOString();
-    const logEntry = {
-        timestamp,
-        level: 'WARN',
-        message,
-        ...metadata
-    };
     console.warn(`[${timestamp}] WARN  ${message} | ${Object.entries(metadata).map(([k, v]) => `${k}=${v}`).join(' ')}`);
 }
 
 function logDebug(message, metadata = {}) {
     const timestamp = new Date().toISOString();
-    const logEntry = {
-        timestamp,
-        level: 'DEBUG',
-        message,
-        ...metadata
-    };
     console.log(`[${timestamp}] DEBUG ${message} | ${Object.entries(metadata).map(([k, v]) => `${k}=${v}`).join(' ')}`);
 }
 
 // Enhanced request logging middleware
-function requestLoggingMiddleware(req, res, next) {
+function requestLoggingMiddleware(req, res, _next) {
     const requestId = generateRequestId();
     req.requestId = requestId;
-    
+
     const startTime = Date.now();
-    
+
     // Log incoming request
     logInfo('Incoming request', {
         requestId,
@@ -68,13 +42,13 @@ function requestLoggingMiddleware(req, res, next) {
         ip: req.ip || req.connection.remoteAddress,
         contentLength: req.get('Content-Length') || 0
     });
-    
+
     // Override res.end to log response
     const originalEnd = res.end;
     res.end = function(chunk, encoding) {
         const duration = Date.now() - startTime;
         const statusCode = res.statusCode;
-        
+
         logInfo('Request completed', {
             requestId,
             method: req.method,
@@ -83,15 +57,15 @@ function requestLoggingMiddleware(req, res, next) {
             duration: `${duration}ms`,
             contentLength: res.get('Content-Length') || 0
         });
-        
+
         originalEnd.call(this, chunk, encoding);
     };
-    
-    next();
+
+    _next();
 }
 
 // Error logging middleware
-function errorLoggingMiddleware(err, req, res, next) {
+function errorLoggingMiddleware(err, req, res, _next) {
     logError('Unhandled error', err, {
         requestId: req.requestId,
         method: req.method,
@@ -99,7 +73,7 @@ function errorLoggingMiddleware(err, req, res, next) {
         userAgent: req.get('User-Agent'),
         ip: req.ip || req.connection.remoteAddress
     });
-    
+
     res.status(500).json({
         error: 'Internal server error',
         requestId: req.requestId
@@ -128,10 +102,10 @@ function calculateUniqueKey(testRun) {
 // Parse block size text to numeric KB value for calculations
 function parseBlockSizeToKB(blockSizeStr) {
     if (!blockSizeStr) return 64; // Default to 64KB
-    
+
     const str = blockSizeStr.toString().toUpperCase();
     const num = parseInt(str);
-    
+
     if (str.includes('M')) {
         return num * 1024; // Convert MB to KB
     } else if (str.includes('K')) {
@@ -148,10 +122,10 @@ function getBaseIops(drive_type, pattern, block_size) {
         "SATA SSD": {"sequential": 50000, "random": 25000},
         "HDD": {"sequential": 200, "random": 100}
     };
-    
+
     const pattern_type = pattern.includes("sequential") ? "sequential" : "random";
     const base = base_values[drive_type][pattern_type];
-    
+
     // Convert text block size to numeric KB value for calculation
     const blockSizeKB = parseBlockSizeToKB(block_size);
     return base * Math.pow(64 / blockSizeKB, 0.5);
@@ -163,7 +137,7 @@ function getBaseLatency(drive_type, pattern) {
         "SATA SSD": {"sequential": 0.5, "random": 1.0},
         "HDD": {"sequential": 5.0, "random": 10.0}
     };
-    
+
     const pattern_type = pattern.includes("sequential") ? "sequential" : "random";
     const base = base_values[drive_type][pattern_type];
     return base; // Base latency doesn't need block size adjustment like IOPS
@@ -175,7 +149,7 @@ function getBaseBandwidth(drive_type, pattern, block_size) {
         "SATA SSD": {"sequential": 500, "random": 250},
         "HDD": {"sequential": 150, "random": 50}
     };
-    
+
     const pattern_type = pattern.includes("sequential") ? "sequential" : "random";
     const base = base_values[drive_type][pattern_type];
     const blockSizeKB = parseBlockSizeToKB(block_size);

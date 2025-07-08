@@ -9,7 +9,7 @@ function parseHtpasswd(filePath) {
         logWarning(`htpasswd file not found`, { filePath });
         return null;
     }
-    
+
     try {
         const content = fs.readFileSync(filePath, 'utf8');
         const users = {};
@@ -22,14 +22,14 @@ function parseHtpasswd(filePath) {
                 }
             }
         });
-        
+
         const userCount = Object.keys(users).length;
-        logInfo('htpasswd file parsed successfully', { 
-            filePath, 
+        logInfo('htpasswd file parsed successfully', {
+            filePath,
             userCount,
             users: Object.keys(users)
         });
-        
+
         return userCount > 0 ? users : null;
     } catch (error) {
         logError('Error reading htpasswd file', error, { filePath });
@@ -45,14 +45,14 @@ function verifyPassword(password, hash) {
         return bcrypt.compareSync(password, hash);
     } else if (hash.startsWith('$apr1$')) {
         // Apache MD5 - not implemented, use bcrypt instead
-        logWarning('Apache MD5 format not supported', { 
-            suggestion: 'Please recreate .htpasswd with bcrypt (-B flag)' 
+        logWarning('Apache MD5 format not supported', {
+            suggestion: 'Please recreate .htpasswd with bcrypt (-B flag)'
         });
         return false;
     } else {
         // Plain text (insecure)
-        logWarning('Using plain text password (insecure)', { 
-            suggestion: 'Please use bcrypt hashed passwords' 
+        logWarning('Using plain text password (insecure)', {
+            suggestion: 'Please use bcrypt hashed passwords'
         });
         return password === hash;
     }
@@ -62,21 +62,21 @@ function verifyPassword(password, hash) {
 function isAdminUser(username, password) {
     const htpasswdUsers = parseHtpasswd(HTPASSWD_PATH);
     if (!htpasswdUsers || !htpasswdUsers[username]) {
-        logInfo('Admin authentication failed', { 
-            username, 
-            reason: !htpasswdUsers ? 'no_htpasswd_file' : 'user_not_found' 
+        logInfo('Admin authentication failed', {
+            username,
+            reason: !htpasswdUsers ? 'no_htpasswd_file' : 'user_not_found'
         });
         return false;
     }
-    
+
     const hash = htpasswdUsers[username];
     const isValid = verifyPassword(password, hash);
-    
-    logInfo('Admin authentication attempt', { 
-        username, 
-        success: isValid 
+
+    logInfo('Admin authentication attempt', {
+        username,
+        success: isValid
     });
-    
+
     return isValid;
 }
 
@@ -84,21 +84,21 @@ function isAdminUser(username, password) {
 function isUploaderUser(username, password) {
     const htuploadersUsers = parseHtpasswd(HTUPLOADERS_PATH);
     if (!htuploadersUsers || !htuploadersUsers[username]) {
-        logInfo('Uploader authentication failed', { 
-            username, 
-            reason: !htuploadersUsers ? 'no_htuploaders_file' : 'user_not_found' 
+        logInfo('Uploader authentication failed', {
+            username,
+            reason: !htuploadersUsers ? 'no_htuploaders_file' : 'user_not_found'
         });
         return false;
     }
-    
+
     const hash = htuploadersUsers[username];
     const isValid = verifyPassword(password, hash);
-    
-    logInfo('Uploader authentication attempt', { 
-        username, 
-        success: isValid 
+
+    logInfo('Uploader authentication attempt', {
+        username,
+        success: isValid
     });
-    
+
     return isValid;
 }
 
@@ -120,21 +120,21 @@ function getUserRole(username, password) {
 // Middleware to require admin access
 function requireAdmin(req, res, next) {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Basic ')) {
-        logInfo('Admin access denied - no auth header', { 
+        logInfo('Admin access denied - no auth header', {
             requestId: req.requestId,
             ip: req.ip || req.connection.remoteAddress,
             userAgent: req.get('User-Agent')
         });
         return res.status(401).json({ error: 'Authentication required' });
     }
-    
+
     const credentials = Buffer.from(authHeader.substring(6), 'base64').toString('utf-8');
     const [username, password] = credentials.split(':');
-    
+
     if (!isAdminUser(username, password)) {
-        logInfo('Admin access denied - invalid credentials', { 
+        logInfo('Admin access denied - invalid credentials', {
             requestId: req.requestId,
             username,
             ip: req.ip || req.connection.remoteAddress,
@@ -142,13 +142,13 @@ function requireAdmin(req, res, next) {
         });
         return res.status(401).json({ error: 'Admin access required' });
     }
-    
-    logInfo('Admin access granted', { 
+
+    logInfo('Admin access granted', {
         requestId: req.requestId,
         username,
         ip: req.ip || req.connection.remoteAddress
     });
-    
+
     req.user = { username, role: 'admin' };
     next();
 }
@@ -156,22 +156,22 @@ function requireAdmin(req, res, next) {
 // Middleware to require any valid user (admin or uploader)
 function requireAuth(req, res, next) {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Basic ')) {
-        logInfo('Authentication denied - no auth header', { 
+        logInfo('Authentication denied - no auth header', {
             requestId: req.requestId,
             ip: req.ip || req.connection.remoteAddress,
             userAgent: req.get('User-Agent')
         });
         return res.status(401).json({ error: 'Authentication required' });
     }
-    
+
     const credentials = Buffer.from(authHeader.substring(6), 'base64').toString('utf-8');
     const [username, password] = credentials.split(':');
-    
+
     const role = getUserRole(username, password);
     if (!role) {
-        logInfo('Authentication denied - invalid credentials', { 
+        logInfo('Authentication denied - invalid credentials', {
             requestId: req.requestId,
             username,
             ip: req.ip || req.connection.remoteAddress,
@@ -179,14 +179,14 @@ function requireAuth(req, res, next) {
         });
         return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
-    logInfo('Authentication successful', { 
+
+    logInfo('Authentication successful', {
         requestId: req.requestId,
         username,
         role,
         ip: req.ip || req.connection.remoteAddress
     });
-    
+
     req.user = { username, role };
     next();
 }

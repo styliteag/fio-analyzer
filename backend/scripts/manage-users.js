@@ -13,15 +13,15 @@ console.log('==========================================\n');
 function getHiddenPassword(prompt) {
   return new Promise((resolve) => {
     process.stdout.write(prompt);
-    
+
     // Check if stdin has setRawMode (TTY)
     if (process.stdin.setRawMode) {
       process.stdin.setRawMode(true);
       process.stdin.resume();
       process.stdin.setEncoding('utf8');
-      
+
       let password = '';
-      
+
       const onData = (char) => {
         switch (char) {
           case '\n':
@@ -49,19 +49,19 @@ function getHiddenPassword(prompt) {
             break;
         }
       };
-      
+
       process.stdin.on('data', onData);
     } else {
       // Fallback for non-TTY environments
       console.log('\n⚠️  Warning: Running in non-TTY mode - password will be visible!');
       console.log('💡 For secure password input, use: docker exec -it fio-app npm run change-password');
       console.log('💡 Or use non-interactive mode: node scripts/change-password.js username password\n');
-      
+
       const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout
       });
-      
+
       rl.question(prompt, (password) => {
         rl.close();
         resolve(password);
@@ -100,10 +100,10 @@ async function main() {
 
       // Get password with hidden input
       password = await getHiddenPassword('New password: ');
-      
+
       if (password && password.length >= 3) {
         const confirmPassword = await getHiddenPassword('Confirm password: ');
-        
+
         if (password !== confirmPassword) {
           console.log('❌ Passwords do not match');
           process.exit(1);
@@ -122,15 +122,15 @@ async function main() {
 
     // Update .htpasswd file while preserving other users
     console.log('📝 Updating .htpasswd file...');
-    
+
     let existingContent = '';
     if (fs.existsSync(HTPASSWD_FILE)) {
       existingContent = fs.readFileSync(HTPASSWD_FILE, 'utf8');
     }
-    
+
     const lines = existingContent.split('\n').filter(line => line.trim() && !line.startsWith('#'));
     const userExists = lines.findIndex(line => line.startsWith(`${username}:`));
-    
+
     if (userExists !== -1) {
       // Update existing user
       lines[userExists] = `${username}:${hashedPassword}`;
@@ -140,7 +140,7 @@ async function main() {
       lines.push(`${username}:${hashedPassword}`);
       console.log(`👤 Added new user '${username}'`);
     }
-    
+
     // Write back to file with preserved structure
     const newContent = lines.join('\n') + '\n';
     fs.writeFileSync(HTPASSWD_FILE, newContent, 'utf8');
@@ -149,7 +149,7 @@ async function main() {
     console.log(`👤 Username: ${username}`);
     console.log('📁 Role: Administrator (full access to all features)');
     console.log('🔄 Restart the application to apply changes.');
-    
+
   } catch (error) {
     console.error('❌ Error changing password:', error.message);
     process.exit(1);

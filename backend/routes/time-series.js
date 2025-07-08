@@ -120,14 +120,14 @@ router.get('/all', requireAdmin, (req, res) => {
         test_sizes: req.query.test_sizes ? req.query.test_sizes.split(',') : [],
         durations: req.query.durations ? req.query.durations.split(',').map(d => parseInt(d)) : []
     };
-    
+
     logInfo('User requesting all historical test runs with filters', {
         requestId: req.requestId,
         username: req.user.username,
         action: 'LIST_ALL_HISTORICAL_TEST_RUNS',
         filters: filters
     });
-    
+
     // Build base query for test_runs_all
     let query = `
         SELECT id, timestamp, drive_model, drive_type, test_name, description,
@@ -137,102 +137,102 @@ router.get('/all', requireAdmin, (req, res) => {
                output_file, num_jobs, direct, test_size, sync, iodepth, is_latest
         FROM test_runs_all
     `;
-    
+
     // Build WHERE conditions (same logic as test-runs endpoint)
     const whereConditions = [];
     const queryParams = [];
-    
+
     // Add hostname filter
     if (filters.hostnames.length > 0) {
         const placeholders = filters.hostnames.map(() => '?').join(',');
         whereConditions.push(`hostname IN (${placeholders})`);
         queryParams.push(...filters.hostnames);
     }
-    
+
     // Add protocol filter
     if (filters.protocols.length > 0) {
         const placeholders = filters.protocols.map(() => '?').join(',');
         whereConditions.push(`protocol IN (${placeholders})`);
         queryParams.push(...filters.protocols);
     }
-    
+
     // Add drive_type filter
     if (filters.drive_types.length > 0) {
         const placeholders = filters.drive_types.map(() => '?').join(',');
         whereConditions.push(`drive_type IN (${placeholders})`);
         queryParams.push(...filters.drive_types);
     }
-    
+
     // Add drive_model filter
     if (filters.drive_models.length > 0) {
         const placeholders = filters.drive_models.map(() => '?').join(',');
         whereConditions.push(`drive_model IN (${placeholders})`);
         queryParams.push(...filters.drive_models);
     }
-    
+
     // Add patterns (read_write_pattern) filter
     if (filters.patterns.length > 0) {
         const placeholders = filters.patterns.map(() => '?').join(',');
         whereConditions.push(`read_write_pattern IN (${placeholders})`);
         queryParams.push(...filters.patterns);
     }
-    
+
     // Add block_sizes filter
     if (filters.block_sizes.length > 0) {
         const placeholders = filters.block_sizes.map(() => '?').join(',');
         whereConditions.push(`block_size IN (${placeholders})`);
         queryParams.push(...filters.block_sizes);
     }
-    
+
     // Add sync filter
     if (filters.syncs.length > 0) {
         const placeholders = filters.syncs.map(() => '?').join(',');
         whereConditions.push(`sync IN (${placeholders})`);
         queryParams.push(...filters.syncs);
     }
-    
+
     // Add queue_depths filter
     if (filters.queue_depths.length > 0) {
         const placeholders = filters.queue_depths.map(() => '?').join(',');
         whereConditions.push(`queue_depth IN (${placeholders})`);
         queryParams.push(...filters.queue_depths);
     }
-    
+
     // Add directs filter
     if (filters.directs.length > 0) {
         const placeholders = filters.directs.map(() => '?').join(',');
         whereConditions.push(`direct IN (${placeholders})`);
         queryParams.push(...filters.directs);
     }
-    
+
     // Add num_jobs filter
     if (filters.num_jobs.length > 0) {
         const placeholders = filters.num_jobs.map(() => '?').join(',');
         whereConditions.push(`num_jobs IN (${placeholders})`);
         queryParams.push(...filters.num_jobs);
     }
-    
+
     // Add test_sizes filter
     if (filters.test_sizes.length > 0) {
         const placeholders = filters.test_sizes.map(() => '?').join(',');
         whereConditions.push(`test_size IN (${placeholders})`);
         queryParams.push(...filters.test_sizes);
     }
-    
+
     // Add durations filter
     if (filters.durations.length > 0) {
         const placeholders = filters.durations.map(() => '?').join(',');
         whereConditions.push(`duration IN (${placeholders})`);
         queryParams.push(...filters.durations);
     }
-    
+
     // Add WHERE clause if there are conditions
     if (whereConditions.length > 0) {
         query += ' WHERE ' + whereConditions.join(' AND ');
     }
-    
+
     query += ` ORDER BY timestamp DESC`;
-    
+
     const db = getDatabase();
     db.all(query, queryParams, (err, rows) => {
         if (err) {
@@ -244,7 +244,7 @@ router.get('/all', requireAdmin, (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+
         logInfo('All historical test runs retrieved successfully', {
             requestId: req.requestId,
             username: req.user.username,
@@ -252,7 +252,7 @@ router.get('/all', requireAdmin, (req, res) => {
             resultCount: rows.length,
             filtersApplied: Object.keys(filters).filter(key => filters[key].length > 0)
         });
-        
+
         res.json(rows);
     });
 });
@@ -286,7 +286,7 @@ router.get('/servers', requireAdmin, (req, res) => {
         username: req.user.username,
         action: 'LIST_TIMESERIES_SERVERS'
     });
-    
+
     const db = getDatabase();
     db.all(`
         SELECT
@@ -328,14 +328,14 @@ router.get('/servers', requireAdmin, (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+
         logInfo('Time-series servers list retrieved successfully', {
             requestId: req.requestId,
             username: req.user.username,
             action: 'LIST_TIMESERIES_SERVERS',
             serverCount: rows.length
         });
-        
+
         res.json(rows);
     });
 });
@@ -369,7 +369,7 @@ router.get('/latest', requireAdmin, (req, res) => {
         username: req.user.username,
         action: 'GET_LATEST_TIMESERIES'
     });
-    
+
     const db = getDatabase();
     db.all(`
         SELECT 
@@ -387,14 +387,14 @@ router.get('/latest', requireAdmin, (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+
         logInfo('Latest time-series data retrieved successfully', {
             requestId: req.requestId,
             username: req.user.username,
             action: 'GET_LATEST_TIMESERIES',
             resultCount: rows.length
         });
-        
+
         res.json(rows);
     });
 });
@@ -541,14 +541,14 @@ router.get('/latest', requireAdmin, (req, res) => {
  */
 router.get('/history', requireAdmin, (req, res) => {
     const { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, start_date, end_date, metric_type, test_size, sync, direct, num_jobs, duration } = req.query;
-    
+
     logInfo('User requesting time-series history', {
         requestId: req.requestId,
         username: req.user.username,
         action: 'GET_TIMESERIES_HISTORY',
         filters: { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, start_date, end_date, metric_type, test_size, sync, direct, num_jobs, duration }
     });
-    
+
     let query = `
         SELECT 
             tr.id as test_run_id,
@@ -566,86 +566,86 @@ router.get('/history', requireAdmin, (req, res) => {
         JOIN performance_metrics_all pm ON tr.id = pm.test_run_id
         WHERE tr.hostname IS NOT NULL AND tr.protocol IS NOT NULL
     `;
-    
+
     const params = [];
-    
+
     if (hostname) {
         query += ' AND tr.hostname = ?';
         params.push(hostname);
     }
-    
+
     if (protocol) {
         query += ' AND tr.protocol = ?';
         params.push(protocol);
     }
-    
+
     if (drive_model) {
         query += ' AND tr.drive_model = ?';
         params.push(drive_model);
     }
-    
+
     if (drive_type) {
         query += ' AND tr.drive_type = ?';
         params.push(drive_type);
     }
-    
+
     if (block_size) {
         query += ' AND tr.block_size = ?';
         params.push(block_size);
     }
-    
+
     if (read_write_pattern) {
         query += ' AND tr.read_write_pattern = ?';
         params.push(read_write_pattern);
     }
-    
+
     if (queue_depth) {
         query += ' AND tr.queue_depth = ?';
         params.push(parseInt(queue_depth));
     }
-    
+
     if (start_date) {
         query += ' AND tr.timestamp >= ?';
         params.push(start_date);
     }
-    
+
     if (end_date) {
         query += ' AND tr.timestamp <= ?';
         params.push(end_date);
     }
-    
+
     if (metric_type) {
         query += ' AND pm.metric_type = ?';
         params.push(metric_type);
     }
-    
+
     if (test_size) {
         query += ' AND tr.test_size = ?';
         params.push(test_size);
     }
-    
+
     if (sync !== undefined && sync !== '') {
         query += ' AND tr.sync = ?';
         params.push(parseInt(sync));
     }
-    
+
     if (direct !== undefined && direct !== '') {
         query += ' AND tr.direct = ?';
         params.push(parseInt(direct));
     }
-    
+
     if (num_jobs) {
         query += ' AND tr.num_jobs = ?';
         params.push(parseInt(num_jobs));
     }
-    
+
     if (duration) {
         query += ' AND tr.duration = ?';
         params.push(parseInt(duration));
     }
-    
+
     query += ' ORDER BY tr.timestamp DESC, tr.hostname, tr.protocol, tr.drive_model';
-    
+
     const db = getDatabase();
     db.all(query, params, (err, rows) => {
         if (err) {
@@ -657,7 +657,7 @@ router.get('/history', requireAdmin, (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+
         logInfo('Time-series history retrieved successfully', {
             requestId: req.requestId,
             username: req.user.username,
@@ -665,7 +665,7 @@ router.get('/history', requireAdmin, (req, res) => {
             resultCount: rows.length,
             appliedFilters: params.length
         });
-        
+
         res.json(rows);
     });
 });
@@ -733,13 +733,13 @@ router.get('/history', requireAdmin, (req, res) => {
  */
 router.get('/trends', requireAdmin, (req, res) => {
     const { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, metric_type, days = 30, test_size, sync, direct, num_jobs, duration } = req.query;
-    
+
     if (!hostname || !protocol || !drive_model || !metric_type) {
-        return res.status(400).json({ 
-            error: 'hostname, protocol, drive_model, and metric_type are required' 
+        return res.status(400).json({
+            error: 'hostname, protocol, drive_model, and metric_type are required'
         });
     }
-    
+
     logInfo('User requesting trend analysis', {
         requestId: req.requestId,
         username: req.user.username,
@@ -759,10 +759,10 @@ router.get('/trends', requireAdmin, (req, res) => {
         num_jobs,
         duration
     });
-    
+
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - parseInt(days));
-    
+
     const query = `
         WITH ordered_data AS (
             SELECT 
@@ -819,10 +819,10 @@ router.get('/trends', requireAdmin, (req, res) => {
         FROM with_prev_value
         ORDER BY timestamp
     `;
-    
+
     const db = getDatabase();
     const queryParams = [hostname, protocol, drive_model, metric_type, cutoffDate.toISOString()];
-    
+
     // Add optional filter parameters
     if (drive_type) queryParams.push(drive_type);
     if (block_size) queryParams.push(block_size);
@@ -833,7 +833,7 @@ router.get('/trends', requireAdmin, (req, res) => {
     if (direct !== undefined && direct !== '') queryParams.push(parseInt(direct));
     if (num_jobs) queryParams.push(parseInt(num_jobs));
     if (duration) queryParams.push(parseInt(duration));
-    
+
     db.all(query, queryParams, (err, rows) => {
         if (err) {
             logError('Database error fetching trend analysis', err, {
@@ -844,7 +844,7 @@ router.get('/trends', requireAdmin, (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+
         logInfo('Trend analysis retrieved successfully', {
             requestId: req.requestId,
             username: req.user.username,
@@ -852,7 +852,7 @@ router.get('/trends', requireAdmin, (req, res) => {
             resultCount: rows.length,
             analysisParams: { hostname, protocol, drive_model, drive_type, block_size, read_write_pattern, queue_depth, metric_type, days, test_size, sync, direct, num_jobs, duration }
         });
-        
+
         res.json(rows);
     });
 });

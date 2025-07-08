@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { getDatabase, updateLatestFlags, insertMetric, insertMetricAll, insertLatencyPercentiles, insertLatencyPercentilesAll } = require('../database');
+const { getDatabase, updateLatestFlags, insertMetric, insertMetricAll } = require('../database');
 const { requireAuth } = require('../auth');
 const { logInfo, logError, logWarning, requestIdMiddleware } = require('../utils');
 
@@ -599,15 +599,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                         if (testRunIdAll) insertFioMetricsAll(testRunIdAll, job.write, 'write'); // Historical table
                     }
 
-                    // Insert latency percentiles into both tables
-                    if (job.read?.clat_ns?.percentile) {
-                        insertLatencyPercentiles(testRunId, 'read', job.read.lat_ns.mean / 1000000, () => {}); // Latest table
-                        if (testRunIdAll) insertLatencyPercentilesAll(testRunIdAll, 'read', job.read.lat_ns.mean / 1000000, () => {}); // Historical table
-                    }
-                    if (job.write?.clat_ns?.percentile) {
-                        insertLatencyPercentiles(testRunId, 'write', job.write.lat_ns.mean / 1000000, () => {}); // Latest table
-                        if (testRunIdAll) insertLatencyPercentilesAll(testRunIdAll, 'write', job.write.lat_ns.mean / 1000000, () => {}); // Historical table
-                    }
+                    // Note: latency percentiles tables removed as they were unused by API endpoints
 
                     completedJobs++;
                     if (completedJobs === jobs.length) {
@@ -667,7 +659,6 @@ function insertFioMetrics(testRunId, data, operationType) {
         [testRunId, 'bandwidth', data.bw_bytes / (1024 * 1024), 'MB/s', operationType] // Convert bytes/s to MB/s
     ];
 
-    const db = getDatabase();
     metrics.forEach(metric => {
         insertMetric(metric[0], metric[1], metric[2], metric[3], metric[4], (err) => {
             if (err) {
@@ -706,7 +697,6 @@ function insertFioMetricsAll(testRunId, data, operationType) {
         [testRunId, 'bandwidth', data.bw_bytes / (1024 * 1024), 'MB/s', operationType] // Convert bytes/s to MB/s
     ];
 
-    const db = getDatabase();
     metrics.forEach(metric => {
         insertMetricAll(metric[0], metric[1], metric[2], metric[3], metric[4], (err) => {
             if (err) {

@@ -1,28 +1,28 @@
 const express = require('express');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const { getDatabase, updateLatestFlags, insertMetric, insertLatencyPercentiles } = require('../database');
-const { requireAdmin, requireAuth } = require('../auth');
+// const multer = require('multer'); // Unused import
+// const path = require('path'); // Unused import
+// const fs = require('fs'); // Unused import
+const { getDatabase } = require('../database');
+const { requireAdmin } = require('../auth');
 const { logInfo, logError, logWarning, requestIdMiddleware } = require('../utils');
 
 const router = express.Router();
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const uploadPath = path.join(__dirname, '..', 'uploads');
-        if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath, { recursive: true });
-        }
-        cb(null, uploadPath);
-    },
-    filename: function (req, file, cb) {
-        cb(null, `${Date.now()}-${file.originalname}`);
-    }
-});
+// Configure multer for file uploads (unused)
+// const storage = multer.diskStorage({
+//     destination: function (req, file, cb) {
+//         const uploadPath = path.join(__dirname, '..', 'uploads');
+//         if (!fs.existsSync(uploadPath)) {
+//             fs.mkdirSync(uploadPath, { recursive: true });
+//         }
+//         cb(null, uploadPath);
+//     },
+//     filename: function (req, file, cb) {
+//         cb(null, `${Date.now()}-${file.originalname}`);
+//     }
+// });
 
-const upload = multer({ storage: storage });
+// const upload = multer({ storage: storage }); // Unused variable
 
 // Apply request ID middleware to all routes
 router.use(requestIdMiddleware);
@@ -105,20 +105,20 @@ router.use(requestIdMiddleware);
  */
 router.put('/bulk', requireAdmin, (req, res) => {
     const { testRunIds, updates } = req.body;
-    
+
     // Validate required fields
     if (!testRunIds || !Array.isArray(testRunIds) || testRunIds.length === 0) {
         return res.status(400).json({ error: 'testRunIds array is required and must not be empty' });
     }
-    
+
     if (!updates || typeof updates !== 'object') {
         return res.status(400).json({ error: 'updates object is required' });
     }
-    
+
     // Define allowed fields for validation
     const allowedFields = ['description', 'test_name', 'hostname', 'protocol', 'drive_type', 'drive_model'];
     const submittedFields = Object.keys(updates);
-    
+
     // Check for invalid fields
     const invalidFields = submittedFields.filter(field => !allowedFields.includes(field));
     if (invalidFields.length > 0) {
@@ -128,11 +128,11 @@ router.put('/bulk', requireAdmin, (req, res) => {
             testRunIds,
             invalidFields
         });
-        return res.status(400).json({ 
-            error: `Invalid fields: ${invalidFields.join(', ')}. Allowed fields: ${allowedFields.join(', ')}` 
+        return res.status(400).json({
+            error: `Invalid fields: ${invalidFields.join(', ')}. Allowed fields: ${allowedFields.join(', ')}`
         });
     }
-    
+
     // Simple validation
     const validation = {
         hostname: { maxLength: 255 },
@@ -142,15 +142,15 @@ router.put('/bulk', requireAdmin, (req, res) => {
         drive_type: { maxLength: 100 },
         drive_model: { maxLength: 255 }
     };
-    
+
     for (const [field, value] of Object.entries(updates)) {
         if (value && validation[field] && value.length > validation[field].maxLength) {
-            return res.status(400).json({ 
-                error: `Field '${field}' exceeds maximum length of ${validation[field].maxLength} characters` 
+            return res.status(400).json({
+                error: `Field '${field}' exceeds maximum length of ${validation[field].maxLength} characters`
             });
         }
     }
-    
+
     logInfo('Admin bulk updating test runs', {
         requestId: req.requestId,
         username: req.user.username,
@@ -160,13 +160,13 @@ router.put('/bulk', requireAdmin, (req, res) => {
         updatedFields: submittedFields,
         changes: updates
     });
-    
+
     const db = getDatabase();
-    
+
     // Build dynamic SQL for only the fields being updated
     const setParts = [];
     const values = [];
-    
+
     if (updates.description !== undefined) {
         setParts.push('description = ?');
         values.push(updates.description);
@@ -191,21 +191,21 @@ router.put('/bulk', requireAdmin, (req, res) => {
         setParts.push('drive_model = ?');
         values.push(updates.drive_model);
     }
-    
+
     if (setParts.length === 0) {
         return res.status(400).json({ error: 'No valid fields to update' });
     }
-    
+
     // Create placeholders for WHERE IN clause
     const placeholders = testRunIds.map(() => '?').join(',');
     const whereValues = testRunIds.map(id => parseInt(id));
-    
+
     const query = `
         UPDATE test_runs 
         SET ${setParts.join(', ')}
         WHERE id IN (${placeholders})
     `;
-    
+
     db.run(query, [...values, ...whereValues], function(err) {
         if (err) {
             logError('Database error in bulk update', err, {
@@ -217,10 +217,10 @@ router.put('/bulk', requireAdmin, (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+
         const updatedCount = this.changes;
         const failedCount = testRunIds.length - updatedCount;
-        
+
         logInfo('Bulk test run update completed', {
             requestId: req.requestId,
             username: req.user.username,
@@ -231,8 +231,8 @@ router.put('/bulk', requireAdmin, (req, res) => {
             updatedFields: submittedFields,
             newValues: updates
         });
-        
-        res.json({ 
+
+        res.json({
             message: `Successfully updated ${updatedCount} test runs`,
             updated: updatedCount,
             failed: failedCount
@@ -372,14 +372,14 @@ router.get('/', requireAdmin, (req, res) => {
         test_sizes: req.query.test_sizes ? req.query.test_sizes.split(',') : [],
         durations: req.query.durations ? req.query.durations.split(',').map(d => parseInt(d)) : []
     };
-    
+
     logInfo('User requesting latest test runs list with filters', {
         requestId: req.requestId,
         username: req.user.username,
         action: 'LIST_LATEST_TEST_RUNS',
         filters: filters
     });
-    
+
     // Build base query
     let query = `
         SELECT id, timestamp, drive_model, drive_type, test_name, description,
@@ -389,102 +389,102 @@ router.get('/', requireAdmin, (req, res) => {
                output_file, num_jobs, direct, test_size, sync, iodepth, is_latest
         FROM test_runs
     `;
-    
+
     // Build WHERE conditions
     const whereConditions = [];
     const queryParams = [];
-    
+
     // Add hostname filter
     if (filters.hostnames.length > 0) {
         const placeholders = filters.hostnames.map(() => '?').join(',');
         whereConditions.push(`hostname IN (${placeholders})`);
         queryParams.push(...filters.hostnames);
     }
-    
+
     // Add protocol filter
     if (filters.protocols.length > 0) {
         const placeholders = filters.protocols.map(() => '?').join(',');
         whereConditions.push(`protocol IN (${placeholders})`);
         queryParams.push(...filters.protocols);
     }
-    
+
     // Add drive_type filter
     if (filters.drive_types.length > 0) {
         const placeholders = filters.drive_types.map(() => '?').join(',');
         whereConditions.push(`drive_type IN (${placeholders})`);
         queryParams.push(...filters.drive_types);
     }
-    
+
     // Add drive_model filter
     if (filters.drive_models.length > 0) {
         const placeholders = filters.drive_models.map(() => '?').join(',');
         whereConditions.push(`drive_model IN (${placeholders})`);
         queryParams.push(...filters.drive_models);
     }
-    
+
     // Add patterns (read_write_pattern) filter
     if (filters.patterns.length > 0) {
         const placeholders = filters.patterns.map(() => '?').join(',');
         whereConditions.push(`read_write_pattern IN (${placeholders})`);
         queryParams.push(...filters.patterns);
     }
-    
+
     // Add block_sizes filter (handle both string and numeric values)
     if (filters.block_sizes.length > 0) {
         const placeholders = filters.block_sizes.map(() => '?').join(',');
         whereConditions.push(`block_size IN (${placeholders})`);
         queryParams.push(...filters.block_sizes);
     }
-    
+
     // Add sync filter
     if (filters.syncs.length > 0) {
         const placeholders = filters.syncs.map(() => '?').join(',');
         whereConditions.push(`sync IN (${placeholders})`);
         queryParams.push(...filters.syncs);
     }
-    
+
     // Add queue_depths filter
     if (filters.queue_depths.length > 0) {
         const placeholders = filters.queue_depths.map(() => '?').join(',');
         whereConditions.push(`queue_depth IN (${placeholders})`);
         queryParams.push(...filters.queue_depths);
     }
-    
+
     // Add directs filter
     if (filters.directs.length > 0) {
         const placeholders = filters.directs.map(() => '?').join(',');
         whereConditions.push(`direct IN (${placeholders})`);
         queryParams.push(...filters.directs);
     }
-    
+
     // Add num_jobs filter
     if (filters.num_jobs.length > 0) {
         const placeholders = filters.num_jobs.map(() => '?').join(',');
         whereConditions.push(`num_jobs IN (${placeholders})`);
         queryParams.push(...filters.num_jobs);
     }
-    
+
     // Add test_sizes filter
     if (filters.test_sizes.length > 0) {
         const placeholders = filters.test_sizes.map(() => '?').join(',');
         whereConditions.push(`test_size IN (${placeholders})`);
         queryParams.push(...filters.test_sizes);
     }
-    
+
     // Add durations filter
     if (filters.durations.length > 0) {
         const placeholders = filters.durations.map(() => '?').join(',');
         whereConditions.push(`duration IN (${placeholders})`);
         queryParams.push(...filters.durations);
     }
-    
+
     // Add WHERE clause if there are conditions
     if (whereConditions.length > 0) {
         query += ' WHERE ' + whereConditions.join(' AND ');
     }
-    
+
     query += ` ORDER BY timestamp DESC`;
-    
+
     const db = getDatabase();
     db.all(query, queryParams, (err, rows) => {
         if (err) {
@@ -496,7 +496,7 @@ router.get('/', requireAdmin, (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+
         logInfo('Latest test runs list retrieved successfully', {
             requestId: req.requestId,
             username: req.user.username,
@@ -504,7 +504,7 @@ router.get('/', requireAdmin, (req, res) => {
             resultCount: rows.length,
             filtersApplied: Object.keys(filters).filter(key => filters[key].length > 0)
         });
-        
+
         res.json(rows);
     });
 });
@@ -581,7 +581,7 @@ router.get('/performance-data', requireAdmin, (req, res) => {
         }
 
         const data = {};
-        
+
         for (const row of rows) {
             const run_id = row.id;
             if (!data[run_id]) {
@@ -607,7 +607,7 @@ router.get('/performance-data', requireAdmin, (req, res) => {
                     metrics: {}
                 };
             }
-            
+
             // Create the metric key (e.g., "iops", "avg_latency", "bandwidth")
             const metricKey = row.metric_type;
             data[run_id].metrics[metricKey] = {
@@ -616,7 +616,7 @@ router.get('/performance-data', requireAdmin, (req, res) => {
                 operation_type: row.operation_type
             };
         }
-        
+
         const responseData = Object.values(data);
         res.json(responseData);
     });
@@ -667,14 +667,14 @@ router.get('/performance-data', requireAdmin, (req, res) => {
  */
 router.get('/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
-    
+
     logInfo('User requesting single test run', {
         requestId: req.requestId,
         username: req.user.username,
         action: 'GET_TEST_RUN',
         testRunId: id
     });
-    
+
     const query = `
         SELECT id, timestamp, drive_model, drive_type, test_name, description,
                block_size, read_write_pattern, queue_depth, duration,
@@ -684,7 +684,7 @@ router.get('/:id', requireAdmin, (req, res) => {
         FROM test_runs
         WHERE id = ?
     `;
-    
+
     const db = getDatabase();
     db.get(query, [parseInt(id)], (err, row) => {
         if (err) {
@@ -697,7 +697,7 @@ router.get('/:id', requireAdmin, (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+
         if (!row) {
             logWarning('Test run not found', {
                 requestId: req.requestId,
@@ -707,14 +707,14 @@ router.get('/:id', requireAdmin, (req, res) => {
             });
             return res.status(404).json({ error: 'Test run not found' });
         }
-        
+
         logInfo('Test run retrieved successfully', {
             requestId: req.requestId,
             username: req.user.username,
             action: 'GET_TEST_RUN',
             testRunId: id
         });
-        
+
         res.json(row);
     });
 });
@@ -788,11 +788,11 @@ router.get('/:id', requireAdmin, (req, res) => {
 router.put('/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
     const { description, test_name, hostname, protocol, drive_type, drive_model } = req.body;
-    
+
     // Define allowed fields for validation
     const allowedFields = ['description', 'test_name', 'hostname', 'protocol', 'drive_type', 'drive_model'];
     const submittedFields = Object.keys(req.body);
-    
+
     // Check for invalid fields
     const invalidFields = submittedFields.filter(field => !allowedFields.includes(field));
     if (invalidFields.length > 0) {
@@ -802,11 +802,11 @@ router.put('/:id', requireAdmin, (req, res) => {
             testRunId: id,
             invalidFields
         });
-        return res.status(400).json({ 
-            error: `Invalid fields: ${invalidFields.join(', ')}. Allowed fields: ${allowedFields.join(', ')}` 
+        return res.status(400).json({
+            error: `Invalid fields: ${invalidFields.join(', ')}. Allowed fields: ${allowedFields.join(', ')}`
         });
     }
-    
+
     // Simple validation
     const validation = {
         hostname: { maxLength: 255 },
@@ -816,15 +816,15 @@ router.put('/:id', requireAdmin, (req, res) => {
         drive_type: { maxLength: 100 },
         drive_model: { maxLength: 255 }
     };
-    
+
     for (const [field, value] of Object.entries(req.body)) {
         if (value && validation[field] && value.length > validation[field].maxLength) {
-            return res.status(400).json({ 
-                error: `Field '${field}' exceeds maximum length of ${validation[field].maxLength} characters` 
+            return res.status(400).json({
+                error: `Field '${field}' exceeds maximum length of ${validation[field].maxLength} characters`
             });
         }
     }
-    
+
     logInfo('Admin updating test run fields', {
         requestId: req.requestId,
         username: req.user.username,
@@ -833,7 +833,7 @@ router.put('/:id', requireAdmin, (req, res) => {
         updatedFields: submittedFields,
         changes: req.body
     });
-    
+
     const db = getDatabase();
     db.run(`
         UPDATE test_runs 
@@ -855,7 +855,7 @@ router.put('/:id', requireAdmin, (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+
         if (this.changes === 0) {
             logWarning('Test run not found for update', {
                 requestId: req.requestId,
@@ -865,7 +865,7 @@ router.put('/:id', requireAdmin, (req, res) => {
             });
             return res.status(404).json({ error: 'Test run not found' });
         }
-        
+
         logInfo('Test run updated successfully', {
             requestId: req.requestId,
             username: req.user.username,
@@ -875,7 +875,7 @@ router.put('/:id', requireAdmin, (req, res) => {
             updatedFields: submittedFields,
             newValues: req.body
         });
-        
+
         res.json({ message: 'Test run updated successfully' });
     });
 });
@@ -917,16 +917,16 @@ router.put('/:id', requireAdmin, (req, res) => {
  */
 router.delete('/:id', requireAdmin, (req, res) => {
     const { id } = req.params;
-    
+
     logInfo('User deleting test run', {
         requestId: req.requestId,
         username: req.user.username,
         action: 'DELETE_TEST_RUN',
         testRunId: id
     });
-    
+
     const db = getDatabase();
-    
+
     // Delete performance_metrics then test_runs
     db.serialize(() => {
         db.run('DELETE FROM performance_metrics WHERE test_run_id = ?', [parseInt(id)], (err) => {
@@ -939,7 +939,7 @@ router.delete('/:id', requireAdmin, (req, res) => {
                 });
                 return res.status(500).json({ error: err.message });
             }
-            
+
             db.run('DELETE FROM test_runs WHERE id = ?', [parseInt(id)], function(err) {
                 if (err) {
                     logError('Error deleting test run', err, {
@@ -950,7 +950,7 @@ router.delete('/:id', requireAdmin, (req, res) => {
                     });
                     return res.status(500).json({ error: err.message });
                 }
-                
+
                 if (this.changes === 0) {
                     logWarning('Test run not found for deletion', {
                         requestId: req.requestId,
@@ -960,14 +960,14 @@ router.delete('/:id', requireAdmin, (req, res) => {
                     });
                     return res.status(404).json({ error: 'Test run not found' });
                 }
-                
+
                 logInfo('Test run deleted successfully', {
                     requestId: req.requestId,
                     username: req.user.username,
                     action: 'DELETE_TEST_RUN',
                     testRunId: id
                 });
-                
+
                 res.json({ message: 'Test run deleted successfully' });
             });
         });

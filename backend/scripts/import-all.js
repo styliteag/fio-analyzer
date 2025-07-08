@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { initDatabase } = require('../database');
-const { logInfo, logError, logWarning, generateRequestId } = require('../utils');
+const { logInfo, logError, generateRequestId } = require('../utils');
 const { processFioFile, discoverUploadedFiles } = require('./import-utils');
 
 /**
@@ -124,14 +124,14 @@ async function main() {
 
         // Discover uploaded files
         console.log(`🔍 Discovering files in ${options.uploadsDir}...`);
-        
+
         if (!fs.existsSync(options.uploadsDir)) {
             console.error(`❌ Error: Uploads directory does not exist: ${options.uploadsDir}`);
             process.exit(1);
         }
 
         const filePairs = await discoverUploadedFiles(options.uploadsDir);
-        
+
         if (filePairs.length === 0) {
             console.log('📭 No FIO JSON files found to import.');
             process.exit(0);
@@ -178,16 +178,16 @@ async function main() {
             const pair = filePairs[i];
             const fileNumber = i + 1;
             const relativePath = path.relative(options.uploadsDir, pair.jsonPath);
-            
+
             try {
                 // Get file size for statistics
                 const fileStats = fs.statSync(pair.jsonPath);
                 totalFileSize += fileStats.size;
 
                 const fileStartTime = Date.now();
-                
+
                 console.log(`[${fileNumber}/${filePairs.length}] 🔄 Processing: ${relativePath}`);
-                
+
                 if (options.verbose) {
                     console.log(`    Drive: ${pair.metadata.drive_model} (${pair.metadata.drive_type})`);
                     console.log(`    Server: ${pair.metadata.hostname || 'unknown'} (${pair.metadata.protocol || 'unknown'})`);
@@ -209,7 +209,7 @@ async function main() {
                     totalErrors += result.errorCount;
 
                     console.log(`[${fileNumber}/${filePairs.length}] ✅ Completed: ${relativePath}`);
-                    
+
                     if (options.verbose || result.skipCount > 0 || result.errorCount > 0) {
                         console.log(`    Jobs: ${result.successCount} imported, ${result.skipCount} skipped, ${result.errorCount} errors`);
                         console.log(`    Processing time: ${formatDuration(fileProcessingTime)}`);
@@ -219,7 +219,7 @@ async function main() {
                     console.log(`[${fileNumber}/${filePairs.length}] ❌ Failed: ${relativePath}`);
                     console.log(`    Error: ${result.error}`);
                 }
-                
+
                 totalProcessed++;
 
                 // Add small delay to prevent overwhelming the database
@@ -230,10 +230,10 @@ async function main() {
             } catch (error) {
                 totalErrors++;
                 totalProcessed++;
-                
+
                 console.log(`[${fileNumber}/${filePairs.length}] ❌ Error: ${relativePath}`);
                 console.log(`    ${error.message}`);
-                
+
                 logError('File processing failed', error, {
                     requestId,
                     filePath: pair.jsonPath,
@@ -244,7 +244,7 @@ async function main() {
 
         // Final summary
         const totalTime = Date.now() - startTime;
-        
+
         console.log(`
 📊 Import Summary
 ================
@@ -278,16 +278,16 @@ Processing time:     ${formatDuration(totalTime)}
 
     } catch (error) {
         const totalTime = Date.now() - startTime;
-        
+
         console.error(`\n❌ Import failed: ${error.message}`);
-        
+
         logError('Bulk import failed', error, {
             requestId,
             totalTime: `${totalTime}ms`,
             uploadsDir: options.uploadsDir,
             overwrite: options.overwrite
         });
-        
+
         process.exit(1);
     }
 }

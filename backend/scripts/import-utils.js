@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { getDatabase, updateLatestFlags, insertMetric, insertLatencyPercentiles } = require('../database');
+const { getDatabase, updateLatestFlags, insertMetric } = require('../database');
 const { logInfo, logError, logWarning, calculateUniqueKey } = require('../utils');
 
 /**
@@ -17,7 +17,7 @@ async function checkFileExistsInDb(testRunData) {
     return new Promise((resolve, reject) => {
         const uniqueKey = calculateUniqueKey(testRunData);
         const db = getDatabase();
-        
+
         const query = `
             SELECT id FROM test_runs 
             WHERE drive_type = ? AND drive_model = ? AND hostname = ? AND protocol = ? 
@@ -25,7 +25,7 @@ async function checkFileExistsInDb(testRunData) {
             AND direct = ? AND test_size = ? AND sync = ? AND iodepth = ?
             LIMIT 1
         `;
-        
+
         const params = [
             testRunData.drive_type || null,
             testRunData.drive_model || null,
@@ -40,7 +40,7 @@ async function checkFileExistsInDb(testRunData) {
             testRunData.sync || null,
             testRunData.iodepth || null
         ];
-        
+
         db.get(query, params, (err, row) => {
             if (err) {
                 logError('Error checking file existence in database', err, { uniqueKey });
@@ -61,7 +61,7 @@ async function checkFileExistsInDb(testRunData) {
  */
 async function processFioFile(jsonFilePath, metadata, options = {}) {
     const requestId = options.requestId || 'cli-import';
-    
+
     try {
         logInfo('Processing FIO file', {
             requestId,
@@ -85,13 +85,13 @@ async function processFioFile(jsonFilePath, metadata, options = {}) {
         });
 
         const importedTestRuns = [];
-        let completedJobs = 0;
-        let skippedJobs = 0;
-        let errorJobs = 0;
+            // let completedJobs = 0; // Unused variable
+    // let skippedJobs = 0; // Unused variable
+    // let errorJobs = 0; // Unused variable
 
         // Store relative path for database
         const relativeFilePath = path.relative(path.join(__dirname, '..'), jsonFilePath);
-        
+
         // Parse test date
         const testDate = metadata.test_date ? new Date(metadata.test_date) : new Date();
 
@@ -127,11 +127,11 @@ async function processFioFile(jsonFilePath, metadata, options = {}) {
                 const block_size = bsStr;
                 const rw = opts.rw || globalOpts.rw || 'read';
                 const iodepth = parseInt(opts.iodepth || globalOpts.iodepth || '1');
-                
+
                 // Get duration from multiple possible sources, prefer actual runtime over configured
                 const duration = Math.round((job.job_runtime || 0) / 1000) || // Actual runtime in ms -> seconds
                                parseInt(opts.runtime || globalOpts.runtime || '0'); // Configured runtime in seconds
-                
+
                 const test_name = opts.name || job.jobname || `fio_job_${jobIndex + 1}`;
                 const rwmixread = parseInt(opts.rwmixread || '100');
 
@@ -183,7 +183,7 @@ async function processFioFile(jsonFilePath, metadata, options = {}) {
                             resolve({ status: 'skipped', reason: 'already_exists' });
                             return;
                         }
-                        
+
                         // Process the job if it doesn't exist
                         processJob();
                     }).catch(err => {
@@ -281,7 +281,7 @@ async function processFioFile(jsonFilePath, metadata, options = {}) {
                                 insertFioMetrics(testRunId, job.read, 'read');
                             }
 
-                            // Insert performance metrics for write operations  
+                            // Insert performance metrics for write operations
                             if (job.write && job.write.iops > 0) {
                                 insertFioMetrics(testRunId, job.write, 'write');
                             }
@@ -400,21 +400,21 @@ function insertPercentileMetrics(testRunId, percentiles, operationType) {
  */
 async function discoverUploadedFiles(uploadsDir) {
     const filePairs = [];
-    
+
     function scanDirectory(dir) {
         const items = fs.readdirSync(dir);
-        
+
         for (const item of items) {
             const fullPath = path.join(dir, item);
             const stat = fs.statSync(fullPath);
-            
+
             if (stat.isDirectory()) {
                 scanDirectory(fullPath);
             } else if (item.endsWith('.json') && item.startsWith('fio_results_')) {
                 // Find corresponding .info file
                 const infoFile = item.replace('fio_results_', 'fio_results_').replace('.json', '.info');
                 const infoPath = path.join(dir, infoFile);
-                
+
                 if (fs.existsSync(infoPath)) {
                     try {
                         const metadata = JSON.parse(fs.readFileSync(infoPath, 'utf8'));
@@ -440,17 +440,17 @@ async function discoverUploadedFiles(uploadsDir) {
             }
         }
     }
-    
+
     scanDirectory(uploadsDir);
-    
+
     // Sort by upload timestamp to process in chronological order
     filePairs.sort((a, b) => a.uploadTimestamp - b.uploadTimestamp);
-    
+
     logInfo('File discovery completed', {
         totalFiles: filePairs.length,
         uploadsDir
     });
-    
+
     return filePairs;
 }
 

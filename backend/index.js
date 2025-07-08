@@ -28,7 +28,7 @@ app.get('/api-docs', (req, res) => {
     const hostHeader = req.get('Host');
     const protocol = req.get('X-Forwarded-Proto') || (req.secure ? 'https' : 'http');
     const currentServerUrl = `${protocol}://${hostHeader}`;
-    
+
     // Clone the swagger options and update servers
     const dynamicSwaggerOptions = {
         ...swaggerOptions,
@@ -50,14 +50,14 @@ app.get('/api-docs', (req, res) => {
             ]
         }
     };
-    
+
     const dynamicSwaggerSpecs = swaggerJsdoc(dynamicSwaggerOptions);
-    
+
     const swaggerUiAssets = swaggerUi.generateHTML(dynamicSwaggerSpecs, {
         customCss: '.swagger-ui .topbar { display: none }',
         customSiteTitle: 'FIO Analyzer API Documentation'
     });
-    
+
     res.send(swaggerUiAssets);
 });
 
@@ -67,7 +67,7 @@ app.get('/api-docs/swagger.json', (req, res) => {
     const hostHeader = req.get('Host');
     const protocol = req.get('X-Forwarded-Proto') || (req.secure ? 'https' : 'http');
     const currentServerUrl = `${protocol}://${hostHeader}`;
-    
+
     // Clone the swagger options and update servers
     const dynamicSwaggerOptions = {
         ...swaggerOptions,
@@ -81,7 +81,7 @@ app.get('/api-docs/swagger.json', (req, res) => {
             ]
         }
     };
-    
+
     const dynamicSwaggerSpecs = swaggerJsdoc(dynamicSwaggerOptions);
     res.json(dynamicSwaggerSpecs);
 });
@@ -92,8 +92,8 @@ app.use('/api', apiRoutes);
 // Health check endpoint
 app.get('/health', (req, res) => {
     logInfo('Health check requested', { requestId: req.requestId });
-    res.json({ 
-        status: 'OK', 
+    res.json({
+        status: 'OK',
         timestamp: new Date().toISOString(),
         version: '1.0.0'
     });
@@ -119,7 +119,7 @@ process.on('SIGINT', () => {
         processId: process.pid,
         uptime: process.uptime()
     });
-    
+
     if (db) {
         db.close((err) => {
             if (err) {
@@ -135,8 +135,8 @@ process.on('SIGINT', () => {
             process.exit(0);
         });
     } else {
-        logInfo('Server shutdown complete (no database connection)', { 
-            processId: process.pid 
+        logInfo('Server shutdown complete (no database connection)', {
+            processId: process.pid
         });
         process.exit(0);
     }
@@ -147,7 +147,7 @@ process.on('SIGTERM', () => {
         processId: process.pid,
         uptime: process.uptime()
     });
-    
+
     if (db) {
         db.close((err) => {
             if (err) {
@@ -163,8 +163,8 @@ process.on('SIGTERM', () => {
             process.exit(0);
         });
     } else {
-        logInfo('Server shutdown complete (no database connection)', { 
-            processId: process.pid 
+        logInfo('Server shutdown complete (no database connection)', {
+            processId: process.pid
         });
         process.exit(0);
     }
