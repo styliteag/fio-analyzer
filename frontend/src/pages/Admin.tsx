@@ -134,7 +134,44 @@ const Admin: React.FC = () => {
     if (view === 'history') {
       setTimeSeriesLoading(true);
       try {
-        const response = await fetchTimeSeriesHistory({ days: 30 });
+        // Apply active filters to time-series data
+        const filterOptions: import('../services/api/timeSeries').TimeSeriesHistoryOptions = { days: 30 };
+        
+        if (activeFilters.hostnames.length > 0) {
+          filterOptions.hostname = activeFilters.hostnames[0];
+        }
+        if (activeFilters.protocols.length > 0) {
+          filterOptions.protocol = activeFilters.protocols[0];
+        }
+        if (activeFilters.drive_types.length > 0) {
+          filterOptions.driveType = activeFilters.drive_types[0];
+        }
+        if (activeFilters.drive_models.length > 0) {
+          filterOptions.driveModel = activeFilters.drive_models[0];
+        }
+        if (activeFilters.patterns.length > 0) {
+          filterOptions.readWritePattern = activeFilters.patterns[0];
+        }
+        if (activeFilters.block_sizes.length > 0) {
+          filterOptions.blockSize = String(activeFilters.block_sizes[0]);
+        }
+        if (activeFilters.queue_depths.length > 0) {
+          filterOptions.queueDepth = activeFilters.queue_depths[0];
+        }
+        if (activeFilters.syncs.length > 0) {
+          filterOptions.sync = activeFilters.syncs[0];
+        }
+        if (activeFilters.directs.length > 0) {
+          filterOptions.direct = activeFilters.directs[0];
+        }
+        if (activeFilters.num_jobs.length > 0) {
+          filterOptions.numJobs = activeFilters.num_jobs[0];
+        }
+        if (activeFilters.durations.length > 0) {
+          filterOptions.duration = activeFilters.durations[0];
+        }
+        
+        const response = await fetchTimeSeriesHistory(filterOptions);
         if (response.data) {
           setTimeSeriesData(response.data);
         } else {
@@ -147,7 +184,7 @@ const Admin: React.FC = () => {
         setTimeSeriesLoading(false);
       }
     }
-  }, [view]);
+  }, [view, activeFilters]);
 
   // Fetch time-series data when view changes to history
   useEffect(() => {
