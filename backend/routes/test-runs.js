@@ -924,19 +924,7 @@ router.delete('/:id', requireAdmin, (req, res) => {
 
     const db = getDatabase();
 
-    // Delete performance_metrics then test_runs
     db.serialize(() => {
-        db.run('DELETE FROM performance_metrics WHERE test_run_id = ?', [parseInt(id)], (err) => {
-            if (err) {
-                logError('Error deleting performance metrics', err, {
-                    requestId: req.requestId,
-                    username: req.user.username,
-                    action: 'DELETE_TEST_RUN',
-                    testRunId: id
-                });
-                return res.status(500).json({ error: err.message });
-            }
-
             db.run('DELETE FROM test_runs WHERE id = ?', [parseInt(id)], function(err) {
                 if (err) {
                     logError('Error deleting test run', err, {
@@ -967,7 +955,6 @@ router.delete('/:id', requireAdmin, (req, res) => {
 
                 res.json({ message: 'Test run deleted successfully' });
             });
-        });
     });
 });
 

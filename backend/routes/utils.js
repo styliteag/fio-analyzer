@@ -232,7 +232,6 @@ router.delete('/database/clear', requireAdmin, (req, res) => {
 
             // Clear tables
             db.serialize(() => {
-                db.run('DELETE FROM performance_metrics');
                 db.run('DELETE FROM test_runs', function(err) {
                     if (err) {
                         logError('Error clearing database', err, {
