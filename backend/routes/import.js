@@ -362,64 +362,12 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                 iodepth
             };
 
-            logInfo('Updating latest flags for job', {
+            logInfo('Processing job for database insertion', {
                 requestId: req.requestId,
                 jobIndex: jobIndex + 1,
                 testName: test_name,
                 uniqueKey: `${drive_type}|${drive_model}|${hostname}|${protocol}|${block_size}|${rw}`
             });
-
-            // Update existing tests to is_latest = 0 for same configuration
-            updateLatestFlags(testRunData, (err) => {
-                if (err) {
-                    logError('Error updating latest flags for job', err, {
-                        requestId: req.requestId,
-                        jobIndex: jobIndex + 1,
-                        testName: test_name,
-                        hardware: {
-                            driveModel: drive_model,
-                            driveType: drive_type,
-                            hostname: hostname || 'unknown',
-                            protocol: protocol || 'unknown'
-                        }
-                    });
-                    errorJobs++;
-                    completedJobs++;
-                    if (completedJobs === jobs.length) {
-                        const totalTime = Date.now() - startTime;
-                        logInfo('Import completed with errors', {
-                            requestId: req.requestId,
-                            username: req.user.username,
-                            hardware: {
-                                driveModel: drive_model,
-                                driveType: drive_type,
-                                hostname: hostname || 'unknown',
-                                protocol: protocol || 'unknown'
-                            },
-                            statistics: {
-                                totalJobs: jobs.length,
-                                importedJobs: importedTestRuns.length,
-                                skippedJobs,
-                                errorJobs,
-                                successfulDbInserts,
-                                failedDbInserts
-                            },
-                            totalTime: `${totalTime}ms`
-                        });
-                        res.json({
-                            message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
-                            test_run_ids: importedTestRuns,
-                            skipped_jobs: skippedJobs
-                        });
-                    }
-                    return;
-                }
-
-                logInfo('Latest flags updated successfully', {
-                    requestId: req.requestId,
-                    jobIndex: jobIndex + 1,
-                    testName: test_name
-                });
 
                 // Prepare data for insertion into both tables
                 const insertData = [
@@ -451,9 +399,9 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                     iodepth
                 ];
 
-                // Insert test run into latest table with is_latest = 1
+                // Insert test run into latest table with is_latest = 1 (use REPLACE to handle duplicates)
                 const insertTestRun = `
-                    INSERT INTO test_runs 
+                    INSERT OR REPLACE INTO test_runs 
                     (timestamp, test_date, drive_model, drive_type, test_name, block_size, 
                      read_write_pattern, queue_depth, duration, fio_version, 
                      job_runtime, rwmixread, total_ios_read, total_ios_write, 
@@ -632,7 +580,6 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                     }
                 });
             });
-        });
         }); // Close jobs.forEach loop
 
     } catch (error) {
