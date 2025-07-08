@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Settings, Database, Filter, BarChart3, History, ChevronUp, ChevronDown, Edit2, Trash2, ArrowLeft, Upload } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Loading from '../components/ui/Loading';
@@ -7,6 +7,7 @@ import Modal from '../components/ui/Modal';
 import { useServerSideTestRuns } from '../hooks/useServerSideTestRuns';
 import { bulkUpdateTestRuns, deleteTestRuns } from '../services/api/testRuns';
 import { bulkImportFioData } from '../services/api/upload';
+import { fetchTimeSeriesHistory } from '../services/api/timeSeries';
 import { useNavigate } from 'react-router-dom';
 import type { TestRun } from '../types';
 
@@ -71,6 +72,8 @@ const Admin: React.FC = () => {
   const [sortField, setSortField] = useState<keyof TestRun>('timestamp');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedRuns, setSelectedRuns] = useState<Set<number>>(new Set());
+  const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
+  const [timeSeriesLoading, setTimeSeriesLoading] = useState(false);
   const [bulkEditState, setBulkEditState] = useState<BulkEditState>({
     isOpen: false,
     fields: {},
@@ -120,9 +123,51 @@ const Admin: React.FC = () => {
     refetch,
   } = useServerSideTestRuns();
 
+  // Combined loading state
+  const isLoading = loading || (view === 'history' && timeSeriesLoading);
+
   // Split latest vs historical early for easy memoisation
   const latestRuns = useMemo(() => testRuns.filter(r => r.is_latest === 1), [testRuns]);
-  const historicalRuns = useMemo(() => testRuns.filter(r => r.is_latest === 0), [testRuns]);
+  
+  // Fetch time-series data for history view
+  const fetchTimeSeriesData = useCallback(async () => {
+    if (view === 'history') {
+      setTimeSeriesLoading(true);
+      try {
+        const response = await fetchTimeSeriesHistory({ days: 30 });
+        if (response.data) {
+          setTimeSeriesData(response.data);
+        } else {
+          setTimeSeriesData([]);
+        }
+      } catch (error) {
+        console.error('Error fetching time-series data:', error);
+        setTimeSeriesData([]);
+      } finally {
+        setTimeSeriesLoading(false);
+      }
+    }
+  }, [view]);
+
+  // Fetch time-series data when view changes to history
+  useEffect(() => {
+    fetchTimeSeriesData();
+  }, [fetchTimeSeriesData]);
+
+  // Use time-series data for history view, regular test runs for latest view
+  const historicalRuns = useMemo(() => {
+    if (view === 'history') {
+      // Transform time-series data to match TestRun structure for grouping
+      return timeSeriesData.map((ts: any) => ({
+        ...ts,
+        is_latest: 0, // Mark as historical
+        id: ts.test_run_id,
+        test_run_id: ts.test_run_id,
+      }));
+    } else {
+      return testRuns.filter(r => r.is_latest === 0);
+    }
+  }, [view, timeSeriesData, testRuns]);
 
   // Group historical runs by hardware / test config key
   const groupedHistory = useMemo(() => {
@@ -878,7 +923,7 @@ const Admin: React.FC = () => {
   );
 
   /* ----- main render ----- */
-  if (loading) return <Loading className="min-h-screen" />;
+  if (isLoading) return <Loading className="min-h-screen" />;
   if (error) return <ErrorDisplay error={error} onRetry={() => window.location.reload()} />;
 
   return (
