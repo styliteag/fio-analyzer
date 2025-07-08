@@ -9,6 +9,7 @@ import Upload from "./pages/Upload";
 import Admin from "./pages/Admin";
 import Compare from "./pages/Compare";
 import Compare2 from "./pages/Compare2";
+import Host from "./pages/Host";
 
 const ProtectedApp = () => {
 	const { isAuthenticated, login, loading, error } = useAuth();
@@ -35,6 +36,7 @@ const ProtectedApp = () => {
 			<Route path="/history" element={<History />} />
 			<Route path="/compare" element={<Compare />} />
 			<Route path="/compare2" element={<Compare2 />} />
+			<Route path="/host/:hostname" element={<Host />} />
 			<Route path="/upload" element={<Upload />} />
 			<Route path="/admin" element={<Admin />} />
 		</Routes>

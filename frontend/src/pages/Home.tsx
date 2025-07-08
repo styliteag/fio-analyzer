@@ -5,7 +5,7 @@ import Button from "../components/ui/Button";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import { useAuth } from "../contexts/AuthContext";
-import { Activity, Database, TrendingUp, Upload, Users, Settings, BarChart3, RefreshCw, Zap, History, Microscope } from "lucide-react";
+import { Activity, Database, TrendingUp, Upload, Users, Settings, BarChart3, RefreshCw, Zap, History, Microscope, Server } from "lucide-react";
 import { fetchDashboardStats, type DashboardStats } from "../services/api/dashboard";
 
 
@@ -138,6 +138,14 @@ export default function Home() {
 						>
 							<Microscope className="w-4 h-4" />
 							Advanced Host Comparison
+						</Button>
+						<Button
+							variant="outline"
+							onClick={() => window.location.href = "/host/redshark"}
+							className="flex items-center gap-2"
+						>
+							<Server className="w-4 h-4" />
+							Host Analysis (Demo)
 						</Button>
 						<Button
 							onClick={handleRefreshStats}
@@ -377,6 +385,18 @@ export default function Home() {
 								</div>
 								<p className="theme-text-secondary text-sm">
 									Manage users and system settings
+								</p>
+							</a>
+							<a
+								href="/host/redshark"
+								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+							>
+								<div className="flex items-center gap-2 mb-2">
+									<Server className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+									<h3 className="font-medium theme-text-primary">Host Analysis</h3>
+								</div>
+								<p className="theme-text-secondary text-sm">
+									Deep dive into individual host performance
 								</p>
 							</a>
 							<a

@@ -27,6 +27,12 @@ export interface TestRun {
 	iodepth?: number;
 	// Uniqueness tracking
 	is_latest?: number;
+	// Performance metrics
+	iops?: number | null;
+	avg_latency?: number | null;
+	bandwidth?: number | null;
+	p95_latency?: number | null;
+	p99_latency?: number | null;
 }
 
 export interface PerformanceMetric {
