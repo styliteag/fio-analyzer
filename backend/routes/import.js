@@ -14,16 +14,16 @@ const storage = multer.diskStorage({
         const uploadPath = path.join(__dirname, '..', 'uploads');
         if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
-            logInfo('Created uploads directory', { 
+            logInfo('Created uploads directory', {
                 requestId: req.requestId,
-                uploadPath 
+                uploadPath
             });
         }
         cb(null, uploadPath);
     },
     filename: function (req, file, cb) {
         const filename = `${Date.now()}-${file.originalname}`;
-        logInfo('File upload started', { 
+        logInfo('File upload started', {
             requestId: req.requestId,
             originalName: file.originalname,
             generatedName: filename,
@@ -111,7 +111,7 @@ router.use(requestIdMiddleware);
  */
 router.post('/', requireAuth, upload.single('file'), (req, res) => {
     const startTime = Date.now();
-    
+
     try {
         const { drive_model, drive_type, hostname, protocol, description, date } = req.body;
         const file = req.file;
@@ -194,7 +194,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
         const driveModelDir = drive_model || 'unknown-drive-model';
         //const testPattern = || 'unknown-test-pattern';
         const uploadDir = path.join(__dirname, '..', 'uploads', hostDir, protocolDir, isodate , isotime, driveTypeDir, driveModelDir);
-        
+
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
             logInfo('Created organized upload directory', {
@@ -206,17 +206,17 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
         // Move uploaded file to organized location
         const finalPath = path.join(uploadDir, 'fio_results_' + timestamp + '.json');
         fs.renameSync(file.path, finalPath);
-        
+
         logInfo('File moved to organized location', {
             requestId: req.requestId,
             originalPath: file.path,
             finalPath,
             fileSize: fs.statSync(finalPath).size
         });
-        
+
         // Store relative path for database
         const relativeFilePath = path.relative(path.join(__dirname, '..'), finalPath);
-        
+
         // Create metadata file
         const metadataPath = path.join(uploadDir, 'fio_results_' + timestamp + '.info');
         const metadata = {
@@ -303,7 +303,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                         },
                         totalTime: `${totalTime}ms`
                     });
-                    res.json({ 
+                    res.json({
                         message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
                         test_run_ids: importedTestRuns,
                         skipped_jobs: skippedJobs
@@ -316,7 +316,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
 
             // Extract test parameters
             const bs = opts.bs || globalOpts.bs || '4k';
-            
+
             // Store block size as text with uppercase suffix
             const bsStr = bs.toString().toUpperCase();
             const block_size = bsStr;
@@ -406,7 +406,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                             },
                             totalTime: `${totalTime}ms`
                         });
-                        res.json({ 
+                        res.json({
                             message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
                             test_run_ids: importedTestRuns,
                             skipped_jobs: skippedJobs
@@ -512,7 +512,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                             },
                             totalTime: `${totalTime}ms`
                         });
-                        res.json({ 
+                        res.json({
                             message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
                             test_run_ids: importedTestRuns,
                             skipped_jobs: skippedJobs
@@ -522,11 +522,11 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                 }
 
                 const testRunId = this.lastID;
-                
+
                 // Now insert into test_runs_all (historical data)
                 db.run(insertTestRunAll, [...insertData], function(errAll) {
                     const testRunIdAll = this.lastID;
-                    
+
                     if (errAll) {
                         logError('Database insertion failed for test_runs_all', errAll, {
                             requestId: req.requestId,
@@ -553,7 +553,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                             success: true
                         });
                     }
-                    
+
                     importedTestRuns.push(testRunId);
                     successfulDbInserts++;
 
@@ -632,7 +632,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                             totalTime: `${totalTime}ms`,
                             testRunIds: importedTestRuns
                         });
-                        res.json({ 
+                        res.json({
                             message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
                             test_run_ids: importedTestRuns,
                             skipped_jobs: skippedJobs
@@ -641,6 +641,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                 });
             });
         });
+        }); // Close jobs.forEach loop
 
     } catch (error) {
         const totalTime = Date.now() - startTime;
