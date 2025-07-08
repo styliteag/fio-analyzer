@@ -70,9 +70,14 @@ interface BulkImportState {
 const Admin: React.FC = () => {
   const navigate = useNavigate();
   const [view, setView] = useState<'latest' | 'history'>('latest');
-  const [sortField, setSortField] = useState<keyof TestRun>('timestamp');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [selectedRuns, setSelectedRuns] = useState<Set<number>>(new Set());
+  
+  // Latest Runs state (uses /api/test-runs)
+  const [latestSortField, setLatestSortField] = useState<keyof TestRun>('timestamp');
+  const [latestSortDirection, setLatestSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [selectedLatestRuns, setSelectedLatestRuns] = useState<Set<number>>(new Set());
+  
+  // History state (uses /api/time-series)
+  const [selectedHistoryRuns, setSelectedHistoryRuns] = useState<Set<number>>(new Set());
   const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
   const [timeSeriesLoading, setTimeSeriesLoading] = useState(false);
   const [bulkEditState, setBulkEditState] = useState<BulkEditState>({
@@ -236,8 +241,8 @@ const Admin: React.FC = () => {
   // Sort latest runs
   const sortedLatestRuns = useMemo(() => {
     return [...latestRuns].sort((a, b) => {
-    const aVal = a[sortField];
-    const bVal = b[sortField];
+    const aVal = a[latestSortField];
+    const bVal = b[latestSortField];
     
     if (aVal === undefined || aVal === null) return 1;
     if (bVal === undefined || bVal === null) return -1;
@@ -251,22 +256,22 @@ const Admin: React.FC = () => {
       comparison = String(aVal).localeCompare(String(bVal));
     }
     
-    return sortDirection === 'desc' ? -comparison : comparison;
+    return latestSortDirection === 'desc' ? -comparison : comparison;
     });
-  }, [latestRuns, sortField, sortDirection]);
+  }, [latestRuns, latestSortField, latestSortDirection]);
 
-  const handleSort = (field: keyof TestRun) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+  const handleLatestSort = (field: keyof TestRun) => {
+    if (latestSortField === field) {
+      setLatestSortDirection(latestSortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      setSortField(field);
-      setSortDirection('asc');
+      setLatestSortField(field);
+      setLatestSortDirection('asc');
     }
   };
 
-  const SortIcon = ({ field }: { field: keyof TestRun }) => {
-    if (sortField !== field) return null;
-    return sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />;
+  const LatestSortIcon = ({ field }: { field: keyof TestRun }) => {
+    if (latestSortField !== field) return null;
+    return latestSortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />;
   };
 
   // Helper function to find the most common value in an array
@@ -288,7 +293,9 @@ const Admin: React.FC = () => {
 
   // Get most common values from selected test runs
   const getCommonValuesFromSelection = (): EditableFields => {
-    const selectedTestRuns = sortedLatestRuns.filter(run => selectedRuns.has(run.id));
+    const selectedTestRuns = view === 'latest' 
+      ? sortedLatestRuns.filter(run => selectedLatestRuns.has(run.id))
+      : timeSeriesData.filter(run => selectedHistoryRuns.has(run.id));
     
     return {
       hostname: getMostCommonValue(selectedTestRuns.map(run => run.hostname)),
@@ -301,21 +308,39 @@ const Admin: React.FC = () => {
   };
 
   const handleSelectAll = () => {
-    if (selectedRuns.size === sortedLatestRuns.length) {
-      setSelectedRuns(new Set());
+    if (view === 'latest') {
+      if (selectedLatestRuns.size === sortedLatestRuns.length) {
+        setSelectedLatestRuns(new Set());
+      } else {
+        setSelectedLatestRuns(new Set(sortedLatestRuns.map(run => run.id)));
+      }
     } else {
-      setSelectedRuns(new Set(sortedLatestRuns.map(run => run.id)));
+      if (selectedHistoryRuns.size === timeSeriesData.length) {
+        setSelectedHistoryRuns(new Set());
+      } else {
+        setSelectedHistoryRuns(new Set(timeSeriesData.map(run => run.id)));
+      }
     }
   };
 
   const handleSelectRun = (runId: number) => {
-    const newSelected = new Set(selectedRuns);
-    if (newSelected.has(runId)) {
-      newSelected.delete(runId);
+    if (view === 'latest') {
+      const newSelected = new Set(selectedLatestRuns);
+      if (newSelected.has(runId)) {
+        newSelected.delete(runId);
+      } else {
+        newSelected.add(runId);
+      }
+      setSelectedLatestRuns(newSelected);
     } else {
-      newSelected.add(runId);
+      const newSelected = new Set(selectedHistoryRuns);
+      if (newSelected.has(runId)) {
+        newSelected.delete(runId);
+      } else {
+        newSelected.add(runId);
+      }
+      setSelectedHistoryRuns(newSelected);
     }
-    setSelectedRuns(newSelected);
   };
 
   const openBulkEditModal = () => {
@@ -353,7 +378,8 @@ const Admin: React.FC = () => {
   };
 
   const handleBulkEdit = async () => {
-    if (selectedRuns.size === 0) return;
+    const selectedCount = view === 'latest' ? selectedLatestRuns.size : selectedHistoryRuns.size;
+    if (selectedCount === 0) return;
     
     // Only include fields that are enabled for update
     const fieldsToUpdate: EditableFields = {};
@@ -371,9 +397,10 @@ const Admin: React.FC = () => {
 
     try {
       // Use the appropriate bulk update function based on the current view
+      const selectedIds = view === 'latest' ? Array.from(selectedLatestRuns) : Array.from(selectedHistoryRuns);
       const result = view === 'history' 
-        ? await bulkUpdateTimeSeries(Array.from(selectedRuns), fieldsToUpdate)
-        : await bulkUpdateTestRuns(Array.from(selectedRuns), fieldsToUpdate);
+        ? await bulkUpdateTimeSeries(selectedIds, fieldsToUpdate)
+        : await bulkUpdateTestRuns(selectedIds, fieldsToUpdate);
       
       if (result.error) {
         throw new Error(result.error);
@@ -387,7 +414,11 @@ const Admin: React.FC = () => {
       }
       
       closeBulkEditModal();
-      setSelectedRuns(new Set());
+      if (view === 'latest') {
+        setSelectedLatestRuns(new Set());
+      } else {
+        setSelectedHistoryRuns(new Set());
+      }
     } catch (err) {
       console.error('Failed to bulk update test runs:', err);
       alert(err instanceof Error ? err.message : 'Bulk update failed');
@@ -403,20 +434,30 @@ const Admin: React.FC = () => {
   };
 
   const handleBulkDelete = async () => {
-    if (selectedRuns.size === 0) return;
+    const selectedCount = view === 'latest' ? selectedLatestRuns.size : selectedHistoryRuns.size;
+    if (selectedCount === 0) return;
     
     try {
-      const result = await deleteTestRuns(Array.from(selectedRuns));
+      const selectedIds = view === 'latest' ? Array.from(selectedLatestRuns) : Array.from(selectedHistoryRuns);
+      const result = await deleteTestRuns(selectedIds);
       
       if (result.failed > 0) {
         console.warn(`Successfully deleted ${result.successful} test runs, but failed to delete ${result.failed} runs.`);
       }
       
       // Refresh the data after successful deletion
-      await refetch();
+      if (view === 'history') {
+        await fetchTimeSeriesData();
+      } else {
+        await refetch();
+      }
       
       closeBulkDeleteModal();
-      setSelectedRuns(new Set());
+      if (view === 'latest') {
+        setSelectedLatestRuns(new Set());
+      } else {
+        setSelectedHistoryRuns(new Set());
+      }
     } catch (err) {
       console.error('Failed to bulk delete test runs:', err);
       alert(err instanceof Error ? err.message : 'Bulk delete failed');
@@ -655,72 +696,72 @@ const Admin: React.FC = () => {
               <th className="px-4 py-3 text-left">
                   <input
                   type="checkbox"
-                  checked={selectedRuns.size === sortedLatestRuns.length && sortedLatestRuns.length > 0}
+                  checked={selectedLatestRuns.size === sortedLatestRuns.length && sortedLatestRuns.length > 0}
                   onChange={handleSelectAll}
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
-                onClick={() => handleSort('id')}
+                onClick={() => handleLatestSort('id')}
               >
                 <div className="flex items-center gap-1">
                   ID
-                  <SortIcon field="id" />
+                  <LatestSortIcon field="id" />
                 </div>
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
-                onClick={() => handleSort('timestamp')}
+                onClick={() => handleLatestSort('timestamp')}
               >
                 <div className="flex items-center gap-1">
                   Timestamp
-                  <SortIcon field="timestamp" />
+                  <LatestSortIcon field="timestamp" />
               </div>
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
-                onClick={() => handleSort('hostname')}
+                onClick={() => handleLatestSort('hostname')}
               >
                 <div className="flex items-center gap-1">
                   Host
-                  <SortIcon field="hostname" />
+                  <LatestSortIcon field="hostname" />
                 </div>
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
-                onClick={() => handleSort('protocol')}
+                onClick={() => handleLatestSort('protocol')}
               >
                 <div className="flex items-center gap-1">
                   Protocol
-                  <SortIcon field="protocol" />
+                  <LatestSortIcon field="protocol" />
                 </div>
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
-                onClick={() => handleSort('drive_model')}
+                onClick={() => handleLatestSort('drive_model')}
               >
                 <div className="flex items-center gap-1">
                   Model
-                  <SortIcon field="drive_model" />
+                  <LatestSortIcon field="drive_model" />
               </div>
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
-                onClick={() => handleSort('drive_type')}
+                onClick={() => handleLatestSort('drive_type')}
               >
                 <div className="flex items-center gap-1">
                   Type
-                  <SortIcon field="drive_type" />
+                  <LatestSortIcon field="drive_type" />
             </div>
               </th>
               <th 
                 className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider cursor-pointer hover:theme-text-primary transition-colors"
-                onClick={() => handleSort('read_write_pattern')}
+                onClick={() => handleLatestSort('read_write_pattern')}
               >
                 <div className="flex items-center gap-1">
                   Pattern
-                  <SortIcon field="read_write_pattern" />
+                  <LatestSortIcon field="read_write_pattern" />
               </div>
                     </th>
               <th className="px-4 py-3 text-left text-xs font-medium theme-text-secondary uppercase tracking-wider">
@@ -736,7 +777,7 @@ const Admin: React.FC = () => {
                           <td className="px-4 py-3">
                     <input
                       type="checkbox"
-                      checked={selectedRuns.has(run.id)}
+                      checked={selectedLatestRuns.has(run.id)}
                       onChange={() => handleSelectRun(run.id)}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
@@ -1041,11 +1082,11 @@ const Admin: React.FC = () => {
         </div>
 
         {/* Bulk Edit Controls */}
-        {view === 'latest' && selectedRuns.size > 0 && (
+        {view === 'latest' && selectedLatestRuns.size > 0 && (
           <div className="mb-4 p-4 theme-card">
               <div className="flex items-center justify-between">
               <span className="text-sm theme-text-secondary">
-                {selectedRuns.size} test run{selectedRuns.size !== 1 ? 's' : ''} selected
+                {selectedLatestRuns.size} test run{selectedLatestRuns.size !== 1 ? 's' : ''} selected
                 </span>
                 <div className="flex gap-2">
                   <Button
@@ -1100,7 +1141,7 @@ const Admin: React.FC = () => {
         >
           <div className="space-y-4">
           <p className="text-sm theme-text-secondary">
-              Update {selectedRuns.size} selected test runs. Check the fields you want to update with the common values.
+              Update {view === 'latest' ? selectedLatestRuns.size : selectedHistoryRuns.size} selected test runs. Check the fields you want to update with the common values.
             </p>
             
             <div className="space-y-3">
@@ -1245,7 +1286,7 @@ const Admin: React.FC = () => {
             
             <div className="flex gap-3 pt-4">
               <Button onClick={handleBulkEdit} className="flex-1">
-                Update {selectedRuns.size} Runs
+                Update {view === 'latest' ? selectedLatestRuns.size : selectedHistoryRuns.size} Runs
               </Button>
               <Button 
               onClick={closeBulkEditModal} 
@@ -1271,10 +1312,10 @@ const Admin: React.FC = () => {
             
             <div className="text-center">
             <h3 className="text-lg font-medium theme-text-primary mb-2">
-                Delete {selectedRuns.size} Test Runs
+                Delete {view === 'latest' ? selectedLatestRuns.size : selectedHistoryRuns.size} Test Runs
               </h3>
             <p className="text-sm theme-text-secondary">
-                Are you sure you want to delete these {selectedRuns.size} test runs? This action cannot be undone.
+                Are you sure you want to delete these {view === 'latest' ? selectedLatestRuns.size : selectedHistoryRuns.size} test runs? This action cannot be undone.
                 All associated performance metrics and data will be permanently removed.
               </p>
             </div>
@@ -1286,7 +1327,7 @@ const Admin: React.FC = () => {
                 className="flex-1"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Delete {selectedRuns.size} Runs
+                Delete {view === 'latest' ? selectedLatestRuns.size : selectedHistoryRuns.size} Runs
               </Button>
               <Button 
               onClick={closeBulkDeleteModal} 
