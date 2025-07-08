@@ -86,16 +86,13 @@ export default function History() {
 			// Do not filter by config on API level; we'll filter client-side to support multi-select
 		}
 
-		console.log('🔍 History.tsx - API call options:', opts);
 		const res = await fetchTimeSeriesHistory(opts);
-		console.log('🔍 History.tsx - API response:', res);
 		if (res.error) {
 			setError(res.error);
 			setData([]);
 			setConfigOptions([]);
 		} else {
 			const newData = res.data || [];
-			console.log('🔍 History.tsx - Data received:', newData.length, 'items');
 			setData(newData);
 			// Recompute config options
 			const unique = new Set<string>();
@@ -119,12 +116,6 @@ export default function History() {
 
 	// Build chart.js dataset structure
 	const chartData = useMemo(() => {
-		console.log('🔍 History.tsx - Building chart data:', {
-			dataLength: data.length,
-			selectedConfigs,
-			selectedMetrics
-		});
-		
 		let filtered = selectedConfigs.length > 0
 			? data.filter((d) => selectedConfigs.includes(`${d.read_write_pattern}|${d.block_size}|${d.queue_depth}`))
 			: data;
@@ -146,8 +137,6 @@ export default function History() {
 			});
 			filtered = transformedData;
 		}
-		
-		console.log('🔍 History.tsx - Filtered data:', filtered.length, 'items');
 
 		const palette = [
 			"#3b82f6",
@@ -182,11 +171,6 @@ export default function History() {
 			pointRadius: 1,
 			pointHoverRadius: 3,
 		}));
-		
-		console.log('🔍 History.tsx - Final chart datasets:', datasets.length, 'datasets');
-		console.log('🔍 History.tsx - Chart data structure:', {
-			datasets: datasets.map(ds => ({ label: ds.label, dataPoints: ds.data.length }))
-		});
 		
 		return { datasets };
 	}, [data, selectedConfigs, selectedMetrics]);
