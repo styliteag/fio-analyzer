@@ -1,4 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, Text } from '@react-three/drei';
+import * as THREE from 'three';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 
 interface Performance3DChartProps {
@@ -14,9 +17,204 @@ interface PerformancePoint {
     pattern: string;
     queueDepth: number;
     color: string;
+    performanceScore: number;
 }
 
+// Component for individual data points in 3D space
+const DataPoint: React.FC<{ 
+    point: PerformancePoint; 
+    position: [number, number, number];
+    onHover: (point: PerformancePoint | null) => void;
+}> = ({ point, position, onHover }) => {
+    const meshRef = useRef<THREE.Mesh>(null);
+    const [hovered, setHovered] = React.useState(false);
+
+    useFrame(() => {
+        if (meshRef.current) {
+            meshRef.current.rotation.x += 0.005;
+            meshRef.current.rotation.y += 0.005;
+        }
+    });
+
+    const size = Math.max(0.1, Math.min(0.4, point.performanceScore * 0.3 + 0.1));
+
+    return (
+        <mesh
+            ref={meshRef}
+            position={position}
+            onPointerOver={() => {
+                setHovered(true);
+                onHover(point);
+            }}
+            onPointerOut={() => {
+                setHovered(false);
+                onHover(null);
+            }}
+            scale={hovered ? 1.5 : 1}
+        >
+            <sphereGeometry args={[size, 16, 16]} />
+            <meshStandardMaterial 
+                color={point.color} 
+                transparent 
+                opacity={hovered ? 1 : 0.8}
+                emissive={hovered ? point.color : '#000000'}
+                emissiveIntensity={hovered ? 0.2 : 0}
+            />
+            {point.performanceScore > 0.7 && (
+                <mesh>
+                    <ringGeometry args={[size + 0.05, size + 0.1, 16]} />
+                    <meshBasicMaterial color="gold" transparent opacity={0.6} />
+                </mesh>
+            )}
+        </mesh>
+    );
+};
+
+// Component for 3D axes
+const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ maxValues }) => {
+    return (
+        <group>
+            {/* X Axis - IOPS */}
+            <mesh position={[2.5, 0, 0]}>
+                <cylinderGeometry args={[0.02, 0.02, 5]} />
+                <meshBasicMaterial color="#ff6b6b" />
+            </mesh>
+            <mesh position={[5.2, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+                <coneGeometry args={[0.1, 0.3]} />
+                <meshBasicMaterial color="#ff6b6b" />
+            </mesh>
+            <Text
+                position={[5.8, 0, 0]}
+                fontSize={0.3}
+                color="#ff6b6b"
+                anchorX="left"
+                anchorY="middle"
+            >
+                IOPS ({maxValues.x.toFixed(0)})
+            </Text>
+
+            {/* Y Axis - Latency */}
+            <mesh position={[0, 2.5, 0]}>
+                <cylinderGeometry args={[0.02, 0.02, 5]} />
+                <meshBasicMaterial color="#4ecdc4" />
+            </mesh>
+            <mesh position={[0, 5.2, 0]}>
+                <coneGeometry args={[0.1, 0.3]} />
+                <meshBasicMaterial color="#4ecdc4" />
+            </mesh>
+            <Text
+                position={[0, 5.8, 0]}
+                fontSize={0.3}
+                color="#4ecdc4"
+                anchorX="center"
+                anchorY="bottom"
+            >
+                Latency ({maxValues.y.toFixed(1)}ms)
+            </Text>
+
+            {/* Z Axis - Bandwidth */}
+            <mesh position={[0, 0, 2.5]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.02, 0.02, 5]} />
+                <meshBasicMaterial color="#45b7d1" />
+            </mesh>
+            <mesh position={[0, 0, 5.2]} rotation={[Math.PI / 2, 0, 0]}>
+                <coneGeometry args={[0.1, 0.3]} />
+                <meshBasicMaterial color="#45b7d1" />
+            </mesh>
+            <Text
+                position={[0, 0, 5.8]}
+                fontSize={0.3}
+                color="#45b7d1"
+                anchorX="center"
+                anchorY="middle"
+            >
+                Bandwidth ({maxValues.z.toFixed(0)} MB/s)
+            </Text>
+
+            {/* Grid lines */}
+            <group>
+                {[1, 2, 3, 4].map(i => (
+                    <React.Fragment key={i}>
+                        {/* X-Y grid */}
+                        <mesh position={[i, 0, 0]}>
+                            <cylinderGeometry args={[0.005, 0.005, 5]} />
+                            <meshBasicMaterial color="#333333" transparent opacity={0.2} />
+                        </mesh>
+                        <mesh position={[0, i, 0]} rotation={[0, 0, Math.PI / 2]}>
+                            <cylinderGeometry args={[0.005, 0.005, 5]} />
+                            <meshBasicMaterial color="#333333" transparent opacity={0.2} />
+                        </mesh>
+                        {/* X-Z grid */}
+                        <mesh position={[i, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                            <cylinderGeometry args={[0.005, 0.005, 5]} />
+                            <meshBasicMaterial color="#333333" transparent opacity={0.2} />
+                        </mesh>
+                        <mesh position={[0, 0, i]} rotation={[0, Math.PI / 2, 0]}>
+                            <cylinderGeometry args={[0.005, 0.005, 5]} />
+                            <meshBasicMaterial color="#333333" transparent opacity={0.2} />
+                        </mesh>
+                    </React.Fragment>
+                ))}
+            </group>
+        </group>
+    );
+};
+
+// Main 3D Scene component
+const Scene3D: React.FC<{ 
+    points: PerformancePoint[]; 
+    ranges: { x: [number, number]; y: [number, number]; z: [number, number] };
+    onPointHover: (point: PerformancePoint | null) => void;
+}> = ({ points, ranges, onPointHover }) => {
+    const normalizeToRange = (value: number, range: [number, number], scale: number = 5) => {
+        return ((value - range[0]) / (range[1] - range[0])) * scale;
+    };
+
+    const maxValues = {
+        x: ranges.x[1],
+        y: ranges.y[1],
+        z: ranges.z[1]
+    };
+
+    return (
+        <>
+            <ambientLight intensity={0.6} />
+            <pointLight position={[10, 10, 10]} intensity={1} />
+            <pointLight position={[-10, -10, -10]} intensity={0.5} />
+            
+            <Axes maxValues={maxValues} />
+            
+            {points.map((point, index) => {
+                const x = normalizeToRange(point.x, ranges.x);
+                const y = normalizeToRange(point.y, ranges.y);
+                const z = normalizeToRange(point.z, ranges.z);
+                
+                return (
+                    <DataPoint
+                        key={index}
+                        point={point}
+                        position={[x, y, z]}
+                        onHover={onPointHover}
+                    />
+                );
+            })}
+            
+            <OrbitControls 
+                enablePan={true}
+                enableZoom={true}
+                enableRotate={true}
+                minDistance={5}
+                maxDistance={20}
+                autoRotate={false}
+                autoRotateSpeed={2}
+            />
+        </>
+    );
+};
+
 const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives }) => {
+    const [hoveredPoint, setHoveredPoint] = React.useState<PerformancePoint | null>(null);
+    
     const colors = [
         '#3B82F6', // blue
         '#10B981', // green
@@ -38,21 +236,33 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives }) => {
             );
 
             validConfigs.forEach(config => {
+                const iops = config.iops || 0;
+                const latency = config.avg_latency || 0;
+                const bandwidth = config.bandwidth || 0;
+                
+                // Calculate performance score
+                const maxIOPS = Math.max(...drives.flatMap(d => d.configurations.map(c => c.iops || 0)));
+                const maxBandwidth = Math.max(...drives.flatMap(d => d.configurations.map(c => c.bandwidth || 0)));
+                const minLatency = Math.min(...drives.flatMap(d => d.configurations.map(c => c.avg_latency || Infinity)));
+                
+                const performanceScore = (iops / maxIOPS) * (bandwidth / maxBandwidth) / ((latency / minLatency) || 1);
+                
                 allPoints.push({
-                    x: config.iops || 0,
-                    y: config.avg_latency || 0,
-                    z: config.bandwidth || 0,
+                    x: iops,
+                    y: latency,
+                    z: bandwidth,
                     drive: drive.drive_model,
                     blockSize: config.block_size,
                     pattern: config.read_write_pattern,
                     queueDepth: config.queue_depth,
-                    color: colors[driveIndex % colors.length]
+                    color: colors[driveIndex % colors.length],
+                    performanceScore
                 });
             });
         });
 
         return allPoints;
-    }, [drives]);
+    }, [drives, colors]);
 
     // Calculate ranges for normalization
     const ranges = useMemo(() => {
@@ -69,107 +279,58 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives }) => {
         };
     }, [points]);
 
-    // Normalize values to 0-300px range for display
-    const normalizeValue = (value: number, range: [number, number], scale: number = 300) => {
-        return ((value - range[0]) / (range[1] - range[0])) * scale;
-    };
-
-    // 3D projection (simple isometric projection)
-    const project3D = (x: number, y: number, z: number) => {
-        const cos30 = Math.cos(Math.PI / 6);
-        const sin30 = Math.sin(Math.PI / 6);
-        
-        return {
-            x: (x - z) * cos30,
-            y: (x + z) * sin30 - y
-        };
-    };
-
-    const chartWidth = 400;
-    const chartHeight = 400;
-    const offsetX = chartWidth / 2;
-    const offsetY = chartHeight / 2;
-
     return (
         <div className="w-full">
             <div className="mb-4">
                 <h4 className="text-lg font-semibold theme-text-primary mb-2">
-                    3D Performance Visualization
+                    Interactive 3D Performance Visualization
                 </h4>
                 <p className="text-sm theme-text-secondary mb-4">
-                    Three-dimensional view: IOPS (width), Latency (height), Bandwidth (depth)
+                    Drag to rotate • Scroll to zoom • Hover points for details
                 </p>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6">
-                {/* 3D Chart */}
+                {/* Interactive 3D Chart */}
                 <div className="flex-1">
-                    <div className="relative bg-gray-50 dark:bg-gray-900 rounded-lg p-4" style={{ height: '450px' }}>
-                        <svg 
-                            width="100%" 
-                            height="100%" 
-                            viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                            className="overflow-visible"
+                    <div className="relative bg-gray-50 dark:bg-gray-900 rounded-lg p-4" style={{ height: '600px' }}>
+                        <Canvas
+                            camera={{ position: [8, 8, 8], fov: 50 }}
+                            style={{ width: '100%', height: '100%' }}
                         >
-                            {/* Grid lines */}
-                            <defs>
-                                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.3"/>
-                                </pattern>
-                            </defs>
-                            <rect width="100%" height="100%" fill="url(#grid)" className="theme-text-secondary" />
+                            <Scene3D 
+                                points={points} 
+                                ranges={ranges} 
+                                onPointHover={setHoveredPoint}
+                            />
+                        </Canvas>
+                        
+                        {/* Floating hover info */}
+                        {hoveredPoint && (
+                            <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border max-w-sm z-10">
+                                <h6 className="font-medium theme-text-primary mb-2">{hoveredPoint.drive}</h6>
+                                <div className="text-xs theme-text-secondary space-y-1">
+                                    <div>Config: {hoveredPoint.blockSize} {hoveredPoint.pattern} QD{hoveredPoint.queueDepth}</div>
+                                    <div>IOPS: <span className="font-medium">{hoveredPoint.x.toFixed(0)}</span></div>
+                                    <div>Latency: <span className="font-medium">{hoveredPoint.y.toFixed(2)}ms</span></div>
+                                    <div>Bandwidth: <span className="font-medium">{hoveredPoint.z.toFixed(1)} MB/s</span></div>
+                                    <div>Performance Score: <span className="font-medium">{hoveredPoint.performanceScore.toFixed(2)}</span></div>
+                                </div>
+                            </div>
+                        )}
 
-                            {/* Axes */}
-                            <g className="theme-text-secondary" strokeWidth="2">
-                                {/* X axis (IOPS) */}
-                                <line x1={offsetX} y1={offsetY} x2={offsetX + 150} y2={offsetY - 87} stroke="currentColor" />
-                                <text x={offsetX + 160} y={offsetY - 80} fontSize="12" fill="currentColor">IOPS</text>
-                                
-                                {/* Y axis (Latency) */}
-                                <line x1={offsetX} y1={offsetY} x2={offsetX} y2={offsetY - 150} stroke="currentColor" />
-                                <text x={offsetX - 30} y={offsetY - 160} fontSize="12" fill="currentColor">Latency</text>
-                                
-                                {/* Z axis (Bandwidth) */}
-                                <line x1={offsetX} y1={offsetY} x2={offsetX - 150} y2={offsetY - 87} stroke="currentColor" />
-                                <text x={offsetX - 180} y={offsetY - 80} fontSize="12" fill="currentColor">Bandwidth</text>
-                            </g>
+                        {/* Controls help */}
+                        <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border">
+                            <div className="text-xs theme-text-secondary space-y-1">
+                                <div className="font-medium text-xs theme-text-primary mb-1">Controls:</div>
+                                <div>• Left drag: Rotate view</div>
+                                <div>• Right drag: Pan view</div>
+                                <div>• Scroll: Zoom in/out</div>
+                                <div>• Hover: Show details</div>
+                            </div>
+                        </div>
 
-                            {/* Data points */}
-                            {points.map((point, index) => {
-                                const normalizedX = normalizeValue(point.x, ranges.x, 150);
-                                const normalizedY = normalizeValue(point.y, ranges.y, 150);
-                                const normalizedZ = normalizeValue(point.z, ranges.z, 150);
-                                
-                                const projected = project3D(normalizedX, normalizedY, normalizedZ);
-                                const x = offsetX + projected.x;
-                                const y = offsetY - projected.y;
-                                
-                                // Point size based on performance score
-                                const performanceScore = (point.x / ranges.x[1]) * (point.z / ranges.z[1]) / (point.y / ranges.y[1]);
-                                const pointSize = Math.max(4, Math.min(12, performanceScore * 8));
-
-                                return (
-                                    <g key={index}>
-                                        <circle
-                                            cx={x}
-                                            cy={y}
-                                            r={pointSize}
-                                            fill={point.color}
-                                            opacity="0.7"
-                                            stroke="#fff"
-                                            strokeWidth="1"
-                                            className="cursor-pointer hover:opacity-100 transition-opacity"
-                                        >
-                                            <title>
-                                                {`${point.drive}\n${point.blockSize} ${point.pattern} QD${point.queueDepth}\nIOPS: ${point.x.toFixed(0)}\nLatency: ${point.y.toFixed(2)}ms\nBandwidth: ${point.z.toFixed(1)} MB/s`}
-                                            </title>
-                                        </circle>
-                                    </g>
-                                );
-                            })}
-                        </svg>
-
-                        {/* Legend positioned over the chart */}
+                        {/* Legend */}
                         <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border max-w-xs">
                             <h5 className="text-sm font-medium theme-text-primary mb-2">Drives</h5>
                             <div className="space-y-1">
@@ -182,14 +343,6 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives }) => {
                                         <span className="theme-text-secondary truncate">{drive.drive_model}</span>
                                     </div>
                                 ))}
-                            </div>
-                        </div>
-
-                        {/* Performance zones indicator */}
-                        <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border">
-                            <div className="text-xs theme-text-secondary space-y-1">
-                                <div>Larger points = Better performance</div>
-                                <div>Top-right-front = Ideal zone</div>
                             </div>
                         </div>
                     </div>
@@ -229,7 +382,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives }) => {
                             <h6 className="text-sm font-medium theme-text-primary mb-2">Top Configurations</h6>
                             <div className="space-y-2 text-xs">
                                 {points
-                                    .sort((a, b) => ((b.x * b.z) / b.y) - ((a.x * a.z) / a.y))
+                                    .sort((a, b) => b.performanceScore - a.performanceScore)
                                     .slice(0, 3)
                                     .map((point, index) => (
                                         <div key={index} className="bg-gray-50 dark:bg-gray-700 p-2 rounded">
