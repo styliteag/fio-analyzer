@@ -75,7 +75,7 @@ const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ ma
     return (
         <group>
             {/* X Axis - IOPS */}
-            <mesh position={[2.5, 0, 0]}>
+            <mesh position={[2.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
                 <cylinderGeometry args={[0.02, 0.02, 5]} />
                 <meshBasicMaterial color="#ff6b6b" />
             </mesh>
