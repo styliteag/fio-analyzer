@@ -8,6 +8,7 @@ import { useServerSideTestRuns } from '../hooks/useServerSideTestRuns';
 import { bulkUpdateTestRuns, deleteTestRuns } from '../services/api/testRuns';
 import { bulkImportFioData } from '../services/api/upload';
 import { fetchTimeSeriesHistory } from '../services/api/timeSeries';
+import { bulkUpdateTimeSeries } from '../services/api/timeSeries';
 import { useNavigate } from 'react-router-dom';
 import type { TestRun } from '../types';
 
@@ -369,14 +370,21 @@ const Admin: React.FC = () => {
     }
 
     try {
-      const result = await bulkUpdateTestRuns(Array.from(selectedRuns), fieldsToUpdate);
+      // Use the appropriate bulk update function based on the current view
+      const result = view === 'history' 
+        ? await bulkUpdateTimeSeries(Array.from(selectedRuns), fieldsToUpdate)
+        : await bulkUpdateTestRuns(Array.from(selectedRuns), fieldsToUpdate);
       
       if (result.error) {
         throw new Error(result.error);
       }
       
       // Refresh the data after successful update
-      await refetch();
+      if (view === 'history') {
+        await fetchTimeSeriesData();
+      } else {
+        await refetch();
+      }
       
       closeBulkEditModal();
       setSelectedRuns(new Set());
@@ -480,14 +488,14 @@ const Admin: React.FC = () => {
     try {
       // Update all runs in the history group
       const testRunIds = historyEditState.group.runs.map((run: TestRun) => run.id);
-      const result = await bulkUpdateTestRuns(testRunIds, fieldsToUpdate);
+      const result = await bulkUpdateTimeSeries(testRunIds, fieldsToUpdate);
       
       if (result.error) {
         throw new Error(result.error);
       }
       
       // Refresh the data after successful update
-      await refetch();
+      await fetchTimeSeriesData();
       
       closeHistoryEditModal();
     } catch (err) {

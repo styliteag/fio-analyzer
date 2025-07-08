@@ -110,6 +110,14 @@ export const fetchTimeSeriesTrends = async (options: TimeSeriesTrendsOptions) =>
     return apiCall<TrendDataPoint[]>(`/api/time-series/trends?${params}`);
 };
 
+// Bulk update time-series test runs
+export const bulkUpdateTimeSeries = async (testRunIds: number[], updates: Record<string, any>) => {
+    return apiCall<{ message: string; updated: number; failed: number }>("/api/time-series/bulk", {
+        method: "PUT",
+        body: JSON.stringify({ testRunIds, updates }),
+    });
+};
+
 // Helper to get common time range options
 export const getTimeRangeOptions = () => [
     { label: "Last 24 hours", hours: 24 },
