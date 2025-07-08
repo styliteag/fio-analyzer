@@ -1,13 +1,13 @@
 const sqlite3 = require('sqlite3').verbose();
 const { DB_PATH } = require('../config');
-const { logInfo, logError, logWarning, calculateUniqueKey, getBaseIops, getBaseLatency, getBaseBandwidth, parseBlockSizeToKB, showServerReady } = require('../utils');
+const { logInfo, logError, calculateUniqueKey, getBaseIops, getBaseLatency, getBaseBandwidth, showServerReady } = require('../utils');
 
 let db;
 
 // Initialize database connection
 function initDatabase() {
     logInfo('Initializing database connection', { dbPath: DB_PATH });
-    
+
     db = new sqlite3.Database(DB_PATH, (err) => {
         if (err) {
             logError('Error opening database', err, { dbPath: DB_PATH });
@@ -16,7 +16,7 @@ function initDatabase() {
         logInfo('Connected to SQLite database successfully', { dbPath: DB_PATH });
         initDb();
     });
-    
+
     return db;
 }
 
@@ -33,14 +33,14 @@ function getDatabase() {
 // Mark existing tests as not latest when inserting a new test with the same configuration
 function updateLatestFlags(testRun, callback) {
     const uniqueKey = calculateUniqueKey(testRun);
-    
-    logInfo('Updating latest flags for test run', { 
+
+    logInfo('Updating latest flags for test run', {
         uniqueKey,
         driveType: testRun.drive_type,
         driveModel: testRun.drive_model,
         hostname: testRun.hostname
     });
-    
+
     // Find all existing tests with the same unique configuration
     const query = `
         UPDATE test_runs 
@@ -49,7 +49,7 @@ function updateLatestFlags(testRun, callback) {
         AND block_size = ? AND read_write_pattern = ? AND output_file = ? AND num_jobs = ? 
         AND direct = ? AND test_size = ? AND sync = ? AND iodepth = ?
     `;
-    
+
     const params = [
         testRun.drive_type || null,
         testRun.drive_model || null,
@@ -64,15 +64,15 @@ function updateLatestFlags(testRun, callback) {
         testRun.sync || null,
         testRun.iodepth || null
     ];
-    
+
     db.run(query, params, function(err) {
         if (err) {
             logError('Error updating latest flags', err, { uniqueKey });
             return callback(err);
         }
-        logInfo('Updated existing tests to is_latest=0', { 
+        logInfo('Updated existing tests to is_latest=0', {
             changes: this.changes,
-            uniqueKey 
+            uniqueKey
         });
         callback(null);
     });
@@ -208,36 +208,13 @@ function initDb() {
             CREATE INDEX IF NOT EXISTS idx_performance_metrics_test_metric 
             ON performance_metrics (test_run_id, metric_type, operation_type)
         `);
-        
+
         db.run(`
             CREATE INDEX IF NOT EXISTS idx_performance_metrics_all_test_metric 
             ON performance_metrics_all (test_run_id, metric_type, operation_type)
         `);
 
-        // Create latency_percentiles table for test_runs (latest data)
-        db.run(`
-            CREATE TABLE IF NOT EXISTS latency_percentiles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                test_run_id INTEGER NOT NULL,
-                operation_type TEXT NOT NULL,
-                percentile REAL NOT NULL,
-                latency_ns INTEGER NOT NULL,
-                FOREIGN KEY (test_run_id) REFERENCES test_runs (id)
-            )
-        `);
 
-        // Create latency_percentiles_all table for test_runs_all (all historical data)
-        db.run(`
-            CREATE TABLE IF NOT EXISTS latency_percentiles_all (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                test_run_id INTEGER NOT NULL,
-                operation_type TEXT NOT NULL,
-                percentile REAL NOT NULL,
-                latency_ns INTEGER NOT NULL,
-                FOREIGN KEY (test_run_id) REFERENCES test_runs_all (id)
-            )
-        `);
-        
         // Create view for latest test results per server
         db.run(`
             CREATE VIEW IF NOT EXISTS latest_test_per_server AS
@@ -274,14 +251,14 @@ function initDb() {
                 console.error(err.message);
                 return;
             }
-            
+
             // Check if test_runs_all is empty (indicates we need migration)
             db.get('SELECT COUNT(*) as count FROM test_runs_all', (err, allRow) => {
                 if (err) {
                     console.error(err.message);
                     return;
                 }
-                
+
                 if (row.count > 0 && allRow.count === 0) {
                     console.log('Migrating existing data to new dual-table structure...');
                     migrateToNewSchema(() => {
@@ -304,7 +281,7 @@ function initDb() {
 // Migration function to move data from single-table to dual-table structure
 function migrateToNewSchema(callback) {
     console.log('Starting migration to dual-table structure...');
-    
+
     db.serialize(() => {
         // Step 1: Copy all data from test_runs to test_runs_all
         db.run(`
@@ -316,7 +293,7 @@ function migrateToNewSchema(callback) {
                 return callback();
             }
             console.log('Copied all test_runs to test_runs_all');
-            
+
             // Step 2: Copy all performance_metrics to performance_metrics_all
             db.run(`
                 INSERT INTO performance_metrics_all 
@@ -327,39 +304,22 @@ function migrateToNewSchema(callback) {
                     return callback();
                 }
                 console.log('Copied all performance_metrics to performance_metrics_all');
-                
-                // Step 3: Copy latency_percentiles if they exist
-                db.run(`
-                    INSERT INTO latency_percentiles_all 
-                    SELECT * FROM latency_percentiles
-                `, (err) => {
-                    // Don't fail if latency_percentiles doesn't exist
-                    if (err && !err.message.includes('no such table')) {
-                        console.error('Error copying latency_percentiles:', err);
-                    } else if (!err) {
-                        console.log('Copied all latency_percentiles to latency_percentiles_all');
+
+                // Step 3: Clear test_runs and performance_metrics to rebuild with latest only
+                db.run('DELETE FROM performance_metrics', (err) => {
+                    if (err) {
+                        console.error('Error clearing performance_metrics:', err);
+                        return callback();
                     }
-                    
-                    // Step 4: Clear test_runs and performance_metrics to rebuild with latest only
-                    db.run('DELETE FROM performance_metrics', (err) => {
+
+                    db.run('DELETE FROM test_runs', (err) => {
                         if (err) {
-                            console.error('Error clearing performance_metrics:', err);
+                            console.error('Error clearing test_runs:', err);
                             return callback();
                         }
-                        
-                        db.run('DELETE FROM latency_percentiles', (err) => {
-                            // Don't fail if table doesn't exist
-                            
-                            db.run('DELETE FROM test_runs', (err) => {
-                                if (err) {
-                                    console.error('Error clearing test_runs:', err);
-                                    return callback();
-                                }
-                                
-                                // Step 5: Rebuild test_runs with only latest entries per configuration
-                                rebuildLatestOnlyTables(callback);
-                            });
-                        });
+
+                        // Step 5: Rebuild test_runs with only latest entries per configuration
+                        rebuildLatestOnlyTables(callback);
                     });
                 });
             });
@@ -370,7 +330,7 @@ function migrateToNewSchema(callback) {
 // Rebuild test_runs and related tables with only latest entries
 function rebuildLatestOnlyTables(callback) {
     console.log('Rebuilding latest-only tables...');
-    
+
     // Insert only the latest test run for each unique configuration
     const query = `
         INSERT INTO test_runs 
@@ -395,13 +355,13 @@ function rebuildLatestOnlyTables(callback) {
             LIMIT 1
         )
     `;
-    
+
     db.run(query, (err) => {
         if (err) {
             console.error('Error rebuilding test_runs with latest data:', err);
             return callback();
         }
-        
+
         // Copy corresponding performance metrics
         db.run(`
             INSERT INTO performance_metrics 
@@ -412,21 +372,9 @@ function rebuildLatestOnlyTables(callback) {
                 console.error('Error copying latest performance metrics:', err);
                 return callback();
             }
-            
-            // Copy corresponding latency percentiles
-            db.run(`
-                INSERT INTO latency_percentiles 
-                SELECT lpa.* FROM latency_percentiles_all lpa
-                JOIN test_runs tr ON lpa.test_run_id = tr.id
-            `, (err) => {
-                // Don't fail if no latency percentiles exist
-                if (err && !err.message.includes('no such table')) {
-                    console.error('Error copying latest latency percentiles:', err);
-                }
-                
-                console.log('Migration to dual-table structure completed successfully!');
-                callback();
-            });
+
+            console.log('Migration to dual-table structure completed successfully!');
+            callback();
         });
     });
 }
@@ -440,36 +388,36 @@ function populateSampleData(callback) {
         { hostname: "sim-app-01", protocol: "Local", drives: [["Simsung 980 PRO", "NVMe SSD"]] },
         { hostname: "sim-cache-01", protocol: "Local", drives: [["Simsung Optane", "NVMe SSD"]] }
     ];
-    
+
     const block_sizes = ['4K', '8K', '16K', '64K', '1M']; // Focused on common block sizes
     const patterns = ["sequential_read", "sequential_write", "random_read", "random_write"];
     const queue_depths = [1, 4, 8, 16]; // Common queue depths
-    
+
     const testRunsData = [];
-    
+
     // Generate multiple realistic test scenarios across all servers
     for (const server of servers) {
         console.log(`Processing server: ${server.hostname} (${server.protocol})`);
-        
+
         // Generate tests for each drive on this server
         for (const [drive_model, drive_type] of server.drives) {
             console.log(`  Drive: ${drive_model} (${drive_type})`);
-            
+
             // Create regular time-series data - tests every few days over 30 days
             for (let dayOffset = 0; dayOffset < 30; dayOffset += 2 + Math.floor(Math.random() * 4)) {
                 // Create timestamp for this day (with some hour randomization)
                 const dayMs = dayOffset * 24 * 60 * 60 * 1000;
                 const hourRandomization = Math.random() * 12 * 60 * 60 * 1000; // Random hour in first 12 hours
                 const timestamp = new Date(Date.now() - dayMs + hourRandomization).toISOString();
-                
+
                 // Create a focused test run for this time point
                 const block_size = block_sizes[Math.floor(Math.random() * block_sizes.length)];
                 const pattern = patterns[Math.floor(Math.random() * patterns.length)];
                 const queue_depth = queue_depths[Math.floor(Math.random() * queue_depths.length)];
-                
+
                 const test_name = `${server.hostname}_${pattern}_${block_size}`;
                 console.log(`    Creating: ${test_name} (${drive_model}, ${block_size}, QD${queue_depth}) at ${timestamp.substring(0, 10)}`);
-                
+
                 // Store test run data for batch processing
                 testRunsData.push({
                     timestamp,
@@ -489,22 +437,21 @@ function populateSampleData(callback) {
     // Process data in a simpler way to avoid statement finalization issues
     const testRunIds = [];
     const testRunIdsAll = [];
-    let testRunsInserted = 0;
-    
+
     const insertNextTestRun = (index) => {
         if (index >= testRunsData.length) {
             console.log('All test runs inserted, now inserting metrics...');
             insertMetricsForAllTests(testRunIds, testRunIdsAll, callback);
             return;
         }
-        
+
         const data = testRunsData[index];
-        
+
         // Calculate realistic test results based on drive type
         const fakeIops = Math.floor(getBaseIops(data.drive_type, data.pattern, data.block_size) * (0.8 + Math.random() * 0.4));
         const fakeLatency = getBaseLatency(data.drive_type, data.pattern) * (0.8 + Math.random() * 0.4);
         const fakeBandwidth = Math.floor(getBaseBandwidth(data.drive_type, data.pattern, data.block_size) * (0.8 + Math.random() * 0.4));
-        
+
         // Generate realistic job option values
         const numJobs = [1, 2, 4, 8][Math.floor(Math.random() * 4)]; // 1, 2, 4, or 8 jobs
         const directIO = Math.random() > 0.5 ? 1 : 0; // 50% chance of direct IO
@@ -512,7 +459,7 @@ function populateSampleData(callback) {
         const testSizes = ["1M", "10M", "100M", "1G"];
         const testSize = testSizes[Math.floor(Math.random() * testSizes.length)];
         const iodepth = [1, 4, 8, 16, 32][Math.floor(Math.random() * 5)]; // Common iodepth values
-        
+
         const testParams = [
             data.timestamp,
             data.testDate.toISOString(),
@@ -540,7 +487,7 @@ function populateSampleData(callback) {
             syncMode, // sync: 0 or 1
             iodepth // iodepth
         ];
-        
+
         // Insert into test_runs_all first (always succeeds)
         db.run(`
             INSERT INTO test_runs_all (
@@ -556,7 +503,7 @@ function populateSampleData(callback) {
                 insertNextTestRun(index + 1);
                 return;
             }
-            
+
             const allId = this.lastID;
             testRunIdsAll.push({
                 id: allId,
@@ -565,7 +512,7 @@ function populateSampleData(callback) {
                 latency: fakeLatency,
                 bandwidth: fakeBandwidth
             });
-            
+
             // Try to insert into test_runs (may fail due to unique constraint)
             db.run(`
                 INSERT OR REPLACE INTO test_runs (
@@ -587,13 +534,13 @@ function populateSampleData(callback) {
                         bandwidth: fakeBandwidth
                     });
                 }
-                
+
                 // Continue with next test run
                 insertNextTestRun(index + 1);
             });
         });
     };
-    
+
     // Start the sequential insertion
     insertNextTestRun(0);
 }
@@ -602,65 +549,57 @@ function populateSampleData(callback) {
 function insertMetricsForAllTests(testRunIds, testRunIdsAll, callback) {
     let metricsInserted = 0;
     const totalMetrics = (testRunIds.length + testRunIdsAll.length) * 4; // ~4 metrics per test run (IOPS, latency, bandwidth, latency percentiles)
-    
+
     // Insert metrics for test_runs (latest)
     testRunIds.forEach(testRun => {
         const { id, data, iops, latency, bandwidth } = testRun;
-        
+
         // Insert IOPS metric
         insertMetric(id, 'iops', iops, 'IOPS', data.pattern.includes('read') ? 'read' : 'write', () => {
             metricsInserted++;
             checkCompletion();
         });
-        
+
         // Insert latency metric
         insertMetric(id, 'avg_latency', latency, 'ms', data.pattern.includes('read') ? 'read' : 'write', () => {
             metricsInserted++;
             checkCompletion();
         });
-        
+
         // Insert bandwidth metric
         insertMetric(id, 'bandwidth', bandwidth, 'MB/s', data.pattern.includes('read') ? 'read' : 'write', () => {
             metricsInserted++;
             checkCompletion();
         });
-        
-        // Insert latency percentiles
-        insertLatencyPercentiles(id, data.pattern.includes('read') ? 'read' : 'write', latency, () => {
-            metricsInserted++;
-            checkCompletion();
-        });
+
+        // Note: latency percentiles tables removed as they were unused
     });
-    
+
     // Insert metrics for test_runs_all (all historical)
     testRunIdsAll.forEach(testRun => {
         const { id, data, iops, latency, bandwidth } = testRun;
-        
+
         // Insert IOPS metric into performance_metrics_all
         insertMetricAll(id, 'iops', iops, 'IOPS', data.pattern.includes('read') ? 'read' : 'write', () => {
             metricsInserted++;
             checkCompletion();
         });
-        
+
         // Insert latency metric into performance_metrics_all
         insertMetricAll(id, 'avg_latency', latency, 'ms', data.pattern.includes('read') ? 'read' : 'write', () => {
             metricsInserted++;
             checkCompletion();
         });
-        
+
         // Insert bandwidth metric into performance_metrics_all
         insertMetricAll(id, 'bandwidth', bandwidth, 'MB/s', data.pattern.includes('read') ? 'read' : 'write', () => {
             metricsInserted++;
             checkCompletion();
         });
-        
-        // Insert latency percentiles into latency_percentiles_all
-        insertLatencyPercentilesAll(id, data.pattern.includes('read') ? 'read' : 'write', latency, () => {
-            metricsInserted++;
-            checkCompletion();
-        });
+
+        // Note: latency percentiles tables removed as they were unused
     });
-    
+
     function checkCompletion() {
         if (metricsInserted >= totalMetrics) {
             console.log(`Sample data generation complete: ${testRunIds.length} latest test runs, ${testRunIdsAll.length} historical test runs, ~${totalMetrics} metrics`);
@@ -687,122 +626,11 @@ function insertMetricAll(testRunId, metricType, value, unit, operationType, call
     );
 }
 
-// Insert latency percentiles for a test run
-function insertLatencyPercentiles(testRunId, operationType, baseLatency, callback) {
-    const percentiles = [
-        { percentile: 50.0, multiplier: 1.0 },
-        { percentile: 90.0, multiplier: 1.5 },
-        { percentile: 95.0, multiplier: 2.0 },
-        { percentile: 99.0, multiplier: 3.0 },
-        { percentile: 99.9, multiplier: 5.0 }
-    ];
-    
-    let inserted = 0;
-    let errors = 0;
-    
-    percentiles.forEach(p => {
-        const latencyNs = Math.floor(baseLatency * p.multiplier * 1000000); // Convert ms to ns
-        
-        // Ensure latency is valid
-        if (latencyNs > 0) {
-            db.run(
-                'INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)',
-                [testRunId, operationType, p.percentile, latencyNs],
-                (err) => {
-                    if (err) {
-                        logError('Error inserting latency percentile', err, {
-                            testRunId,
-                            operationType,
-                            percentile: p.percentile,
-                            latencyNs,
-                            baseLatency
-                        });
-                        errors++;
-                    }
-                    inserted++;
-                    if (inserted === percentiles.length && callback) {
-                        callback(errors > 0 ? new Error(`${errors} percentile insertions failed`) : null);
-                    }
-                }
-            );
-        } else {
-            logWarning('Skipping invalid latency percentile', {
-                testRunId,
-                operationType,
-                percentile: p.percentile,
-                latencyNs,
-                baseLatency,
-                reason: 'invalid_latency'
-            });
-            inserted++;
-            if (inserted === percentiles.length && callback) {
-                callback(errors > 0 ? new Error(`${errors} percentile insertions failed`) : null);
-            }
-        }
-    });
-}
-
-// Insert latency percentiles for a test run into latency_percentiles_all (historical)
-function insertLatencyPercentilesAll(testRunId, operationType, baseLatency, callback) {
-    const percentiles = [
-        { percentile: 50.0, multiplier: 1.0 },
-        { percentile: 90.0, multiplier: 1.5 },
-        { percentile: 95.0, multiplier: 2.0 },
-        { percentile: 99.0, multiplier: 3.0 },
-        { percentile: 99.9, multiplier: 5.0 }
-    ];
-    
-    let inserted = 0;
-    let errors = 0;
-    
-    percentiles.forEach(p => {
-        const latencyNs = Math.floor(baseLatency * p.multiplier * 1000000); // Convert ms to ns
-        
-        // Ensure latency is valid
-        if (latencyNs > 0) {
-            db.run(
-                'INSERT INTO latency_percentiles_all (test_run_id, operation_type, percentile, latency_ns) VALUES (?, ?, ?, ?)',
-                [testRunId, operationType, p.percentile, latencyNs],
-                (err) => {
-                    if (err) {
-                        logError('Error inserting latency percentile to all table', err, {
-                            testRunId,
-                            operationType,
-                            percentile: p.percentile,
-                            latencyNs,
-                            baseLatency
-                        });
-                        errors++;
-                    }
-                    inserted++;
-                    if (inserted === percentiles.length && callback) {
-                        callback(errors > 0 ? new Error(`${errors} percentile insertions failed`) : null);
-                    }
-                }
-            );
-        } else {
-            logWarning('Skipping invalid latency percentile for all table', {
-                testRunId,
-                operationType,
-                percentile: p.percentile,
-                latencyNs,
-                baseLatency,
-                reason: 'invalid_latency'
-            });
-            inserted++;
-            if (inserted === percentiles.length && callback) {
-                callback(errors > 0 ? new Error(`${errors} percentile insertions failed`) : null);
-            }
-        }
-    });
-}
 
 module.exports = {
     initDatabase,
     getDatabase,
     updateLatestFlags,
     insertMetric,
-    insertMetricAll,
-    insertLatencyPercentiles,
-    insertLatencyPercentilesAll
+    insertMetricAll
 };
