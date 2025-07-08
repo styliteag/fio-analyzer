@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { getDatabase, updateLatestFlags, insertMetric, insertLatencyPercentiles, insertPercentileMetrics } = require('../database');
+const { getDatabase, updateLatestFlags, insertMetric, insertMetricAll, insertLatencyPercentiles, insertLatencyPercentilesAll } = require('../database');
 const { requireAuth } = require('../auth');
 const { logInfo, logError, logWarning, requestIdMiddleware } = require('../utils');
 
@@ -421,19 +421,8 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                     testName: test_name
                 });
 
-                // Insert test run with job options fields and is_latest = 1
-                const insertTestRun = `
-                    INSERT INTO test_runs 
-                    (timestamp, test_date, drive_model, drive_type, test_name, block_size, 
-                     read_write_pattern, queue_depth, duration, fio_version, 
-                     job_runtime, rwmixread, total_ios_read, total_ios_write, 
-                     usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path,
-                     output_file, num_jobs, direct, test_size, sync, iodepth, is_latest)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                `;
-
-                const db = getDatabase();
-                db.run(insertTestRun, [
+                // Prepare data for insertion into both tables
+                const insertData = [
                     new Date().toISOString(),
                     testDate.toISOString(),
                     drive_model,
@@ -460,7 +449,32 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                     test_size,
                     sync,
                     iodepth
-                ], function(err) {
+                ];
+
+                // Insert test run into latest table with is_latest = 1
+                const insertTestRun = `
+                    INSERT INTO test_runs 
+                    (timestamp, test_date, drive_model, drive_type, test_name, block_size, 
+                     read_write_pattern, queue_depth, duration, fio_version, 
+                     job_runtime, rwmixread, total_ios_read, total_ios_write, 
+                     usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path,
+                     output_file, num_jobs, direct, test_size, sync, iodepth, is_latest)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                `;
+
+                // Insert test run into historical table with is_latest = 1
+                const insertTestRunAll = `
+                    INSERT INTO test_runs_all 
+                    (timestamp, test_date, drive_model, drive_type, test_name, block_size, 
+                     read_write_pattern, queue_depth, duration, fio_version, 
+                     job_runtime, rwmixread, total_ios_read, total_ios_write, 
+                     usr_cpu, sys_cpu, hostname, protocol, description, uploaded_file_path,
+                     output_file, num_jobs, direct, test_size, sync, iodepth, is_latest)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                `;
+
+                const db = getDatabase();
+                db.run(insertTestRun, [...insertData], function(err) {
                 if (err) {
                     logError('Database insertion failed for job', err, {
                         requestId: req.requestId,
@@ -508,100 +522,122 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                 }
 
                 const testRunId = this.lastID;
-                importedTestRuns.push(testRunId);
-                successfulDbInserts++;
+                
+                // Now insert into test_runs_all (historical data)
+                db.run(insertTestRunAll, [...insertData], function(errAll) {
+                    const testRunIdAll = this.lastID;
+                    
+                    if (errAll) {
+                        logError('Database insertion failed for test_runs_all', errAll, {
+                            requestId: req.requestId,
+                            jobIndex: jobIndex + 1,
+                            testName: test_name,
+                            testRunId,
+                            dbOperation: 'INSERT_TEST_RUN_ALL'
+                        });
+                        // Continue anyway - we have the main record
+                    } else {
+                        logInfo('Database insertion successful for both tables', {
+                            requestId: req.requestId,
+                            jobIndex: jobIndex + 1,
+                            testName: test_name,
+                            testRunId,
+                            testRunIdAll,
+                            hardware: {
+                                driveModel: drive_model,
+                                driveType: drive_type,
+                                hostname: hostname || 'unknown',
+                                protocol: protocol || 'unknown'
+                            },
+                            dbOperation: 'INSERT_TEST_RUN_DUAL',
+                            success: true
+                        });
+                    }
+                    
+                    importedTestRuns.push(testRunId);
+                    successfulDbInserts++;
 
-                logInfo('Database insertion successful for job', {
-                    requestId: req.requestId,
-                    jobIndex: jobIndex + 1,
-                    testName: test_name,
-                    testRunId,
-                    lastID: this.lastID,
-                    hardware: {
-                        driveModel: drive_model,
-                        driveType: drive_type,
-                        hostname: hostname || 'unknown',
-                        protocol: protocol || 'unknown'
-                    },
-                    dbOperation: 'INSERT_TEST_RUN',
-                    success: true
-                });
+                    // Insert performance metrics for read operations into both tables
+                    if (job.read && job.read.iops > 0) {
+                        logInfo('Inserting read metrics to both tables', {
+                            requestId: req.requestId,
+                            jobIndex: jobIndex + 1,
+                            testRunId,
+                            testRunIdAll,
+                            readIOPS: job.read.iops,
+                            readLatency: job.read.lat_ns?.mean,
+                            readBandwidth: job.read.bw_bytes,
+                            hardware: {
+                                driveModel: drive_model,
+                                driveType: drive_type,
+                                hostname: hostname || 'unknown',
+                                protocol: protocol || 'unknown'
+                            }
+                        });
+                        insertFioMetrics(testRunId, job.read, 'read'); // Latest table
+                        if (testRunIdAll) insertFioMetricsAll(testRunIdAll, job.read, 'read'); // Historical table
+                    }
 
-                // Insert performance metrics for read operations
-                if (job.read && job.read.iops > 0) {
-                    logInfo('Inserting read metrics', {
-                        requestId: req.requestId,
-                        jobIndex: jobIndex + 1,
-                        testRunId,
-                        readIOPS: job.read.iops,
-                        readLatency: job.read.lat_ns?.mean,
-                        readBandwidth: job.read.bw_bytes,
-                        hardware: {
-                            driveModel: drive_model,
-                            driveType: drive_type,
-                            hostname: hostname || 'unknown',
-                            protocol: protocol || 'unknown'
-                        }
-                    });
-                    insertFioMetrics(testRunId, job.read, 'read');
-                }
+                    // Insert performance metrics for write operations into both tables
+                    if (job.write && job.write.iops > 0) {
+                        logInfo('Inserting write metrics to both tables', {
+                            requestId: req.requestId,
+                            jobIndex: jobIndex + 1,
+                            testRunId,
+                            testRunIdAll,
+                            writeIOPS: job.write.iops,
+                            writeLatency: job.write.lat_ns?.mean,
+                            writeBandwidth: job.write.bw_bytes,
+                            hardware: {
+                                driveModel: drive_model,
+                                driveType: drive_type,
+                                hostname: hostname || 'unknown',
+                                protocol: protocol || 'unknown'
+                            }
+                        });
+                        insertFioMetrics(testRunId, job.write, 'write'); // Latest table
+                        if (testRunIdAll) insertFioMetricsAll(testRunIdAll, job.write, 'write'); // Historical table
+                    }
 
-                // Insert performance metrics for write operations  
-                if (job.write && job.write.iops > 0) {
-                    logInfo('Inserting write metrics', {
-                        requestId: req.requestId,
-                        jobIndex: jobIndex + 1,
-                        testRunId,
-                        writeIOPS: job.write.iops,
-                        writeLatency: job.write.lat_ns?.mean,
-                        writeBandwidth: job.write.bw_bytes,
-                        hardware: {
-                            driveModel: drive_model,
-                            driveType: drive_type,
-                            hostname: hostname || 'unknown',
-                            protocol: protocol || 'unknown'
-                        }
-                    });
-                    insertFioMetrics(testRunId, job.write, 'write');
-                }
+                    // Insert latency percentiles into both tables
+                    if (job.read?.clat_ns?.percentile) {
+                        insertLatencyPercentiles(testRunId, 'read', job.read.lat_ns.mean / 1000000, () => {}); // Latest table
+                        if (testRunIdAll) insertLatencyPercentilesAll(testRunIdAll, 'read', job.read.lat_ns.mean / 1000000, () => {}); // Historical table
+                    }
+                    if (job.write?.clat_ns?.percentile) {
+                        insertLatencyPercentiles(testRunId, 'write', job.write.lat_ns.mean / 1000000, () => {}); // Latest table
+                        if (testRunIdAll) insertLatencyPercentilesAll(testRunIdAll, 'write', job.write.lat_ns.mean / 1000000, () => {}); // Historical table
+                    }
 
-                // Insert p95/p99 latency values as metrics
-                if (job.read?.clat_ns?.percentile) {
-                    insertPercentileMetrics(testRunId, job.read.clat_ns.percentile, 'read');
-                }
-                if (job.write?.clat_ns?.percentile) {
-                    insertPercentileMetrics(testRunId, job.write.clat_ns.percentile, 'write');
-                }
-
-                completedJobs++;
-                if (completedJobs === jobs.length) {
-                    const totalTime = Date.now() - startTime;
-                    logInfo('Import completed successfully', {
-                        requestId: req.requestId,
-                        username: req.user.username,
-                        hardware: {
-                            driveModel: drive_model,
-                            driveType: drive_type,
-                            hostname: hostname || 'unknown',
-                            protocol: protocol || 'unknown'
-                        },
-                        statistics: {
-                            totalJobs: jobs.length,
-                            importedJobs: importedTestRuns.length,
-                            skippedJobs,
-                            errorJobs,
-                            successfulDbInserts,
-                            failedDbInserts
-                        },
-                        totalTime: `${totalTime}ms`,
-                        testRunIds: importedTestRuns
-                    });
-                    res.json({ 
-                        message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
-                        test_run_ids: importedTestRuns,
-                        skipped_jobs: skippedJobs
-                    });
-                }
+                    completedJobs++;
+                    if (completedJobs === jobs.length) {
+                        const totalTime = Date.now() - startTime;
+                        logInfo('Import completed successfully', {
+                            requestId: req.requestId,
+                            username: req.user.username,
+                            hardware: {
+                                driveModel: drive_model,
+                                driveType: drive_type,
+                                hostname: hostname || 'unknown',
+                                protocol: protocol || 'unknown'
+                            },
+                            statistics: {
+                                totalJobs: jobs.length,
+                                importedJobs: importedTestRuns.length,
+                                skippedJobs,
+                                errorJobs,
+                                successfulDbInserts,
+                                failedDbInserts
+                            },
+                            totalTime: `${totalTime}ms`,
+                            testRunIds: importedTestRuns
+                        });
+                        res.json({ 
+                            message: `FIO results imported successfully. Processed ${importedTestRuns.length} out of ${jobs.length} jobs.`,
+                            test_run_ids: importedTestRuns,
+                            skipped_jobs: skippedJobs
+                        });
+                    }
                 });
             });
         });
@@ -655,6 +691,43 @@ function insertFioMetrics(testRunId, data, operationType) {
                     value: metric[2],
                     unit: metric[3],
                     dbOperation: 'INSERT_METRIC',
+                    success: true
+                });
+            }
+        });
+    });
+}
+
+function insertFioMetricsAll(testRunId, data, operationType) {
+    const metrics = [
+        [testRunId, 'iops', data.iops, 'IOPS', operationType],
+        [testRunId, 'avg_latency', data.lat_ns.mean / 1000000, 'ms', operationType], // Convert ns to ms
+        [testRunId, 'bandwidth', data.bw_bytes / (1024 * 1024), 'MB/s', operationType] // Convert bytes/s to MB/s
+    ];
+
+    const db = getDatabase();
+    metrics.forEach(metric => {
+        insertMetricAll(metric[0], metric[1], metric[2], metric[3], metric[4], (err) => {
+            if (err) {
+                logError('Error inserting metric to historical table', err, {
+                    testRunId,
+                    operationType,
+                    metricType: metric[1],
+                    value: metric[2],
+                    unit: metric[3],
+                    dbOperation: 'INSERT_METRIC_ALL',
+                    hardware: {
+                        testRunId: testRunId
+                    }
+                });
+            } else {
+                logInfo('Metric inserted successfully to historical table', {
+                    testRunId,
+                    operationType,
+                    metricType: metric[1],
+                    value: metric[2],
+                    unit: metric[3],
+                    dbOperation: 'INSERT_METRIC_ALL',
                     success: true
                 });
             }
