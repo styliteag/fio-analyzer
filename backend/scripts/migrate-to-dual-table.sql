@@ -51,16 +51,6 @@ CREATE TABLE IF NOT EXISTS performance_metrics_all (
     FOREIGN KEY (test_run_id) REFERENCES test_runs_all (id)
 );
 
--- Step 3: Create new latency percentiles historical table
-CREATE TABLE IF NOT EXISTS latency_percentiles_all (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    test_run_id INTEGER NOT NULL,
-    operation_type TEXT NOT NULL,
-    percentile REAL NOT NULL,
-    latency_ns INTEGER NOT NULL,
-    FOREIGN KEY (test_run_id) REFERENCES test_runs_all (id)
-);
-
 -- Step 4: Backup existing data by copying to historical tables
 -- Copy all test runs to test_runs_all
 INSERT INTO test_runs_all (
@@ -96,17 +86,6 @@ SELECT id, test_run_id, metric_type, value, unit, operation_type
 FROM performance_metrics
 WHERE NOT EXISTS (
     SELECT 1 FROM performance_metrics_all WHERE performance_metrics_all.id = performance_metrics.id
-);
-
--- Copy all latency percentiles to latency_percentiles_all (if table exists)
-INSERT INTO latency_percentiles_all (
-    id, test_run_id, operation_type, percentile, latency_ns
-)
-SELECT id, test_run_id, operation_type, percentile, latency_ns
-FROM latency_percentiles
-WHERE EXISTS (SELECT name FROM sqlite_master WHERE type='table' AND name='latency_percentiles')
-AND NOT EXISTS (
-    SELECT 1 FROM latency_percentiles_all WHERE latency_percentiles_all.id = latency_percentiles.id
 );
 
 -- Step 5: Clear existing test_runs table and recreate with unique constraints
@@ -201,27 +180,6 @@ SELECT pma.test_run_id, pma.metric_type, pma.value, pma.unit, pma.operation_type
 FROM performance_metrics_all pma
 JOIN test_runs tr ON pma.test_run_id = tr.id;
 
--- Step 9: Clear and repopulate latency_percentiles with only latest test data (if table exists)
--- Check if latency_percentiles table exists before trying to rename it
-UPDATE sqlite_master SET name = 'latency_percentiles_backup' 
-WHERE type = 'table' AND name = 'latency_percentiles';
-
--- Create latency_percentiles table for latest data
-CREATE TABLE IF NOT EXISTS latency_percentiles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    test_run_id INTEGER NOT NULL,
-    operation_type TEXT NOT NULL,
-    percentile REAL NOT NULL,
-    latency_ns INTEGER NOT NULL,
-    FOREIGN KEY (test_run_id) REFERENCES test_runs (id)
-);
-
--- Populate with percentiles for latest test runs only (if data exists)
-INSERT INTO latency_percentiles (test_run_id, operation_type, percentile, latency_ns)
-SELECT lpa.test_run_id, lpa.operation_type, lpa.percentile, lpa.latency_ns
-FROM latency_percentiles_all lpa
-JOIN test_runs tr ON lpa.test_run_id = tr.id;
-
 -- Step 10: Create performance indexes for new tables
 -- Indexes for test_runs_all (historical data queries)
 CREATE INDEX IF NOT EXISTS idx_test_runs_all_timestamp 
@@ -243,13 +201,6 @@ ON performance_metrics (test_run_id, metric_type, operation_type);
 
 CREATE INDEX IF NOT EXISTS idx_performance_metrics_all_test_metric 
 ON performance_metrics_all (test_run_id, metric_type, operation_type);
-
--- Indexes for latency percentiles
-CREATE INDEX IF NOT EXISTS idx_latency_percentiles_test_run 
-ON latency_percentiles (test_run_id, operation_type);
-
-CREATE INDEX IF NOT EXISTS idx_latency_percentiles_all_test_run 
-ON latency_percentiles_all (test_run_id, operation_type);
 
 -- Step 11: Create view for latest test results per server
 CREATE VIEW IF NOT EXISTS latest_test_per_server AS
@@ -286,10 +237,7 @@ SELECT
     (SELECT COUNT(*) FROM test_runs_all) as total_historical_runs,
     (SELECT COUNT(*) FROM test_runs) as latest_runs,
     (SELECT COUNT(*) FROM performance_metrics_all) as total_historical_metrics,
-    (SELECT COUNT(*) FROM performance_metrics) as latest_metrics,
-    (SELECT COUNT(*) FROM latency_percentiles_all) as total_historical_percentiles,
-    (SELECT COUNT(*) FROM latency_percentiles) as latest_percentiles;
-
+    (SELECT COUNT(*) FROM performance_metrics) as latest_metrics;
 COMMIT;
 
 -- Notes:
