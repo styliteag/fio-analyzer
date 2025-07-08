@@ -10,6 +10,255 @@ router.use(requestIdMiddleware);
 
 /**
  * @swagger
+ * /api/time-series/all:
+ *   get:
+ *     summary: Get all historical test runs with filtering
+ *     description: Retrieve all historical test runs (equivalent to the old include_historical=true). This endpoint provides access to the complete test run history.
+ *     tags: [Time Series]
+ *     security:
+ *       - basicAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: hostnames
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of hostnames to filter by
+ *         example: "server1,server2"
+ *       - in: query
+ *         name: protocols
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of protocols to filter by
+ *         example: "NVMe,SATA"
+ *       - in: query
+ *         name: drive_types
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of drive types to filter by
+ *         example: "SSD,HDD"
+ *       - in: query
+ *         name: drive_models
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of drive models to filter by
+ *         example: "Samsung 980 PRO,WD Black"
+ *       - in: query
+ *         name: patterns
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of test patterns to filter by
+ *         example: "read,write,randread,randwrite"
+ *       - in: query
+ *         name: block_sizes
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of block sizes to filter by
+ *         example: "4k,64k,1M"
+ *       - in: query
+ *         name: syncs
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of sync values to filter by
+ *         example: "0,1"
+ *       - in: query
+ *         name: queue_depths
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of queue depths to filter by
+ *         example: "1,4,16,32"
+ *       - in: query
+ *         name: directs
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of direct I/O values to filter by
+ *         example: "0,1"
+ *       - in: query
+ *         name: num_jobs
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of number of jobs to filter by
+ *         example: "1,4,8"
+ *       - in: query
+ *         name: test_sizes
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of test sizes to filter by
+ *         example: "1G,10G,100G"
+ *       - in: query
+ *         name: durations
+ *         schema:
+ *           type: string
+ *         description: Comma-separated list of test durations (in seconds) to filter by
+ *         example: "30,60,300"
+ *     responses:
+ *       200:
+ *         description: Historical test runs retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/TestRun'
+ *       401:
+ *         description: Unauthorized - Admin access required
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/all', requireAdmin, (req, res) => {
+    // Extract filter parameters from query string (same as test-runs endpoint)
+    const filters = {
+        hostnames: req.query.hostnames ? req.query.hostnames.split(',') : [],
+        protocols: req.query.protocols ? req.query.protocols.split(',') : [],
+        drive_types: req.query.drive_types ? req.query.drive_types.split(',') : [],
+        drive_models: req.query.drive_models ? req.query.drive_models.split(',') : [],
+        patterns: req.query.patterns ? req.query.patterns.split(',') : [],
+        block_sizes: req.query.block_sizes ? req.query.block_sizes.split(',') : [],
+        syncs: req.query.syncs ? req.query.syncs.split(',').map(s => parseInt(s)) : [],
+        queue_depths: req.query.queue_depths ? req.query.queue_depths.split(',').map(q => parseInt(q)) : [],
+        directs: req.query.directs ? req.query.directs.split(',').map(d => parseInt(d)) : [],
+        num_jobs: req.query.num_jobs ? req.query.num_jobs.split(',').map(n => parseInt(n)) : [],
+        test_sizes: req.query.test_sizes ? req.query.test_sizes.split(',') : [],
+        durations: req.query.durations ? req.query.durations.split(',').map(d => parseInt(d)) : []
+    };
+    
+    logInfo('User requesting all historical test runs with filters', {
+        requestId: req.requestId,
+        username: req.user.username,
+        action: 'LIST_ALL_HISTORICAL_TEST_RUNS',
+        filters: filters
+    });
+    
+    // Build base query for test_runs_all
+    let query = `
+        SELECT id, timestamp, drive_model, drive_type, test_name, description,
+               block_size, read_write_pattern, queue_depth, duration,
+               fio_version, job_runtime, rwmixread, total_ios_read, 
+               total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
+               output_file, num_jobs, direct, test_size, sync, iodepth, is_latest
+        FROM test_runs_all
+    `;
+    
+    // Build WHERE conditions (same logic as test-runs endpoint)
+    const whereConditions = [];
+    const queryParams = [];
+    
+    // Add hostname filter
+    if (filters.hostnames.length > 0) {
+        const placeholders = filters.hostnames.map(() => '?').join(',');
+        whereConditions.push(`hostname IN (${placeholders})`);
+        queryParams.push(...filters.hostnames);
+    }
+    
+    // Add protocol filter
+    if (filters.protocols.length > 0) {
+        const placeholders = filters.protocols.map(() => '?').join(',');
+        whereConditions.push(`protocol IN (${placeholders})`);
+        queryParams.push(...filters.protocols);
+    }
+    
+    // Add drive_type filter
+    if (filters.drive_types.length > 0) {
+        const placeholders = filters.drive_types.map(() => '?').join(',');
+        whereConditions.push(`drive_type IN (${placeholders})`);
+        queryParams.push(...filters.drive_types);
+    }
+    
+    // Add drive_model filter
+    if (filters.drive_models.length > 0) {
+        const placeholders = filters.drive_models.map(() => '?').join(',');
+        whereConditions.push(`drive_model IN (${placeholders})`);
+        queryParams.push(...filters.drive_models);
+    }
+    
+    // Add patterns (read_write_pattern) filter
+    if (filters.patterns.length > 0) {
+        const placeholders = filters.patterns.map(() => '?').join(',');
+        whereConditions.push(`read_write_pattern IN (${placeholders})`);
+        queryParams.push(...filters.patterns);
+    }
+    
+    // Add block_sizes filter
+    if (filters.block_sizes.length > 0) {
+        const placeholders = filters.block_sizes.map(() => '?').join(',');
+        whereConditions.push(`block_size IN (${placeholders})`);
+        queryParams.push(...filters.block_sizes);
+    }
+    
+    // Add sync filter
+    if (filters.syncs.length > 0) {
+        const placeholders = filters.syncs.map(() => '?').join(',');
+        whereConditions.push(`sync IN (${placeholders})`);
+        queryParams.push(...filters.syncs);
+    }
+    
+    // Add queue_depths filter
+    if (filters.queue_depths.length > 0) {
+        const placeholders = filters.queue_depths.map(() => '?').join(',');
+        whereConditions.push(`queue_depth IN (${placeholders})`);
+        queryParams.push(...filters.queue_depths);
+    }
+    
+    // Add directs filter
+    if (filters.directs.length > 0) {
+        const placeholders = filters.directs.map(() => '?').join(',');
+        whereConditions.push(`direct IN (${placeholders})`);
+        queryParams.push(...filters.directs);
+    }
+    
+    // Add num_jobs filter
+    if (filters.num_jobs.length > 0) {
+        const placeholders = filters.num_jobs.map(() => '?').join(',');
+        whereConditions.push(`num_jobs IN (${placeholders})`);
+        queryParams.push(...filters.num_jobs);
+    }
+    
+    // Add test_sizes filter
+    if (filters.test_sizes.length > 0) {
+        const placeholders = filters.test_sizes.map(() => '?').join(',');
+        whereConditions.push(`test_size IN (${placeholders})`);
+        queryParams.push(...filters.test_sizes);
+    }
+    
+    // Add durations filter
+    if (filters.durations.length > 0) {
+        const placeholders = filters.durations.map(() => '?').join(',');
+        whereConditions.push(`duration IN (${placeholders})`);
+        queryParams.push(...filters.durations);
+    }
+    
+    // Add WHERE clause if there are conditions
+    if (whereConditions.length > 0) {
+        query += ' WHERE ' + whereConditions.join(' AND ');
+    }
+    
+    query += ` ORDER BY timestamp DESC`;
+    
+    const db = getDatabase();
+    db.all(query, queryParams, (err, rows) => {
+        if (err) {
+            logError('Database error fetching all historical test runs', err, {
+                requestId: req.requestId,
+                username: req.user.username,
+                action: 'LIST_ALL_HISTORICAL_TEST_RUNS'
+            });
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        
+        logInfo('All historical test runs retrieved successfully', {
+            requestId: req.requestId,
+            username: req.user.username,
+            action: 'LIST_ALL_HISTORICAL_TEST_RUNS',
+            resultCount: rows.length,
+            filtersApplied: Object.keys(filters).filter(key => filters[key].length > 0)
+        });
+        
+        res.json(rows);
+    });
+});
+
+/**
+ * @swagger
  * /api/time-series/servers:
  *   get:
  *     summary: List servers with test statistics
@@ -52,7 +301,7 @@ router.get('/servers', requireAdmin, (req, res) => {
                 COUNT(*) AS run_count,
                 MAX(timestamp) AS last_test_time,
                 MIN(timestamp) AS first_test_time
-            FROM test_runs
+            FROM test_runs_all
             WHERE hostname IS NOT NULL
               AND protocol IS NOT NULL
               AND drive_model IS NOT NULL
@@ -66,7 +315,6 @@ router.get('/servers', requireAdmin, (req, res) => {
                 queue_depth
             HAVING
                 COUNT(*) >= 2
-                AND SUM(CASE WHEN is_latest = 1 THEN 1 ELSE 0 END) >= 1
         )
         GROUP BY hostname
         ORDER BY hostname;
@@ -314,8 +562,8 @@ router.get('/history', requireAdmin, (req, res) => {
             pm.metric_type,
             pm.value,
             pm.unit
-        FROM test_runs tr
-        JOIN performance_metrics pm ON tr.id = pm.test_run_id
+        FROM test_runs_all tr
+        JOIN performance_metrics_all pm ON tr.id = pm.test_run_id
         WHERE tr.hostname IS NOT NULL AND tr.protocol IS NOT NULL
     `;
     
@@ -525,8 +773,8 @@ router.get('/trends', requireAdmin, (req, res) => {
                 pm.value,
                 pm.unit,
                 ROW_NUMBER() OVER (ORDER BY tr.timestamp) as rn
-            FROM test_runs tr
-            JOIN performance_metrics pm ON tr.id = pm.test_run_id
+            FROM test_runs_all tr
+            JOIN performance_metrics_all pm ON tr.id = pm.test_run_id
             WHERE tr.hostname = ? 
             AND tr.protocol = ?
             AND tr.drive_model = ?

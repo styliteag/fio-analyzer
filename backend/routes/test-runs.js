@@ -244,19 +244,12 @@ router.put('/bulk', requireAdmin, (req, res) => {
  * @swagger
  * /api/test-runs:
  *   get:
- *     summary: Get test runs with optional filtering
- *     description: Retrieve a list of FIO test runs with comprehensive filtering capabilities. By default returns only the latest test for each unique configuration. Use include_historical=true to get all historical data.
+ *     summary: Get latest test runs with optional filtering
+ *     description: Retrieve a list of the latest FIO test runs (one per unique configuration) with comprehensive filtering capabilities. For historical data, use the /api/time-series endpoints.
  *     tags: [Test Runs]
  *     security:
  *       - basicAuth: []
  *     parameters:
- *       - in: query
- *         name: include_historical
- *         required: false
- *         schema:
- *           type: boolean
- *         description: Include historical test runs (default false - only latest per configuration)
- *         example: false
  *       - in: query
  *         name: hostnames
  *         required: false
@@ -364,8 +357,6 @@ router.put('/bulk', requireAdmin, (req, res) => {
  *               $ref: '#/components/schemas/Error'
  */
 router.get('/', requireAdmin, (req, res) => {
-    const includeHistorical = req.query.include_historical === 'true';
-    
     // Extract filter parameters from query string
     const filters = {
         hostnames: req.query.hostnames ? req.query.hostnames.split(',') : [],
@@ -382,11 +373,10 @@ router.get('/', requireAdmin, (req, res) => {
         durations: req.query.durations ? req.query.durations.split(',').map(d => parseInt(d)) : []
     };
     
-    logInfo('User requesting test runs list with filters', {
+    logInfo('User requesting latest test runs list with filters', {
         requestId: req.requestId,
         username: req.user.username,
-        action: 'LIST_TEST_RUNS',
-        includeHistorical: includeHistorical,
+        action: 'LIST_LATEST_TEST_RUNS',
         filters: filters
     });
     
@@ -403,11 +393,6 @@ router.get('/', requireAdmin, (req, res) => {
     // Build WHERE conditions
     const whereConditions = [];
     const queryParams = [];
-    
-    // Add is_latest filter unless historical data is requested
-    if (!includeHistorical) {
-        whereConditions.push('is_latest = 1');
-    }
     
     // Add hostname filter
     if (filters.hostnames.length > 0) {
@@ -512,12 +497,11 @@ router.get('/', requireAdmin, (req, res) => {
             return;
         }
         
-        logInfo('Test runs list retrieved successfully', {
+        logInfo('Latest test runs list retrieved successfully', {
             requestId: req.requestId,
             username: req.user.username,
-            action: 'LIST_TEST_RUNS',
+            action: 'LIST_LATEST_TEST_RUNS',
             resultCount: rows.length,
-            includeHistorical: includeHistorical,
             filtersApplied: Object.keys(filters).filter(key => filters[key].length > 0)
         });
         
