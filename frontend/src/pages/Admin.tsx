@@ -121,7 +121,9 @@ const Admin: React.FC = () => {
     setActiveFilters,
     clearFilters,
     refetch,
-  } = useServerSideTestRuns();
+  } = useServerSideTestRuns({
+    autoFetch: view === 'latest' // Only auto-fetch when in latest view
+  });
 
   // Combined loading state
   const isLoading = loading || (view === 'history' && timeSeriesLoading);
@@ -186,10 +188,14 @@ const Admin: React.FC = () => {
     }
   }, [view, activeFilters]);
 
-  // Fetch time-series data when view changes to history
+  // Fetch data when view changes
   useEffect(() => {
-    fetchTimeSeriesData();
-  }, [fetchTimeSeriesData]);
+    if (view === 'history') {
+      fetchTimeSeriesData();
+    } else if (view === 'latest') {
+      refetch(); // Manually refetch test runs when switching to latest view
+    }
+  }, [fetchTimeSeriesData, refetch, view]);
 
   // Use time-series data for history view, regular test runs for latest view
   const historicalRuns = useMemo(() => {
