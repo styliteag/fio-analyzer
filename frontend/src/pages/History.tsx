@@ -86,13 +86,16 @@ export default function History() {
 			// Do not filter by config on API level; we'll filter client-side to support multi-select
 		}
 
+		console.log('🔍 History.tsx - API call options:', opts);
 		const res = await fetchTimeSeriesHistory(opts);
+		console.log('🔍 History.tsx - API response:', res);
 		if (res.error) {
 			setError(res.error);
 			setData([]);
 			setConfigOptions([]);
 		} else {
 			const newData = res.data || [];
+			console.log('🔍 History.tsx - Data received:', newData.length, 'items');
 			setData(newData);
 			// Recompute config options
 			const unique = new Set<string>();
@@ -116,12 +119,35 @@ export default function History() {
 
 	// Build chart.js dataset structure
 	const chartData = useMemo(() => {
+		console.log('🔍 History.tsx - Building chart data:', {
+			dataLength: data.length,
+			selectedConfigs,
+			selectedMetrics
+		});
+		
 		let filtered = selectedConfigs.length > 0
 			? data.filter((d) => selectedConfigs.includes(`${d.read_write_pattern}|${d.block_size}|${d.queue_depth}`))
 			: data;
 		if (selectedMetrics.length > 0) {
-			filtered = filtered.filter((d) => selectedMetrics.includes(d.metric_type));
+			// Backend returns actual metric values, not metric_type field
+			// We need to transform the data to include metric_type for each selected metric
+			const transformedData: any[] = [];
+			filtered.forEach((d) => {
+				selectedMetrics.forEach((metric) => {
+					const value = d[metric as keyof typeof d];
+					if (value !== null && value !== undefined) {
+						transformedData.push({
+							...d,
+							metric_type: metric,
+							value: value
+						});
+					}
+				});
+			});
+			filtered = transformedData;
 		}
+		
+		console.log('🔍 History.tsx - Filtered data:', filtered.length, 'items');
 
 		const palette = [
 			"#3b82f6",
@@ -146,18 +172,23 @@ export default function History() {
 			}
 			map[key].data.push({ x: d.timestamp, y: d.value });
 		});
-		return {
-			datasets: Object.values(map).map((ds) => ({
-				label: ds.label,
-				data: ds.data,
-				borderColor: ds.color,
-				backgroundColor: ds.color,
-				fill: false,
-				tension: 0.3,
-				pointRadius: 1,
-				pointHoverRadius: 3,
-			})),
-		};
+		const datasets = Object.values(map).map((ds) => ({
+			label: ds.label,
+			data: ds.data,
+			borderColor: ds.color,
+			backgroundColor: ds.color,
+			fill: false,
+			tension: 0.3,
+			pointRadius: 1,
+			pointHoverRadius: 3,
+		}));
+		
+		console.log('🔍 History.tsx - Final chart datasets:', datasets.length, 'datasets');
+		console.log('🔍 History.tsx - Chart data structure:', {
+			datasets: datasets.map(ds => ({ label: ds.label, dataPoints: ds.data.length }))
+		});
+		
+		return { datasets };
 	}, [data, selectedConfigs, selectedMetrics]);
 
 	const chartOptions = useMemo(() => {
