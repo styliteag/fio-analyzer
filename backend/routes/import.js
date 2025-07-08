@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { getDatabase, updateLatestFlags, insertMetric, insertMetricAll } = require('../database');
+const { getDatabase } = require('../database');
 const { requireAuth } = require('../auth');
 const { logInfo, logError, logWarning, requestIdMiddleware } = require('../utils');
 const { processFioFile, discoverUploadedFiles } = require('../scripts/import-utils');
@@ -347,21 +347,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
             const test_size = opts.size || globalOpts.size || '';
             const sync = parseInt(opts.sync || globalOpts.sync || '0');
 
-            // Create test run object for uniqueness calculation
-            const testRunData = {
-                drive_type,
-                drive_model,
-                hostname,
-                protocol,
-                block_size,
-                read_write_pattern: rw,
-                output_file,
-                num_jobs,
-                direct,
-                test_size,
-                sync,
-                iodepth
-            };
+
 
             logInfo('Processing job for database insertion', {
                 requestId: req.requestId,
@@ -403,16 +389,16 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
                 // Calculate performance metrics from job data
                 const readData = job.read || {};
                 const writeData = job.write || {};
-                
+
                 // Use read data if available, otherwise write data, otherwise null
-                const avgLatency = (readData.lat_ns?.mean || writeData.lat_ns?.mean) ? 
+                const avgLatency = (readData.lat_ns?.mean || writeData.lat_ns?.mean) ?
                     (readData.lat_ns?.mean || writeData.lat_ns?.mean) / 1000000 : null; // Convert ns to ms
-                const bandwidth = (readData.bw_bytes || writeData.bw_bytes) ? 
+                const bandwidth = (readData.bw_bytes || writeData.bw_bytes) ?
                     (readData.bw_bytes || writeData.bw_bytes) / (1024 * 1024) : null; // Convert to MB/s
                 const iops = readData.iops || writeData.iops || null;
-                const p95Latency = (readData.lat_ns?.percentile?.p95 || writeData.lat_ns?.percentile?.p95) ? 
+                const p95Latency = (readData.lat_ns?.percentile?.p95 || writeData.lat_ns?.percentile?.p95) ?
                     (readData.lat_ns?.percentile?.p95 || writeData.lat_ns?.percentile?.p95) / 1000000 : null;
-                const p99Latency = (readData.lat_ns?.percentile?.p99 || writeData.lat_ns?.percentile?.p99) ? 
+                const p99Latency = (readData.lat_ns?.percentile?.p99 || writeData.lat_ns?.percentile?.p99) ?
                     (readData.lat_ns?.percentile?.p99 || writeData.lat_ns?.percentile?.p99) / 1000000 : null;
 
                 // Add performance metrics to insertData
@@ -579,31 +565,7 @@ router.post('/', requireAuth, upload.single('file'), (req, res) => {
     }
 });
 
-function insertFioMetrics(testRunId, data, operationType) {
-    // Since metrics are now stored directly in the main table, we don't need separate insertion
-    // The metrics are already included when the test run is inserted
-    logInfo('Metrics are now stored directly in the main table', {
-        testRunId,
-        operationType,
-        iops: data.iops,
-        avg_latency: data.lat_ns.mean / 1000000,
-        bandwidth: data.bw_bytes / (1024 * 1024),
-        dbOperation: 'METRICS_INCLUDED_IN_MAIN_TABLE'
-    });
-}
 
-function insertFioMetricsAll(testRunId, data, operationType) {
-    // Since metrics are now stored directly in the main table, we don't need separate insertion
-    // The metrics are already included when the test run is inserted
-    logInfo('Metrics are now stored directly in the main table (historical)', {
-        testRunId,
-        operationType,
-        iops: data.iops,
-        avg_latency: data.lat_ns.mean / 1000000,
-        bandwidth: data.bw_bytes / (1024 * 1024),
-        dbOperation: 'METRICS_INCLUDED_IN_MAIN_TABLE_ALL'
-    });
-}
 
 /**
  * @swagger
@@ -695,7 +657,7 @@ router.post('/bulk', requireAuth, async (req, res) => {
 
         // Discover uploaded files
         const uploadsDir = path.join(__dirname, '..', 'uploads');
-        
+
         if (!fs.existsSync(uploadsDir)) {
             logError('Bulk import failed - uploads directory does not exist', null, {
                 requestId: req.requestId,
@@ -751,7 +713,6 @@ router.post('/bulk', requireAuth, async (req, res) => {
 
         // Process files in chronological order
         let totalProcessed = 0;
-        let totalSuccess = 0;
         let totalSkipped = 0;
         let totalErrors = 0;
         let totalTestRuns = 0;

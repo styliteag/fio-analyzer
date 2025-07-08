@@ -273,27 +273,27 @@ function initDb() {
 
 function runSimplifiedSchemaMigration(callback) {
     console.log('Starting simplified schema migration...');
-    
+
     // Read the migration SQL from the file
     const fs = require('fs');
     const path = require('path');
     const migrationPath = path.join(__dirname, '..', 'scripts', 'migrate-to-simplified-schema.sql');
-    
+
     try {
         const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
-        
+
         // Execute the migration
         db.exec(migrationSQL, (err) => {
             if (err) {
                 console.error('Migration failed:', err.message);
                 return;
             }
-            
+
             console.log('Simplified schema migration completed successfully!');
             console.log('- Removed performance_metrics and performance_metrics_all tables');
             console.log('- Added metric columns directly to test_runs and test_runs_all');
             console.log('- Updated indexes for better performance');
-            
+
             callback();
         });
     } catch (error) {

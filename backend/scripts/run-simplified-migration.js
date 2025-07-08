@@ -128,7 +128,7 @@ class SimplifiedSchemaMigrator {
                     return;
                 }
 
-                const hasMetrics = columns.some(col => 
+                const hasMetrics = columns.some(col =>
                     ['avg_latency', 'bandwidth', 'iops', 'p95_latency', 'p99_latency'].includes(col.name)
                 );
 
@@ -231,7 +231,7 @@ async function main() {
     try {
         await migrator.migrate();
         process.exit(0);
-    } catch (error) {
+    } catch {
         console.error('\nMigration failed. Please check the error message above.');
         process.exit(1);
     } finally {
@@ -244,4 +244,4 @@ if (require.main === module) {
     main().catch(console.error);
 }
 
-module.exports = SimplifiedSchemaMigrator; 
+module.exports = SimplifiedSchemaMigrator;
