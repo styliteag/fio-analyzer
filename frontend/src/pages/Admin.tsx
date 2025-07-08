@@ -67,6 +67,10 @@ interface BulkImportState {
   loading: boolean;
 }
 
+interface BulkDeleteAllHistoryState {
+  isOpen: boolean;
+}
+
 const Admin: React.FC = () => {
   const navigate = useNavigate();
   const [view, setView] = useState<'latest' | 'history'>('latest');
@@ -118,6 +122,9 @@ const Admin: React.FC = () => {
     dryRun: false,
     loading: false,
   });
+  const [bulkDeleteAllHistoryState, setBulkDeleteAllHistoryState] = useState<BulkDeleteAllHistoryState>({
+    isOpen: false,
+  });
   const {
     testRuns,
     loading,
@@ -154,7 +161,20 @@ const Admin: React.FC = () => {
   // When switching to History, set host filter to none
   useEffect(() => {
     if (view === 'history') {
-      setActiveFilters((prev: any) => ({ ...prev, hostnames: [''] }));
+      setActiveFilters({ 
+        hostnames: [''], 
+        protocols: [], 
+        drive_types: [], 
+        drive_models: [], 
+        patterns: [],
+        block_sizes: [], 
+        queue_depths: [], 
+        syncs: [], 
+        directs: [], 
+        num_jobs: [], 
+        test_sizes: [],
+        durations: [] 
+      });
     }
   }, [view, setActiveFilters]);
 
@@ -571,8 +591,8 @@ const Admin: React.FC = () => {
       const testRunIds = historicalRunsToDelete.map((run: TestRun) => run.id);
       const result = await deleteTimeSeriesRuns(testRunIds);
       
-      if (result.data?.notFound > 0) {
-        console.warn(`Deleted ${result.data?.deleted} historical runs, but ${result.data?.notFound} were not found.`);
+      if (result.data && result.data.notFound && result.data.notFound > 0) {
+        console.warn(`Deleted ${result.data.deleted} historical runs, but ${result.data.notFound} were not found.`);
       }
       
       // Refresh the data after successful deletion
@@ -618,6 +638,48 @@ const Admin: React.FC = () => {
       alert(err instanceof Error ? err.message : 'Bulk import failed');
     } finally {
       setBulkImportState(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const openBulkDeleteAllHistoryModal = () => {
+    setBulkDeleteAllHistoryState({ isOpen: true });
+  };
+
+  const closeBulkDeleteAllHistoryModal = () => {
+    setBulkDeleteAllHistoryState({ isOpen: false });
+  };
+
+  const handleBulkDeleteAllHistory = async () => {
+    if (groupedHistory.length === 0) return;
+
+    try {
+      // Collect all historical run IDs from all groups
+      const allHistoricalRunIds: number[] = [];
+      groupedHistory.forEach(group => {
+        group.runs.forEach(run => {
+          allHistoricalRunIds.push(run.id);
+        });
+      });
+
+      if (allHistoricalRunIds.length === 0) {
+        console.warn('No historical runs to delete.');
+        closeBulkDeleteAllHistoryModal();
+        return;
+      }
+
+      const result = await deleteTimeSeriesRuns(allHistoricalRunIds);
+      
+      if (result.data && result.data.notFound && result.data.notFound > 0) {
+        console.warn(`Deleted ${result.data.deleted} historical runs, but ${result.data.notFound} were not found.`);
+      }
+      
+      // Refresh the data after successful deletion
+      await fetchTimeSeriesData();
+      
+      closeBulkDeleteAllHistoryModal();
+    } catch (err) {
+      console.error('Failed to bulk delete all history:', err);
+      alert(err instanceof Error ? err.message : 'Bulk delete all history failed');
     }
   };
 
@@ -1119,12 +1181,25 @@ const Admin: React.FC = () => {
             <h2 className="text-lg font-semibold theme-text-primary">
               {view === 'latest' ? 'Latest Test Runs' : 'Historical Data Groups'}
             </h2>
-            <div className="text-sm theme-text-secondary">
-              {view === 'latest' 
-                ? `Showing ${latestRuns.length} latest runs`
-                : `Showing ${groupedHistory.length} configuration groups`
-              }
-        </div>
+            <div className="flex items-center gap-4">
+              <div className="text-sm theme-text-secondary">
+                {view === 'latest' 
+                  ? `Showing ${latestRuns.length} latest runs`
+                  : `Showing ${groupedHistory.length} configuration groups`
+                }
+              </div>
+              {view === 'history' && groupedHistory.length > 0 && (
+                <Button
+                  onClick={openBulkDeleteAllHistoryModal}
+                  variant="danger"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Bulk Delete All History
+                </Button>
+              )}
+            </div>
           </div>
           {view === 'latest' ? renderLatestTable() : renderHistoryTable()}
         </div>
@@ -1642,6 +1717,63 @@ const Admin: React.FC = () => {
               onClick={closeBulkImportModal} 
               variant="secondary"
               disabled={bulkImportState.loading}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk Delete All History Modal */}
+      <Modal
+        isOpen={bulkDeleteAllHistoryState.isOpen}
+        onClose={closeBulkDeleteAllHistoryModal}
+        title="Bulk Delete All History"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 dark:bg-red-900 rounded-full">
+            <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+          </div>
+          
+          <div className="text-center">
+            <h3 className="text-lg font-medium theme-text-primary mb-2">
+              Delete All Historical Data
+            </h3>
+            <p className="text-sm theme-text-secondary">
+              Are you sure you want to delete ALL historical test runs currently in view? This will delete {' '}
+              {groupedHistory.reduce((total, group) => total + group.count, 0)} test runs from {' '}
+              {groupedHistory.length} configuration groups.
+            </p>
+            <p className="text-sm theme-text-secondary mt-2 font-medium">
+              This action cannot be undone. All associated performance metrics and data will be permanently removed.
+            </p>
+          </div>
+          
+          <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+            <h4 className="font-medium text-red-900 dark:text-red-100 mb-2">
+              Summary of Deletion
+            </h4>
+            <div className="text-sm text-red-800 dark:text-red-200">
+              <p><strong>Total Historical Runs:</strong> {groupedHistory.reduce((total, group) => total + group.count, 0)}</p>
+              <p><strong>Configuration Groups:</strong> {groupedHistory.length}</p>
+              <p><strong>Action:</strong> Delete all historical test runs from all groups</p>
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button 
+              onClick={handleBulkDeleteAllHistory} 
+              variant="danger"
+              className="flex-1"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete All {groupedHistory.reduce((total, group) => total + group.count, 0)} Historical Runs
+            </Button>
+            <Button 
+              onClick={closeBulkDeleteAllHistoryModal} 
+              variant="secondary"
+              className="flex-1"
             >
               Cancel
             </Button>
