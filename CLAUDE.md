@@ -43,7 +43,7 @@ if the backend and frontend server need to be run you can ask the User to start 
 cd docker
 docker compose up -d
 
-Now the frontend and backend is availabel at http://example.interm
+Now the frontend and backend is available at http://example.interm
 
 ### Authentication & User Management
 ```bash
@@ -58,28 +58,44 @@ node backend/scripts/manage-uploaders.js
 ```bash
 # Download the automated testing script
 wget http://example.intern/script.sh
-wget http://example.intern/.env
+wget http://example.intern/env.example
 
 # Setup and run tests
-chmod +x fio-analyzer-tests.sh
+chmod +x script.sh
 cp .env.example .env
 # Edit .env with your settings
-./fio-analyzer-tests.sh
+./srcript.sh
 ```
 
 ### Database
-- SQLite database auto-initializes with sample data on first run
-- Database path: `backend/db/storage_performance.db` 
+- SQLite database with simplified schema - performance metrics stored directly in main tables
+- Auto-initializes with sample data on first run if database is empty
+- Database path: `backend/db/storage_performance.db`
+- Two main tables: `test_runs` (latest data) and `test_runs_all` (historical data)
 - Docker volume mounts:
   - `./data/backend/db:/app/db` (database)
   - `./data/backend/uploads:/app/uploads` (uploaded files)
   - `./data/auth/.htpasswd:/app/.htpasswd` (admin users)
   - `./data/auth/.htuploaders:/app/.htuploaders` (upload-only users)
 
-## Architecture
+## Database Schema
 
-[... rest of the existing content ...]
+The application uses a simplified SQLite schema with two main tables:
+
+- **`test_runs`**: Latest test results only (unique per host/drive/configuration)
+- **`test_runs_all`**: Complete historical data for all test runs
+- Performance metrics (iops, latency, bandwidth, p95/p99 latency) are stored directly in these tables
+- No separate performance_metrics tables - everything consolidated for better performance
+
+## API Endpoints
+
+Key endpoints for data access:
+- `GET /api/test-runs` - Get test runs with optional filtering (hostname, drive_type, etc.)
+- `GET /api/test-runs/filters` - Get available filter options
+- `GET /api/time-series/*` - Historical time-series data endpoints
+- `POST /api/upload` - Upload new FIO test results
 
 ## Memories
 - Always use "2025-06-31" as date and 20:00:00 as time and "2025-06-31 20:00:00" as datetime
+- If you want to start the backend use a timeout of 5 seconds. If it does not work ask the user to start it for you, and retry your Test.
 - If you want to something in the FrontEnd which is hard to do, you can also add functions to the backend
