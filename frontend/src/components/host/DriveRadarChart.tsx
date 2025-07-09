@@ -163,10 +163,58 @@ const DriveRadarChart: React.FC<DriveRadarChartProps> = ({ drives }) => {
                 cornerRadius: 8,
                 padding: 12,
                 callbacks: {
+                    title: (context: any) => {
+                        const driveLabel = context[0].dataset.label || '';
+                        const metricLabel = context[0].label || '';
+                        return `${driveLabel} - ${metricLabel}`;
+                    },
                     label: (context: any) => {
-                        const label = context.dataset.label || '';
-                        const value = context.parsed.r.toFixed(1);
-                        return `${label}: ${value}%`;
+                        const driveIndex = context.datasetIndex;
+                        const drive = driveScores[driveIndex];
+                        const metricIndex = context.dataIndex;
+                        const normalizedScore = context.parsed.r.toFixed(1);
+                        
+                        const metricDetails = [
+                            `Score: ${normalizedScore}%`,
+                            '',
+                            `Drive Type: ${drives[driveIndex].drive_type}`,
+                            `Protocol: ${drives[driveIndex].protocol}`,
+                            '',
+                            `Raw Performance Data:`
+                        ];
+                        
+                        switch (metricIndex) {
+                            case 0: // Peak IOPS
+                                metricDetails.push(`Peak IOPS: ${drive.maxIOPS.toFixed(0)}`);
+                                break;
+                            case 1: // Avg IOPS
+                                metricDetails.push(`Average IOPS: ${drive.avgIOPS.toFixed(0)}`);
+                                break;
+                            case 2: // Low Latency
+                                metricDetails.push(`Lowest Latency: ${drive.minLatency.toFixed(2)}ms`);
+                                break;
+                            case 3: // Avg Latency
+                                metricDetails.push(`Average Latency: ${drive.avgLatency.toFixed(2)}ms`);
+                                break;
+                            case 4: // Peak Bandwidth
+                                metricDetails.push(`Peak Bandwidth: ${drive.maxBandwidth.toFixed(1)} MB/s`);
+                                break;
+                            case 5: // Avg Bandwidth
+                                metricDetails.push(`Average Bandwidth: ${drive.avgBandwidth.toFixed(1)} MB/s`);
+                                break;
+                            case 6: // Consistency
+                                metricDetails.push(`Consistency Score: ${(drive.consistency * 100).toFixed(1)}%`);
+                                metricDetails.push(`(Lower variation = higher consistency)`);
+                                break;
+                        }
+                        
+                        const validConfigs = drives[driveIndex].configurations.filter(c => 
+                            c.iops !== null && c.avg_latency !== null && c.bandwidth !== null
+                        );
+                        metricDetails.push('');
+                        metricDetails.push(`Test Configurations: ${validConfigs.length}`);
+                        
+                        return metricDetails;
                     }
                 }
             },

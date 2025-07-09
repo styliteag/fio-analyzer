@@ -43,7 +43,12 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
             blockSize: config.block_size,
             pattern: config.read_write_pattern,
             queueDepth: config.queue_depth,
-            bandwidth: config.bandwidth
+            bandwidth: config.bandwidth,
+            p95_latency: config.p95_latency,
+            p99_latency: config.p99_latency,
+            timestamp: config.timestamp,
+            driveType: drive.drive_type,
+            protocol: drive.protocol
         }));
 
         return {
@@ -81,15 +86,28 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
                 cornerRadius: 8,
                 padding: 12,
                 callbacks: {
-                    title: () => '',
+                    title: (context: any) => {
+                        const point = context[0].raw;
+                        return `${context[0].dataset.label} (${point.driveType} - ${point.protocol})`;
+                    },
                     label: (context: any) => {
                         const point = context.raw;
                         return [
-                            `Drive: ${context.dataset.label}`,
-                            `IOPS: ${point.y.toFixed(0)}`,
-                            `Latency: ${point.x.toFixed(2)}ms`,
-                            `Config: ${point.blockSize} ${point.pattern} QD${point.queueDepth}`,
-                            `Bandwidth: ${point.bandwidth?.toFixed(1) || 'N/A'} MB/s`
+                            '',
+                            '🔧 Test Configuration:',
+                            `   Block Size: ${point.blockSize}`,
+                            `   Pattern: ${point.pattern}`,
+                            `   Queue Depth: ${point.queueDepth}`,
+                            '',
+                            '📈 Performance Metrics:',
+                            `   IOPS: ${point.y.toFixed(0)}`,
+                            `   Avg Latency: ${point.x.toFixed(2)}ms`,
+                            `   Bandwidth: ${point.bandwidth?.toFixed(1) || 'N/A'} MB/s`,
+                            `   95th Percentile: ${point.p95_latency !== null && point.p95_latency !== undefined ? point.p95_latency.toFixed(2) + 'ms' : 'N/A'}`,
+                            `   99th Percentile: ${point.p99_latency !== null && point.p99_latency !== undefined ? point.p99_latency.toFixed(2) + 'ms' : 'N/A'}`,
+                            '',
+                            '🕒 Test Date:',
+                            `   ${new Date(point.timestamp).toLocaleDateString()} ${new Date(point.timestamp).toLocaleTimeString()}`
                         ];
                     }
                 }

@@ -11,9 +11,25 @@ interface MatrixCell {
     configuration: string;
     drive: string;
     intensity: number;
+    fullConfig?: {
+        block_size: string;
+        read_write_pattern: string;
+        queue_depth: number;
+        iops: number | null | undefined;
+        avg_latency: number | null | undefined;
+        bandwidth: number | null | undefined;
+        p95_latency: number | null | undefined;
+        p99_latency: number | null | undefined;
+        timestamp: string;
+    };
+    driveInfo?: {
+        drive_type: string;
+        protocol: string;
+    };
 }
 
 const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric }) => {
+    const [hoveredCell, setHoveredCell] = React.useState<{ cell: MatrixCell; x: number; y: number } | null>(null);
     // Get all unique block sizes and patterns
     const allBlockSizes = [...new Set(
         drives.flatMap(drive => 
@@ -52,6 +68,8 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
             let bestValue = metric === 'avg_latency' ? Infinity : 0;
             let bestDrive = '';
             let bestConfig = '';
+            let bestFullConfig: any = null;
+            let bestDriveInfo: any = null;
 
             drives.forEach(drive => {
                 const config = drive.configurations.find(c => 
@@ -66,6 +84,11 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
                         bestValue = value;
                         bestDrive = drive.drive_model;
                         bestConfig = `${blockSize} ${pattern} QD${config.queue_depth}`;
+                        bestFullConfig = config;
+                        bestDriveInfo = {
+                            drive_type: drive.drive_type,
+                            protocol: drive.protocol
+                        };
                     }
                 }
             });
@@ -77,7 +100,9 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
                 value: bestValue === (metric === 'avg_latency' ? Infinity : 0) ? 0 : bestValue,
                 configuration: bestConfig,
                 drive: bestDrive,
-                intensity: metric === 'avg_latency' ? 1 - intensity : intensity
+                intensity: metric === 'avg_latency' ? 1 - intensity : intensity,
+                fullConfig: bestFullConfig,
+                driveInfo: bestDriveInfo
             };
         });
     });
@@ -115,6 +140,7 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
             default: return value.toString();
         }
     };
+
 
     return (
         <div className="w-full">
@@ -161,7 +187,15 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
                                             <td
                                                 key={`${blockSize}-${pattern}`}
                                                 className={`border border-gray-300 dark:border-gray-600 p-2 text-center cursor-pointer transition-all hover:scale-105 ${intensityStyle}`}
-                                                title={`${cell.drive}: ${formatValue(cell.value, metric)} ${getMetricLabel(metric)}\n${cell.configuration}`}
+                                                onMouseEnter={(e) => {
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setHoveredCell({
+                                                        cell,
+                                                        x: rect.left + rect.width / 2,
+                                                        y: rect.top
+                                                    });
+                                                }}
+                                                onMouseLeave={() => setHoveredCell(null)}
                                             >
                                                 <div className="text-xs font-bold">
                                                     {formatValue(cell.value, metric)}
@@ -194,6 +228,70 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
                     <span>Hover cells for details</span>
                 </div>
             </div>
+            
+            {/* Custom Hover Popup */}
+            {hoveredCell && (
+                <div
+                    className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-4 z-50 max-w-sm"
+                    style={{
+                        left: hoveredCell.x - 150, // Center the popup horizontally
+                        top: hoveredCell.y - 10,   // Position above the cell
+                        transform: 'translateY(-100%)'
+                    }}
+                >
+                    {hoveredCell.cell.fullConfig && hoveredCell.cell.driveInfo ? (
+                        <div className="space-y-3">
+                            {/* Drive Info */}
+                            <div>
+                                <h3 className="font-semibold theme-text-primary text-sm">
+                                    {hoveredCell.cell.drive}
+                                </h3>
+                                <p className="text-xs theme-text-secondary">
+                                    {hoveredCell.cell.driveInfo.drive_type} - {hoveredCell.cell.driveInfo.protocol}
+                                </p>
+                            </div>
+                            
+                            {/* Test Configuration */}
+                            <div>
+                                <h4 className="font-medium theme-text-primary text-xs mb-1">Test Configuration</h4>
+                                <div className="text-xs theme-text-secondary space-y-1">
+                                    <div>Block Size: <span className="font-medium">{hoveredCell.cell.fullConfig.block_size}</span></div>
+                                    <div>Pattern: <span className="font-medium">{hoveredCell.cell.fullConfig.read_write_pattern}</span></div>
+                                    <div>Queue Depth: <span className="font-medium">{hoveredCell.cell.fullConfig.queue_depth}</span></div>
+                                </div>
+                            </div>
+                            
+                            {/* Performance Metrics */}
+                            <div>
+                                <h4 className="font-medium theme-text-primary text-xs mb-1">Performance Metrics</h4>
+                                <div className="text-xs theme-text-secondary space-y-1">
+                                    <div>IOPS: <span className="font-medium">{hoveredCell.cell.fullConfig.iops !== null && hoveredCell.cell.fullConfig.iops !== undefined ? hoveredCell.cell.fullConfig.iops.toFixed(0) : 'N/A'}</span></div>
+                                    <div>Avg Latency: <span className="font-medium">{hoveredCell.cell.fullConfig.avg_latency !== null && hoveredCell.cell.fullConfig.avg_latency !== undefined ? hoveredCell.cell.fullConfig.avg_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                    <div>Bandwidth: <span className="font-medium">{hoveredCell.cell.fullConfig.bandwidth !== null && hoveredCell.cell.fullConfig.bandwidth !== undefined ? hoveredCell.cell.fullConfig.bandwidth.toFixed(1) + ' MB/s' : 'N/A'}</span></div>
+                                    <div>95th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p95_latency !== null && hoveredCell.cell.fullConfig.p95_latency !== undefined ? hoveredCell.cell.fullConfig.p95_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                    <div>99th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p99_latency !== null && hoveredCell.cell.fullConfig.p99_latency !== undefined ? hoveredCell.cell.fullConfig.p99_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                </div>
+                            </div>
+                            
+                            {/* Test Date */}
+                            <div>
+                                <h4 className="font-medium theme-text-primary text-xs mb-1">Test Date</h4>
+                                <div className="text-xs theme-text-secondary">
+                                    {new Date(hoveredCell.cell.fullConfig.timestamp).toLocaleDateString()} {new Date(hoveredCell.cell.fullConfig.timestamp).toLocaleTimeString()}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <div className="font-semibold theme-text-primary text-sm">{hoveredCell.cell.drive}</div>
+                            <div className="text-xs theme-text-secondary">
+                                {formatValue(hoveredCell.cell.value, metric)} {getMetricLabel(metric)}
+                            </div>
+                            <div className="text-xs theme-text-secondary">{hoveredCell.cell.configuration}</div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

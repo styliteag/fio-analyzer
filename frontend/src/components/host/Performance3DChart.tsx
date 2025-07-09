@@ -19,6 +19,11 @@ interface PerformancePoint {
     queueDepth: number;
     color: string;
     performanceScore: number;
+    p95_latency?: number | null;
+    p99_latency?: number | null;
+    timestamp: string;
+    driveType: string;
+    protocol: string;
 }
 
 // Component for dynamic camera control that works with OrbitControls
@@ -343,6 +348,7 @@ const Scene3D: React.FC<{
 
 const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDrives }) => {
     const [hoveredPoint, setHoveredPoint] = React.useState<PerformancePoint | null>(null);
+    const [isMaximized, setIsMaximized] = React.useState<boolean>(false);
     const [colorScheme, setColorScheme] = React.useState<string>('vibrant');
     const [cameraMode, setCameraMode] = React.useState<'perspective' | 'orthographic'>('perspective');
     const [fov, setFov] = React.useState<number>(30);
@@ -434,7 +440,12 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                     pattern: config.read_write_pattern,
                     queueDepth: config.queue_depth,
                     color: currentScheme.drives[driveIndex % currentScheme.drives.length],
-                    performanceScore
+                    performanceScore,
+                    p95_latency: config.p95_latency,
+                    p99_latency: config.p99_latency,
+                    timestamp: config.timestamp,
+                    driveType: drive.drive_type,
+                    protocol: drive.protocol
                 });
             });
         });
@@ -471,9 +482,20 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
     return (
         <div className="w-full">
             <div className="mb-4">
-                <h4 className="text-lg font-semibold theme-text-primary mb-2">
-                    Interactive 3D Performance Visualization
-                </h4>
+                <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-lg font-semibold theme-text-primary">
+                        Interactive 3D Performance Visualization
+                    </h4>
+                    <button
+                        onClick={() => setIsMaximized(true)}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                        title="Maximize visualization"
+                    >
+                        <svg className="w-5 h-5 theme-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                    </button>
+                </div>
                 <p className="text-sm theme-text-secondary mb-4">
                     Drag to rotate • Scroll to zoom • Hover points for details
                 </p>
@@ -592,13 +614,43 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                         {/* Floating hover info */}
                         {hoveredPoint && (
                             <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border max-w-sm z-10">
-                                <h6 className="font-medium theme-text-primary mb-2">{hoveredPoint.drive}</h6>
-                                <div className="text-xs theme-text-secondary space-y-1">
-                                    <div>Config: {hoveredPoint.blockSize} {hoveredPoint.pattern} QD{hoveredPoint.queueDepth}</div>
-                                    <div>IOPS: <span className="font-medium">{hoveredPoint.x.toFixed(0)}</span></div>
-                                    <div>Latency: <span className="font-medium">{hoveredPoint.y.toFixed(2)}ms</span></div>
-                                    <div>Bandwidth: <span className="font-medium">{hoveredPoint.z.toFixed(1)} MB/s</span></div>
-                                    <div>Performance Score: <span className="font-medium">{hoveredPoint.performanceScore.toFixed(2)}</span></div>
+                                <div className="space-y-3">
+                                    {/* Drive Info */}
+                                    <div>
+                                        <h6 className="font-medium theme-text-primary text-sm">{hoveredPoint.drive}</h6>
+                                        <p className="text-xs theme-text-secondary">{hoveredPoint.driveType} - {hoveredPoint.protocol}</p>
+                                    </div>
+                                    
+                                    {/* Test Configuration */}
+                                    <div>
+                                        <h6 className="font-medium theme-text-primary text-xs mb-1">Test Configuration</h6>
+                                        <div className="text-xs theme-text-secondary space-y-1">
+                                            <div>Block Size: <span className="font-medium">{hoveredPoint.blockSize}</span></div>
+                                            <div>Pattern: <span className="font-medium">{hoveredPoint.pattern}</span></div>
+                                            <div>Queue Depth: <span className="font-medium">{hoveredPoint.queueDepth}</span></div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Performance Metrics */}
+                                    <div>
+                                        <h6 className="font-medium theme-text-primary text-xs mb-1">Performance Metrics</h6>
+                                        <div className="text-xs theme-text-secondary space-y-1">
+                                            <div>Latency: <span className="font-medium">{hoveredPoint.x.toFixed(2)}ms</span></div>
+                                            <div>IOPS: <span className="font-medium">{hoveredPoint.y.toFixed(0)}</span></div>
+                                            <div>Bandwidth: <span className="font-medium">{hoveredPoint.z.toFixed(1)} MB/s</span></div>
+                                            <div>95th Percentile: <span className="font-medium">{hoveredPoint.p95_latency !== null && hoveredPoint.p95_latency !== undefined ? hoveredPoint.p95_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                            <div>99th Percentile: <span className="font-medium">{hoveredPoint.p99_latency !== null && hoveredPoint.p99_latency !== undefined ? hoveredPoint.p99_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                            <div>Score: <span className="font-medium">{hoveredPoint.performanceScore.toFixed(2)}</span></div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Test Date */}
+                                    <div>
+                                        <h6 className="font-medium theme-text-primary text-xs mb-1">Test Date</h6>
+                                        <div className="text-xs theme-text-secondary">
+                                            {new Date(hoveredPoint.timestamp).toLocaleDateString()} {new Date(hoveredPoint.timestamp).toLocaleTimeString()}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -675,7 +727,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                                 {point.blockSize} {point.pattern} QD{point.queueDepth}
                                             </div>
                                             <div className="theme-text-secondary">
-                                                {point.x.toFixed(0)} IOPS, {point.y.toFixed(2)}ms, {point.z.toFixed(1)} MB/s
+                                                {point.x.toFixed(2)}ms, {point.y.toFixed(0)} IOPS, {point.z.toFixed(1)} MB/s
                                             </div>
                                         </div>
                                     ))}
@@ -684,6 +736,196 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                     </div>
                 </div>
             </div>
+            
+            {/* Maximized Visualization Modal */}
+            {isMaximized && (
+                <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 overflow-hidden">
+                    <div className="h-full flex flex-col">
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                            <h2 className="text-xl font-semibold theme-text-primary">
+                                Interactive 3D Performance Visualization - Maximized
+                            </h2>
+                            <button
+                                onClick={() => setIsMaximized(false)}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                title="Exit fullscreen"
+                            >
+                                <svg className="w-6 h-6 theme-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        {/* Controls */}
+                        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex flex-wrap gap-4 items-center">
+                                {/* Color Scheme */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm theme-text-secondary">Color:</span>
+                                    {Object.entries(colorSchemes).map(([key, scheme]) => (
+                                        <button
+                                            key={key}
+                                            onClick={() => setColorScheme(key)}
+                                            className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                                                colorScheme === key
+                                                    ? 'bg-blue-500 text-white shadow-md'
+                                                    : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary'
+                                            }`}
+                                        >
+                                            {scheme.name}
+                                        </button>
+                                    ))}
+                                </div>
+                                
+                                {/* Camera Mode */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm theme-text-secondary">Camera:</span>
+                                    <button
+                                        onClick={() => setCameraMode('perspective')}
+                                        className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                                            cameraMode === 'perspective'
+                                                ? 'bg-green-500 text-white shadow-md'
+                                                : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary'
+                                        }`}
+                                    >
+                                        Perspective
+                                    </button>
+                                    <button
+                                        onClick={() => setCameraMode('orthographic')}
+                                        className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                                            cameraMode === 'orthographic'
+                                                ? 'bg-green-500 text-white shadow-md'
+                                                : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary'
+                                        }`}
+                                    >
+                                        Orthographic
+                                    </button>
+                                </div>
+                                
+                                {/* FOV Slider */}
+                                {cameraMode === 'perspective' && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm theme-text-secondary">FOV:</span>
+                                        <input
+                                            type="range"
+                                            min="15"
+                                            max="60"
+                                            value={fov}
+                                            onChange={(e) => setFov(Number(e.target.value))}
+                                            className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                        <span className="text-xs theme-text-secondary">{fov}°</span>
+                                    </div>
+                                )}
+                                
+                                {/* Preset Views */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm theme-text-secondary">View:</span>
+                                    <button
+                                        onClick={() => setCameraPosition([12, 12, 12])}
+                                        className="px-2 py-1 rounded text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary"
+                                    >
+                                        Isometric
+                                    </button>
+                                    <button
+                                        onClick={() => setCameraPosition([15, 5, 5])}
+                                        className="px-2 py-1 rounded text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary"
+                                    >
+                                        Front
+                                    </button>
+                                    <button
+                                        onClick={() => setCameraPosition([5, 15, 5])}
+                                        className="px-2 py-1 rounded text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary"
+                                    >
+                                        Side
+                                    </button>
+                                    <button
+                                        onClick={() => setCameraPosition([5, 5, 15])}
+                                        className="px-2 py-1 rounded text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary"
+                                    >
+                                        Top
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* 3D Visualization */}
+                        <div className="flex-1 relative bg-gray-50 dark:bg-gray-900">
+                            <Canvas
+                                camera={{ position: memoizedCameraPosition, fov: fov }}
+                                style={{ width: '100%', height: '100%' }}
+                            >
+                                <Scene3D 
+                                    points={points} 
+                                    ranges={ranges} 
+                                    onPointHover={setHoveredPoint}
+                                    colorScheme={currentScheme}
+                                    cameraMode={cameraMode}
+                                    fov={fov}
+                                    cameraPosition={memoizedCameraPosition}
+                                />
+                            </Canvas>
+                            
+                            {/* Hover info in maximized view */}
+                            {hoveredPoint && (
+                                <div className="absolute top-4 left-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border max-w-sm z-10">
+                                    <div className="space-y-3">
+                                        {/* Drive Info */}
+                                        <div>
+                                            <h6 className="font-medium theme-text-primary text-sm">{hoveredPoint.drive}</h6>
+                                            <p className="text-xs theme-text-secondary">{hoveredPoint.driveType} - {hoveredPoint.protocol}</p>
+                                        </div>
+                                        
+                                        {/* Test Configuration */}
+                                        <div>
+                                            <h6 className="font-medium theme-text-primary text-xs mb-1">Test Configuration</h6>
+                                            <div className="text-xs theme-text-secondary space-y-1">
+                                                <div>Block Size: <span className="font-medium">{hoveredPoint.blockSize}</span></div>
+                                                <div>Pattern: <span className="font-medium">{hoveredPoint.pattern}</span></div>
+                                                <div>Queue Depth: <span className="font-medium">{hoveredPoint.queueDepth}</span></div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Performance Metrics */}
+                                        <div>
+                                            <h6 className="font-medium theme-text-primary text-xs mb-1">Performance Metrics</h6>
+                                            <div className="text-xs theme-text-secondary space-y-1">
+                                                <div>Latency: <span className="font-medium">{hoveredPoint.x.toFixed(2)}ms</span></div>
+                                                <div>IOPS: <span className="font-medium">{hoveredPoint.y.toFixed(0)}</span></div>
+                                                <div>Bandwidth: <span className="font-medium">{hoveredPoint.z.toFixed(1)} MB/s</span></div>
+                                                <div>95th Percentile: <span className="font-medium">{hoveredPoint.p95_latency !== null && hoveredPoint.p95_latency !== undefined ? hoveredPoint.p95_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                                <div>99th Percentile: <span className="font-medium">{hoveredPoint.p99_latency !== null && hoveredPoint.p99_latency !== undefined ? hoveredPoint.p99_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                                <div>Score: <span className="font-medium">{hoveredPoint.performanceScore.toFixed(2)}</span></div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Test Date */}
+                                        <div>
+                                            <h6 className="font-medium theme-text-primary text-xs mb-1">Test Date</h6>
+                                            <div className="text-xs theme-text-secondary">
+                                                {new Date(hoveredPoint.timestamp).toLocaleDateString()} {new Date(hoveredPoint.timestamp).toLocaleTimeString()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Help text in maximized view */}
+                            <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border">
+                                <div className="text-xs theme-text-secondary space-y-1">
+                                    <div className="font-medium text-xs theme-text-primary mb-1">Controls:</div>
+                                    <div>• Left drag: Rotate view</div>
+                                    <div>• Right drag: Pan view</div>
+                                    <div>• Scroll: Zoom in/out</div>
+                                    <div>• Hover: Show details</div>
+                                    <div>• ESC: Exit fullscreen</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
