@@ -37,7 +37,7 @@ const DataPoint: React.FC<{
         }
     });
 
-    const size = Math.max(0.1, Math.min(0.4, point.performanceScore * 0.3 + 0.1));
+    const size = Math.max(0.05, Math.min(0.2, point.performanceScore * 0.15 + 0.05));
 
     return (
         <mesh
@@ -57,9 +57,9 @@ const DataPoint: React.FC<{
             <meshStandardMaterial 
                 color={point.color} 
                 transparent 
-                opacity={hovered ? 1 : 0.8}
-                emissive={hovered ? point.color : '#000000'}
-                emissiveIntensity={hovered ? 0.2 : 0}
+                opacity={hovered ? 1 : 0.95}
+                emissive={point.color}
+                emissiveIntensity={hovered ? 0.3 : 0.1}
             />
             {point.performanceScore > 0.7 && (
                 <mesh>
