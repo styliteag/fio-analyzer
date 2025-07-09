@@ -1,5 +1,5 @@
-import React, { useMemo, useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import React, { useMemo, useRef, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
@@ -20,6 +20,70 @@ interface PerformancePoint {
     color: string;
     performanceScore: number;
 }
+
+// Component for dynamic camera control that works with OrbitControls
+const CameraController: React.FC<{
+    cameraMode: 'perspective' | 'orthographic';
+    fov: number;
+    position: [number, number, number];
+}> = React.memo(({ cameraMode, fov, position }) => {
+    const { camera, size, set } = useThree();
+    const controlsRef = useRef<any>(null);
+    
+    useEffect(() => {
+        if (cameraMode === 'perspective') {
+            if (!(camera instanceof THREE.PerspectiveCamera)) {
+                // Create new perspective camera
+                const newCamera = new THREE.PerspectiveCamera(fov, size.width / size.height, 0.1, 1000);
+                newCamera.position.set(...position);
+                set({ camera: newCamera });
+            } else {
+                // Update existing perspective camera
+                camera.fov = fov;
+                camera.updateProjectionMatrix();
+            }
+        } else {
+            if (!(camera instanceof THREE.OrthographicCamera)) {
+                // Create new orthographic camera
+                const aspect = size.width / size.height;
+                const newCamera = new THREE.OrthographicCamera(-6 * aspect, 6 * aspect, 6, -6, 0.1, 1000);
+                newCamera.position.set(...position);
+                set({ camera: newCamera });
+            }
+        }
+    }, [cameraMode, fov, camera, size, set]);
+    
+    // Handle position updates separately to work with OrbitControls
+    useEffect(() => {
+        if (controlsRef.current) {
+            // Update the controls to move to new position
+            controlsRef.current.object.position.set(...position);
+            controlsRef.current.update();
+        }
+    }, [position]);
+    
+    return (
+        <OrbitControls 
+            ref={controlsRef}
+            enablePan={true}
+            enableZoom={true}
+            enableRotate={true}
+            minDistance={5}
+            maxDistance={20}
+            autoRotate={false}
+            autoRotateSpeed={2}
+        />
+    );
+}, (prevProps, nextProps) => {
+    // Custom comparison function to prevent unnecessary re-renders
+    return (
+        prevProps.cameraMode === nextProps.cameraMode &&
+        prevProps.fov === nextProps.fov &&
+        prevProps.position[0] === nextProps.position[0] &&
+        prevProps.position[1] === nextProps.position[1] &&
+        prevProps.position[2] === nextProps.position[2]
+    );
+});
 
 // Component for individual data points in 3D space
 const DataPoint: React.FC<{ 
@@ -231,7 +295,10 @@ const Scene3D: React.FC<{
     ranges: { x: [number, number]; y: [number, number]; z: [number, number] };
     onPointHover: (point: PerformancePoint | null) => void;
     colorScheme: any;
-}> = ({ points, ranges, onPointHover, colorScheme }) => {
+    cameraMode: 'perspective' | 'orthographic';
+    fov: number;
+    cameraPosition: [number, number, number];
+}> = ({ points, ranges, onPointHover, colorScheme, cameraMode, fov, cameraPosition }) => {
     const normalizeToRange = (value: number, range: [number, number], scale: number = 5) => {
         return ((value - range[0]) / (range[1] - range[0])) * scale;
     };
@@ -244,6 +311,11 @@ const Scene3D: React.FC<{
 
     return (
         <>
+            <CameraController 
+                cameraMode={cameraMode} 
+                fov={fov} 
+                position={cameraPosition} 
+            />
             <ambientLight intensity={0.6} />
             <pointLight position={[10, 10, 10]} intensity={1} />
             <pointLight position={[-10, -10, -10]} intensity={0.5} />
@@ -265,15 +337,6 @@ const Scene3D: React.FC<{
                 );
             })}
             
-            <OrbitControls 
-                enablePan={true}
-                enableZoom={true}
-                enableRotate={true}
-                minDistance={5}
-                maxDistance={20}
-                autoRotate={false}
-                autoRotateSpeed={2}
-            />
         </>
     );
 };
@@ -281,6 +344,12 @@ const Scene3D: React.FC<{
 const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDrives }) => {
     const [hoveredPoint, setHoveredPoint] = React.useState<PerformancePoint | null>(null);
     const [colorScheme, setColorScheme] = React.useState<string>('vibrant');
+    const [cameraMode, setCameraMode] = React.useState<'perspective' | 'orthographic'>('perspective');
+    const [fov, setFov] = React.useState<number>(30);
+    const [cameraPosition, setCameraPosition] = React.useState<[number, number, number]>([12, 12, 12]);
+    
+    // Memoize camera position to prevent unnecessary re-renders
+    const memoizedCameraPosition = useMemo(() => cameraPosition, [cameraPosition[0], cameraPosition[1], cameraPosition[2]]);
     
     const colorSchemes = {
         vibrant: {
@@ -426,6 +495,79 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                         </button>
                     ))}
                 </div>
+                
+                {/* Camera Mode Toggle */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                    <span className="text-sm theme-text-secondary mr-2">Camera Mode:</span>
+                    <button
+                        onClick={() => setCameraMode('perspective')}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                            cameraMode === 'perspective'
+                                ? 'bg-green-500 text-white shadow-md'
+                                : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary'
+                        }`}
+                    >
+                        Perspective
+                    </button>
+                    <button
+                        onClick={() => setCameraMode('orthographic')}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                            cameraMode === 'orthographic'
+                                ? 'bg-green-500 text-white shadow-md'
+                                : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary'
+                        }`}
+                    >
+                        Orthographic
+                    </button>
+                </div>
+                
+                {/* Camera Controls */}
+                <div className="flex flex-wrap gap-4 mb-4">
+                    {/* FOV Slider (only for perspective mode) */}
+                    {cameraMode === 'perspective' && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm theme-text-secondary">FOV:</span>
+                            <input
+                                type="range"
+                                min="15"
+                                max="60"
+                                value={fov}
+                                onChange={(e) => setFov(Number(e.target.value))}
+                                className="w-20 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <span className="text-xs theme-text-secondary">{fov}°</span>
+                        </div>
+                    )}
+                    
+                    {/* Preset Camera Positions */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm theme-text-secondary">View:</span>
+                        <button
+                            onClick={() => setCameraPosition([12, 12, 12])}
+                            className="px-2 py-1 rounded text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary"
+                        >
+                            Isometric
+                        </button>
+                        <button
+                            onClick={() => setCameraPosition([15, 5, 5])}
+                            className="px-2 py-1 rounded text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary"
+                        >
+                            Front
+                        </button>
+                        <button
+                            onClick={() => setCameraPosition([5, 15, 5])}
+                            className="px-2 py-1 rounded text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary"
+                        >
+                            Side
+                        </button>
+                        <button
+                            onClick={() => setCameraPosition([5, 5, 15])}
+                            className="px-2 py-1 rounded text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary"
+                        >
+                            Top
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6">
@@ -433,7 +575,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                 <div className="flex-1">
                     <div className="relative bg-gray-50 dark:bg-gray-900 rounded-lg p-4" style={{ height: '600px' }}>
                         <Canvas
-                            camera={{ position: [8, 8, 8], fov: 50 }}
+                            camera={{ position: memoizedCameraPosition, fov: fov }}
                             style={{ width: '100%', height: '100%' }}
                         >
                             <Scene3D 
@@ -441,6 +583,9 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                 ranges={ranges} 
                                 onPointHover={setHoveredPoint}
                                 colorScheme={currentScheme}
+                                cameraMode={cameraMode}
+                                fov={fov}
+                                cameraPosition={memoizedCameraPosition}
                             />
                         </Canvas>
                         
