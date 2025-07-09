@@ -6,6 +6,7 @@ import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 
 interface Performance3DChartProps {
     drives: DriveAnalysis[];
+    allDrives?: DriveAnalysis[]; // Original unfiltered data for axis scaling
 }
 
 interface PerformancePoint {
@@ -131,30 +132,109 @@ const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ ma
                 Bandwidth ({maxValues.z.toFixed(0)} MB/s)
             </Text>
 
-            {/* Grid lines */}
+            {/* Floor */}
+            <mesh position={[2.5, 0, 2.5]} rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[5, 5]} />
+                <meshBasicMaterial 
+                    color="#f0f0f0" 
+                    transparent 
+                    opacity={0.1}
+                    side={2}
+                />
+            </mesh>
+            
+            {/* Floor grid pattern */}
             <group>
-                {[1, 2, 3, 4].map(i => (
-                    <React.Fragment key={i}>
-                        {/* X-Y grid */}
-                        <mesh position={[i, 0, 0]}>
-                            <cylinderGeometry args={[0.005, 0.005, 5]} />
-                            <meshBasicMaterial color="#333333" transparent opacity={0.2} />
+                {[0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5].map(i => (
+                    <React.Fragment key={`floor-${i}`}>
+                        {/* Grid lines along X */}
+                        <mesh position={[2.5, 0.001, i]} rotation={[-Math.PI / 2, 0, Math.PI / 2]}>
+                            <planeGeometry args={[5, 0.02]} />
+                            <meshBasicMaterial color="#cccccc" transparent opacity={0.15} />
                         </mesh>
-                        <mesh position={[0, i, 0]} rotation={[0, 0, Math.PI / 2]}>
-                            <cylinderGeometry args={[0.005, 0.005, 5]} />
-                            <meshBasicMaterial color="#333333" transparent opacity={0.2} />
-                        </mesh>
-                        {/* X-Z grid */}
-                        <mesh position={[i, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                            <cylinderGeometry args={[0.005, 0.005, 5]} />
-                            <meshBasicMaterial color="#333333" transparent opacity={0.2} />
-                        </mesh>
-                        <mesh position={[0, 0, i]} rotation={[0, Math.PI / 2, 0]}>
-                            <cylinderGeometry args={[0.005, 0.005, 5]} />
-                            <meshBasicMaterial color="#333333" transparent opacity={0.2} />
+                        {/* Grid lines along Z */}
+                        <mesh position={[i, 0.001, 2.5]} rotation={[-Math.PI / 2, 0, 0]}>
+                            <planeGeometry args={[5, 0.02]} />
+                            <meshBasicMaterial color="#cccccc" transparent opacity={0.15} />
                         </mesh>
                     </React.Fragment>
                 ))}
+            </group>
+
+            {/* Back Wall (X-Y plane at Z=0) */}
+            <mesh position={[2.5, 2.5, 0]}>
+                <planeGeometry args={[5, 5]} />
+                <meshBasicMaterial 
+                    color="#f8f9fa" 
+                    transparent 
+                    opacity={0.08}
+                    side={2}
+                />
+            </mesh>
+            
+            {/* Side Wall (Y-Z plane at X=0) */}
+            <mesh position={[0, 2.5, 2.5]} rotation={[0, Math.PI / 2, 0]}>
+                <planeGeometry args={[5, 5]} />
+                <meshBasicMaterial 
+                    color="#f8f9fa" 
+                    transparent 
+                    opacity={0.08}
+                    side={2}
+                />
+            </mesh>
+
+            {/* Wall grid patterns */}
+            <group>
+                {/* Back wall grid */}
+                {[0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5].map(i => (
+                    <React.Fragment key={`back-wall-${i}`}>
+                        {/* Horizontal lines */}
+                        <mesh position={[2.5, i, 0.001]}>
+                            <planeGeometry args={[5, 0.02]} />
+                            <meshBasicMaterial color="#e0e0e0" transparent opacity={0.1} />
+                        </mesh>
+                        {/* Vertical lines */}
+                        <mesh position={[i, 2.5, 0.001]}>
+                            <planeGeometry args={[0.02, 5]} />
+                            <meshBasicMaterial color="#e0e0e0" transparent opacity={0.1} />
+                        </mesh>
+                    </React.Fragment>
+                ))}
+                
+                {/* Side wall grid */}
+                {[0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5].map(i => (
+                    <React.Fragment key={`side-wall-${i}`}>
+                        {/* Horizontal lines */}
+                        <mesh position={[0.001, i, 2.5]} rotation={[0, Math.PI / 2, 0]}>
+                            <planeGeometry args={[5, 0.02]} />
+                            <meshBasicMaterial color="#e0e0e0" transparent opacity={0.1} />
+                        </mesh>
+                        {/* Vertical lines */}
+                        <mesh position={[0.001, 2.5, i]} rotation={[0, Math.PI / 2, 0]}>
+                            <planeGeometry args={[0.02, 5]} />
+                            <meshBasicMaterial color="#e0e0e0" transparent opacity={0.1} />
+                        </mesh>
+                    </React.Fragment>
+                ))}
+            </group>
+
+            {/* Corner edge highlights */}
+            <group>
+                {/* Floor-to-back-wall corner */}
+                <mesh position={[2.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                    <cylinderGeometry args={[0.01, 0.01, 5]} />
+                    <meshBasicMaterial color="#666666" transparent opacity={0.3} />
+                </mesh>
+                {/* Floor-to-side-wall corner */}
+                <mesh position={[0, 0, 2.5]} rotation={[0, Math.PI / 2, 0]}>
+                    <cylinderGeometry args={[0.01, 0.01, 5]} />
+                    <meshBasicMaterial color="#666666" transparent opacity={0.3} />
+                </mesh>
+                {/* Back-wall-to-side-wall corner */}
+                <mesh position={[0, 2.5, 0]}>
+                    <cylinderGeometry args={[0.01, 0.01, 5]} />
+                    <meshBasicMaterial color="#666666" transparent opacity={0.3} />
+                </mesh>
             </group>
         </group>
     );
@@ -212,7 +292,7 @@ const Scene3D: React.FC<{
     );
 };
 
-const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives }) => {
+const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDrives }) => {
     const [hoveredPoint, setHoveredPoint] = React.useState<PerformancePoint | null>(null);
     
     const colors = [
@@ -240,10 +320,11 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives }) => {
                 const latency = config.avg_latency || 0;
                 const bandwidth = config.bandwidth || 0;
                 
-                // Calculate performance score
-                const maxIOPS = Math.max(...drives.flatMap(d => d.configurations.map(c => c.iops || 0)));
-                const maxBandwidth = Math.max(...drives.flatMap(d => d.configurations.map(c => c.bandwidth || 0)));
-                const minLatency = Math.min(...drives.flatMap(d => d.configurations.map(c => c.avg_latency || Infinity)));
+                // Calculate performance score using fixed ranges from all data
+                const dataSource = allDrives || drives;
+                const maxIOPS = Math.max(...dataSource.flatMap(d => d.configurations.map(c => c.iops || 0)));
+                const maxBandwidth = Math.max(...dataSource.flatMap(d => d.configurations.map(c => c.bandwidth || 0)));
+                const minLatency = Math.min(...dataSource.flatMap(d => d.configurations.map(c => c.avg_latency || Infinity)));
                 
                 const performanceScore = (iops / maxIOPS) * (bandwidth / maxBandwidth) / ((latency / minLatency) || 1);
                 
@@ -262,22 +343,33 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives }) => {
         });
 
         return allPoints;
-    }, [drives, colors]);
+    }, [drives, colors, allDrives]);
 
-    // Calculate ranges for normalization
+    // Calculate fixed ranges based on ALL original data (not filtered data) for consistent scaling
     const ranges = useMemo(() => {
-        if (points.length === 0) return { x: [0, 1] as [number, number], y: [0, 1] as [number, number], z: [0, 1] as [number, number] };
+        // Use original unfiltered data if available, otherwise fall back to current drives
+        const dataSource = allDrives || drives;
+        
+        // Get all possible values from all drives, not just current filtered points
+        const allConfigs = dataSource.flatMap(drive => drive.configurations);
+        const validConfigs = allConfigs.filter(c => 
+            c.iops !== null && c.avg_latency !== null && c.bandwidth !== null &&
+            c.iops !== undefined && c.avg_latency !== undefined && c.bandwidth !== undefined &&
+            c.iops > 0 && c.avg_latency > 0 && c.bandwidth > 0
+        );
 
-        const xValues = points.map(p => p.x);
-        const yValues = points.map(p => p.y);
-        const zValues = points.map(p => p.z);
+        if (validConfigs.length === 0) return { x: [0, 1] as [number, number], y: [0, 1] as [number, number], z: [0, 1] as [number, number] };
+
+        const xValues = validConfigs.map(c => c.iops || 0);
+        const yValues = validConfigs.map(c => c.avg_latency || 0);
+        const zValues = validConfigs.map(c => c.bandwidth || 0);
 
         return {
-            x: [Math.min(...xValues), Math.max(...xValues)] as [number, number],
-            y: [Math.min(...yValues), Math.max(...yValues)] as [number, number],
-            z: [Math.min(...zValues), Math.max(...zValues)] as [number, number]
+            x: [0, Math.max(...xValues)] as [number, number], // Start from 0 for IOPS
+            y: [0, Math.max(...yValues)] as [number, number], // Start from 0 for Latency
+            z: [0, Math.max(...zValues)] as [number, number]  // Start from 0 for Bandwidth
         };
-    }, [points]);
+    }, [allDrives, drives]); // Depends on original data, not filtered points
 
     return (
         <div className="w-full">

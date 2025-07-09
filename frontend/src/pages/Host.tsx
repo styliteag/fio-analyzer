@@ -507,7 +507,10 @@ const Host: React.FC = () => {
                             )}
 
                             {activeView === '3d' && (
-                                <Performance3DChart drives={filteredDrives} />
+                                <Performance3DChart 
+                                    drives={filteredDrives} 
+                                    allDrives={hostData?.drives} 
+                                />
                             )}
                         </Card>
                     </div>
