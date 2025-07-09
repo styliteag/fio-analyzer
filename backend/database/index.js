@@ -233,175 +233,20 @@ function initDb() {
                     return;
                 }
 
-                // Check if old performance_metrics tables exist (indicates we need simplified schema migration)
-                db.all(`
-                    SELECT name FROM sqlite_master 
-                    WHERE type='table' 
-                    AND name IN ('performance_metrics', 'performance_metrics_all')
-                `, (err, oldTables) => {
-                    if (err) {
-                        console.error(err.message);
-                        return;
-                    }
-
-                    const hasOldMetricsTables = oldTables.length > 0;
-
-                    if (hasOldMetricsTables) {
-                        console.log('Detected old performance_metrics tables. Running simplified schema migration...');
-                        runSimplifiedSchemaMigration(() => {
-                            showServerReady(8000);
-                        });
-                    } else if (row.count > 0 && allRow.count === 0) {
-                        console.log('Migrating existing data to new dual-table structure...');
-                        migrateToNewSchema(() => {
-                            showServerReady(8000);
-                        });
-                    } else if (row.count === 0 && allRow.count === 0) {
-                        console.log('Populating sample data...');
-                        console.log('Estimated data: ~60 test runs with performance metrics (simplified schema)');
-                        populateSampleData(() => {
-                            showServerReady(8000);
-                        });
-                    } else {
+                if (row.count === 0 && allRow.count === 0) {
+                    console.log('Populating sample data...');
+                    console.log('Estimated data: ~60 test runs with performance metrics (simplified schema)');
+                    populateSampleData(() => {
                         showServerReady(8000);
-                    }
-                });
-            });
-        });
-    });
-}
-
-function runSimplifiedSchemaMigration(callback) {
-    console.log('Starting simplified schema migration...');
-
-    // Read the migration SQL from the file
-    const fs = require('fs');
-    const path = require('path');
-    const migrationPath = path.join(__dirname, '..', 'scripts', 'migrate-to-simplified-schema.sql');
-
-    try {
-        const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
-
-        // Execute the migration
-        db.exec(migrationSQL, (err) => {
-            if (err) {
-                console.error('Migration failed:', err.message);
-                return;
-            }
-
-            console.log('Simplified schema migration completed successfully!');
-            console.log('- Removed performance_metrics and performance_metrics_all tables');
-            console.log('- Added metric columns directly to test_runs and test_runs_all');
-            console.log('- Updated indexes for better performance');
-
-            callback();
-        });
-    } catch (error) {
-        console.error('Failed to read migration file:', error.message);
-        callback();
-    }
-}
-
-// Migration function to move data from single-table to dual-table structure
-function migrateToNewSchema(callback) {
-    console.log('Starting migration to dual-table structure...');
-
-    db.serialize(() => {
-        // Step 1: Copy all data from test_runs to test_runs_all
-        db.run(`
-            INSERT INTO test_runs_all 
-            SELECT * FROM test_runs
-        `, (err) => {
-            if (err) {
-                console.error('Error copying data to test_runs_all:', err);
-                return callback();
-            }
-            console.log('Copied all test_runs to test_runs_all');
-
-            // Step 2: Copy all performance_metrics to performance_metrics_all
-            db.run(`
-                INSERT INTO performance_metrics_all 
-                SELECT * FROM performance_metrics
-            `, (err) => {
-                if (err) {
-                    console.error('Error copying performance_metrics:', err);
-                    return callback();
-                }
-                console.log('Copied all performance_metrics to performance_metrics_all');
-
-                // Step 3: Clear test_runs and performance_metrics to rebuild with latest only
-                db.run('DELETE FROM performance_metrics', (err) => {
-                    if (err) {
-                        console.error('Error clearing performance_metrics:', err);
-                        return callback();
-                    }
-
-                    db.run('DELETE FROM test_runs', (err) => {
-                        if (err) {
-                            console.error('Error clearing test_runs:', err);
-                            return callback();
-                        }
-
-                        // Step 5: Rebuild test_runs with only latest entries per configuration
-                        rebuildLatestOnlyTables(callback);
                     });
-                });
+                } else {
+                    showServerReady(8000);
+                }
             });
         });
     });
 }
 
-// Rebuild test_runs and related tables with only latest entries
-function rebuildLatestOnlyTables(callback) {
-    console.log('Rebuilding latest-only tables...');
-
-    // Insert only the latest test run for each unique configuration
-    const query = `
-        INSERT INTO test_runs 
-        SELECT * FROM test_runs_all tr1
-        WHERE tr1.id = (
-            SELECT tr2.id 
-            FROM test_runs_all tr2 
-            WHERE tr2.hostname = tr1.hostname 
-            AND tr2.protocol = tr1.protocol 
-            AND tr2.drive_type = tr1.drive_type 
-            AND tr2.drive_model = tr1.drive_model 
-            AND tr2.block_size = tr1.block_size 
-            AND tr2.read_write_pattern = tr1.read_write_pattern 
-            AND tr2.queue_depth = tr1.queue_depth 
-            AND tr2.num_jobs = tr1.num_jobs 
-            AND tr2.direct = tr1.direct 
-            AND tr2.test_size = tr1.test_size 
-            AND tr2.sync = tr1.sync 
-            AND tr2.iodepth = tr1.iodepth 
-            AND tr2.duration = tr1.duration
-            ORDER BY tr2.timestamp DESC 
-            LIMIT 1
-        )
-    `;
-
-    db.run(query, (err) => {
-        if (err) {
-            console.error('Error rebuilding test_runs with latest data:', err);
-            return callback();
-        }
-
-        // Copy corresponding performance metrics
-        db.run(`
-            INSERT INTO performance_metrics 
-            SELECT pma.* FROM performance_metrics_all pma
-            JOIN test_runs tr ON pma.test_run_id = tr.id
-        `, (err) => {
-            if (err) {
-                console.error('Error copying latest performance metrics:', err);
-                return callback();
-            }
-
-            console.log('Migration to dual-table structure completed successfully!');
-            callback();
-        });
-    });
-}
 
 // Sample data generation
 function populateSampleData(callback) {
