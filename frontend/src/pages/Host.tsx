@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Server, HardDrive, Zap, Activity, ArrowLeft, RefreshCw, BarChart3, Radar, TrendingUp, Box, ChevronDown } from 'lucide-react';
+import Select from 'react-select';
+import { Server, HardDrive, Zap, Activity, ArrowLeft, RefreshCw, BarChart3, Radar, TrendingUp, Box } from 'lucide-react';
 import { DashboardHeader, DashboardFooter } from '../components/layout';
 import { Card, Button, Loading, ErrorDisplay } from '../components/ui';
 import { fetchHostAnalysis, getHostList, type HostAnalysisData } from '../services/api/hostAnalysis';
@@ -9,18 +10,19 @@ import DriveRadarChart from '../components/host/DriveRadarChart';
 import PerformanceScatterPlot from '../components/host/PerformanceScatterPlot';
 import Performance3DChart from '../components/host/Performance3DChart';
 import HostFilters from '../components/host/HostFilters';
+import { getSelectStyles } from '../hooks/useThemeColors';
 
 const Host: React.FC = () => {
     const { hostname } = useParams<{ hostname: string }>();
     const navigate = useNavigate();
-    const [hostData, setHostData] = useState<HostAnalysisData | null>(null);
+    const [hostDataMap, setHostDataMap] = useState<Record<string, HostAnalysisData>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
     // Host selection states
     const [availableHosts, setAvailableHosts] = useState<string[]>([]);
     const [loadingHosts, setLoadingHosts] = useState(true);
-    const [selectedHost, setSelectedHost] = useState<string>('');
+    const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
     
     // Filter states
     const [selectedBlockSizes, setSelectedBlockSizes] = useState<string[]>([]);
@@ -42,9 +44,9 @@ const Host: React.FC = () => {
             
             // Auto-select host from URL or first available host
             if (hostname && hosts.includes(hostname)) {
-                setSelectedHost(hostname);
+                setSelectedHosts([hostname]);
             } else if (!hostname && hosts.length > 0) {
-                setSelectedHost(hosts[0]);
+                setSelectedHosts([hosts[0]]);
                 navigate(`/host/${hosts[0]}`, { replace: true });
             }
         } catch (err) {
@@ -55,11 +57,9 @@ const Host: React.FC = () => {
         }
     };
 
-    // Load host analysis data
-    const loadHostData = async (targetHost?: string) => {
-        const hostToLoad = targetHost || selectedHost || hostname;
-        
-        if (!hostToLoad) {
+    // Load host analysis data for multiple hosts
+    const loadHostsData = async (hosts: string[] = selectedHosts) => {
+        if (hosts.length === 0) {
             setLoading(false);
             return;
         }
@@ -67,8 +67,20 @@ const Host: React.FC = () => {
         try {
             setLoading(true);
             setError(null);
-            const data = await fetchHostAnalysis(hostToLoad);
-            setHostData(data);
+            const dataMap: Record<string, HostAnalysisData> = {};
+            
+            // Load data for each host
+            for (const host of hosts) {
+                try {
+                    const data = await fetchHostAnalysis(host);
+                    dataMap[host] = data;
+                } catch (err) {
+                    console.error(`Failed to load data for host ${host}:`, err);
+                    // Continue with other hosts even if one fails
+                }
+            }
+            
+            setHostDataMap(dataMap);
         } catch (err) {
             console.error('Failed to load host analysis:', err);
             setError(err instanceof Error ? err.message : 'Failed to load host analysis');
@@ -78,10 +90,13 @@ const Host: React.FC = () => {
     };
 
     // Handle host selection change
-    const handleHostChange = (newHost: string) => {
-        setSelectedHost(newHost);
-        navigate(`/host/${newHost}`);
-        loadHostData(newHost);
+    const handleHostsChange = (newHosts: string[]) => {
+        setSelectedHosts(newHosts);
+        // Update URL to reflect primary host (first selected)
+        if (newHosts.length > 0) {
+            navigate(`/host/${newHosts[0]}`);
+        }
+        loadHostsData(newHosts);
         // Reset filters when switching hosts
         resetFilters();
     };
@@ -89,31 +104,66 @@ const Host: React.FC = () => {
     // Load host list on component mount
     useEffect(() => {
         loadHostList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Load host data when hostname changes
     useEffect(() => {
-        if (hostname && hostname !== selectedHost) {
-            setSelectedHost(hostname);
-            loadHostData(hostname);
+        if (hostname && !selectedHosts.includes(hostname)) {
+            setSelectedHosts([hostname]);
+            loadHostsData([hostname]);
         }
-    }, [hostname]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hostname, selectedHosts]);
 
-    // Load host data when selected host changes (after host list is loaded)
+    // Load host data when selected hosts change (after host list is loaded)
     useEffect(() => {
-        if (selectedHost && !loadingHosts) {
-            loadHostData(selectedHost);
+        if (selectedHosts.length > 0 && !loadingHosts) {
+            loadHostsData(selectedHosts);
         }
-    }, [selectedHost, loadingHosts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedHosts, loadingHosts]);
+
+    // Combine data from all selected hosts
+    const combinedHostData = useMemo(() => {
+        const allHosts = Object.values(hostDataMap);
+        if (allHosts.length === 0) return null;
+        
+        // Combine all drives from all hosts
+        const allDrives = allHosts.flatMap(hostData => hostData.drives);
+        
+        // Combine test coverage from all hosts
+        const allBlockSizes = [...new Set(allHosts.flatMap(h => h.testCoverage.blockSizes))].sort();
+        const allPatterns = [...new Set(allHosts.flatMap(h => h.testCoverage.patterns))].sort();
+        const allQueueDepths = [...new Set(allHosts.flatMap(h => h.testCoverage.queueDepths))].sort((a, b) => a - b);
+        const allProtocols = [...new Set(allHosts.flatMap(h => h.testCoverage.protocols))].sort();
+        const allHostDiskCombinations = [...new Set(allHosts.flatMap(h => h.testCoverage.hostDiskCombinations))].sort();
+        
+        // Use first host as template and combine data
+        const primaryHost = allHosts[0];
+        return {
+            ...primaryHost,
+            drives: allDrives,
+            testCoverage: {
+                blockSizes: allBlockSizes,
+                patterns: allPatterns,
+                queueDepths: allQueueDepths,
+                protocols: allProtocols,
+                hostDiskCombinations: allHostDiskCombinations
+            },
+            totalTests: allHosts.reduce((sum, h) => sum + h.totalTests, 0),
+            hostname: selectedHosts.length === 1 ? selectedHosts[0] : `${selectedHosts.length} hosts`
+        };
+    }, [hostDataMap, selectedHosts]);
 
     // Filter drives based on selected criteria
     const filteredDrives = useMemo(() => {
-        if (!hostData) return [];
+        if (!combinedHostData) return [];
 
-        return hostData.drives.filter(drive => {
+        return combinedHostData.drives.filter(drive => {
             // Filter drives by selected host-disk combinations
             if (selectedHostDiskCombinations.length === 0) return true;
-            const driveCombo = `${drive.hostname || hostData.hostname} - ${drive.protocol} - ${drive.drive_model}`;
+            const driveCombo = `${drive.hostname} - ${drive.protocol} - ${drive.drive_model}`;
             return selectedHostDiskCombinations.includes(driveCombo);
         }).map(drive => ({
             ...drive,
@@ -125,7 +175,7 @@ const Host: React.FC = () => {
                 return blockSizeMatch && patternMatch && queueDepthMatch;
             })
         })).filter(drive => drive.configurations.length > 0);
-    }, [hostData, selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedProtocols, selectedHostDiskCombinations]);
+    }, [combinedHostData, selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedHostDiskCombinations]);
 
     const resetFilters = () => {
         setSelectedBlockSizes([]);
@@ -135,7 +185,7 @@ const Host: React.FC = () => {
         setSelectedHostDiskCombinations([]);
     };
 
-    if (loadingHosts || (loading && !selectedHost)) {
+    if (loadingHosts || (loading && selectedHosts.length === 0)) {
         return (
             <div className="min-h-screen theme-bg-secondary">
                 <DashboardHeader />
@@ -154,7 +204,7 @@ const Host: React.FC = () => {
                 <main className="container mx-auto px-4 py-8">
                     <ErrorDisplay 
                         error={error}
-                        onRetry={() => selectedHost ? loadHostData(selectedHost) : loadHostList()}
+                        onRetry={() => selectedHosts.length > 0 ? loadHostsData(selectedHosts) : loadHostList()}
                         showRetry={true}
                     />
                 </main>
@@ -196,7 +246,7 @@ const Host: React.FC = () => {
                             </Button>
                             <Button
                                 variant="outline"
-                                onClick={() => selectedHost && loadHostData(selectedHost)}
+                                onClick={() => selectedHosts.length > 0 && loadHostsData(selectedHosts)}
                                 disabled={loading}
                                 className="flex items-center gap-2"
                             >
@@ -206,22 +256,32 @@ const Host: React.FC = () => {
                         </div>
 
                         {/* Host Selector */}
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium theme-text-secondary">Select Host:</span>
-                            <div className="relative">
-                                <select
-                                    value={selectedHost}
-                                    onChange={(e) => handleHostChange(e.target.value)}
-                                    className="appearance-none bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-2 pr-8 text-sm theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    disabled={loadingHosts}
-                                >
-                                    {availableHosts.map(host => (
-                                        <option key={host} value={host}>
-                                            {host}
-                                        </option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 theme-text-secondary pointer-events-none" />
+                        <div className="flex items-center gap-3 flex-1 max-w-md">
+                            <span className="text-sm font-medium theme-text-secondary whitespace-nowrap">Select Hosts:</span>
+                            <div className="flex-1">
+                                <Select
+                                    isMulti
+                                    closeMenuOnSelect={false}
+                                    hideSelectedOptions={false}
+                                    blurInputOnSelect={false}
+                                    isClearable={false}
+                                    isDisabled={loadingHosts}
+                                    options={availableHosts.map(host => ({
+                                        value: host,
+                                        label: host
+                                    }))}
+                                    value={selectedHosts.map(host => ({
+                                        value: host,
+                                        label: host
+                                    }))}
+                                    onChange={(selected) => {
+                                        const hosts = selected ? selected.map(s => s.value) : [];
+                                        handleHostsChange(hosts);
+                                    }}
+                                    placeholder="Select hosts to analyze..."
+                                    className="text-sm"
+                                    styles={getSelectStyles()}
+                                />
                             </div>
                         </div>
                     </div>
@@ -229,7 +289,7 @@ const Host: React.FC = () => {
                     <div className="flex items-center gap-3 mb-2">
                         <Server className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                         <h1 className="text-3xl font-bold theme-text-primary">
-                            {selectedHost || 'Host Analysis'}
+                            {selectedHosts.length === 1 ? selectedHosts[0] : selectedHosts.length > 1 ? `${selectedHosts.length} Hosts` : 'Host Analysis'}
                         </h1>
                     </div>
                     <p className="theme-text-secondary text-lg">
@@ -238,14 +298,14 @@ const Host: React.FC = () => {
                 </div>
 
                 {/* Loading state for host data */}
-                {loading && selectedHost && (
+                {loading && selectedHosts.length > 0 && (
                     <div className="flex justify-center py-12">
                         <Loading />
                     </div>
                 )}
 
                 {/* Content when host data is available */}
-                {!loading && hostData && (
+                {!loading && combinedHostData && (
                 <>
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -254,7 +314,7 @@ const Host: React.FC = () => {
                             <div>
                                 <p className="theme-text-secondary text-sm font-medium">Total Tests</p>
                                 <p className="theme-text-primary text-2xl font-bold">
-                                    {hostData.totalTests.toLocaleString()}
+                                    {combinedHostData.totalTests.toLocaleString()}
                                 </p>
                             </div>
                             <Activity className="w-8 h-8 text-blue-600 dark:text-blue-400 opacity-80" />
@@ -266,7 +326,7 @@ const Host: React.FC = () => {
                             <div>
                                 <p className="theme-text-secondary text-sm font-medium">Storage Drives</p>
                                 <p className="theme-text-primary text-2xl font-bold">
-                                    {hostData.drives.length}
+                                    {combinedHostData.drives.length}
                                 </p>
                             </div>
                             <HardDrive className="w-8 h-8 text-green-600 dark:text-green-400 opacity-80" />
@@ -278,7 +338,7 @@ const Host: React.FC = () => {
                             <div>
                                 <p className="theme-text-secondary text-sm font-medium">Avg IOPS</p>
                                 <p className="theme-text-primary text-2xl font-bold">
-                                    {hostData.performanceSummary.avgIOPS.toFixed(0)}
+                                    {combinedHostData.performanceSummary.avgIOPS.toFixed(0)}
                                 </p>
                             </div>
                             <Zap className="w-8 h-8 text-yellow-600 dark:text-yellow-400 opacity-80" />
@@ -290,7 +350,7 @@ const Host: React.FC = () => {
                             <div>
                                 <p className="theme-text-secondary text-sm font-medium">Avg Latency</p>
                                 <p className="theme-text-primary text-2xl font-bold">
-                                    {hostData.performanceSummary.avgLatency.toFixed(2)}ms
+                                    {combinedHostData.performanceSummary.avgLatency.toFixed(2)}ms
                                 </p>
                             </div>
                             <Activity className="w-8 h-8 text-purple-600 dark:text-purple-400 opacity-80" />
@@ -377,7 +437,7 @@ const Host: React.FC = () => {
                     {/* Filters Sidebar */}
                     <div className="xl:col-span-1">
                         <HostFilters
-                            testCoverage={hostData.testCoverage}
+                            testCoverage={combinedHostData.testCoverage}
                             selectedBlockSizes={selectedBlockSizes}
                             selectedPatterns={selectedPatterns}
                             selectedQueueDepths={selectedQueueDepths}
@@ -400,7 +460,7 @@ const Host: React.FC = () => {
                                 </h4>
                                 <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded">
                                     <p className="font-bold text-green-700 dark:text-green-400 text-sm">
-                                        {hostData.performanceSummary.bestDrive}
+                                        {combinedHostData.performanceSummary.bestDrive}
                                     </p>
                                 </div>
                             </Card>
@@ -412,7 +472,7 @@ const Host: React.FC = () => {
                                 </h4>
                                 <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded">
                                     <p className="font-bold text-orange-700 dark:text-orange-400 text-sm">
-                                        {hostData.performanceSummary.worstDrive}
+                                        {combinedHostData.performanceSummary.worstDrive}
                                     </p>
                                 </div>
                             </Card>
@@ -518,7 +578,7 @@ const Host: React.FC = () => {
                             {activeView === '3d' && (
                                 <Performance3DChart 
                                     drives={filteredDrives} 
-                                    allDrives={hostData?.drives} 
+                                    allDrives={combinedHostData?.drives} 
                                 />
                             )}
                         </Card>

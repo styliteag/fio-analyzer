@@ -28,6 +28,7 @@ const DEFAULT_FILTERS: ActiveFilters = {
     block_sizes: [],
     hostnames: [],
     protocols: [],
+    host_disk_combinations: [],
     syncs: [],
     queue_depths: [],
     directs: [],

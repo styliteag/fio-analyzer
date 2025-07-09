@@ -169,6 +169,7 @@ const Admin: React.FC = () => {
         patterns: [],
         block_sizes: [], 
         queue_depths: [], 
+        host_disk_combinations: [],
         syncs: [], 
         directs: [], 
         num_jobs: [], 

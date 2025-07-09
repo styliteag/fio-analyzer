@@ -13,6 +13,7 @@ export interface DriveAnalysis {
     drive_model: string;
     drive_type: string;
     protocol: string;
+    hostname: string;
     testCount: number;
     configurations: TestConfiguration[];
     topPerformance: {
@@ -99,6 +100,7 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
             drive_model: driveModel,
             drive_type: runs[0].drive_type,
             protocol: runs[0].protocol || 'unknown',
+            hostname: runs[0].hostname || 'unknown',
             testCount: runs.length,
             configurations,
             topPerformance: {

@@ -60,6 +60,7 @@ export const convertTimeSeriesFiltersToActiveFilters = (
         }),
         patterns: timeSeriesFilters.patterns,
         queue_depths: timeSeriesFilters.queue_depths,
+        host_disk_combinations: [],
         syncs: timeSeriesFilters.syncs,
         directs: timeSeriesFilters.directs,
         num_jobs: timeSeriesFilters.num_jobs,

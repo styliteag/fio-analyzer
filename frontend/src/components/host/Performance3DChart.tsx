@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unknown-property */
 import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Text } from '@react-three/drei';
@@ -31,7 +32,7 @@ const CameraController: React.FC<{
     cameraMode: 'perspective' | 'orthographic';
     fov: number;
     position: [number, number, number];
-}> = React.memo(({ cameraMode, fov, position }) => {
+}> = React.memo(function CameraController({ cameraMode, fov, position }) {
     const { camera, size, set } = useThree();
     const controlsRef = useRef<any>(null);
     
@@ -56,7 +57,7 @@ const CameraController: React.FC<{
                 set({ camera: newCamera });
             }
         }
-    }, [cameraMode, fov, camera, size, set]);
+    }, [cameraMode, fov, camera, size, set, position]);
     
     // Handle position updates separately to work with OrbitControls
     useEffect(() => {
@@ -355,7 +356,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
     const [cameraPosition, setCameraPosition] = React.useState<[number, number, number]>([12, 12, 12]);
     
     // Memoize camera position to prevent unnecessary re-renders
-    const memoizedCameraPosition = useMemo(() => cameraPosition, [cameraPosition[0], cameraPosition[1], cameraPosition[2]]);
+    const memoizedCameraPosition = useMemo(() => cameraPosition, [cameraPosition]);
     
     const colorSchemes = {
         vibrant: {
