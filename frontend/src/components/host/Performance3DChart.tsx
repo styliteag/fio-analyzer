@@ -142,7 +142,7 @@ const Axes: React.FC<{
 }> = ({ maxValues, colorScheme }) => {
     return (
         <group>
-            {/* X Axis - IOPS */}
+            {/* X Axis - Latency */}
             <mesh position={[2.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
                 <cylinderGeometry args={[0.02, 0.02, 5]} />
                 <meshBasicMaterial color="#ff6b6b" />
@@ -158,10 +158,10 @@ const Axes: React.FC<{
                 anchorX="left"
                 anchorY="middle"
             >
-                IOPS ({maxValues.x.toFixed(0)})
+                Latency ({maxValues.x.toFixed(1)}ms)
             </Text>
 
-            {/* Y Axis - Latency */}
+            {/* Y Axis - IOPS */}
             <mesh position={[0, 2.5, 0]}>
                 <cylinderGeometry args={[0.02, 0.02, 5]} />
                 <meshBasicMaterial color="#4ecdc4" />
@@ -177,7 +177,7 @@ const Axes: React.FC<{
                 anchorX="center"
                 anchorY="bottom"
             >
-                Latency ({maxValues.y.toFixed(1)}ms)
+                IOPS ({maxValues.y.toFixed(0)})
             </Text>
 
             {/* Z Axis - Bandwidth */}
@@ -426,8 +426,8 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                 const performanceScore = (iops / maxIOPS) * (bandwidth / maxBandwidth) / ((latency / minLatency) || 1);
                 
                 allPoints.push({
-                    x: iops,
-                    y: latency,
+                    x: latency,
+                    y: iops,
                     z: bandwidth,
                     drive: drive.drive_model,
                     blockSize: config.block_size,
@@ -457,13 +457,13 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
 
         if (validConfigs.length === 0) return { x: [0, 1] as [number, number], y: [0, 1] as [number, number], z: [0, 1] as [number, number] };
 
-        const xValues = validConfigs.map(c => c.iops || 0);
-        const yValues = validConfigs.map(c => c.avg_latency || 0);
+        const xValues = validConfigs.map(c => c.avg_latency || 0);
+        const yValues = validConfigs.map(c => c.iops || 0);
         const zValues = validConfigs.map(c => c.bandwidth || 0);
 
         return {
-            x: [0, Math.max(...xValues)] as [number, number], // Start from 0 for IOPS
-            y: [0, Math.max(...yValues)] as [number, number], // Start from 0 for Latency
+            x: [0, Math.max(...xValues)] as [number, number], // Start from 0 for Latency
+            y: [0, Math.max(...yValues)] as [number, number], // Start from 0 for IOPS
             z: [0, Math.max(...zValues)] as [number, number]  // Start from 0 for Bandwidth
         };
     }, [allDrives, drives]); // Depends on original data, not filtered points
