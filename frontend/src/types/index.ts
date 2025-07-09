@@ -63,6 +63,7 @@ export interface FilterOptions {
 	block_sizes: (string | number)[];
 	hostnames: string[];
 	protocols: string[];
+	host_disk_combinations: string[];
 	syncs: number[];
 	queue_depths: number[];
 	directs: number[];

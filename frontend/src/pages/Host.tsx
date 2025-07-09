@@ -27,6 +27,7 @@ const Host: React.FC = () => {
     const [selectedPatterns, setSelectedPatterns] = useState<string[]>([]);
     const [selectedQueueDepths, setSelectedQueueDepths] = useState<number[]>([]);
     const [selectedProtocols, setSelectedProtocols] = useState<string[]>([]);
+    const [selectedHostDiskCombinations, setSelectedHostDiskCombinations] = useState<string[]>([]);
     
     // Visualization states
     const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'radar' | 'scatter' | '3d'>('overview');
@@ -109,7 +110,12 @@ const Host: React.FC = () => {
     const filteredDrives = useMemo(() => {
         if (!hostData) return [];
 
-        return hostData.drives.map(drive => ({
+        return hostData.drives.filter(drive => {
+            // Filter drives by selected host-disk combinations
+            if (selectedHostDiskCombinations.length === 0) return true;
+            const driveCombo = `${drive.hostname || hostData.hostname} - ${drive.protocol} - ${drive.drive_model}`;
+            return selectedHostDiskCombinations.includes(driveCombo);
+        }).map(drive => ({
             ...drive,
             configurations: drive.configurations.filter(config => {
                 const blockSizeMatch = selectedBlockSizes.length === 0 || selectedBlockSizes.includes(config.block_size);
@@ -119,13 +125,14 @@ const Host: React.FC = () => {
                 return blockSizeMatch && patternMatch && queueDepthMatch;
             })
         })).filter(drive => drive.configurations.length > 0);
-    }, [hostData, selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedProtocols]);
+    }, [hostData, selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedProtocols, selectedHostDiskCombinations]);
 
     const resetFilters = () => {
         setSelectedBlockSizes([]);
         setSelectedPatterns([]);
         setSelectedQueueDepths([]);
         setSelectedProtocols([]);
+        setSelectedHostDiskCombinations([]);
     };
 
     if (loadingHosts || (loading && !selectedHost)) {
@@ -375,10 +382,12 @@ const Host: React.FC = () => {
                             selectedPatterns={selectedPatterns}
                             selectedQueueDepths={selectedQueueDepths}
                             selectedProtocols={selectedProtocols}
+                            selectedHostDiskCombinations={selectedHostDiskCombinations}
                             onBlockSizeChange={setSelectedBlockSizes}
                             onPatternChange={setSelectedPatterns}
                             onQueueDepthChange={setSelectedQueueDepths}
                             onProtocolChange={setSelectedProtocols}
+                            onHostDiskCombinationChange={setSelectedHostDiskCombinations}
                             onReset={resetFilters}
                         />
 

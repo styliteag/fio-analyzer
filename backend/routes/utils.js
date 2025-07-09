@@ -77,6 +77,7 @@ router.get('/filters', requireAdmin, (req, res) => {
         'SELECT DISTINCT drive_type FROM test_runs WHERE drive_type IS NOT NULL ORDER BY drive_type',
         'SELECT DISTINCT hostname FROM test_runs WHERE hostname IS NOT NULL ORDER BY hostname',
         'SELECT DISTINCT protocol FROM test_runs WHERE protocol IS NOT NULL ORDER BY protocol',
+        'SELECT DISTINCT (hostname || " - " || protocol || " - " || drive_model) as host_disk_combo FROM test_runs WHERE hostname IS NOT NULL AND protocol IS NOT NULL AND drive_model IS NOT NULL ORDER BY host_disk_combo',
         'SELECT DISTINCT block_size FROM test_runs WHERE block_size IS NOT NULL ORDER BY block_size',
         'SELECT DISTINCT read_write_pattern FROM test_runs WHERE read_write_pattern IS NOT NULL ORDER BY read_write_pattern',
         'SELECT DISTINCT sync FROM test_runs WHERE sync IS NOT NULL ORDER BY sync',
@@ -88,7 +89,7 @@ router.get('/filters', requireAdmin, (req, res) => {
     ];
 
     const results = {};
-    const keys = ['drive_models', 'drive_types', 'hostnames', 'protocols', 'block_sizes', 'patterns', 'syncs', 'queue_depths', 'directs', 'num_jobs', 'test_sizes', 'durations'];
+    const keys = ['drive_models', 'drive_types', 'hostnames', 'protocols', 'host_disk_combinations', 'block_sizes', 'patterns', 'syncs', 'queue_depths', 'directs', 'num_jobs', 'test_sizes', 'durations'];
     let completed = 0;
 
     queries.forEach((query, index) => {

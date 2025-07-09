@@ -63,6 +63,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
             if (tempFilters.block_sizes.length > 0 && !tempFilters.block_sizes.includes(run.block_size)) return;
             if (tempFilters.hostnames.length > 0 && (!run.hostname || !tempFilters.hostnames.includes(run.hostname))) return;
             if (tempFilters.protocols.length > 0 && (!run.protocol || !tempFilters.protocols.includes(run.protocol))) return;
+            if ((tempFilters as any).host_disk_combinations && (tempFilters as any).host_disk_combinations.length > 0) {
+                if (!run.hostname || !run.protocol || !run.drive_model) return;
+                const combo = `${run.hostname} - ${run.protocol} - ${run.drive_model}`;
+                if (!(tempFilters as any).host_disk_combinations.includes(combo)) return;
+            }
             if (tempFilters.syncs.length > 0 && (run.sync === undefined || !tempFilters.syncs.includes(run.sync))) return;
             if (tempFilters.queue_depths.length > 0 && !tempFilters.queue_depths.includes(run.queue_depth)) return;
             if (tempFilters.directs.length > 0 && (run.direct === undefined || !tempFilters.directs.includes(run.direct))) return;
@@ -79,6 +84,11 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                 case 'block_sizes': value = run.block_size; break;
                 case 'hostnames': value = run.hostname; break;
                 case 'protocols': value = run.protocol; break;
+                case 'host_disk_combinations': 
+                    value = run.hostname && run.protocol && run.drive_model 
+                        ? `${run.hostname} - ${run.protocol} - ${run.drive_model}` 
+                        : undefined; 
+                    break;
                 case 'syncs': value = run.sync; break;
                 case 'queue_depths': value = run.queue_depth; break;
                 case 'directs': value = run.direct; break;
@@ -266,6 +276,63 @@ const TestRunFilters: React.FC<TestRunFiltersProps> = ({
                         onFilterChange('drive_types', selected ? selected.map((s) => s.value) : [])
                     }
                     placeholder="All drive types"
+                    className="text-xs"
+                    styles={getSelectStyles()}
+                />
+            </div>
+
+            <div>
+                <label className="block text-xs font-medium theme-text-secondary mb-1">
+                    Host-Protocol-Disk
+                </label>
+                <Select
+                    isMulti
+                    closeMenuOnSelect={false}
+                    hideSelectedOptions={false}
+                    blurInputOnSelect={false}
+                    isClearable={false}
+                    onMenuOpen={() => {
+                        setOpenDropdown('host_disk_combinations');
+                        setFiltersWhenOpened(activeFilters);
+                    }}
+                    onMenuClose={() => {
+                        setOpenDropdown(null);
+                        setFiltersWhenOpened(null);
+                        setCachedCounts({});
+                    }}
+                    options={
+                        openDropdown === 'host_disk_combinations'
+                            ? (filters.host_disk_combinations || []).map((combo) => {
+                                const count = calculateAccurateCount('host_disk_combinations', combo);
+                                return {
+                                    value: String(combo),
+                                    label: `${combo} (${count})`,
+                                };
+                            }).filter(option => parseInt(option.label.match(/\((\d+)\)/)?.[1] || '0') > 0)
+                            : useDynamicFilters && dynamicFilterOptions
+                                ? (dynamicFilterOptions.host_disk_combinations || [])
+                                    .filter(option => option.count > 0)
+                                    .map((option) => ({
+                                        value: String(option.value),
+                                        label: `${option.label} (${option.count})`,
+                                    }))
+                                : (filters.host_disk_combinations || []).map((combo) => ({
+                                    value: String(combo),
+                                    label: String(combo),
+                                }))
+                    }
+                    value={(activeFilters.host_disk_combinations || []).map((combo) => ({
+                        value: String(combo),
+                        label: useDynamicFilters && dynamicFilterOptions
+                            ? `${combo} (${filteredRuns.filter(run => 
+                                `${run.hostname} - ${run.protocol} - ${run.drive_model}` === combo
+                            ).length})`
+                            : String(combo),
+                    }))}
+                    onChange={(selected) =>
+                        onFilterChange('host_disk_combinations', selected ? selected.map((s) => s.value) : [])
+                    }
+                    placeholder="All host-disk combinations"
                     className="text-xs"
                     styles={getSelectStyles()}
                 />

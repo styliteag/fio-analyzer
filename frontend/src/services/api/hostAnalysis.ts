@@ -39,6 +39,7 @@ export interface TestCoverage {
     patterns: string[];
     queueDepths: number[];
     protocols: string[];
+    hostDiskCombinations: string[];
 }
 
 export interface PerformanceSummary {
@@ -113,7 +114,10 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
         blockSizes: [...new Set(validRuns.map((r: TestRun) => String(r.block_size)))].sort(),
         patterns: [...new Set(validRuns.map((r: TestRun) => r.read_write_pattern))].sort(),
         queueDepths: [...new Set(validRuns.map((r: TestRun) => r.queue_depth))].sort((a: number, b: number) => a - b),
-        protocols: [...new Set(validRuns.map((r: TestRun) => r.protocol || 'unknown'))].sort()
+        protocols: [...new Set(validRuns.map((r: TestRun) => r.protocol || 'unknown'))].sort(),
+        hostDiskCombinations: [...new Set(validRuns.map((r: TestRun) => 
+            `${r.hostname} - ${r.protocol} - ${r.drive_model}`
+        ))].sort()
     };
     
     // Calculate performance summary

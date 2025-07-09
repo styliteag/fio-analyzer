@@ -8,6 +8,7 @@ export interface ActiveFilters {
     block_sizes: (string | number)[];
     hostnames: string[];
     protocols: string[];
+    host_disk_combinations: string[];
     syncs: number[];
     queue_depths: number[];
     directs: number[];
@@ -29,6 +30,7 @@ export interface DynamicFilterOptions {
     block_sizes: FilterOption[];
     hostnames: FilterOption[];
     protocols: FilterOption[];
+    host_disk_combinations: FilterOption[];
     syncs: FilterOption[];
     queue_depths: FilterOption[];
     directs: FilterOption[];
@@ -45,6 +47,7 @@ export const useTestRunFilters = (testRuns: TestRun[]) => {
         block_sizes: [],
         hostnames: [],
         protocols: [],
+        host_disk_combinations: [],
         syncs: [],
         queue_depths: [],
         directs: [],
@@ -90,6 +93,14 @@ export const useTestRunFilters = (testRuns: TestRun[]) => {
             filtered = filtered.filter(
                 (run) => run.protocol && activeFilters.protocols.includes(run.protocol),
             );
+        }
+
+        if (activeFilters.host_disk_combinations.length > 0) {
+            filtered = filtered.filter((run) => {
+                if (!run.hostname || !run.protocol || !run.drive_model) return false;
+                const combo = `${run.hostname} - ${run.protocol} - ${run.drive_model}`;
+                return activeFilters.host_disk_combinations.includes(combo);
+            });
         }
 
         if (activeFilters.syncs.length > 0) {

@@ -9,10 +9,12 @@ interface HostFiltersProps {
     selectedPatterns: string[];
     selectedQueueDepths: number[];
     selectedProtocols: string[];
+    selectedHostDiskCombinations: string[];
     onBlockSizeChange: (blockSizes: string[]) => void;
     onPatternChange: (patterns: string[]) => void;
     onQueueDepthChange: (queueDepths: number[]) => void;
     onProtocolChange: (protocols: string[]) => void;
+    onHostDiskCombinationChange: (combinations: string[]) => void;
     onReset: () => void;
 }
 
@@ -22,10 +24,12 @@ const HostFilters: React.FC<HostFiltersProps> = ({
     selectedPatterns,
     selectedQueueDepths,
     selectedProtocols,
+    selectedHostDiskCombinations,
     onBlockSizeChange,
     onPatternChange,
     onQueueDepthChange,
     onProtocolChange,
+    onHostDiskCombinationChange,
     onReset
 }) => {
     const handleFilterChange = (
@@ -138,6 +142,26 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     </div>
                 </div>
 
+                {/* Host-Disk Combinations */}
+                <div>
+                    <h4 className="font-medium theme-text-primary mb-3">Host-Protocol-Disk</h4>
+                    <div className="flex flex-wrap gap-2">
+                        {testCoverage.hostDiskCombinations.map(combination => (
+                            <button
+                                key={combination}
+                                onClick={() => handleFilterChange(combination, selectedHostDiskCombinations, onHostDiskCombinationChange)}
+                                className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                                    selectedHostDiskCombinations.includes(combination)
+                                        ? 'bg-indigo-500 text-white'
+                                        : 'bg-gray-100 dark:bg-gray-700 theme-text-secondary hover:bg-gray-200 dark:hover:bg-gray-600'
+                                }`}
+                            >
+                                {combination}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Active Filters Summary */}
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-600">
                     <div className="text-sm theme-text-secondary">
@@ -157,10 +181,14 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                             {selectedProtocols.length > 0 && (
                                 <div>Protocols: {selectedProtocols.join(', ')}</div>
                             )}
+                            {selectedHostDiskCombinations.length > 0 && (
+                                <div>Host-Disk: {selectedHostDiskCombinations.join(', ')}</div>
+                            )}
                             {selectedBlockSizes.length === 0 && 
                              selectedPatterns.length === 0 && 
                              selectedQueueDepths.length === 0 && 
-                             selectedProtocols.length === 0 && (
+                             selectedProtocols.length === 0 && 
+                             selectedHostDiskCombinations.length === 0 && (
                                 <div className="italic">No filters applied</div>
                             )}
                         </div>
