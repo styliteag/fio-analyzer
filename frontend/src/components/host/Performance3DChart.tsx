@@ -221,24 +221,6 @@ const Axes: React.FC<{
                 ))}
             </group>
 
-            {/* Corner edge highlights */}
-            <group>
-                {/* Floor-to-back-wall corner */}
-                <mesh position={[2.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-                    <cylinderGeometry args={[0.02, 0.02, 5]} />
-                    <meshBasicMaterial color={colorScheme.corners} transparent opacity={0.6} />
-                </mesh>
-                {/* Floor-to-side-wall corner */}
-                <mesh position={[0, 0, 2.5]} rotation={[0, Math.PI / 2, 0]}>
-                    <cylinderGeometry args={[0.02, 0.02, 5]} />
-                    <meshBasicMaterial color={colorScheme.corners} transparent opacity={0.6} />
-                </mesh>
-                {/* Back-wall-to-side-wall corner */}
-                <mesh position={[0, 2.5, 0]}>
-                    <cylinderGeometry args={[0.02, 0.02, 5]} />
-                    <meshBasicMaterial color={colorScheme.corners} transparent opacity={0.6} />
-                </mesh>
-            </group>
         </group>
     );
 };
