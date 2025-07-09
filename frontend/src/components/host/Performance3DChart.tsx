@@ -72,7 +72,10 @@ const DataPoint: React.FC<{
 };
 
 // Component for 3D axes
-const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ maxValues }) => {
+const Axes: React.FC<{ 
+    maxValues: { x: number; y: number; z: number };
+    colorScheme: any;
+}> = ({ maxValues, colorScheme }) => {
     return (
         <group>
             {/* X Axis - IOPS */}
@@ -136,9 +139,9 @@ const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ ma
             <mesh position={[2.5, 0, 2.5]} rotation={[-Math.PI / 2, 0, 0]}>
                 <planeGeometry args={[5, 5]} />
                 <meshBasicMaterial 
-                    color="#f0f0f0" 
+                    color={colorScheme.floor} 
                     transparent 
-                    opacity={0.1}
+                    opacity={0.3}
                     side={2}
                 />
             </mesh>
@@ -149,13 +152,13 @@ const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ ma
                     <React.Fragment key={`floor-${i}`}>
                         {/* Grid lines along X */}
                         <mesh position={[2.5, 0.001, i]} rotation={[-Math.PI / 2, 0, Math.PI / 2]}>
-                            <planeGeometry args={[5, 0.02]} />
-                            <meshBasicMaterial color="#cccccc" transparent opacity={0.15} />
+                            <planeGeometry args={[5, 0.04]} />
+                            <meshBasicMaterial color={colorScheme.floorGrid} transparent opacity={0.4} />
                         </mesh>
                         {/* Grid lines along Z */}
                         <mesh position={[i, 0.001, 2.5]} rotation={[-Math.PI / 2, 0, 0]}>
-                            <planeGeometry args={[5, 0.02]} />
-                            <meshBasicMaterial color="#cccccc" transparent opacity={0.15} />
+                            <planeGeometry args={[5, 0.04]} />
+                            <meshBasicMaterial color={colorScheme.floorGrid} transparent opacity={0.4} />
                         </mesh>
                     </React.Fragment>
                 ))}
@@ -165,9 +168,9 @@ const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ ma
             <mesh position={[2.5, 2.5, 0]}>
                 <planeGeometry args={[5, 5]} />
                 <meshBasicMaterial 
-                    color="#f8f9fa" 
+                    color={colorScheme.walls} 
                     transparent 
-                    opacity={0.08}
+                    opacity={0.25}
                     side={2}
                 />
             </mesh>
@@ -176,9 +179,9 @@ const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ ma
             <mesh position={[0, 2.5, 2.5]} rotation={[0, Math.PI / 2, 0]}>
                 <planeGeometry args={[5, 5]} />
                 <meshBasicMaterial 
-                    color="#f8f9fa" 
+                    color={colorScheme.walls} 
                     transparent 
-                    opacity={0.08}
+                    opacity={0.25}
                     side={2}
                 />
             </mesh>
@@ -190,13 +193,13 @@ const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ ma
                     <React.Fragment key={`back-wall-${i}`}>
                         {/* Horizontal lines */}
                         <mesh position={[2.5, i, 0.001]}>
-                            <planeGeometry args={[5, 0.02]} />
-                            <meshBasicMaterial color="#e0e0e0" transparent opacity={0.1} />
+                            <planeGeometry args={[5, 0.03]} />
+                            <meshBasicMaterial color={colorScheme.wallGrid} transparent opacity={0.3} />
                         </mesh>
                         {/* Vertical lines */}
                         <mesh position={[i, 2.5, 0.001]}>
-                            <planeGeometry args={[0.02, 5]} />
-                            <meshBasicMaterial color="#e0e0e0" transparent opacity={0.1} />
+                            <planeGeometry args={[0.03, 5]} />
+                            <meshBasicMaterial color={colorScheme.wallGrid} transparent opacity={0.3} />
                         </mesh>
                     </React.Fragment>
                 ))}
@@ -206,13 +209,13 @@ const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ ma
                     <React.Fragment key={`side-wall-${i}`}>
                         {/* Horizontal lines */}
                         <mesh position={[0.001, i, 2.5]} rotation={[0, Math.PI / 2, 0]}>
-                            <planeGeometry args={[5, 0.02]} />
-                            <meshBasicMaterial color="#e0e0e0" transparent opacity={0.1} />
+                            <planeGeometry args={[5, 0.03]} />
+                            <meshBasicMaterial color={colorScheme.wallGrid} transparent opacity={0.3} />
                         </mesh>
                         {/* Vertical lines */}
                         <mesh position={[0.001, 2.5, i]} rotation={[0, Math.PI / 2, 0]}>
-                            <planeGeometry args={[0.02, 5]} />
-                            <meshBasicMaterial color="#e0e0e0" transparent opacity={0.1} />
+                            <planeGeometry args={[0.03, 5]} />
+                            <meshBasicMaterial color={colorScheme.wallGrid} transparent opacity={0.3} />
                         </mesh>
                     </React.Fragment>
                 ))}
@@ -222,18 +225,18 @@ const Axes: React.FC<{ maxValues: { x: number; y: number; z: number } }> = ({ ma
             <group>
                 {/* Floor-to-back-wall corner */}
                 <mesh position={[2.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-                    <cylinderGeometry args={[0.01, 0.01, 5]} />
-                    <meshBasicMaterial color="#666666" transparent opacity={0.3} />
+                    <cylinderGeometry args={[0.02, 0.02, 5]} />
+                    <meshBasicMaterial color={colorScheme.corners} transparent opacity={0.6} />
                 </mesh>
                 {/* Floor-to-side-wall corner */}
                 <mesh position={[0, 0, 2.5]} rotation={[0, Math.PI / 2, 0]}>
-                    <cylinderGeometry args={[0.01, 0.01, 5]} />
-                    <meshBasicMaterial color="#666666" transparent opacity={0.3} />
+                    <cylinderGeometry args={[0.02, 0.02, 5]} />
+                    <meshBasicMaterial color={colorScheme.corners} transparent opacity={0.6} />
                 </mesh>
                 {/* Back-wall-to-side-wall corner */}
                 <mesh position={[0, 2.5, 0]}>
-                    <cylinderGeometry args={[0.01, 0.01, 5]} />
-                    <meshBasicMaterial color="#666666" transparent opacity={0.3} />
+                    <cylinderGeometry args={[0.02, 0.02, 5]} />
+                    <meshBasicMaterial color={colorScheme.corners} transparent opacity={0.6} />
                 </mesh>
             </group>
         </group>
@@ -245,7 +248,8 @@ const Scene3D: React.FC<{
     points: PerformancePoint[]; 
     ranges: { x: [number, number]; y: [number, number]; z: [number, number] };
     onPointHover: (point: PerformancePoint | null) => void;
-}> = ({ points, ranges, onPointHover }) => {
+    colorScheme: any;
+}> = ({ points, ranges, onPointHover, colorScheme }) => {
     const normalizeToRange = (value: number, range: [number, number], scale: number = 5) => {
         return ((value - range[0]) / (range[1] - range[0])) * scale;
     };
@@ -262,7 +266,7 @@ const Scene3D: React.FC<{
             <pointLight position={[10, 10, 10]} intensity={1} />
             <pointLight position={[-10, -10, -10]} intensity={0.5} />
             
-            <Axes maxValues={maxValues} />
+            <Axes maxValues={maxValues} colorScheme={colorScheme} />
             
             {points.map((point, index) => {
                 const x = normalizeToRange(point.x, ranges.x);
@@ -294,15 +298,57 @@ const Scene3D: React.FC<{
 
 const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDrives }) => {
     const [hoveredPoint, setHoveredPoint] = React.useState<PerformancePoint | null>(null);
+    const [colorScheme, setColorScheme] = React.useState<string>('vibrant');
     
-    const colors = [
-        '#3B82F6', // blue
-        '#10B981', // green
-        '#F56565', // red
-        '#8B5CF6', // purple
-        '#F59E0B', // yellow
-        '#EC4899', // pink
-    ];
+    const colorSchemes = {
+        vibrant: {
+            name: 'Vibrant',
+            drives: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'],
+            floor: '#2C3E50',
+            walls: '#34495E',
+            floorGrid: '#4A6741',
+            wallGrid: '#5D6D7E',
+            corners: '#7F8C8D'
+        },
+        neon: {
+            name: 'Neon',
+            drives: ['#FF073A', '#39FF14', '#00FFFF', '#FF69B4', '#FFD700', '#8A2BE2'],
+            floor: '#0D1B2A',
+            walls: '#1B263B',
+            floorGrid: '#00F5FF',
+            wallGrid: '#FF1493',
+            corners: '#32CD32'
+        },
+        professional: {
+            name: 'Professional',
+            drives: ['#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#592E83', '#3A5998'],
+            floor: '#F8F9FA',
+            walls: '#E9ECEF',
+            floorGrid: '#6C757D',
+            wallGrid: '#ADB5BD',
+            corners: '#495057'
+        },
+        ocean: {
+            name: 'Ocean',
+            drives: ['#006D75', '#19A7CE', '#61A3FE', '#B088F9', '#FF6B9D', '#C9F2C7'],
+            floor: '#001F3F',
+            walls: '#0074D9',
+            floorGrid: '#7FDBFF',
+            wallGrid: '#B10DC9',
+            corners: '#3D9970'
+        },
+        sunset: {
+            name: 'Sunset',
+            drives: ['#FF4136', '#FF851B', '#FFDC00', '#2ECC40', '#0074D9', '#B10DC9'],
+            floor: '#2C1810',
+            walls: '#4A2C2A',
+            floorGrid: '#FF851B',
+            wallGrid: '#FFDC00',
+            corners: '#FF4136'
+        }
+    };
+    
+    const currentScheme = colorSchemes[colorScheme as keyof typeof colorSchemes];
 
     // Prepare 3D data points
     const points = useMemo(() => {
@@ -336,14 +382,14 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                     blockSize: config.block_size,
                     pattern: config.read_write_pattern,
                     queueDepth: config.queue_depth,
-                    color: colors[driveIndex % colors.length],
+                    color: currentScheme.drives[driveIndex % currentScheme.drives.length],
                     performanceScore
                 });
             });
         });
 
         return allPoints;
-    }, [drives, colors, allDrives]);
+    }, [drives, currentScheme.drives, allDrives]);
 
     // Calculate fixed ranges based on ALL original data (not filtered data) for consistent scaling
     const ranges = useMemo(() => {
@@ -380,6 +426,24 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                 <p className="text-sm theme-text-secondary mb-4">
                     Drag to rotate • Scroll to zoom • Hover points for details
                 </p>
+                
+                {/* Color Scheme Buttons */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                    <span className="text-sm theme-text-secondary mr-2">Color Scheme:</span>
+                    {Object.entries(colorSchemes).map(([key, scheme]) => (
+                        <button
+                            key={key}
+                            onClick={() => setColorScheme(key)}
+                            className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                                colorScheme === key
+                                    ? 'bg-blue-500 text-white shadow-md'
+                                    : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-secondary'
+                            }`}
+                        >
+                            {scheme.name}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6">
@@ -394,6 +458,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                 points={points} 
                                 ranges={ranges} 
                                 onPointHover={setHoveredPoint}
+                                colorScheme={currentScheme}
                             />
                         </Canvas>
                         
@@ -430,7 +495,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                     <div key={drive.drive_model} className="flex items-center gap-2 text-xs">
                                         <div 
                                             className="w-3 h-3 rounded-full" 
-                                            style={{ backgroundColor: colors[index % colors.length] }}
+                                            style={{ backgroundColor: currentScheme.drives[index % currentScheme.drives.length] }}
                                         ></div>
                                         <span className="theme-text-secondary truncate">{drive.drive_model}</span>
                                     </div>
@@ -456,7 +521,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                 const performanceScore = (avgIOPS * avgBandwidth) / (avgLatency * 1000);
 
                                 return (
-                                    <div key={drive.drive_model} className="border-l-4 pl-3" style={{ borderColor: colors[index % colors.length] }}>
+                                    <div key={drive.drive_model} className="border-l-4 pl-3" style={{ borderColor: currentScheme.drives[index % currentScheme.drives.length] }}>
                                         <h6 className="font-medium theme-text-primary text-sm">{drive.drive_model}</h6>
                                         <div className="mt-2 space-y-1 text-xs theme-text-secondary">
                                             <div>Avg IOPS: <span className="font-medium">{avgIOPS.toFixed(0)}</span></div>
