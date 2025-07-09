@@ -219,14 +219,12 @@ function initDb() {
             WHERE rn = 1
         `);
 
-        // Check if we need to migrate data from old single-table structure
         db.get('SELECT COUNT(*) as count FROM test_runs', (err, row) => {
             if (err) {
                 console.error(err.message);
                 return;
             }
 
-            // Check if test_runs_all is empty (indicates we need migration)
             db.get('SELECT COUNT(*) as count FROM test_runs_all', (err, allRow) => {
                 if (err) {
                     console.error(err.message);
