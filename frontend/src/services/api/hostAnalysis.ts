@@ -62,8 +62,9 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
     const testRuns = response.data;
     
     // Filter out test runs with null performance data
+    // Note: avg_latency is optional since it may not be available for all test data
     const validRuns = testRuns.filter((run: TestRun) => 
-        run.iops !== null && run.avg_latency !== null && run.bandwidth !== null
+        run.iops !== null && run.bandwidth !== null
     );
     
     if (validRuns.length === 0) {
@@ -105,7 +106,7 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
             configurations,
             topPerformance: {
                 maxIOPS: Math.max(...validConfigs.map(c => c.iops || 0)),
-                minLatency: Math.min(...validConfigs.map(c => c.avg_latency || Infinity)),
+                minLatency: Math.min(...validConfigs.filter(c => c.avg_latency !== null).map(c => c.avg_latency || Infinity)) || 0,
                 maxBandwidth: Math.max(...validConfigs.map(c => c.bandwidth || 0))
             }
         };
@@ -123,9 +124,9 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
     };
     
     // Calculate performance summary
-    const allIOPS = validRuns.filter((r: TestRun) => r.iops).map((r: TestRun) => r.iops!);
-    const allLatencies = validRuns.filter((r: TestRun) => r.avg_latency).map((r: TestRun) => r.avg_latency!);
-    const allBandwidths = validRuns.filter((r: TestRun) => r.bandwidth).map((r: TestRun) => r.bandwidth!);
+    const allIOPS = validRuns.filter((r: TestRun) => r.iops !== null).map((r: TestRun) => r.iops!);
+    const allLatencies = validRuns.filter((r: TestRun) => r.avg_latency !== null).map((r: TestRun) => r.avg_latency!);
+    const allBandwidths = validRuns.filter((r: TestRun) => r.bandwidth !== null).map((r: TestRun) => r.bandwidth!);
     
     const drivePerformanceScores = drives.map(drive => ({
         drive_model: drive.drive_model,
@@ -141,9 +142,9 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
     );
     
     const performanceSummary: PerformanceSummary = {
-        avgIOPS: allIOPS.reduce((sum: number, val: number) => sum + val, 0) / allIOPS.length,
-        avgLatency: allLatencies.reduce((sum: number, val: number) => sum + val, 0) / allLatencies.length,
-        avgBandwidth: allBandwidths.reduce((sum: number, val: number) => sum + val, 0) / allBandwidths.length,
+        avgIOPS: allIOPS.length > 0 ? allIOPS.reduce((sum: number, val: number) => sum + val, 0) / allIOPS.length : 0,
+        avgLatency: allLatencies.length > 0 ? allLatencies.reduce((sum: number, val: number) => sum + val, 0) / allLatencies.length : 0,
+        avgBandwidth: allBandwidths.length > 0 ? allBandwidths.reduce((sum: number, val: number) => sum + val, 0) / allBandwidths.length : 0,
         bestDrive: bestDrive.drive_model,
         worstDrive: worstDrive.drive_model
     };
