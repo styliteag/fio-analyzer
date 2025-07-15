@@ -8,8 +8,11 @@ import { fetchHostAnalysis, getHostList, type HostAnalysisData } from '../servic
 import PerformanceMatrix from '../components/host/PerformanceMatrix';
 import DriveRadarChart from '../components/host/DriveRadarChart';
 import PerformanceScatterPlot from '../components/host/PerformanceScatterPlot';
-import Performance3DChart from '../components/host/Performance3DChart';
 import HostFilters from '../components/host/HostFilters';
+import ZoneHeatmapChart from '../components/host/ZoneHeatmapChart';
+import ParallelCoordinatesChart from '../components/host/ParallelCoordinatesChart';
+import BoxPlotChart from '../components/host/BoxPlotChart';
+import FacetScatterGrid from '../components/host/FacetScatterGrid';
 import { getSelectStyles } from '../hooks/useThemeColors';
 
 const Host: React.FC = () => {
@@ -32,7 +35,7 @@ const Host: React.FC = () => {
     const [selectedHostDiskCombinations, setSelectedHostDiskCombinations] = useState<string[]>([]);
     
     // Visualization states
-    const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'radar' | 'scatter' | '3d'>('overview');
+    const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'zoneheatmap' | '3d'>('overview');
     const [matrixMetric, setMatrixMetric] = useState<'iops' | 'avg_latency' | 'bandwidth'>('iops');
 
     // Load available hosts
@@ -394,6 +397,38 @@ const Host: React.FC = () => {
                             IOPS vs Latency
                         </Button>
                         <Button
+                            variant={activeView === 'parallel' ? 'primary' : 'outline'}
+                            onClick={() => setActiveView('parallel')}
+                            className="flex items-center gap-2"
+                        >
+                            <Activity className="w-4 h-4" />
+                            Parallel Coordinates
+                        </Button>
+                        <Button
+                            variant={activeView === 'boxplot' ? 'primary' : 'outline'}
+                            onClick={() => setActiveView('boxplot')}
+                            className="flex items-center gap-2"
+                        >
+                            <Box className="w-4 h-4" />
+                            Boxplot by Block Size
+                        </Button>
+                        <Button
+                            variant={activeView === 'facets' ? 'primary' : 'outline'}
+                            onClick={() => setActiveView('facets')}
+                            className="flex items-center gap-2"
+                        >
+                            <Zap className="w-4 h-4" />
+                            Facet Scatter Grids
+                        </Button>
+                        <Button
+                            variant={activeView === 'zoneheatmap' ? 'primary' : 'outline'}
+                            onClick={() => setActiveView('zoneheatmap')}
+                            className="flex items-center gap-2"
+                        >
+                            <Activity className="w-4 h-4" />
+                            Zone Heatmap
+                        </Button>
+                        <Button
                             variant={activeView === '3d' ? 'primary' : 'outline'}
                             onClick={() => setActiveView('3d')}
                             className="flex items-center gap-2"
@@ -575,10 +610,42 @@ const Host: React.FC = () => {
                                 <PerformanceScatterPlot drives={filteredDrives} />
                             )}
 
-                            {activeView === '3d' && (
-                                <Performance3DChart 
-                                    drives={filteredDrives} 
-                                    allDrives={combinedHostData?.drives} 
+                            {activeView === 'parallel' && (
+                                <ParallelCoordinatesChart data={filteredDrives} />
+                            )}
+
+
+                            {activeView === 'boxplot' && (
+                                <BoxPlotChart data={filteredDrives} />
+                            )}
+
+                            {activeView === 'facets' && (
+                                <FacetScatterGrid data={filteredDrives} />
+                            )}
+
+                            {activeView === 'zoneheatmap' && (
+                                <ZoneHeatmapChart
+                                    data={filteredDrives.flatMap(drive =>
+                                        drive.configurations.map(config => {
+                                            // Determine performance zone
+                                            let zone: 'High Performance' | 'Balanced' | 'High Latency' | 'Low Performance';
+                                            const iops = config.iops || 0;
+                                            const avgLatency = config.avg_latency ?? 0;
+                                            if (iops > 500000 && avgLatency < 0.2) zone = 'High Performance';
+                                            else if (iops > 100000 && avgLatency < 0.5) zone = 'Balanced';
+                                            else if (avgLatency > 0.8) zone = 'High Latency';
+                                            else zone = 'Low Performance';
+                                            return {
+                                                iops,
+                                                avg_latency: avgLatency,
+                                                block_size: config.block_size,
+                                                queue_depth: config.queue_depth,
+                                                host: drive.hostname,
+                                                pool: drive.drive_model,
+                                                zone,
+                                            };
+                                        })
+                                    )}
                                 />
                             )}
                         </Card>

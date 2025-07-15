@@ -1,5 +1,5 @@
 // Chart data processing utilities
-import type { ChartTemplate, PerformanceData } from '../../types';
+import type { ChartTemplate, PerformanceData, RadarGridData, RadarPoolData, RadarMetrics } from '../../types';
 import { sortBlockSizes } from '../../utils/sorting';
 import { formatBlockSize } from '../../services/data/formatters';
 import type { SortOption, GroupOption } from './ChartControls';
@@ -750,6 +750,136 @@ export const processDefaultChart = (
     });
 
     return { labels, datasets };
+};
+
+// Process data for radar grid template
+export const processRadarGridData = (
+    data: PerformanceData[],
+    colors: string[],
+    options: ProcessorOptions,
+): RadarGridData[] => {
+    const sortedData = applySortingAndGrouping(data, options);
+    
+    // Group data by hostname (host)
+    const hostGroups = new Map<string, PerformanceData[]>();
+    sortedData.forEach((item) => {
+        const hostname = item.hostname || 'Unknown';
+        if (!hostGroups.has(hostname)) {
+            hostGroups.set(hostname, []);
+        }
+        hostGroups.get(hostname)?.push(item);
+    });
+
+    // Helper function to normalize metrics to 0-100 scale
+    const normalizeMetrics = (allData: PerformanceData[]): Map<string, { min: number; max: number }> => {
+        const metrics = new Map<string, { min: number; max: number }>();
+        
+        const iopsValues = allData.map(item => getMetricValue(item.metrics, "iops")).filter(v => v > 0);
+        const latencyValues = allData.map(item => getMetricValue(item.metrics, "avg_latency")).filter(v => v > 0);
+        const bandwidthValues = allData.map(item => getMetricValue(item.metrics, "bandwidth")).filter(v => v > 0);
+        const p95Values = allData.map(item => getMetricValue(item.metrics, "p95_latency")).filter(v => v > 0);
+        const p99Values = allData.map(item => getMetricValue(item.metrics, "p99_latency")).filter(v => v > 0);
+        
+        metrics.set('iops', { min: Math.min(...iopsValues), max: Math.max(...iopsValues) });
+        metrics.set('latency', { min: Math.min(...latencyValues), max: Math.max(...latencyValues) });
+        metrics.set('bandwidth', { min: Math.min(...bandwidthValues), max: Math.max(...bandwidthValues) });
+        metrics.set('p95_latency', { min: Math.min(...p95Values), max: Math.max(...p95Values) });
+        metrics.set('p99_latency', { min: Math.min(...p99Values), max: Math.max(...p99Values) });
+        
+        return metrics;
+    };
+
+    const normalizationRanges = normalizeMetrics(sortedData);
+    
+    // Function to normalize a value to 0-100 scale
+    const normalizeValue = (value: number, metricName: string): number => {
+        const range = normalizationRanges.get(metricName);
+        if (!range || range.max === range.min) return 0;
+        
+        // For latency metrics, lower is better, so invert the scale
+        if (metricName.includes('latency')) {
+            return 100 - ((value - range.min) / (range.max - range.min)) * 100;
+        }
+        
+        // For IOPS and bandwidth, higher is better
+        return ((value - range.min) / (range.max - range.min)) * 100;
+    };
+    
+    // Calculate consistency score based on variance in performance
+    const calculateConsistencyScore = (hostData: PerformanceData[]): number => {
+        if (hostData.length < 2) return 100;
+        
+        const iopsValues = hostData.map(item => getMetricValue(item.metrics, "iops"));
+        const mean = iopsValues.reduce((a, b) => a + b, 0) / iopsValues.length;
+        const variance = iopsValues.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / iopsValues.length;
+        const cv = Math.sqrt(variance) / mean; // Coefficient of variation
+        
+        // Convert CV to consistency score (lower CV = higher consistency)
+        return Math.max(0, 100 - (cv * 100));
+    };
+
+    const result: RadarGridData[] = [];
+    let colorIndex = 0;
+
+    // Process each host
+    hostGroups.forEach((hostData, hostname) => {
+        // Group pools within each host by drive_model
+        const poolGroups = new Map<string, PerformanceData[]>();
+        hostData.forEach((item) => {
+            const poolName = item.drive_model;
+            if (!poolGroups.has(poolName)) {
+                poolGroups.set(poolName, []);
+            }
+            poolGroups.get(poolName)?.push(item);
+        });
+
+        const pools: RadarPoolData[] = [];
+        
+        // Process each pool within the host
+        poolGroups.forEach((poolData, poolName) => {
+            // Calculate average metrics for this pool
+            const avgMetrics = poolData.reduce((acc, item) => {
+                acc.iops += getMetricValue(item.metrics, "iops");
+                acc.latency += getMetricValue(item.metrics, "avg_latency");
+                acc.bandwidth += getMetricValue(item.metrics, "bandwidth");
+                acc.p95_latency += getMetricValue(item.metrics, "p95_latency");
+                acc.p99_latency += getMetricValue(item.metrics, "p99_latency");
+                return acc;
+            }, { iops: 0, latency: 0, bandwidth: 0, p95_latency: 0, p99_latency: 0 });
+            
+            const count = poolData.length;
+            avgMetrics.iops /= count;
+            avgMetrics.latency /= count;
+            avgMetrics.bandwidth /= count;
+            avgMetrics.p95_latency /= count;
+            avgMetrics.p99_latency /= count;
+            
+            const normalizedMetrics: RadarMetrics = {
+                iops: normalizeValue(avgMetrics.iops, 'iops'),
+                latency: normalizeValue(avgMetrics.latency, 'latency'),
+                bandwidth: normalizeValue(avgMetrics.bandwidth, 'bandwidth'),
+                p95_latency: normalizeValue(avgMetrics.p95_latency, 'p95_latency'),
+                p99_latency: normalizeValue(avgMetrics.p99_latency, 'p99_latency'),
+                consistency: calculateConsistencyScore(poolData),
+            };
+
+            pools.push({
+                poolName,
+                metrics: normalizedMetrics,
+                color: colors[colorIndex % colors.length],
+            });
+            
+            colorIndex++;
+        });
+
+        result.push({
+            hostname,
+            protocol: hostData[0]?.protocol || 'Unknown',
+            pools,
+        });
+    });
+
+    return result;
 };
 
 // Main processor function that routes to specific processors

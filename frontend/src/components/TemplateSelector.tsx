@@ -4,6 +4,7 @@ import {
 	TrendingUp,
 	Zap,
 	Clock,
+	Target,
 } from "lucide-react";
 import type React from "react";
 import type { ChartTemplate } from "../types";
@@ -55,6 +56,16 @@ const chartTemplates: ChartTemplate[] = [
 		metrics: ["iops", "avg_latency"],
 	},
 	{
+		id: "radar-grid",
+		name: "🎯 Performance Radar Grid",
+		description: "Multi-dimensional radar chart grid comparing hosts and storage pools",
+		chartType: "radar-grid",
+		xAxis: "hostname",
+		yAxis: "multi_metrics",
+		groupBy: "drive_model",
+		metrics: ["iops", "avg_latency", "bandwidth", "p95_latency", "p99_latency", "consistency"],
+	},
+	{
 		id: "3d-bar",
 		name: "🧊 3D Chart",
 		description: "Interactive 3D bar chart: Block Size × Queue Depth × Metric",
@@ -85,6 +96,8 @@ const getTemplateIcon = (chartType: string) => {
 			return <Scatter3D size={20} />;
 		case "time-series":
 			return <Clock size={20} />;
+		case "radar-grid":
+			return <Target size={20} />;
 		default:
 			return <Zap size={20} />;
 	}

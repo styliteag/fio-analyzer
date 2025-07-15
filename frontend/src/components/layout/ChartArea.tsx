@@ -3,6 +3,7 @@ import React from 'react';
 import { ChartContainer } from '../charts';
 import ThreeDBarChart from '../ThreeDBarChart';
 import TimeSeriesChart from '../TimeSeriesChart';
+import PerformanceRadarGrid from '../PerformanceRadarGrid';
 import type { ChartTemplate, PerformanceData } from '../../types';
 import type { ActiveFilters } from '../../hooks/useTestRunFilters';
 
@@ -51,6 +52,11 @@ export const ChartArea: React.FC<ChartAreaProps> = ({
                     data={threeDChartData} 
                     isMaximized={isChartMaximized}
                     onToggleMaximize={handleToggleMaximize}
+                />
+            ) : selectedTemplate.chartType === 'radar-grid' ? (
+                <PerformanceRadarGrid
+                    data={enhancedPerformanceData}
+                    isMaximized={isChartMaximized}
                 />
             ) : (
                 <ChartContainer

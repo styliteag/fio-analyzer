@@ -76,11 +76,32 @@ export interface ChartTemplate {
 	id: string;
 	name: string;
 	description: string;
-	chartType: "bar" | "line" | "scatter" | "3d-bar" | "time-series";
+	chartType: "bar" | "line" | "scatter" | "3d-bar" | "time-series" | "radar-grid";
 	xAxis: string;
 	yAxis: string;
 	groupBy?: string;
 	metrics: string[];
+}
+
+export interface RadarGridData {
+	hostname: string;
+	protocol: string;
+	pools: RadarPoolData[];
+}
+
+export interface RadarPoolData {
+	poolName: string;
+	metrics: RadarMetrics;
+	color: string;
+}
+
+export interface RadarMetrics {
+	iops: number;
+	latency: number;
+	bandwidth: number;
+	p95_latency: number;
+	p99_latency: number;
+	consistency: number;
 }
 
 // Time-series interfaces
