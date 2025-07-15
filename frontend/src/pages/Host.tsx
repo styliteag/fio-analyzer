@@ -9,7 +9,6 @@ import PerformanceMatrix from '../components/host/PerformanceMatrix';
 import DriveRadarChart from '../components/host/DriveRadarChart';
 import PerformanceScatterPlot from '../components/host/PerformanceScatterPlot';
 import HostFilters from '../components/host/HostFilters';
-import ZoneHeatmapChart from '../components/host/ZoneHeatmapChart';
 import ParallelCoordinatesChart from '../components/host/ParallelCoordinatesChart';
 import BoxPlotChart from '../components/host/BoxPlotChart';
 import FacetScatterGrid from '../components/host/FacetScatterGrid';
@@ -35,7 +34,7 @@ const Host: React.FC = () => {
     const [selectedHostDiskCombinations, setSelectedHostDiskCombinations] = useState<string[]>([]);
     
     // Visualization states
-    const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'zoneheatmap' | '3d'>('overview');
+    const [activeView, setActiveView] = useState<'overview' | 'matrix' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | '3d'>('overview');
     const [matrixMetric, setMatrixMetric] = useState<'iops' | 'avg_latency' | 'bandwidth'>('iops');
 
     // Load available hosts
@@ -421,14 +420,6 @@ const Host: React.FC = () => {
                             Facet Scatter Grids
                         </Button>
                         <Button
-                            variant={activeView === 'zoneheatmap' ? 'primary' : 'outline'}
-                            onClick={() => setActiveView('zoneheatmap')}
-                            className="flex items-center gap-2"
-                        >
-                            <Activity className="w-4 h-4" />
-                            Zone Heatmap
-                        </Button>
-                        <Button
                             variant={activeView === '3d' ? 'primary' : 'outline'}
                             onClick={() => setActiveView('3d')}
                             className="flex items-center gap-2"
@@ -623,31 +614,6 @@ const Host: React.FC = () => {
                                 <FacetScatterGrid data={filteredDrives} />
                             )}
 
-                            {activeView === 'zoneheatmap' && (
-                                <ZoneHeatmapChart
-                                    data={filteredDrives.flatMap(drive =>
-                                        drive.configurations.map(config => {
-                                            // Determine performance zone
-                                            let zone: 'High Performance' | 'Balanced' | 'High Latency' | 'Low Performance';
-                                            const iops = config.iops || 0;
-                                            const avgLatency = config.avg_latency ?? 0;
-                                            if (iops > 500000 && avgLatency < 0.2) zone = 'High Performance';
-                                            else if (iops > 100000 && avgLatency < 0.5) zone = 'Balanced';
-                                            else if (avgLatency > 0.8) zone = 'High Latency';
-                                            else zone = 'Low Performance';
-                                            return {
-                                                iops,
-                                                avg_latency: avgLatency,
-                                                block_size: config.block_size,
-                                                queue_depth: config.queue_depth,
-                                                host: drive.hostname,
-                                                pool: drive.drive_model,
-                                                zone,
-                                            };
-                                        })
-                                    )}
-                                />
-                            )}
                         </Card>
                     </div>
                 </div>
