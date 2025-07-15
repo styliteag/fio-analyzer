@@ -54,9 +54,9 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
   const dimensions = useMemo(() => [
     { key: 'blockSize', label: 'Block Size (KB)' },
     { key: 'queueDepth', label: 'Queue Depth' },
+    { key: 'avgLatency', label: 'Avg Latency (ms)' },
     { key: 'iops', label: 'IOPS' },
-    { key: 'bandwidth', label: 'Bandwidth (MB/s)' },
-    { key: 'avgLatency', label: 'Avg Latency (ms)' }
+    { key: 'bandwidth', label: 'Bandwidth (MB/s)' }
   ], []);
 
   // Create color mapping for drive models based on hostname
