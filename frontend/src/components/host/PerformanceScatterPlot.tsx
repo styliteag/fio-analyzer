@@ -10,6 +10,7 @@ import {
 import { Scatter } from 'react-chartjs-2';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { createChartJsColors } from '../../utils/colorMapping';
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -20,14 +21,14 @@ interface PerformanceScatterPlotProps {
 const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives }) => {
     const themeColors = useThemeColors();
 
-    const colors = [
-        'rgba(59, 130, 246, 0.8)',   // blue
-        'rgba(16, 185, 129, 0.8)',   // green
-        'rgba(245, 101, 101, 0.8)',  // red
-        'rgba(139, 92, 246, 0.8)',   // purple
-        'rgba(245, 158, 11, 0.8)',   // yellow
-        'rgba(236, 72, 153, 0.8)',   // pink
-    ];
+    // Generate unique colors based on hostname and drive model
+    const chartColors = createChartJsColors(
+        drives.map(drive => ({
+            hostname: drive.hostname,
+            driveModel: drive.drive_model,
+            label: drive.drive_model
+        }))
+    );
 
     // Create datasets for each drive
     const datasets = drives.map((drive, index) => {
@@ -51,11 +52,12 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
             protocol: drive.protocol
         }));
 
+        const colors = chartColors[index];
         return {
             label: drive.drive_model,
             data,
-            backgroundColor: colors[index % colors.length],
-            borderColor: colors[index % colors.length].replace('0.8', '1'),
+            backgroundColor: colors.backgroundColor,
+            borderColor: colors.borderColor,
             pointRadius: 6,
             pointHoverRadius: 8,
         };

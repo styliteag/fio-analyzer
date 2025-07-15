@@ -1,5 +1,6 @@
 import React, { useMemo, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
+import { generateUniqueColorsForChart } from '../../utils/colorMapping';
 
 export interface ParallelCoordinatesChartProps {
   data: any[];
@@ -58,10 +59,23 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
     { key: 'avgLatency', label: 'Avg Latency (ms)' }
   ], []);
 
-  // Create color scale for drive models
-  const colorScale = useMemo(() => {
-    const driveModels = [...new Set(chartData.map(d => d.driveModel))];
-    return d3.scaleOrdinal(d3.schemeCategory10).domain(driveModels);
+  // Create color mapping for drive models based on hostname
+  const colorMapping = useMemo(() => {
+    const uniqueDrives = [...new Set(chartData.map(d => `${d.hostname}_${d.driveModel}`))];
+    const uniqueColors = generateUniqueColorsForChart(
+      uniqueDrives.map(combo => {
+        const [hostname, driveModel] = combo.split('_');
+        return { hostname, driveModel };
+      }),
+      'primary'
+    );
+    
+    const mapping = new Map<string, string>();
+    uniqueDrives.forEach((combo, index) => {
+      mapping.set(combo, uniqueColors[index]);
+    });
+    
+    return mapping;
   }, [chartData]);
 
   useEffect(() => {
@@ -128,7 +142,7 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
         return line(lineData);
       })
       .style("fill", "none")
-      .style("stroke", (d: any) => colorScale(d.driveModel))
+      .style("stroke", (d: any) => colorMapping.get(`${d.hostname}_${d.driveModel}`) || '#888')
       .style("stroke-width", 1.5)
       .style("stroke-opacity", 0.6);
 
@@ -192,7 +206,7 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
       .attr("x2", 15)
       .attr("y1", 0)
       .attr("y2", 0)
-      .style("stroke", (d: any) => colorScale(d))
+      .style("stroke", (d: any) => colorMapping.get(d) || '#888')
       .style("stroke-width", 2);
 
     legendItems.append("text")
@@ -203,7 +217,7 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
       .style("fill", "currentColor")
       .text((d: any) => d);
 
-  }, [chartData, colorScale, dimensions]);
+  }, [chartData, colorMapping, dimensions]);
 
   if (!chartData || chartData.length === 0) {
     return (

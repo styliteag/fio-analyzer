@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
+import { generateUniqueColorsForChart } from '../../utils/colorMapping';
 
 export interface BoxPlotChartProps {
   data: DriveAnalysis[];
@@ -236,17 +237,38 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
         .attr("class", `box-${d.blockSize}`)
         .style("cursor", "pointer");
 
-      // Define colors based on theme - much more vibrant and visible
+      // Define colors based on hostname/drive names from the data for this block size
       const isDarkMode = document.documentElement.classList.contains('dark');
+      
+      // Get all drives that have data for this block size
+      const relevantDrives = data.filter(drive => 
+        drive.configurations.some(config => config.block_size === d.blockSize)
+      );
+      
+      // Generate colors for these drives and use the primary one
+      const driveColors = generateUniqueColorsForChart(
+        relevantDrives.map(drive => ({
+          hostname: drive.hostname,
+          driveModel: drive.drive_model
+        })),
+        'primary'
+      );
+      
+      // Use the first drive's color as the primary color, or fallback to blue
+      const primaryColor = driveColors.length > 0 ? driveColors[0] : 'rgba(59, 130, 246, 0.8)';
+      const baseColor = primaryColor.includes('rgba') ? 
+        primaryColor.match(/rgba?\(([^)]+)\)/)?.[1]?.split(',').slice(0, 3).join(',') || '59, 130, 246' :
+        '59, 130, 246';
+      
       const colors = {
-        whiskers: isHovered ? "#60a5fa" : (isDarkMode ? "#e5e7eb" : "#374151"),
+        whiskers: isHovered ? `rgb(${baseColor})` : (isDarkMode ? "#e5e7eb" : "#374151"),
         box: {
-          fill: isHovered ? (isDarkMode ? "#3b82f6" : "#bfdbfe") : (isDarkMode ? "#1e40af" : "#f1f5f9"),
-          stroke: isHovered ? "#60a5fa" : (isDarkMode ? "#3b82f6" : "#64748b")
+          fill: isHovered ? `rgba(${baseColor}, 0.6)` : `rgba(${baseColor}, 0.3)`,
+          stroke: isHovered ? `rgb(${baseColor})` : `rgba(${baseColor}, 0.7)`
         },
         median: isHovered ? "#fbbf24" : (isDarkMode ? "#fbbf24" : "#f59e0b"),
         outliers: {
-          fill: isHovered ? "#f87171" : (isDarkMode ? "#ef4444" : "#dc2626"),
+          fill: isHovered ? "#f87171" : `rgba(${baseColor}, 0.8)`,
           stroke: isDarkMode ? "#ffffff" : "#ffffff"
         }
       };

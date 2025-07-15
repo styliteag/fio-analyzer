@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
+import { extractColorFromName } from '../../utils/colorMapping';
 
 interface PerformanceMatrixProps {
     drives: DriveAnalysis[];
@@ -10,6 +11,7 @@ interface MatrixCell {
     value: number;
     configuration: string;
     drive: string;
+    hostname: string;
     intensity: number;
     fullConfig?: {
         block_size: string;
@@ -67,6 +69,7 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
             // Find best value for this block size + pattern combination across all drives
             let bestValue = metric === 'avg_latency' ? Infinity : 0;
             let bestDrive = '';
+            let bestHostname = '';
             let bestConfig = '';
             let bestFullConfig: any = null;
             let bestDriveInfo: any = null;
@@ -83,6 +86,7 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
                     if (isBetter) {
                         bestValue = value;
                         bestDrive = drive.drive_model;
+                        bestHostname = drive.hostname;
                         bestConfig = `${blockSize} ${pattern} QD${config.queue_depth}`;
                         bestFullConfig = config;
                         bestDriveInfo = {
@@ -100,6 +104,7 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
                 value: bestValue === (metric === 'avg_latency' ? Infinity : 0) ? 0 : bestValue,
                 configuration: bestConfig,
                 drive: bestDrive,
+                hostname: bestHostname,
                 intensity: metric === 'avg_latency' ? 1 - intensity : intensity,
                 fullConfig: bestFullConfig,
                 driveInfo: bestDriveInfo
@@ -141,6 +146,33 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
         }
     };
 
+    const getColorBasedIntensityStyle = (cell: MatrixCell): string => {
+        if (cell.intensity === 0 || !cell.hostname) {
+            return 'bg-gray-100 dark:bg-gray-800 text-gray-500';
+        }
+
+        // Extract color from hostname or drive name
+        const colorName = extractColorFromName(cell.hostname) || extractColorFromName(cell.drive);
+        
+        // Generate intensity-based styles with the extracted color
+        if (colorName) {
+            if (cell.intensity > 0.8) return `bg-gradient-to-br from-${colorName}-400 to-${colorName}-600 text-white`;
+            if (cell.intensity > 0.6) return `bg-gradient-to-br from-${colorName}-300 to-${colorName}-500 text-white`;
+            if (cell.intensity > 0.4) return `bg-gradient-to-br from-${colorName}-200 to-${colorName}-400 text-gray-800`;
+            if (cell.intensity > 0.2) return `bg-gradient-to-br from-${colorName}-100 to-${colorName}-300 text-gray-800`;
+            if (cell.intensity > 0) return `bg-gradient-to-br from-gray-100 to-${colorName}-200 text-gray-800`;
+        }
+        
+        // Fallback to blue if no color extracted
+        if (cell.intensity > 0.8) return 'bg-gradient-to-br from-blue-400 to-blue-600 text-white';
+        if (cell.intensity > 0.6) return 'bg-gradient-to-br from-blue-300 to-blue-500 text-white';
+        if (cell.intensity > 0.4) return 'bg-gradient-to-br from-blue-200 to-blue-400 text-gray-800';
+        if (cell.intensity > 0.2) return 'bg-gradient-to-br from-blue-100 to-blue-300 text-gray-800';
+        if (cell.intensity > 0) return 'bg-gradient-to-br from-gray-100 to-blue-200 text-gray-800';
+        
+        return 'bg-gray-100 dark:bg-gray-800 text-gray-500';
+    };
+
 
     return (
         <div className="w-full">
@@ -176,12 +208,7 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
                                     </td>
                                     {allPatterns.map((pattern, colIndex) => {
                                         const cell = matrixData[rowIndex][colIndex];
-                                        const intensityStyle = cell.intensity > 0.8 ? 'bg-gradient-to-br from-blue-400 to-blue-600 text-white' :
-                                                             cell.intensity > 0.6 ? 'bg-gradient-to-br from-blue-300 to-blue-500 text-white' :
-                                                             cell.intensity > 0.4 ? 'bg-gradient-to-br from-blue-200 to-blue-400 text-gray-800' :
-                                                             cell.intensity > 0.2 ? 'bg-gradient-to-br from-blue-100 to-blue-300 text-gray-800' :
-                                                             cell.intensity > 0 ? 'bg-gradient-to-br from-gray-100 to-blue-200 text-gray-800' :
-                                                             'bg-gray-100 dark:bg-gray-800 text-gray-500';
+                                        const intensityStyle = getColorBasedIntensityStyle(cell);
 
                                         return (
                                             <td

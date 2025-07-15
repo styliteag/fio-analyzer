@@ -11,6 +11,7 @@ import {
 import { Scatter } from 'react-chartjs-2';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { generateUniqueColorsForChart } from '../../utils/colorMapping';
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend, Title);
 
@@ -57,17 +58,17 @@ const FacetScatterGrid: React.FC<FacetScatterGridProps> = ({ data }) => {
 
     const facets = getFacets();
 
-    // Generate colors for different drives/hosts
-    const generateColors = (count: number) => [
-        'rgba(59, 130, 246, 0.8)',   // blue
-        'rgba(16, 185, 129, 0.8)',   // green
-        'rgba(245, 101, 101, 0.8)',  // red
-        'rgba(139, 92, 246, 0.8)',   // purple
-        'rgba(245, 158, 11, 0.8)',   // yellow
-        'rgba(236, 72, 153, 0.8)',   // pink
-        'rgba(34, 197, 94, 0.8)',    // emerald
-        'rgba(168, 85, 247, 0.8)',   // violet
-    ].slice(0, count);
+    // Generate colors based on hostname and drive model
+    const getColorsForFacet = (facetConfigs: any[]) => {
+        const uniqueDrives = Array.from(new Set(facetConfigs.map(config => 
+            `${config.hostname}_${config.drive_model}`
+        ))).map(combo => {
+            const [hostname, driveModel] = combo.split('_');
+            return { hostname, driveModel };
+        });
+        
+        return generateUniqueColorsForChart(uniqueDrives, 'primary');
+    };
 
     // Create chart for each facet
     const createChartForFacet = (facetValue: string) => {
@@ -102,7 +103,7 @@ const FacetScatterGrid: React.FC<FacetScatterGridProps> = ({ data }) => {
         };
 
         const secondaryGroups = getSecondaryGroups();
-        const colors = generateColors(secondaryGroups.length);
+        const colors = getColorsForFacet(facetConfigs);
 
         const datasets = secondaryGroups.map((group, index) => {
             const groupConfigs = facetConfigs.filter(config => {
@@ -134,11 +135,15 @@ const FacetScatterGrid: React.FC<FacetScatterGridProps> = ({ data }) => {
                 hostname: config.hostname
             }));
 
+            // Use color based on index, with fallback
+            const backgroundColor = colors[index % colors.length] || 'rgba(59, 130, 246, 0.8)';
+            const borderColor = backgroundColor.replace('0.8', '1.0');
+
             return {
                 label: group,
                 data,
-                backgroundColor: colors[index] || colors[0],
-                borderColor: (colors[index] || colors[0]).replace('0.8', '1'),
+                backgroundColor,
+                borderColor,
                 pointRadius: 4,
                 pointHoverRadius: 6,
             };

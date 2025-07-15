@@ -11,6 +11,7 @@ import {
 import { Radar } from 'react-chartjs-2';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { createChartJsColors } from '../../utils/colorMapping';
 
 ChartJS.register(
     RadialLinearScale,
@@ -109,33 +110,37 @@ const DriveRadarChart: React.FC<DriveRadarChartProps> = ({ drives }) => {
         'Consistency'
     ];
 
-    const colors = [
-        'rgba(59, 130, 246, 0.8)',   // blue
-        'rgba(16, 185, 129, 0.8)',   // green
-        'rgba(245, 101, 101, 0.8)',  // red
-        'rgba(139, 92, 246, 0.8)',   // purple
-        'rgba(245, 158, 11, 0.8)',   // yellow
-    ];
+    // Generate unique colors based on hostname and drive model
+    const chartColors = createChartJsColors(
+        drives.map(drive => ({
+            hostname: drive.hostname,
+            driveModel: drive.drive_model,
+            label: drive.drive_model
+        }))
+    );
 
-    const datasets = normalizedData.map((drive, index) => ({
-        label: drive.drive_model,
-        data: [
-            drive.maxIOPS,
-            drive.avgIOPS,
-            drive.latencyScore,
-            drive.avgLatencyScore,
-            drive.maxBandwidth,
-            drive.avgBandwidth,
-            drive.consistency
-        ],
-        backgroundColor: colors[index % colors.length].replace('0.8', '0.2'),
-        borderColor: colors[index % colors.length],
-        borderWidth: 2,
-        pointBackgroundColor: colors[index % colors.length],
-        pointBorderColor: '#fff',
-        pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: colors[index % colors.length],
-    }));
+    const datasets = normalizedData.map((drive, index) => {
+        const colors = chartColors[index];
+        return {
+            label: drive.drive_model,
+            data: [
+                drive.maxIOPS,
+                drive.avgIOPS,
+                drive.latencyScore,
+                drive.avgLatencyScore,
+                drive.maxBandwidth,
+                drive.avgBandwidth,
+                drive.consistency
+            ],
+            backgroundColor: colors.backgroundColor,
+            borderColor: colors.borderColor,
+            borderWidth: 2,
+            pointBackgroundColor: colors.pointBackgroundColor,
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: colors.borderColor,
+        };
+    });
 
     const chartData = {
         labels: radarLabels,
