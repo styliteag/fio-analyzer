@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 
 export interface BoxPlotChartProps {
@@ -82,7 +82,7 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
     };
   };
 
-  const processData = (): BoxplotData[] => {
+  const processData = useCallback((): BoxplotData[] => {
     // Flatten all configurations from all drives
     const allConfigurations = data.flatMap(drive => 
       drive.configurations.filter(config => {
@@ -128,7 +128,7 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
       
       return extractSize(a.blockSize) - extractSize(b.blockSize);
     });
-  };
+  }, [data, metric]);
 
   useEffect(() => {
     if (!svgRef.current || data.length === 0) return;
@@ -353,7 +353,7 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
     return () => {
       tooltip.remove();
     };
-  }, [data, metric, hoveredBox]);
+  }, [data, metric, hoveredBox, processData]);
 
   if (data.length === 0) {
     return (
