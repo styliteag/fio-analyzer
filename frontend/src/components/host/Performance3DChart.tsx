@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
+import { generateUniqueColorsForChart } from '../../utils/colorMapping';
 
 interface Performance3DChartProps {
     drives: DriveAnalysis[];
@@ -408,6 +409,32 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
     
     const currentScheme = colorSchemes[colorScheme as keyof typeof colorSchemes];
 
+    // Generate intelligent colors for drives based on hostname and drive model
+    const driveColors = useMemo(() => {
+        const uniqueColors = generateUniqueColorsForChart(
+            drives.map(drive => ({
+                hostname: drive.hostname,
+                driveModel: drive.drive_model,
+                label: drive.drive_model
+            })),
+            'primary'
+        );
+        
+        // Convert RGBA colors to hex format for three.js
+        const hexColors = uniqueColors.map(color => {
+            if (color.startsWith('rgba')) {
+                const match = color.match(/rgba?\(([^)]+)\)/);
+                if (match) {
+                    const [r, g, b] = match[1].split(',').map(n => parseInt(n.trim()));
+                    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+                }
+            }
+            return color;
+        });
+        
+        return hexColors;
+    }, [drives]);
+
     // Prepare 3D data points
     const points = useMemo(() => {
         const allPoints: PerformancePoint[] = [];
@@ -440,7 +467,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                     blockSize: config.block_size,
                     pattern: config.read_write_pattern,
                     queueDepth: config.queue_depth,
-                    color: currentScheme.drives[driveIndex % currentScheme.drives.length],
+                    color: driveColors[driveIndex] || currentScheme.drives[driveIndex % currentScheme.drives.length],
                     performanceScore,
                     p95_latency: config.p95_latency,
                     p99_latency: config.p99_latency,
@@ -452,7 +479,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
         });
 
         return allPoints;
-    }, [drives, currentScheme.drives, allDrives]);
+    }, [drives, currentScheme.drives, allDrives, driveColors]);
 
     // Calculate fixed ranges based on ALL original data (not filtered data) for consistent scaling
     const ranges = useMemo(() => {
