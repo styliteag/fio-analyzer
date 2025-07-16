@@ -183,7 +183,16 @@ export default function History() {
 			scales: {
 				x: {
 					type: "time" as const,
-					time: { unit: timeUnit },
+					time: { 
+						unit: timeUnit,
+						displayFormats: {
+							hour: 'HH:mm',
+							day: 'MM/dd',
+							week: 'MM/dd',
+							month: 'MM/yyyy',
+						},
+						tooltipFormat: 'yyyy-MM-dd HH:mm:ss',
+					},
 					title: { display: true, text: "Time" },
 				},
 				y: {
@@ -193,6 +202,32 @@ export default function History() {
 			},
 			plugins: {
 				legend: { display: true, position: "bottom" as const },
+				tooltip: {
+					mode: 'index' as const,
+					intersect: false,
+					callbacks: {
+						title: (context: any) => {
+							if (context.length > 0) {
+								const date = new Date(context[0].parsed.x);
+								return date.toLocaleString('en-US', {
+									year: 'numeric',
+									month: '2-digit',
+									day: '2-digit',
+									hour: '2-digit',
+									minute: '2-digit',
+									second: '2-digit',
+									hour12: false
+								});
+							}
+							return '';
+						},
+						label: (context: any) => {
+							const value = context.parsed.y;
+							const label = context.dataset.label || '';
+							return `${label}: ${value.toLocaleString()}`;
+						},
+					},
+				},
 			},
 		} as const;
 	}, [days, selectedMetrics]);
