@@ -2,7 +2,7 @@
 import React from 'react';
 import { ChartContainer } from '../charts';
 import ThreeDBarChart from '../ThreeDBarChart';
-import TimeSeriesChart from '../TimeSeriesChart';
+import PerformanceTimeSeriesChart from '../PerformanceTimeSeriesChart';
 import PerformanceRadarGrid from '../PerformanceRadarGrid';
 import type { ChartTemplate, PerformanceData } from '../../types';
 import type { ActiveFilters } from '../../hooks/useTestRunFilters';
@@ -42,9 +42,11 @@ export const ChartArea: React.FC<ChartAreaProps> = ({
             )}
             
             {selectedTemplate.chartType === 'time-series' ? (
-                <TimeSeriesChart
+                <PerformanceTimeSeriesChart
+                    performanceData={enhancedPerformanceData}
                     isMaximized={isChartMaximized}
                     onToggleMaximize={handleToggleMaximize}
+                    loading={loading}
                     sharedFilters={sharedFilters}
                 />
             ) : selectedTemplate.chartType === '3d-bar' ? (
