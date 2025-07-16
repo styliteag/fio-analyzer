@@ -12,6 +12,7 @@ import HostFilters from '../components/host/HostFilters';
 import ParallelCoordinatesChart from '../components/host/ParallelCoordinatesChart';
 import BoxPlotChart from '../components/host/BoxPlotChart';
 import FacetScatterGrid from '../components/host/FacetScatterGrid';
+import Performance3DChart from '../components/host/Performance3DChart';
 import { getSelectStyles } from '../hooks/useThemeColors';
 
 const Host: React.FC = () => {
@@ -612,6 +613,10 @@ const Host: React.FC = () => {
 
                             {activeView === 'facets' && (
                                 <FacetScatterGrid data={filteredDrives} />
+                            )}
+
+                            {activeView === '3d' && (
+                                <Performance3DChart drives={filteredDrives} />
                             )}
 
                         </Card>
