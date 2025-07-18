@@ -23,18 +23,16 @@ ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build:prod
 
 # Main application stage
-FROM node:24-alpine
+FROM python:3.11-alpine
 
 WORKDIR /app
 
 # Install nginx for serving frontend static files
 RUN apk add --no-cache nginx
 
-# Copy backend package files
-COPY backend/package*.json ./
-
-# Install backend dependencies
-RUN EXTERNAL_URL=/api npm ci --only=production --no-audit --no-fund
+# Copy backend requirements and install Python dependencies
+COPY backend/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source
 COPY backend/ ./
@@ -57,7 +55,7 @@ RUN mkdir -p /var/cache/nginx && \
     echo 'echo "Starting FIO Analyzer"' >> /app/start.sh && \
     echo 'echo "Version: $(cat /app/VERSION)"' >> /app/start.sh && \
     echo 'nginx -g "daemon off;" &' >> /app/start.sh && \
-    echo 'npm start' >> /app/start.sh && \
+    echo 'uvicorn main:app --host 0.0.0.0 --port 8000' >> /app/start.sh && \
     chmod +x /app/start.sh
 
 EXPOSE 80
