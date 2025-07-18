@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# FIO Analyzer Docker Registry Push Script
+# FIO Analyzer Docker Registry Push Script with Multi-Architecture Support
 
 set -e
 
@@ -16,44 +16,47 @@ else
     VERSION_TAG="latest"
 fi
 
-echo "🚀 Pushing FIO Analyzer images to registry..."
+echo "🚀 Building and pushing FIO Analyzer multi-architecture images to registry..."
 echo "Registry: ${REGISTRY_URL}"
 echo "Namespace: ${NAMESPACE}"
-echo "Tag: ${IMAGE_TAG}"
+echo "Version Tag: ${VERSION_TAG}"
 echo ""
 
-
-# Build the images first
-echo "🔨 Building images..."
-docker compose build
-
-# Get the image ID
-IMAGE_TAG=$(docker images -q fio-analyzer_app)
-
-# Set the external URL for the app so the coantainer will be able to access the API behind a reverse proxy
+# Set the external URL for the app so the container will be able to access the API behind a reverse proxy
 EXTERNAL_URL=/api
 export EXTERNAL_URL
 
-if [ -z "$IMAGE_TAG" ]; then
-    echo "❌ Image not found. Make sure to build it first with 'docker compose build'"
-    exit 1
+# Create and use a multi-platform builder if it doesn't exist
+BUILDER_NAME="fio-analyzer-builder"
+if ! docker buildx inspect $BUILDER_NAME >/dev/null 2>&1; then
+    echo "🔨 Creating multi-platform builder: $BUILDER_NAME"
+    docker buildx create --name $BUILDER_NAME --use
+else
+    echo "🔨 Using existing multi-platform builder: $BUILDER_NAME"
+    docker buildx use $BUILDER_NAME
 fi
 
-# Tag images for registry
-echo "🏷️  Tagging images..."
-docker tag fio-analyzer_app ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:${VERSION_TAG}
-docker tag fio-analyzer_app ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:latest
-
-# Push images
-echo "📤 Pushing images to registry..."
-docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:${VERSION_TAG}
-docker push ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:latest
+# Build and push multi-architecture images
+echo "🏗️  Building multi-architecture images..."
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    --tag ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:${VERSION_TAG} \
+    --tag ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:latest \
+    --file app/Dockerfile \
+    --build-arg VITE_API_URL="." \
+    --push \
+    ..
 
 echo ""
-echo "✅ Images pushed successfully!"
+echo "✅ Multi-architecture images built and pushed successfully!"
 echo ""
-echo "📋 Image URL:"
-echo "   App:      ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer-app:${IMAGE_TAG}"
+echo "📋 Image URLs:"
+echo "   App:      ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:${VERSION_TAG}"
+echo "   Latest:   ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:latest"
+echo ""
+echo "🏗️  Supported architectures:"
+echo "   - linux/amd64 (x86_64)"
+echo "   - linux/arm64 (ARM64)"
 echo ""
 echo "🚀 To deploy these images, use:"
-echo "   IMAGE_TAG=${IMAGE_TAG} DOCKER_NAMESPACE=${NAMESPACE} docker compose -f compose.prod.yml up -d"
+echo "   DOCKER_NAMESPACE=${NAMESPACE} docker compose -f compose.prod.yml up -d"
