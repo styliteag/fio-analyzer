@@ -2,7 +2,7 @@
 FROM node:24-alpine AS frontend-builder
 
 # Accept build arguments  
-ARG VITE_API_URL=""
+ARG VITE_API_URL
 
 WORKDIR /app
 
