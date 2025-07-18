@@ -1,6 +1,5 @@
 // API utility functions with authentication
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
-console.log("API_BASE_URL in utils/api.ts:", API_BASE_URL, "DEV:", import.meta.env.DEV, "PROD:", import.meta.env.PROD, "VITE_API_URL:", import.meta.env.VITE_API_URL);
 
 // Get stored authentication credentials
 const getAuthHeaders = (): HeadersInit => {
@@ -28,7 +27,6 @@ export const authenticatedFetch = async (
 	options: RequestInit = {},
 ): Promise<Response> => {
 	const url = `${API_BASE_URL}${endpoint}`;
-	console.log("API call from utils/api.ts:", { endpoint, API_BASE_URL, url, currentPath: window.location.pathname });
 	const headers = {
 		...getAuthHeaders(),
 		...options.headers,

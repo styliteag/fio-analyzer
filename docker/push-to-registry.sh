@@ -43,7 +43,6 @@ docker buildx build \
     --tag ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:${VERSION_TAG} \
     --tag ${REGISTRY_URL}/${NAMESPACE}/fio-analyzer:latest \
     --file app/Dockerfile \
-    --build-arg VITE_API_URL="." \
     --push \
     ..
 
