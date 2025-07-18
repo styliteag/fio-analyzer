@@ -1,211 +1,117 @@
-# Database Migration Scripts
+# FIO Analyzer Backend Scripts
 
-This directory contains scripts to migrate your FIO Analyzer database from the old single-table structure to the new dual-table architecture that separates latest vs historical data.
+This directory contains management scripts for the FIO Analyzer FastAPI backend.
 
-## 🚨 Important: Backup First!
+## 🐍 Python Backend Scripts
 
-**ALWAYS backup your database before running any migration!**
+The backend has been migrated to Python FastAPI. All scripts are now Python-based and require the virtual environment to be activated.
+
+## 📋 Prerequisites
+
+Before running any scripts, ensure the Python virtual environment is activated:
 
 ```bash
-cp /path/to/your/storage_performance.db /path/to/your/storage_performance.db.backup
+cd backend
+source venv/bin/activate  # Activate virtual environment
 ```
 
-## Migration Scripts
+## 🔧 Available Scripts
 
-### 1. `migrate-to-dual-table.sql` - Main Migration Script
+### 1. `manage_users.py` - User Management Script
 
-Complete SQL migration script that converts the old database structure to the new dual-table architecture.
-
-**What it does:**
-- Creates new historical tables (`test_runs_all`, `performance_metrics_all`, `latency_percentiles_all`)
-- Preserves ALL existing data in historical tables
-- Creates new latest-only tables with unique constraints
-- Populates latest tables with only the most recent test per configuration
-- Creates proper indexes for performance
-- Creates backup tables for safety
-
-**Usage:**
-```bash
-# Method 1: Direct SQL execution
-sqlite3 your_database.db < migrate-to-dual-table.sql
-
-# Method 2: Interactive execution
-sqlite3 your_database.db
-.read migrate-to-dual-table.sql
-.quit
-```
-
-### 2. `run-migration.js` - Node.js Migration Runner
-
-A safer Node.js script that performs the migration with additional checks and validation.
+Python script for managing admin and uploader users in the FIO Analyzer system.
 
 **Features:**
-- Automatic database backup creation
-- Pre-migration schema validation
-- Better error handling and rollback support
-- Post-migration validation
-- Detailed progress reporting
+- Add new users with bcrypt password hashing
+- Remove existing users
+- List all users
+- Separate admin and uploader user management
+- Compatible with existing `.htpasswd` and `.htuploaders` files
 
 **Usage:**
 ```bash
-# Use default database location
-node run-migration.js
+# Activate virtual environment first
+cd backend
+source venv/bin/activate
 
-# Specify custom database path
-node run-migration.js /path/to/your/database.db
+# Add admin user
+python scripts/manage_users.py add --username admin --password secret --admin
+
+# Add uploader user  
+python scripts/manage_users.py add --username uploader --password secret
+
+# List admin users
+python scripts/manage_users.py list --admin
+
+# List uploader users
+python scripts/manage_users.py list
+
+# Remove admin user
+python scripts/manage_users.py remove --username admin --admin
+
+# Remove uploader user
+python scripts/manage_users.py remove --username uploader
 ```
 
-**Requirements:**
-- Node.js with sqlite3 package installed
-- Write permissions to database directory
+**Options:**
+- `add` - Add a new user
+- `remove` - Remove an existing user  
+- `list` - List all users
+- `--admin` - Manage admin users (without this flag, manages uploader users)
+- `--username` - Username to add/remove
+- `--password` - Password for new users
 
-### 3. `validate-migration.sql` - Validation Script
+## 🚨 Important: Database Backup!
 
-Comprehensive validation script to verify the migration was successful.
+**ALWAYS backup your database before running any operations!**
 
-**What it checks:**
-- Table structure correctness
-- Data integrity (no data loss)
-- Unique constraint validation
-- Foreign key integrity
-- Data recency verification (latest runs are actually the most recent)
-- Sample data comparison
-
-**Usage:**
 ```bash
-sqlite3 your_database.db < validate-migration.sql
+cp backend/db/storage_performance.db backend/db/storage_performance.db.backup
 ```
 
-### 4. `rollback-dual-table.sql` - Rollback Script
+## 🔄 FastAPI Backend Features
 
-Emergency rollback script to revert back to the old single-table structure.
+The new Python FastAPI backend provides:
 
-**⚠️ Warning:** This script will lose the benefits of the dual-table separation!
+- **Auto-generated API documentation** at `http://localhost:8000/docs`
+- **Type-safe data validation** with Pydantic models
+- **Better performance** compared to Node.js/Express
+- **Modern async/await** support
+- **Structured logging** with request tracking
+- **Backward compatibility** with existing frontend
 
-**Usage:**
+## 🐳 Docker Support
+
+The backend scripts work in both local development and Docker environments:
+
 ```bash
-sqlite3 your_database.db < rollback-dual-table.sql
+# Local development
+cd backend
+source venv/bin/activate
+python scripts/manage_users.py list --admin
+
+# Docker environment
+docker exec -it fio-app python scripts/manage_users.py list --admin
 ```
 
-## Migration Process
+## 🔧 Development Setup
 
-### Recommended Steps:
+For first-time setup:
 
-1. **Backup your database**
-   ```bash
-   cp storage_performance.db storage_performance.db.backup
-   ```
+```bash
+# Setup virtual environment
+./setup-backend-venv.sh
 
-2. **Stop your application** to ensure no active database connections
+# Or manual setup
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-3. **Run the migration** (choose one method):
-   ```bash
-   # Option A: Use the Node.js script (recommended)
-   node run-migration.js
+## 📚 Additional Resources
 
-   # Option B: Use SQL directly
-   sqlite3 storage_performance.db < migrate-to-dual-table.sql
-   ```
-
-4. **Validate the migration**
-   ```bash
-   sqlite3 storage_performance.db < validate-migration.sql
-   ```
-
-5. **Test your application** thoroughly with the new database
-
-6. **Optimize the database** (optional but recommended)
-   ```bash
-   sqlite3 storage_performance.db "VACUUM;"
-   ```
-
-7. **Clean up backup tables** (only after confirming everything works)
-   ```sql
-   DROP TABLE IF EXISTS test_runs_backup;
-   DROP TABLE IF EXISTS performance_metrics_backup;
-   ```
-
-## New Database Structure
-
-After migration, your database will have:
-
-### Latest Data Tables (Optimized for fast queries):
-- `test_runs` - Only the most recent test per unique configuration
-- `performance_metrics` - Metrics for latest tests only  
-- `latency_percentiles` - Latency data for latest tests only
-
-### Historical Data Tables (Complete data archive):
-- `test_runs_all` - ALL test runs (complete history)
-- `performance_metrics_all` - ALL performance metrics
-- `latency_percentiles_all` - ALL latency percentiles
-
-### Key Benefits:
-- **Faster queries** for latest data (most common use case)
-- **Complete history preserved** for analysis and reporting
-- **Unique constraints** prevent duplicate latest configurations
-- **Better indexing** for both latest and historical queries
-
-## API Changes
-
-After migration, the application will use:
-- `/api/test-runs` - Returns only latest test runs (no `include_historical` parameter)
-- `/api/time-series/all` - Returns complete historical data with filtering
-
-## Troubleshooting
-
-### Common Issues:
-
-1. **"Database is locked" error**
-   - Stop all applications using the database
-   - Check for any remaining connections
-   - Wait a moment and try again
-
-2. **Migration fails partway through**
-   - The migration uses transactions, so partial changes should be rolled back
-   - Restore from your backup and investigate the error
-   - Check disk space and permissions
-
-3. **Data appears missing after migration**
-   - Run the validation script to check data integrity
-   - Latest tables only contain the most recent test per configuration (this is expected)
-   - All historical data is preserved in `*_all` tables
-
-4. **Application errors after migration**
-   - Ensure you're using the updated application code that supports dual-table structure
-   - Check that API endpoints are working correctly
-   - Verify database schema matches expectations
-
-### Recovery:
-
-If something goes wrong:
-
-1. **Restore from backup:**
-   ```bash
-   cp storage_performance.db.backup storage_performance.db
-   ```
-
-2. **Use rollback script:**
-   ```bash
-   sqlite3 storage_performance.db < rollback-dual-table.sql
-   ```
-
-3. **Contact support** with error details and validation results
-
-## Files Summary
-
-| File | Purpose | When to Use |
-|------|---------|-------------|
-| `migrate-to-dual-table.sql` | Main migration script | Direct SQL execution |
-| `run-migration.js` | Safer migration with validation | Recommended for production |
-| `validate-migration.sql` | Verify migration success | After any migration |
-| `rollback-dual-table.sql` | Emergency rollback | If migration fails |
-| `README.md` | This documentation | For understanding the process |
-
-## Support
-
-For issues or questions about the migration:
-
-1. Check the validation script output for specific problems
-2. Review the error messages carefully
-3. Ensure you have backups before any migration attempts
-4. Test the migration on a copy of your database first
+- **API Documentation**: http://localhost:8000/docs
+- **FastAPI Guide**: https://fastapi.tiangolo.com/
+- **Migration Summary**: See `MIGRATION_SUMMARY.md` in the root directory
+- **Setup Guide**: See `FASTAPI_README.md` in the root directory

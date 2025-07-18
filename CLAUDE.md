@@ -7,10 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a **Storage Performance Visualizer** - a full-stack web application that analyzes and visualizes FIO (Flexible I/O Tester) benchmark results. The application consists of:
 
 - **Frontend**: React + TypeScript + Vite application with interactive charts (in `frontend/` directory)
-- **Backend**: Express.js Node.js server with SQLite database (in `backend/` directory) 
+- **Backend**: Python FastAPI server with SQLite database (in `backend/` directory) 
 - **Database**: SQLite with test runs and performance metrics tables
 - **Authentication**: Role-based access control with admin and upload-only users
 - **Testing Script**: Automated FIO testing script with configurable parameters
+
+## Migration Note
+The backend has been migrated from Node.js/Express to Python FastAPI for improved performance and developer experience. All API endpoints remain identical for frontend compatibility.
 
 ## Key Commands
 
@@ -23,11 +26,16 @@ npm run dev                   # Start Vite dev server (http://localhost:5173)
 npm run build                 # Build frontend for production
 npm run lint                  # Run ESLint on TypeScript files
 
-# Backend development (in backend/ directory)
+# Backend development (Python FastAPI in backend/ directory)
 cd backend
-npm install                   # Install Node.js dependencies
-npm run start                 # Start Express server (http://localhost:8000)
+python3 -m venv venv          # Create virtual environment (first time only)
+source venv/bin/activate      # Activate virtual environment
+pip install -r requirements.txt  # Install Python dependencies
+uvicorn main:app --reload --host 0.0.0.0 --port 8000  # Start FastAPI server
 rm db/storage_performance.db  # Remove the db, it will be regenerated on the next run
+
+# Quick backend setup script
+./setup-backend-venv.sh       # One-time setup of Python virtual environment
 
 # Docker deployment (single container)
 cd docker
@@ -37,7 +45,29 @@ docker compose -f compose.prod.yml up -d  # Production deployment
 
 ### Run the Server
 
-if the backend and frontend server need to be run you can ask the User to start them. He Maybe will start ./start-frontend-backend.sh to run the servers
+The easiest way to run both frontend and backend is using the automated startup script:
+
+```bash
+./start-frontend-backend.sh    # Automatically sets up Python venv and starts both servers
+```
+
+This script will:
+- Create a Python virtual environment if needed
+- Install Python dependencies
+- Start FastAPI backend (http://localhost:8000)
+- Start React frontend (http://localhost:5173)
+
+Alternative manual startup:
+```bash
+# Terminal 1 - Backend
+cd backend
+source venv/bin/activate
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2 - Frontend  
+cd frontend
+npm run dev
+```
 
 ### Run the Server as docker-compose
 cd docker
@@ -47,11 +77,19 @@ Now the frontend and backend is available at http://example.interm
 
 ### Authentication & User Management
 ```bash
+# Activate Python virtual environment first
+cd backend
+source venv/bin/activate
+
 # Admin users (full access to all features)
-node backend/scripts/manage-users.js
+python scripts/manage_users.py add --username admin --password secret --admin
+python scripts/manage_users.py list --admin
+python scripts/manage_users.py remove --username admin --admin
 
 # Upload-only users (can only upload FIO test data)
-node backend/scripts/manage-uploaders.js
+python scripts/manage_users.py add --username uploader --password secret
+python scripts/manage_users.py list
+python scripts/manage_users.py remove --username uploader
 ```
 
 ### Testing Script
@@ -91,11 +129,30 @@ The application uses a simplified SQLite schema with two main tables:
 
 Key endpoints for data access:
 - `GET /api/test-runs` - Get test runs with optional filtering (hostname, drive_type, etc.)
-- `GET /api/test-runs/filters` - Get available filter options
+- `GET /api/filters` - Get available filter options
 - `GET /api/time-series/*` - Historical time-series data endpoints
-- `POST /api/upload` - Upload new FIO test results
+- `POST /api/import` - Upload new FIO test results
+- `GET /health` - Health check endpoint
+
+## API Documentation
+
+The FastAPI backend automatically generates comprehensive API documentation:
+- **Swagger UI**: http://localhost:8000/docs (interactive API testing)
+- **ReDoc**: http://localhost:8000/redoc (clean documentation)
+- **OpenAPI JSON**: http://localhost:8000/openapi.json (machine-readable spec)
+
+## Backend Technology Stack
+
+- **Framework**: FastAPI (Python 3.11+)
+- **Server**: Uvicorn ASGI server
+- **Database**: SQLite with direct connection
+- **Authentication**: HTTP Basic Auth with bcrypt
+- **Validation**: Pydantic models with type checking
+- **Documentation**: Auto-generated OpenAPI/Swagger
 
 ## Memories
 - Always use "2025-06-31" as date and 20:00:00 as time and "2025-06-31 20:00:00" as datetime
-- If you want to start the backend use a timeout of 5 seconds. If it does not work ask the user to start it for you, and retry your Test.
-- If you want to something in the FrontEnd which is hard to do, you can also add functions to the backend
+- If you want to start the backend, use `./start-frontend-backend.sh` or ask the user to start it for you
+- The backend uses Python FastAPI with virtual environment - ensure venv is activated when running manual commands
+- If you want to do something in the FrontEnd which is hard to do, you can also add functions to the backend
+- Use the auto-generated API documentation at http://localhost:8000/docs for testing endpoints
