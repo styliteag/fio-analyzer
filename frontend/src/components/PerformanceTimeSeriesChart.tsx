@@ -43,7 +43,6 @@ interface EnabledMetrics {
 }
 
 const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
-    performanceData,
     isMaximized,
     onToggleMaximize,
     loading = false,
@@ -79,22 +78,22 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
                 };
                 
                 // Add filters if they exist
-                if (sharedFilters?.hostnames?.length > 0) {
+                if (sharedFilters?.hostnames?.length && sharedFilters.hostnames.length > 0) {
                     queryParams.hostname = sharedFilters.hostnames[0];
                 }
-                if (sharedFilters?.protocols?.length > 0) {
+                if (sharedFilters?.protocols?.length && sharedFilters.protocols.length > 0) {
                     queryParams.protocol = sharedFilters.protocols[0];
                 }
-                if (sharedFilters?.drive_models?.length > 0) {
+                if (sharedFilters?.drive_models?.length && sharedFilters.drive_models.length > 0) {
                     queryParams.driveModel = sharedFilters.drive_models[0];
                 }
-                if (sharedFilters?.drive_types?.length > 0) {
+                if (sharedFilters?.drive_types?.length && sharedFilters.drive_types.length > 0) {
                     queryParams.driveType = sharedFilters.drive_types[0];
                 }
-                if (sharedFilters?.block_sizes?.length > 0) {
+                if (sharedFilters?.block_sizes?.length && sharedFilters.block_sizes.length > 0) {
                     queryParams.blockSize = sharedFilters.block_sizes[0];
                 }
-                if (sharedFilters?.patterns?.length > 0) {
+                if (sharedFilters?.patterns?.length && sharedFilters.patterns.length > 0) {
                     queryParams.readWritePattern = sharedFilters.patterns[0];
                 }
 
@@ -127,8 +126,8 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
         }
 
         const selectedMetrics = Object.entries(enabledMetrics)
-            .filter(([_, enabled]) => enabled)
-            .map(([metric, _]) => metric);
+            .filter(([, enabled]) => enabled)
+            .map(([metric]) => metric);
 
         // Transform data to include metric_type for each selected metric
         const transformedData: any[] = [];
@@ -184,8 +183,8 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
     // Chart options
     const chartOptions = useMemo(() => {
         const enabledMetricsList = Object.entries(enabledMetrics)
-            .filter(([_, enabled]) => enabled)
-            .map(([metric, _]) => metric);
+            .filter(([, enabled]) => enabled)
+            .map(([metric]) => metric);
 
         return {
             responsive: true,
