@@ -1,12 +1,12 @@
 // Dashboard header component with navigation and user controls
-import { Activity, Database, LogOut, Upload, Settings } from 'lucide-react';
+import { Activity, Database, LogOut, Upload, Settings, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import ThemeToggle from '../ThemeToggle';
 
 export const DashboardHeader: React.FC = () => {
     const navigate = useNavigate();
-    const { username, logout } = useAuth();
+    const { username, isAdmin, logout } = useAuth();
 
     return (
         <header className="theme-header shadow-sm">
@@ -49,6 +49,16 @@ export const DashboardHeader: React.FC = () => {
                             <Settings className="h-4 w-4 mr-2" />
                             Admin
                         </button>
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                onClick={() => navigate("/users")}
+                                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md theme-btn-secondary transition-colors"
+                            >
+                                <Users className="h-4 w-4 mr-2" />
+                                Users
+                            </button>
+                        )}
                         <div className="flex items-center text-sm theme-text-secondary mr-4">
                             <Database className="h-4 w-4 mr-1" />
                             FIO Benchmark Analysis

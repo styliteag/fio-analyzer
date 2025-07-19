@@ -7,6 +7,7 @@ import Performance from "./pages/Performance";
 import History from "./pages/History";
 import Upload from "./pages/Upload";
 import Admin from "./pages/Admin";
+import UserManager from "./pages/UserManager";
 import Compare from "./pages/Compare";
 import Compare2 from "./pages/Compare2";
 import Host from "./pages/Host";
@@ -39,6 +40,7 @@ const ProtectedApp = () => {
 			<Route path="/host/:hostname?" element={<Host />} />
 			<Route path="/upload" element={<Upload />} />
 			<Route path="/admin" element={<Admin />} />
+			<Route path="/users" element={<UserManager />} />
 		</Routes>
 	);
 };

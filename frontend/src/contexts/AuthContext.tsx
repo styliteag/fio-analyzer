@@ -11,6 +11,9 @@ import {
 interface AuthContextType {
 	isAuthenticated: boolean;
 	username: string | null;
+	userRole: 'admin' | 'uploader' | null;
+	isAdmin: boolean;
+	isUploader: boolean;
 	login: (username: string, password: string) => Promise<void>;
 	logout: () => void;
 	loading: boolean;
@@ -34,23 +37,28 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [username, setUsername] = useState<string | null>(null);
+	const [userRole, setUserRole] = useState<'admin' | 'uploader' | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	const verifyCredentials = useCallback(async (credentials: string): Promise<boolean> => {
+	const verifyCredentials = useCallback(async (credentials: string): Promise<{valid: boolean, role?: 'admin' | 'uploader'}> => {
 		try {
 			const response = await fetch(
-				`${import.meta.env.VITE_API_URL || "."}/api/test-runs`,
+				`${import.meta.env.VITE_API_URL || "."}/api/users/me`,
 				{
 					headers: {
 						Authorization: `Basic ${credentials}`,
 					},
 				},
 			);
-			return response.ok;
+			if (response.ok) {
+				const userData = await response.json();
+				return { valid: true, role: userData.role };
+			}
+			return { valid: false };
 		} catch (error) {
 			console.warn("Network error during credential verification:", error);
-			return false;
+			return { valid: false };
 		}
 	}, []);
 
@@ -63,10 +71,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 					JSON.parse(storedAuth);
 				// Verify credentials are still valid by making a test API call
 				verifyCredentials(credentials)
-					.then((valid) => {
-						if (valid) {
+					.then(({ valid, role }) => {
+						if (valid && role) {
 							setIsAuthenticated(true);
 							setUsername(storedUsername);
+							setUserRole(role);
 						} else {
 							localStorage.removeItem("fio-auth");
 						}
@@ -89,17 +98,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 			// Create base64 encoded credentials
 			const credentials = btoa(`${username}:${password}`);
 
-			// Test the credentials
-			const response = await fetch(
-				`${import.meta.env.VITE_API_URL || "."}/api/test-runs`,
-				{
-					headers: {
-						Authorization: `Basic ${credentials}`,
-					},
-				},
-			);
+			// Test the credentials and get user info
+			const { valid, role } = await verifyCredentials(credentials);
 
-			if (response.ok) {
+			if (valid && role) {
 				// Store credentials in localStorage
 				localStorage.setItem(
 					"fio-auth",
@@ -111,12 +113,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
 				setIsAuthenticated(true);
 				setUsername(username);
-				setLoading(false);
-			} else if (response.status === 401) {
-				setError("Invalid username or password");
+				setUserRole(role);
 				setLoading(false);
 			} else {
-				setError("Login failed. Please try again.");
+				setError("Invalid username or password");
 				setLoading(false);
 			}
 		} catch (err) {
@@ -132,12 +132,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		localStorage.removeItem("fio-auth");
 		setIsAuthenticated(false);
 		setUsername(null);
+		setUserRole(null);
 		setError(null);
 	};
 
 	const value: AuthContextType = {
 		isAuthenticated,
 		username,
+		userRole,
+		isAdmin: userRole === 'admin',
+		isUploader: userRole === 'uploader' || userRole === 'admin',
 		login,
 		logout,
 		loading,

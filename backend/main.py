@@ -17,7 +17,7 @@ import uvicorn
 from config.settings import settings
 from database.connection import init_database, close_database
 from utils.logging import setup_logging, log_info, log_error
-from routers import test_runs, imports, time_series, utils_router
+from routers import test_runs, imports, time_series, utils_router, users
 from auth.middleware import require_auth, User
 
 
@@ -121,6 +121,7 @@ app.include_router(test_runs.router, prefix="/api/test-runs", tags=["Test Runs"]
 app.include_router(imports.router, prefix="/api/import", tags=["Import"])
 app.include_router(time_series.router, prefix="/api/time-series", tags=["Time Series"])
 app.include_router(utils_router.router, prefix="/api", tags=["Utils"])
+app.include_router(users.router, tags=["Users"])
 
 
 # Health check endpoint
