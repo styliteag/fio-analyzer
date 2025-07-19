@@ -3,13 +3,13 @@ Time series API router
 """
 
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body
 from datetime import datetime, timedelta
 import sqlite3
 
 from database.connection import get_db
 from database.models import TrendData
-from auth.middleware import require_auth, User
+from auth.middleware import require_auth, require_admin, User
 from utils.logging import log_info, log_error
 
 
@@ -581,6 +581,178 @@ async def get_trends(
     except Exception as e:
         log_error("Error retrieving trend analysis", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to retrieve trend analysis")
+
+
+@router.put("/bulk")
+@router.put("/bulk/")  # Handle with trailing slash
+async def bulk_update_time_series(
+    request: Request,
+    bulk_request: dict = Body(...),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db)
+):
+    """Bulk update time series test runs"""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    
+    try:
+        # Extract required fields
+        test_run_ids = bulk_request.get('testRunIds')
+        updates = bulk_request.get('updates')
+        
+        # Validate required fields
+        if not test_run_ids or not isinstance(test_run_ids, list) or len(test_run_ids) == 0:
+            raise HTTPException(status_code=400, detail="testRunIds array is required and must not be empty")
+        
+        if not updates or not isinstance(updates, dict):
+            raise HTTPException(status_code=400, detail="updates object is required")
+        
+        # Define allowed fields for validation
+        allowed_fields = ['description', 'test_name', 'hostname', 'protocol', 'drive_type', 'drive_model']
+        submitted_fields = list(updates.keys())
+        
+        # Check for invalid fields
+        invalid_fields = [field for field in submitted_fields if field not in allowed_fields]
+        if invalid_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid fields: {', '.join(invalid_fields)}. Allowed fields: {', '.join(allowed_fields)}"
+            )
+        
+        # Build dynamic SQL for only the fields being updated
+        set_parts = []
+        values = []
+        
+        if 'description' in updates:
+            set_parts.append('description = ?')
+            values.append(updates['description'])
+        if 'test_name' in updates:
+            set_parts.append('test_name = ?')
+            values.append(updates['test_name'])
+        if 'hostname' in updates:
+            set_parts.append('hostname = ?')
+            values.append(updates['hostname'])
+        if 'protocol' in updates:
+            set_parts.append('protocol = ?')
+            values.append(updates['protocol'])
+        if 'drive_type' in updates:
+            set_parts.append('drive_type = ?')
+            values.append(updates['drive_type'])
+        if 'drive_model' in updates:
+            set_parts.append('drive_model = ?')
+            values.append(updates['drive_model'])
+        
+        if len(set_parts) == 0:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+        
+        # Create placeholders for WHERE IN clause
+        placeholders = ','.join(['?' for _ in test_run_ids])
+        where_values = [int(test_id) for test_id in test_run_ids]
+        
+        cursor = db.cursor()
+        
+        # Begin transaction
+        cursor.execute("BEGIN TRANSACTION")
+        
+        try:
+            # Update test_runs_all first
+            update_all_query = f"""
+                UPDATE test_runs_all 
+                SET {', '.join(set_parts)}
+                WHERE id IN ({placeholders})
+            """
+            cursor.execute(update_all_query, values + where_values)
+            updated_count_all = cursor.rowcount
+            
+            # Also update test_runs table to keep in sync
+            update_runs_query = f"""
+                UPDATE test_runs 
+                SET {', '.join(set_parts)}
+                WHERE id IN ({placeholders})
+            """
+            cursor.execute(update_runs_query, values + where_values)
+            updated_count_runs = cursor.rowcount
+            
+            # Commit transaction
+            cursor.execute("COMMIT")
+            
+            total_updated = min(updated_count_all, updated_count_runs)
+            failed_count = len(test_run_ids) - total_updated
+            
+            log_info("Bulk time-series test run update completed", {
+                "request_id": request_id,
+                "user": user.username,
+                "requested_count": len(test_run_ids),
+                "updated_count": total_updated,
+                "failed_count": failed_count,
+                "updated_fields": submitted_fields,
+                "changes": updates
+            })
+            
+            return {
+                "message": f"Successfully updated {total_updated} time-series test runs",
+                "updated": total_updated,
+                "failed": failed_count
+            }
+            
+        except Exception as e:
+            # Rollback on error
+            cursor.execute("ROLLBACK")
+            raise e
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error during bulk time-series update", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to update time-series test runs")
+
+
+@router.delete("/delete")
+@router.delete("/delete/")  # Handle with trailing slash
+async def delete_time_series(
+    request: Request,
+    delete_request: dict = Body(...),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db)
+):
+    """Delete time series test runs"""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    
+    try:
+        # Extract required fields
+        test_run_ids = delete_request.get('testRunIds')
+        
+        # Validate required fields
+        if not test_run_ids or not isinstance(test_run_ids, list) or len(test_run_ids) == 0:
+            raise HTTPException(status_code=400, detail="testRunIds array is required and must not be empty")
+        
+        cursor = db.cursor()
+        
+        # Create placeholders for WHERE IN clause
+        placeholders = ','.join(['?' for _ in test_run_ids])
+        int_test_run_ids = [int(test_id) for test_id in test_run_ids]
+        
+        # Delete from test_runs_all
+        cursor.execute(f"DELETE FROM test_runs_all WHERE id IN ({placeholders})", int_test_run_ids)
+        deleted = cursor.rowcount
+        not_found = len(test_run_ids) - deleted
+        
+        db.commit()
+        
+        log_info("Bulk time-series test run delete completed", {
+            "request_id": request_id,
+            "user": user.username,
+            "requested_count": len(test_run_ids),
+            "deleted": deleted,
+            "not_found": not_found
+        })
+        
+        return {"deleted": deleted, "notFound": not_found}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error during time-series delete", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to delete time-series test runs")
 
 
 def get_metric_unit(metric: str) -> str:

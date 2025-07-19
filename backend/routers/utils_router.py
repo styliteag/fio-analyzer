@@ -73,5 +73,5 @@ async def get_api_info():
         "version": "1.0.0", 
         "description": "API for FIO (Flexible I/O Tester) performance analysis and time-series monitoring",
         "endpoints": 14,
-        "documentation": "/docs"
+        "documentation": "/api-docs"
     }

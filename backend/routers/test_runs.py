@@ -3,7 +3,7 @@ Test runs API router
 """
 
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body
 import sqlite3
 
 from database.connection import get_db
@@ -80,7 +80,7 @@ async def get_test_runs(
                    block_size, read_write_pattern, queue_depth, duration,
                    fio_version, job_runtime, rwmixread, total_ios_read, 
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-                   uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                   output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
                    avg_latency, bandwidth, iops, p95_latency, p99_latency
             FROM test_runs 
             WHERE {where_clause} 
@@ -282,7 +282,7 @@ async def get_test_run(
                    block_size, read_write_pattern, queue_depth, duration,
                    fio_version, job_runtime, rwmixread, total_ios_read, 
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-                   uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                   output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
                    avg_latency, bandwidth, iops, p95_latency, p99_latency
             FROM test_runs WHERE id = ?
         """, (test_run_id,))
@@ -306,6 +306,114 @@ async def get_test_run(
     except Exception as e:
         log_error("Error retrieving test run", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to retrieve test run")
+
+
+@router.put("/{test_run_id}")
+async def update_test_run(
+    request: Request,
+    test_run_id: int,
+    update_data: dict = Body(...),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db)
+):
+    """Update a test run"""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    
+    try:
+        # Define allowed fields for validation
+        allowed_fields = ['description', 'test_name', 'hostname', 'protocol', 'drive_type', 'drive_model']
+        submitted_fields = list(update_data.keys())
+        
+        # Check for invalid fields
+        invalid_fields = [field for field in submitted_fields if field not in allowed_fields]
+        if invalid_fields:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid fields: {', '.join(invalid_fields)}. Allowed fields: {', '.join(allowed_fields)}"
+            )
+        
+        # Simple validation
+        validation = {
+            'hostname': {'maxLength': 255},
+            'protocol': {'maxLength': 100},
+            'description': {'maxLength': 1000},
+            'test_name': {'maxLength': 500},
+            'drive_type': {'maxLength': 100},
+            'drive_model': {'maxLength': 255}
+        }
+        
+        for field, value in update_data.items():
+            if value and field in validation and len(str(value)) > validation[field]['maxLength']:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Field '{field}' exceeds maximum length of {validation[field]['maxLength']} characters"
+                )
+        
+        # Build update query
+        cursor = db.cursor()
+        
+        # Update test_runs table
+        cursor.execute("""
+            UPDATE test_runs 
+            SET description = COALESCE(?, description),
+                test_name = COALESCE(?, test_name),
+                hostname = COALESCE(?, hostname),
+                protocol = COALESCE(?, protocol),
+                drive_type = COALESCE(?, drive_type),
+                drive_model = COALESCE(?, drive_model)
+            WHERE id = ?
+        """, [
+            update_data.get('description'),
+            update_data.get('test_name'),
+            update_data.get('hostname'),
+            update_data.get('protocol'),
+            update_data.get('drive_type'),
+            update_data.get('drive_model'),
+            test_run_id
+        ])
+        
+        latest_updated = cursor.rowcount
+        
+        # Also update test_runs_all table
+        cursor.execute("""
+            UPDATE test_runs_all 
+            SET description = COALESCE(?, description),
+                test_name = COALESCE(?, test_name),
+                hostname = COALESCE(?, hostname),
+                protocol = COALESCE(?, protocol),
+                drive_type = COALESCE(?, drive_type),
+                drive_model = COALESCE(?, drive_model)
+            WHERE id = ?
+        """, [
+            update_data.get('description'),
+            update_data.get('test_name'),
+            update_data.get('hostname'),
+            update_data.get('protocol'),
+            update_data.get('drive_type'),
+            update_data.get('drive_model'),
+            test_run_id
+        ])
+        
+        db.commit()
+        
+        if latest_updated == 0:
+            raise HTTPException(status_code=404, detail="Test run not found")
+        
+        log_info("Test run updated successfully", {
+            "request_id": request_id,
+            "user": user.username,
+            "test_run_id": test_run_id,
+            "updated_fields": submitted_fields,
+            "changes": update_data
+        })
+        
+        return {"message": "Test run updated successfully"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error updating test run", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to update test run")
 
 
 @router.delete("/{test_run_id}")
