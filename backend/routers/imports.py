@@ -5,8 +5,8 @@ Import API router
 import json
 import uuid
 import os
-from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Body
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Body
 from datetime import datetime
 import sqlite3
 from pathlib import Path
@@ -26,6 +26,12 @@ router = APIRouter()
 async def import_fio_data(
     request: Request,
     file: UploadFile = File(...),
+    drive_model: str = Form(...),
+    drive_type: str = Form(...),
+    hostname: str = Form(...),
+    protocol: str = Form(...),
+    description: str = Form(...),
+    date: Optional[str] = Form(None),
     user: User = Depends(require_uploader),
     db: sqlite3.Connection = Depends(get_db)
 ):
@@ -50,6 +56,19 @@ async def import_fio_data(
         # Extract test run data from FIO JSON
         test_run_data = extract_test_run_data(fio_data, file.filename)
         
+        # Override with form data
+        test_run_data.update({
+            "drive_model": drive_model,
+            "drive_type": drive_type,
+            "hostname": hostname,
+            "protocol": protocol,
+            "description": description
+        })
+        
+        # Set date if provided
+        if date:
+            test_run_data["test_date"] = date
+        
         # Update latest flags
         await db_manager.update_latest_flags(test_run_data)
         
@@ -71,7 +90,9 @@ async def import_fio_data(
             "filename": file.filename,
             "test_run_id": test_run_id,
             "hostname": test_run_data.get("hostname"),
-            "test_name": test_run_data.get("test_name")
+            "test_name": test_run_data.get("test_name"),
+            "drive_model": test_run_data.get("drive_model"),
+            "drive_type": test_run_data.get("drive_type")
         })
         
         return {
@@ -225,11 +246,33 @@ async def bulk_import_fio_data(
 def extract_metadata_from_path(file_path: Path) -> Dict[str, Any]:
     """Extract metadata from file path structure"""
     try:
-        # Expected path structure: uploads/hostname/protocol/date/time/filename.json
+        # Expected path structure: backend/uploads/hostname/protocol/date/time/drive_type/drive_model/filename.json
         parts = file_path.parts
-        uploads_index = parts.index(settings.upload_dir.name)
         
-        if len(parts) >= uploads_index + 4:
+        # Find the uploads directory in the path
+        try:
+            uploads_index = parts.index("uploads")
+        except ValueError:
+            # Try alternative path structure
+            uploads_index = parts.index("upload")
+        
+        if len(parts) >= uploads_index + 6:
+            hostname = parts[uploads_index + 1]
+            protocol = parts[uploads_index + 2]
+            date_str = parts[uploads_index + 3]
+            time_str = parts[uploads_index + 4]
+            drive_type = parts[uploads_index + 5]
+            drive_model = parts[uploads_index + 6]
+            
+            return {
+                "hostname": hostname,
+                "protocol": protocol,
+                "drive_type": drive_type,
+                "drive_model": drive_model,
+                "test_date": f"{date_str}T{time_str.replace('-', ':')}:00"
+            }
+        elif len(parts) >= uploads_index + 4:
+            # Fallback for older structure without drive info
             hostname = parts[uploads_index + 1]
             protocol = parts[uploads_index + 2]
             date_str = parts[uploads_index + 3]
