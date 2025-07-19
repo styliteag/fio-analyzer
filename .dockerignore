@@ -4,6 +4,12 @@ backend/npm-debug.log*
 backend/.npm
 backend/db/storage_performance.db
 backend/uploads/*
+backend/venv/*
+__pycache__/
+backend/__pycache__/*
+*.pyc
+*.pyo
+
 # Frontend
 frontend/node_modules
 frontend/dist

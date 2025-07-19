@@ -23,7 +23,7 @@ ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build:prod
 
 # Main application stage
-FROM python:3.11-alpine
+FROM python:3.13-alpine
 
 WORKDIR /app
 
