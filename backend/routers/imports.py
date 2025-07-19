@@ -153,14 +153,30 @@ async def bulk_import_fio_data(
                 with open(json_file, 'r', encoding='utf-8') as f:
                     fio_data = json.load(f)
                 
-                # Extract metadata from file path
-                metadata = extract_metadata_from_path(json_file)
+                # Try to read metadata from .info file first
+                info_file = json_file.with_suffix('.info')
+                metadata = {}
+                if info_file.exists():
+                    try:
+                        with open(info_file, 'r', encoding='utf-8') as f:
+                            metadata = json.load(f)
+                    except Exception as e:
+                        log_error(f"Error reading .info file {info_file}", e, {"request_id": request_id})
+                
+                # If no .info file or failed to read, extract from file path
+                if not metadata:
+                    metadata = extract_metadata_from_path(json_file)
                 
                 # Extract test run data
                 test_run_data = extract_test_run_data(fio_data, json_file.name)
                 
                 # Update metadata with path info
                 test_run_data.update(metadata)
+                
+                # Use timestamp from .info file if available
+                if metadata.get("upload_timestamp"):
+                    test_run_data["timestamp"] = metadata["upload_timestamp"]
+                    test_run_data["test_date"] = metadata.get("test_date", metadata["upload_timestamp"])
                 
                 if dry_run:
                     # For dry run, just collect metadata
