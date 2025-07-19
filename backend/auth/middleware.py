@@ -93,7 +93,6 @@ def require_auth(request: Request) -> User:
         raise HTTPException(
             status_code=401,
             detail="Authentication required",
-            headers={"WWW-Authenticate": "Basic"},
         )
     
     log_info("Authentication successful", {
@@ -119,7 +118,6 @@ def require_admin(request: Request) -> User:
         raise HTTPException(
             status_code=401,
             detail="Authentication required",
-            headers={"WWW-Authenticate": "Basic"},
         )
     
     if user.role != "admin":
@@ -132,7 +130,6 @@ def require_admin(request: Request) -> User:
         raise HTTPException(
             status_code=401,
             detail="Admin access required",
-            headers={"WWW-Authenticate": "Basic"},
         )
     
     log_info("Admin access granted", {
@@ -157,7 +154,6 @@ def require_uploader(request: Request) -> User:
         raise HTTPException(
             status_code=401,
             detail="Authentication required",
-            headers={"WWW-Authenticate": "Basic"},
         )
     
     if user.role not in ["admin", "uploader"]:
@@ -170,7 +166,6 @@ def require_uploader(request: Request) -> User:
         raise HTTPException(
             status_code=403,
             detail="Upload access required",
-            headers={"WWW-Authenticate": "Basic"},
         )
     
     log_info("Upload access granted", {
