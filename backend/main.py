@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 import uvicorn
 
 from config.settings import settings
@@ -134,6 +135,35 @@ async def health_check():
 
 
 # Error handlers
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle FastAPI validation errors to match old API format"""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    
+    # Extract first validation error and create simple error message
+    error_detail = exc.errors()[0] if exc.errors() else {}
+    field_name = error_detail.get('loc', ['unknown'])[-1]  # Get the last part of the location
+    error_type = error_detail.get('type', 'validation_error')
+    
+    # Create user-friendly error message
+    if error_type == 'missing':
+        error_message = f"{field_name} is required"
+    else:
+        error_message = f"Invalid {field_name}"
+    
+    log_info("Validation error", {
+        "request_id": request_id,
+        "error": error_message,
+        "field": field_name,
+        "url": str(request.url)
+    })
+    
+    return JSONResponse(
+        status_code=400,
+        content={"error": error_message}
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler"""
