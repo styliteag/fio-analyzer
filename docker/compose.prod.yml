@@ -20,8 +20,8 @@ services:
       - fio-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/api/test-runs"]
-      timeout: 30s
+      test: ["CMD", "/app/health-check.sh"]
+      timeout: 60s
       interval: 30s
       retries: 3
 

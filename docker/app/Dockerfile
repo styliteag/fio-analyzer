@@ -40,6 +40,9 @@ COPY backend/ ./
 # Copy nginx configuration
 COPY docker/app/nginx-main.conf /etc/nginx/nginx.conf
 
+# Copy health check script
+COPY docker/app/health-check.sh /app/health-check.sh
+
 # Copy frontend build from builder stage
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
@@ -49,8 +52,10 @@ COPY scripts/fio-analyzer-tests.sh /usr/share/nginx/html/script.sh
 COPY scripts/.env.example /usr/share/nginx/html/.env.example
 COPY scripts/.env.example /usr/share/nginx/html/env.example
 
+
 # Create nginx cache directory and startup script
 RUN mkdir -p /var/cache/nginx && \
+    chmod +x /app/health-check.sh && \
     echo '#!/bin/sh' > /app/start.sh && \
     echo 'echo "Starting FIO Analyzer"' >> /app/start.sh && \
     echo 'echo "Version: $(cat /app/VERSION)"' >> /app/start.sh && \
