@@ -8,7 +8,7 @@ import os
 import signal
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -135,6 +135,24 @@ async def health_check():
 
 
 # Error handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTPException to use 'error' instead of 'detail' for API compatibility"""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    
+    log_info("HTTP exception", {
+        "request_id": request_id,
+        "status_code": exc.status_code,
+        "detail": str(exc.detail),
+        "url": str(request.url)
+    })
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": str(exc.detail)}
+    )
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle FastAPI validation errors to match old API format"""

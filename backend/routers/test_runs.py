@@ -3,8 +3,9 @@ Test runs API router
 """
 
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body, File, Form, UploadFile
 import sqlite3
+from fastapi import FastAPI
 
 from database.connection import get_db
 from database.models import TestRun, BulkUpdateRequest, dataclass_to_dict
@@ -14,6 +15,24 @@ from utils.logging import log_info, log_error
 
 router = APIRouter()
 
+app = FastAPI(
+    title="FIO Analyzer API",
+    description="A comprehensive API for FIO (Flexible I/O Tester) performance analysis and time-series monitoring",
+    version="1.0.0",
+    contact={
+        "name": "FIO Analyzer",
+        "url": "https://github.com/fio-analyzer"
+    },
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT"
+    },
+    servers=[
+        {"url": "http://localhost:8000", "description": "Development server"},
+        {"url": "https://fio-analyzer.stylite-live.net", "description": "Production server"}
+    ]
+)
+
 
 @router.get("/")
 @router.get("")  # Handle route without trailing slash
@@ -21,9 +40,16 @@ async def get_test_runs(
     request: Request,
     hostnames: Optional[str] = Query(None, description="Comma-separated hostnames to filter"),
     drive_types: Optional[str] = Query(None, description="Comma-separated drive types to filter"),
+    drive_models: Optional[str] = Query(None, description="Comma-separated drive models to filter"),  # ADDED
     protocols: Optional[str] = Query(None, description="Comma-separated protocols to filter"),
     patterns: Optional[str] = Query(None, description="Comma-separated patterns to filter"),
     block_sizes: Optional[str] = Query(None, description="Comma-separated block sizes to filter"),
+    syncs: Optional[str] = Query(None, description="Comma-separated sync values to filter"),  # ADDED
+    queue_depths: Optional[str] = Query(None, description="Comma-separated queue depths to filter"),  # ADDED
+    directs: Optional[str] = Query(None, description="Comma-separated direct values to filter"),  # ADDED
+    num_jobs: Optional[str] = Query(None, description="Comma-separated num_jobs values to filter"),  # ADDED
+    test_sizes: Optional[str] = Query(None, description="Comma-separated test sizes to filter"),  # ADDED
+    durations: Optional[str] = Query(None, description="Comma-separated durations to filter"),  # ADDED
     limit: int = Query(1000, ge=1, le=10000, description="Number of results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     user: User = Depends(require_auth),
@@ -49,6 +75,13 @@ async def get_test_runs(
             where_conditions.append(f"drive_type IN ({placeholders})")
             params.extend(drive_type_list)
         
+        # ADDED: drive_models filter
+        if drive_models:
+            drive_model_list = [d.strip() for d in drive_models.split(',')]
+            placeholders = ','.join(['?' for _ in drive_model_list])
+            where_conditions.append(f"drive_model IN ({placeholders})")
+            params.extend(drive_model_list)
+        
         if protocols:
             protocol_list = [p.strip() for p in protocols.split(',')]
             placeholders = ','.join(['?' for _ in protocol_list])
@@ -67,6 +100,48 @@ async def get_test_runs(
             where_conditions.append(f"block_size IN ({placeholders})")
             params.extend(block_size_list)
         
+        # ADDED: syncs filter (integer conversion)
+        if syncs:
+            sync_list = [int(s.strip()) for s in syncs.split(',')]
+            placeholders = ','.join(['?' for _ in sync_list])
+            where_conditions.append(f"sync IN ({placeholders})")
+            params.extend(sync_list)
+        
+        # ADDED: queue_depths filter (integer conversion)
+        if queue_depths:
+            queue_depth_list = [int(q.strip()) for q in queue_depths.split(',')]
+            placeholders = ','.join(['?' for _ in queue_depth_list])
+            where_conditions.append(f"queue_depth IN ({placeholders})")
+            params.extend(queue_depth_list)
+        
+        # ADDED: directs filter (integer conversion)
+        if directs:
+            direct_list = [int(d.strip()) for d in directs.split(',')]
+            placeholders = ','.join(['?' for _ in direct_list])
+            where_conditions.append(f"direct IN ({placeholders})")
+            params.extend(direct_list)
+        
+        # ADDED: num_jobs filter (integer conversion)
+        if num_jobs:
+            num_jobs_list = [int(n.strip()) for n in num_jobs.split(',')]
+            placeholders = ','.join(['?' for _ in num_jobs_list])
+            where_conditions.append(f"num_jobs IN ({placeholders})")
+            params.extend(num_jobs_list)
+        
+        # ADDED: test_sizes filter
+        if test_sizes:
+            test_size_list = [s.strip() for s in test_sizes.split(',')]
+            placeholders = ','.join(['?' for _ in test_size_list])
+            where_conditions.append(f"test_size IN ({placeholders})")
+            params.extend(test_size_list)
+        
+        # ADDED: durations filter (integer conversion)
+        if durations:
+            duration_list = [int(d.strip()) for d in durations.split(',')]
+            placeholders = ','.join(['?' for _ in duration_list])
+            where_conditions.append(f"duration IN ({placeholders})")
+            params.extend(duration_list)
+
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
         
         # Get total count

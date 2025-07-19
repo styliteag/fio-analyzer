@@ -29,12 +29,9 @@ async def get_filters(
         cursor = db.cursor()
         filters = {}
         
-        # Get distinct values for each filter
+        # Get distinct values for each filter (matching Node.js response order)
         filter_queries = [
             ("drive_models", "SELECT DISTINCT drive_model FROM test_runs WHERE drive_model IS NOT NULL ORDER BY drive_model"),
-            ("drive_types", "SELECT DISTINCT drive_type FROM test_runs WHERE drive_type IS NOT NULL ORDER BY drive_type"),
-            ("hostnames", "SELECT DISTINCT hostname FROM test_runs WHERE hostname IS NOT NULL ORDER BY hostname"),
-            ("protocols", "SELECT DISTINCT protocol FROM test_runs WHERE protocol IS NOT NULL ORDER BY protocol"),
             ("host_disk_combinations", "SELECT DISTINCT (hostname || ' - ' || protocol || ' - ' || drive_model) as host_disk_combo FROM test_runs WHERE hostname IS NOT NULL AND protocol IS NOT NULL AND drive_model IS NOT NULL ORDER BY host_disk_combo"),
             ("block_sizes", "SELECT DISTINCT block_size FROM test_runs WHERE block_size IS NOT NULL ORDER BY block_size"),
             ("patterns", "SELECT DISTINCT read_write_pattern FROM test_runs WHERE read_write_pattern IS NOT NULL ORDER BY read_write_pattern"),
@@ -44,6 +41,9 @@ async def get_filters(
             ("num_jobs", "SELECT DISTINCT num_jobs FROM test_runs WHERE num_jobs IS NOT NULL ORDER BY num_jobs"),
             ("test_sizes", "SELECT DISTINCT test_size FROM test_runs WHERE test_size IS NOT NULL ORDER BY test_size"),
             ("durations", "SELECT DISTINCT duration FROM test_runs WHERE duration IS NOT NULL ORDER BY duration"),
+            ("hostnames", "SELECT DISTINCT hostname FROM test_runs WHERE hostname IS NOT NULL ORDER BY hostname"),
+            ("protocols", "SELECT DISTINCT protocol FROM test_runs WHERE protocol IS NOT NULL ORDER BY protocol"),
+            ("drive_types", "SELECT DISTINCT drive_type FROM test_runs WHERE drive_type IS NOT NULL ORDER BY drive_type"),
         ]
         
         for filter_name, query in filter_queries:
