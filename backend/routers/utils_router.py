@@ -8,7 +8,7 @@ import sqlite3
 
 from database.connection import get_db
 # Removed FilterOptions import - using plain dictionary
-from auth.middleware import require_auth, User
+from auth.middleware import require_auth, User, require_admin
 from utils.logging import log_info, log_error
 
 
@@ -19,7 +19,7 @@ router = APIRouter()
 @router.get("/filters/")  # Handle with trailing slash
 async def get_filters(
     request: Request,
-    user: User = Depends(require_auth),
+    user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get available filter options"""

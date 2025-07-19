@@ -52,7 +52,7 @@ async def get_test_runs(
     durations: Optional[str] = Query(None, description="Comma-separated durations to filter"),  # ADDED
     limit: int = Query(1000, ge=1, le=10000, description="Number of results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
-    user: User = Depends(require_auth),
+    user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get test runs with optional filtering"""
@@ -266,7 +266,7 @@ async def bulk_update_test_runs(
 async def get_performance_data(
     request: Request,
     test_run_ids: str = Query(..., description="Comma-separated test run IDs"),
-    user: User = Depends(require_auth),
+    user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get performance data for specific test runs"""
@@ -344,7 +344,7 @@ async def get_performance_data(
 async def get_test_run(
     request: Request,
     test_run_id: int,
-    user: User = Depends(require_auth),
+    user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get a single test run by ID"""

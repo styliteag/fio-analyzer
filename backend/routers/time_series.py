@@ -20,7 +20,7 @@ router = APIRouter()
 @router.get("/servers/")  # Handle with trailing slash
 async def get_servers(
     request: Request,
-    user: User = Depends(require_auth),
+    user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get list of servers with test data"""
@@ -105,7 +105,7 @@ async def get_all_time_series(
     durations: Optional[str] = Query(None, description="Comma-separated durations"),
     limit: int = Query(1000, ge=1, le=10000, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
-    user: User = Depends(require_auth),
+    user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get all historical time series data with filtering"""
@@ -245,7 +245,7 @@ async def get_latest_time_series(
     request: Request,
     hostnames: Optional[str] = Query(None, description="Comma-separated hostnames"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
-    user: User = Depends(require_auth),
+    user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get latest time series data"""
@@ -345,7 +345,7 @@ async def get_historical_time_series(
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
     limit: int = Query(10000, ge=1, le=50000, description="Maximum number of results"),
-    user: User = Depends(require_auth),
+    user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get historical time series data"""
@@ -494,7 +494,7 @@ async def get_trends(
     hostname: str = Query(..., description="Hostname to analyze"),
     metric: str = Query("iops", description="Metric to analyze"),
     days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
-    user: User = Depends(require_auth),
+    user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get trend analysis for a specific host and metric"""
