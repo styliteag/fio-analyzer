@@ -78,11 +78,11 @@ async def import_fio_data(
         # Save uploaded file
         file_path = save_uploaded_file(content, file.filename, test_run_data)
         
-        # Update file path in database
-        cursor = db.cursor()
-        cursor.execute("UPDATE test_runs SET uploaded_file_path = ? WHERE id = ?", (str(file_path), test_run_id))
-        cursor.execute("UPDATE test_runs_all SET uploaded_file_path = ? WHERE id = ?", (str(file_path), test_run_id))
-        db.commit()
+        # Create metadata file (matching Node.js behavior)
+        metadata_path = create_metadata_file(file_path, test_run_data, user.username, file.filename)
+        
+        # Insert into database with file path
+        test_run_id = insert_test_run(db, test_run_data, file_path)
         
         log_info("FIO data imported successfully", {
             "request_id": request_id,
@@ -196,15 +196,10 @@ async def bulk_import_fio_data(
                     # Update latest flags
                     await db_manager.update_latest_flags(test_run_data)
                     
-                    # Insert into database
-                    test_run_id = insert_test_run(db, test_run_data)
+                    # Insert into database with file path
+                    test_run_id = insert_test_run(db, test_run_data, str(json_file))
                     total_test_runs += 1
                     processed_files += 1
-                    
-                    # Update file path in database
-                    cursor.execute("UPDATE test_runs SET uploaded_file_path = ? WHERE id = ?", (str(json_file), test_run_id))
-                    cursor.execute("UPDATE test_runs_all SET uploaded_file_path = ? WHERE id = ?", (str(json_file), test_run_id))
-                    db.commit()
                 
             except Exception as e:
                 log_error(f"Error processing file {json_file}", e, {"request_id": request_id})
@@ -301,26 +296,28 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
         raise HTTPException(status_code=400, detail="No jobs found in FIO data")
     
     job = jobs[0]  # Use first job
+    global_opts = fio_data.get("global options", {})
+    job_opts = job.get("job options", {})
     
     # Extract basic information
     test_run_data = {
         "timestamp": datetime.now().isoformat(),
         "test_date": datetime.now().isoformat(),
-        "fio_version": fio_data.get("fio_version", "unknown"),
+        "fio_version": fio_data.get("fio version", "unknown"),
         "job_runtime": job.get("job_runtime", 0),
         "duration": job.get("duration", 0) // 1000,  # Convert to seconds
         "test_name": job.get("jobname", "unknown"),
         
-        # Extract from job options
-        "block_size": job.get("job_options", {}).get("bs", "4K"),
-        "read_write_pattern": job.get("job_options", {}).get("rw", "read"),
-        "queue_depth": int(job.get("job_options", {}).get("iodepth", 1)),
-        "output_file": job.get("job_options", {}).get("filename", "testfile"),
-        "num_jobs": int(job.get("job_options", {}).get("numjobs", 1)),
-        "direct": int(job.get("job_options", {}).get("direct", 0)),
-        "test_size": job.get("job_options", {}).get("size", "1M"),
-        "sync": int(job.get("job_options", {}).get("sync", 0)),
-        "iodepth": int(job.get("job_options", {}).get("iodepth", 1)),
+        # Extract from job options (matching Node.js logic)
+        "block_size": (job_opts.get("bs") or global_opts.get("bs") or "4k").upper(),
+        "read_write_pattern": job_opts.get("rw") or global_opts.get("rw") or "read",
+        "queue_depth": int(job_opts.get("iodepth") or global_opts.get("iodepth") or 1),
+        "output_file": job_opts.get("filename") or global_opts.get("filename") or "testfile",
+        "num_jobs": int(job_opts.get("numjobs") or global_opts.get("numjobs") or 1),
+        "direct": int(job_opts.get("direct") or global_opts.get("direct") or 0),
+        "test_size": job_opts.get("size") or global_opts.get("size") or "1M",
+        "sync": int(job_opts.get("sync") or global_opts.get("sync") or 0),
+        "iodepth": int(job_opts.get("iodepth") or global_opts.get("iodepth") or 1),
         
         # Extract performance metrics
         "iops": extract_iops(job),
@@ -386,7 +383,7 @@ def extract_percentile_latency(job: Dict[str, Any], percentile: int) -> float:
     return max_lat / 1000000  # Convert ns to ms
 
 
-def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any]) -> int:
+def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> int:
     """Insert test run into database"""
     cursor = db.cursor()
     
@@ -403,12 +400,18 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any]) -> in
     values = [test_run_data.get(col) for col in columns]
     placeholders = ", ".join(["?" for _ in columns])
     
-    # Insert into test_runs_all
+    # Insert into test_runs_all first
     cursor.execute(f"INSERT INTO test_runs_all ({', '.join(columns)}) VALUES ({placeholders})", values)
+    test_run_all_id = cursor.lastrowid
     
     # Insert into test_runs (with conflict resolution)
     cursor.execute(f"INSERT OR REPLACE INTO test_runs ({', '.join(columns)}) VALUES ({placeholders})", values)
     test_run_id = cursor.lastrowid
+    
+    # Update file path in both tables if provided
+    if file_path:
+        cursor.execute("UPDATE test_runs SET uploaded_file_path = ? WHERE id = ?", (str(file_path), test_run_id))
+        cursor.execute("UPDATE test_runs_all SET uploaded_file_path = ? WHERE id = ?", (str(file_path), test_run_all_id))
     
     db.commit()
     return test_run_id
@@ -442,3 +445,38 @@ def save_uploaded_file(content: bytes, filename: str, test_run_data: Dict[str, A
         f.write(content)
     
     return str(file_path)
+
+
+def create_metadata_file(file_path: str, test_run_data: Dict[str, Any], username: str, original_filename: str) -> str:
+    """Create metadata file alongside the uploaded JSON file (matching Node.js behavior)"""
+    from pathlib import Path
+    
+    # Convert file_path to Path object
+    json_path = Path(file_path)
+    
+    # Create metadata file path with .info extension
+    metadata_path = json_path.with_suffix('.info')
+    
+    # Prepare metadata (matching Node.js structure)
+    metadata = {
+        "drive_model": test_run_data.get("drive_model"),
+        "drive_type": test_run_data.get("drive_type"),
+        "hostname": test_run_data.get("hostname"),
+        "protocol": test_run_data.get("protocol"),
+        "description": test_run_data.get("description"),
+        "test_date": test_run_data.get("test_date"),
+        "upload_timestamp": datetime.now().isoformat(),
+        "original_filename": original_filename,
+        "uploaded_by": username
+    }
+    
+    # Write metadata file
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=2)
+    
+    log_info("Metadata file created", {
+        "metadata_path": str(metadata_path),
+        "metadata_keys": list(metadata.keys())
+    })
+    
+    return str(metadata_path)
