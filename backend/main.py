@@ -8,7 +8,7 @@ import os
 import signal
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -17,6 +17,7 @@ from config.settings import settings
 from database.connection import init_database, close_database
 from utils.logging import setup_logging, log_info, log_error
 from routers import test_runs, imports, time_series, utils_router
+from auth.middleware import require_auth, User
 
 
 # Setup logging

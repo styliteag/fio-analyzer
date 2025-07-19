@@ -11,7 +11,7 @@ import sqlite3
 
 from database.connection import get_db, db_manager
 # Removed ImportResponse import - using plain dictionaries
-from auth.middleware import require_auth, User
+from auth.middleware import require_uploader, User
 from utils.logging import log_info, log_error
 from config.settings import settings
 
@@ -24,7 +24,7 @@ router = APIRouter()
 async def import_fio_data(
     request: Request,
     file: UploadFile = File(...),
-    user: User = Depends(require_auth),
+    user: User = Depends(require_uploader),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Import FIO test data from uploaded file"""

@@ -16,6 +16,7 @@ security = HTTPBasic()
 class User:
     """User class"""
     def __init__(self, username: str, role: str):
+        """Initialize user with username and role"""
         self.username = username
         self.role = role
 
@@ -137,6 +138,45 @@ def require_admin(request: Request) -> User:
     log_info("Admin access granted", {
         "request_id": getattr(request.state, 'request_id', 'unknown'),
         "username": user.username,
+        "ip": request.client.host if request.client else "unknown"
+    })
+    
+    return user
+
+
+def require_uploader(request: Request) -> User:
+    """Require upload access (admin or uploader users)"""
+    user = get_current_user(request)
+    
+    if not user:
+        log_info("Upload access denied - no auth header", {
+            "request_id": getattr(request.state, 'request_id', 'unknown'),
+            "ip": request.client.host if request.client else "unknown",
+            "user_agent": request.headers.get("user-agent", "unknown")
+        })
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    
+    if user.role not in ["admin", "uploader"]:
+        log_info("Upload access denied - insufficient privileges", {
+            "request_id": getattr(request.state, 'request_id', 'unknown'),
+            "username": user.username,
+            "role": user.role,
+            "ip": request.client.host if request.client else "unknown"
+        })
+        raise HTTPException(
+            status_code=403,
+            detail="Upload access required",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    
+    log_info("Upload access granted", {
+        "request_id": getattr(request.state, 'request_id', 'unknown'),
+        "username": user.username,
+        "role": user.role,
         "ip": request.client.host if request.client else "unknown"
     })
     
