@@ -72,9 +72,6 @@ async def import_fio_data(
         # Update latest flags
         await db_manager.update_latest_flags(test_run_data)
         
-        # Insert into database
-        test_run_id = insert_test_run(db, test_run_data)
-        
         # Save uploaded file
         file_path = save_uploaded_file(content, file.filename, test_run_data)
         
@@ -173,18 +170,23 @@ async def bulk_import_fio_data(
                     })
                     processed_files += 1
                 else:
-                    # Check if test run already exists
+                    # Check if test run already exists with more specific criteria
                     cursor = db.cursor()
                     cursor.execute("""
                         SELECT id FROM test_runs_all 
                         WHERE hostname = ? AND protocol = ? AND drive_model = ? 
-                        AND test_name = ? AND timestamp = ?
+                        AND drive_type = ? AND block_size = ? AND read_write_pattern = ?
+                        AND queue_depth = ? AND test_name = ? AND uploaded_file_path = ?
                     """, (
                         test_run_data.get("hostname"),
                         test_run_data.get("protocol"),
                         test_run_data.get("drive_model"),
+                        test_run_data.get("drive_type"),
+                        test_run_data.get("block_size"),
+                        test_run_data.get("read_write_pattern"),
+                        test_run_data.get("queue_depth"),
                         test_run_data.get("test_name"),
-                        test_run_data.get("timestamp")
+                        str(json_file)
                     ))
                     
                     existing = cursor.fetchone()
@@ -241,7 +243,7 @@ async def bulk_import_fio_data(
 def extract_metadata_from_path(file_path: Path) -> Dict[str, Any]:
     """Extract metadata from file path structure"""
     try:
-        # Expected path structure: backend/uploads/hostname/protocol/date/time/drive_type/drive_model/filename.json
+        # Expected path structure: backend/uploads/hostname/protocol/date/time/filename.json
         parts = file_path.parts
         
         # Find the uploads directory in the path
@@ -251,27 +253,11 @@ def extract_metadata_from_path(file_path: Path) -> Dict[str, Any]:
             # Try alternative path structure
             uploads_index = parts.index("upload")
         
-        if len(parts) >= uploads_index + 6:
+        if len(parts) >= uploads_index + 5:
             hostname = parts[uploads_index + 1]
             protocol = parts[uploads_index + 2]
             date_str = parts[uploads_index + 3]
             time_str = parts[uploads_index + 4]
-            drive_type = parts[uploads_index + 5]
-            drive_model = parts[uploads_index + 6]
-            
-            return {
-                "hostname": hostname,
-                "protocol": protocol,
-                "drive_type": drive_type,
-                "drive_model": drive_model,
-                "test_date": f"{date_str}T{time_str.replace('-', ':')}:00"
-            }
-        elif len(parts) >= uploads_index + 4:
-            # Fallback for older structure without drive info
-            hostname = parts[uploads_index + 1]
-            protocol = parts[uploads_index + 2]
-            date_str = parts[uploads_index + 3]
-            time_str = parts[uploads_index + 4] if len(parts) > uploads_index + 4 else "00-00"
             
             return {
                 "hostname": hostname,
