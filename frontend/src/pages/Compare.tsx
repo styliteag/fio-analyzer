@@ -10,7 +10,7 @@ import {
 } from "chart.js";
 import { fetchFilters } from "../services/api/testRuns";
 import { fetchPerformanceData } from "../services/api/performance";
-import { fetchTimeSeriesAll } from "../utils/api";
+import { fetchTimeSeriesAll } from "../services/api/timeSeries";
 import type { PerformanceData, FilterOptions } from "../types";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";

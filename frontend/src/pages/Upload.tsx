@@ -11,7 +11,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ThemeToggle from "../components/ThemeToggle";
 import { useAuth } from "../contexts/AuthContext";
-import { importFioData } from "../utils/api";
+import { uploadFioData } from "../services/api/upload";
 
 export default function Upload() {
 	const navigate = useNavigate();
@@ -62,7 +62,7 @@ export default function Upload() {
 		const finalDriveType = showCustomType ? customDriveType : driveType;
 
 		try {
-			await importFioData(file, {
+			const result = await uploadFioData(file, {
 				drive_model: driveModel || "Unknown",
 				drive_type: finalDriveType || "Unknown",
 				hostname: hostname || "Unknown",

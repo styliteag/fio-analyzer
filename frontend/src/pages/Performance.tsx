@@ -9,7 +9,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTestRunFilters } from "../hooks/useTestRunFilters";
 import { usePerformanceData } from "../hooks";
 import { TrendingUp, Activity, Zap, Timer, HardDrive, Server } from "lucide-react";
-import { fetchTestRuns } from "../utils/api";
+import { fetchTestRuns } from "../services/api/testRuns";
 import type { TestRun, ChartTemplate } from "../types";
 
 interface TestRunMetrics {

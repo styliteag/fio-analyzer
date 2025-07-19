@@ -144,3 +144,62 @@ export const getTimeSeriesMetricTypes = () => [
     { value: "p95_latency", label: "95th Percentile Latency" },
     { value: "p99_latency", label: "99th Percentile Latency" },
 ];
+
+// Fetch all time-series data with comprehensive filtering
+export const fetchTimeSeriesAll = async (filters?: {
+    hostnames?: string[];
+    protocols?: string[];
+    drive_types?: string[];
+    drive_models?: string[];
+    patterns?: string[];
+    block_sizes?: (string|number)[];
+    syncs?: number[];
+    queue_depths?: number[];
+    directs?: number[];
+    num_jobs?: number[];
+    test_sizes?: string[];
+    durations?: number[];
+}) => {
+    const params = new URLSearchParams();
+    
+    if (filters?.hostnames && filters.hostnames.length > 0) {
+        params.append("hostnames", filters.hostnames.join(","));
+    }
+    if (filters?.protocols && filters.protocols.length > 0) {
+        params.append("protocols", filters.protocols.join(","));
+    }
+    if (filters?.drive_types && filters.drive_types.length > 0) {
+        params.append("drive_types", filters.drive_types.join(","));
+    }
+    if (filters?.drive_models && filters.drive_models.length > 0) {
+        params.append("drive_models", filters.drive_models.join(","));
+    }
+    if (filters?.patterns && filters.patterns.length > 0) {
+        params.append("patterns", filters.patterns.join(","));
+    }
+    if (filters?.block_sizes && filters.block_sizes.length > 0) {
+        params.append("block_sizes", filters.block_sizes.map(b => String(b)).join(","));
+    }
+    if (filters?.syncs && filters.syncs.length > 0) {
+        params.append("syncs", filters.syncs.join(","));
+    }
+    if (filters?.queue_depths && filters.queue_depths.length > 0) {
+        params.append("queue_depths", filters.queue_depths.join(","));
+    }
+    if (filters?.directs && filters.directs.length > 0) {
+        params.append("directs", filters.directs.join(","));
+    }
+    if (filters?.num_jobs && filters.num_jobs.length > 0) {
+        params.append("num_jobs", filters.num_jobs.join(","));
+    }
+    if (filters?.test_sizes && filters.test_sizes.length > 0) {
+        params.append("test_sizes", filters.test_sizes.join(","));
+    }
+    if (filters?.durations && filters.durations.length > 0) {
+        params.append("durations", filters.durations.join(","));
+    }
+
+    const queryString = params.toString();
+    const url = `/api/time-series/all${queryString ? `?${queryString}` : ''}`;
+    return apiCall<TimeSeriesDataPoint[]>(url);
+};

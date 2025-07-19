@@ -1,7 +1,10 @@
-import { AlertCircle, Edit, Save, X } from "lucide-react";
+import { Edit, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { TestRun } from "../types";
-import { updateTestRun } from "../utils/api";
+import { updateTestRun } from "../services/api/testRuns";
+import BaseTestRunModal from "./shared/BaseTestRunModal";
+import DriveTypeSelector from "./shared/DriveTypeSelector";
+import ProtocolSelector from "./shared/ProtocolSelector";
 
 interface BulkEditModalProps {
 	testRuns: TestRun[];
@@ -128,46 +131,34 @@ export default function BulkEditModal({
 		}
 	};
 
-	const handleClose = () => {
-		if (!saving) {
-			onClose();
-			setError(null);
-		}
-	};
 
-	const handleDriveTypeChange = (value: string) => {
-		if (value === "custom") {
-			setShowCustomType(true);
-			setDriveType("");
-		} else {
-			setShowCustomType(false);
-			setDriveType(value);
-			setCustomDriveType("");
-		}
+	const handleDriveTypeChange = (driveType: string, customType: string, showCustom: boolean) => {
+		setDriveType(driveType);
+		setCustomDriveType(customType);
+		setShowCustomType(showCustom);
 	};
 
 	if (!isOpen || !testRuns.length) return null;
 
 	return (
-		<div className="fixed inset-0 theme-overlay flex items-center justify-center p-4 z-50">
-			<div className="theme-modal rounded-lg shadow-xl max-w-lg w-full border">
-				{/* Header */}
-				<div className="flex items-center justify-between p-6 border-b theme-border-primary">
-					<h3 className="text-lg font-medium theme-text-primary flex items-center">
-						<Edit className="h-5 w-5 mr-2" />
-						Bulk Edit {testRuns.length} Test Runs
-					</h3>
-					<button
-						onClick={handleClose}
-						disabled={saving}
-						className="theme-text-tertiary hover:theme-text-secondary disabled:opacity-50 transition-colors"
-					>
-						<X className="h-6 w-6" />
-					</button>
-				</div>
-
-				{/* Content */}
-				<div className="p-6 space-y-4">
+		<BaseTestRunModal
+			isOpen={isOpen}
+			onClose={onClose}
+			title={`Bulk Edit ${testRuns.length} Test Runs`}
+			icon={<Edit className="h-5 w-5" />}
+			saving={saving}
+			error={error}
+			onSave={handleSave}
+			saveButtonText={`Update ${testRuns.length} Test Runs`}
+			saveButtonIcon={<Save className="h-4 w-4 mr-2" />}
+			maxWidth="lg"
+			saveDisabled={
+				!updateDriveModel &&
+				!updateDriveType &&
+				!updateHostname &&
+				!updateProtocol
+			}
+		>
 					{/* Selected Runs Preview */}
 					<div className="theme-bg-secondary rounded-lg p-4 text-sm border theme-border-secondary">
 						<div className="font-medium theme-text-primary mb-2">
@@ -233,47 +224,13 @@ export default function BulkEditModal({
 								Update Drive Type
 							</label>
 						</div>
-						{!showCustomType ? (
-							<select
-								value={driveType}
-								onChange={(e) => handleDriveTypeChange(e.target.value)}
-								className="theme-form-select"
-								disabled={saving || !updateDriveType}
-							>
-								<option value="">Select type</option>
-								<option value="NVMe SSD">NVMe SSD</option>
-								<option value="SATA SSD">SATA SSD</option>
-								<option value="HDD">HDD</option>
-								<option value="Optane">Optane</option>
-								<option value="eUFS">eUFS</option>
-								<option value="eMMC">eMMC</option>
-								<option value="SD Card">SD Card</option>
-								<option value="custom">+ Add Custom Type</option>
-							</select>
-						) : (
-							<div className="flex gap-2">
-								<input
-									type="text"
-									value={customDriveType}
-									onChange={(e) => setCustomDriveType(e.target.value)}
-									placeholder="Enter custom drive type"
-									className="theme-form-input"
-									disabled={saving || !updateDriveType}
-								/>
-								<button
-									type="button"
-									onClick={() => {
-										setShowCustomType(false);
-										setCustomDriveType("");
-										setDriveType("");
-									}}
-									className="px-3 py-2 text-sm theme-btn-secondary rounded-md transition-colors"
-									disabled={saving || !updateDriveType}
-								>
-									Cancel
-								</button>
-							</div>
-						)}
+						<DriveTypeSelector
+							value={driveType}
+							customValue={customDriveType}
+							showCustom={showCustomType}
+							onChange={handleDriveTypeChange}
+							disabled={saving || !updateDriveType}
+						/>
 					</div>
 
 					{/* Hostname */}
@@ -322,25 +279,11 @@ export default function BulkEditModal({
 								🔗 Update Protocol
 							</label>
 						</div>
-						<select
+						<ProtocolSelector
 							value={protocol}
-							onChange={(e) => setProtocol(e.target.value)}
-							className="theme-form-select"
+							onChange={setProtocol}
 							disabled={saving || !updateProtocol}
-						>
-							<option value="">Select protocol</option>
-							<option value="NFS">NFS</option>
-							<option value="SMB">SMB</option>
-							<option value="iSCSI">iSCSI</option>
-							<option value="FC">Fibre Channel</option>
-							<option value="SAS">SAS</option>
-							<option value="SATA">SATA</option>
-							<option value="NVMe">NVMe</option>
-							<option value="USB">USB</option>
-							<option value="Thunderbolt">Thunderbolt</option>
-							<option value="Local">Local</option>
-							<option value="Unknown">Unknown</option>
-						</select>
+						/>
 					</div>
 
 					{/* Progress */}
@@ -363,49 +306,6 @@ export default function BulkEditModal({
 						</div>
 					)}
 
-					{/* Error Message */}
-					{error && (
-						<div className="flex items-center p-3 text-sm theme-error rounded-md border">
-							<AlertCircle className="h-4 w-4 mr-2" />
-							{error}
-						</div>
-					)}
-				</div>
-
-				{/* Footer */}
-				<div className="flex items-center justify-end gap-3 p-6 border-t theme-border-primary theme-bg-secondary">
-					<button
-						onClick={handleClose}
-						disabled={saving}
-						className="px-4 py-2 text-sm font-medium theme-btn-secondary border rounded-md transition-colors disabled:opacity-50"
-					>
-						Cancel
-					</button>
-					<button
-						onClick={handleSave}
-						disabled={
-							saving ||
-							(!updateDriveModel &&
-								!updateDriveType &&
-								!updateHostname &&
-								!updateProtocol)
-						}
-						className="inline-flex items-center px-4 py-2 text-sm font-medium theme-btn-primary border border-transparent rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-					>
-						{saving ? (
-							<>
-								<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-								Updating...
-							</>
-						) : (
-							<>
-								<Save className="h-4 w-4 mr-2" />
-								Update {testRuns.length} Test Runs
-							</>
-						)}
-					</button>
-				</div>
-			</div>
-		</div>
+		</BaseTestRunModal>
 	);
 }

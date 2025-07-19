@@ -29,6 +29,7 @@ export {
     fetchTimeSeriesLatest, 
     fetchTimeSeriesHistory,
     fetchTimeSeriesTrends,
+    fetchTimeSeriesAll,
 } from './timeSeries';
 
 export {
