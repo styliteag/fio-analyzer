@@ -156,3 +156,4 @@ The FastAPI backend automatically generates comprehensive API documentation:
 - The backend uses Python FastAPI with virtual environment - ensure venv is activated when running manual commands
 - If you want to do something in the FrontEnd which is hard to do, you can also add functions to the backend
 - Use the auto-generated API documentation at http://localhost:8000/docs for testing endpoints
+- Before running the backend check the syntax!
