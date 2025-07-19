@@ -28,10 +28,10 @@ docker compose up --build -d
 
 # Setup authentication (first time only)
 # Admin users (full access)
-docker exec -it fio-app node scripts/manage-users.js
+docker exec -it fio-app python scripts/manage_users.py add --admin --username admin --password your_password
 
 # Upload-only users (restricted access)  
-docker exec -it fio-app node scripts/manage-uploaders.js
+docker exec -it fio-app python scripts/manage_users.py add --username uploader --password your_password
 
 # Download testing script
 wget http://localhost/fio-analyzer-tests.sh
@@ -115,10 +115,10 @@ volumes:
 ### User Management
 ```bash
 # Manage admin users (full access)
-docker exec -it fio-app node scripts/manage-users.js
+docker exec -it fio-app python scripts/manage_users.py add --admin --username admin --password your_password
 
 # Manage upload-only users (restricted access)
-docker exec -it fio-app node scripts/manage-uploaders.js
+docker exec -it fio-app python scripts/manage_users.py add --username uploader --password your_password
 
 # View current users
 docker exec fio-app cat /app/.htpasswd          # Admin users
@@ -178,7 +178,7 @@ The web interface includes advanced interactive chart controls:
    ls -la data/auth/
    
    # Reset admin user
-   docker exec -it fio-app node scripts/manage-users.js
+docker exec -it fio-app python scripts/manage_users.py add --admin --username admin --password your_password
    ```
 
 5. **Script download issues:**

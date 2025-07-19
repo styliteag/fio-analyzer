@@ -2,29 +2,21 @@
 Test runs API router
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
 import sqlite3
 
 from database.connection import get_db
-from database.models import TestRun, BulkUpdateRequest, BulkUpdateResponse
-from auth.middleware import require_admin, User
+from database.models import TestRun, BulkUpdateRequest, dataclass_to_dict
+from auth.middleware import require_admin, require_auth, User
 from utils.logging import log_info, log_error
 
 
 router = APIRouter()
 
 
-class TestRunsResponse(BaseModel):
-    """Test runs response model"""
-    test_runs: List[TestRun]
-    total: int
-    page: int
-    per_page: int
-
-
-@router.get("/", response_model=TestRunsResponse)
+@router.get("/")
+@router.get("")  # Handle route without trailing slash
 async def get_test_runs(
     request: Request,
     hostnames: Optional[str] = Query(None, description="Comma-separated hostnames to filter"),
@@ -34,6 +26,7 @@ async def get_test_runs(
     block_sizes: Optional[str] = Query(None, description="Comma-separated block sizes to filter"),
     limit: int = Query(50, ge=1, le=1000, description="Number of results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
+    user: User = Depends(require_auth),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get test runs with optional filtering"""
@@ -91,12 +84,12 @@ async def get_test_runs(
         cursor.execute(query, params + [limit, offset])
         rows = cursor.fetchall()
         
-        # Convert to TestRun objects
+        # Convert to dictionaries
         test_runs = []
         for row in rows:
             test_run_data = dict(row)
             test_run_data['block_size'] = str(test_run_data['block_size'])  # Ensure string
-            test_runs.append(TestRun(**test_run_data))
+            test_runs.append(test_run_data)
         
         log_info("Test runs retrieved successfully", {
             "request_id": request_id,
@@ -111,19 +104,16 @@ async def get_test_runs(
             }
         })
         
-        return TestRunsResponse(
-            test_runs=test_runs,
-            total=total,
-            page=offset // limit + 1,
-            per_page=limit
-        )
+        # Frontend expects direct array of test runs, not wrapped object
+        return test_runs
     
     except Exception as e:
         log_error("Error retrieving test runs", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to retrieve test runs")
 
 
-@router.put("/bulk", response_model=BulkUpdateResponse)
+@router.put("/bulk")
+@router.put("/bulk/")  # Handle with trailing slash
 async def bulk_update_test_runs(
     request: Request,
     bulk_request: BulkUpdateRequest,
@@ -135,7 +125,8 @@ async def bulk_update_test_runs(
     
     try:
         # Validate that we have updates to apply
-        updates = bulk_request.updates.dict(exclude_none=True)
+        from dataclasses import asdict
+        updates = {k: v for k, v in asdict(bulk_request.updates).items() if v is not None}
         if not updates:
             raise HTTPException(status_code=400, detail="No updates provided")
         
@@ -178,11 +169,11 @@ async def bulk_update_test_runs(
             "updates": updates
         })
         
-        return BulkUpdateResponse(
-            message=f"Successfully updated {updated} test runs",
-            updated=updated,
-            failed=len(bulk_request.test_run_ids) - updated
-        )
+        return {
+            "message": f"Successfully updated {updated} test runs",
+            "updated": updated,
+            "failed": len(bulk_request.test_run_ids) - updated
+        }
     
     except Exception as e:
         log_error("Error during bulk update", e, {"request_id": request_id})
@@ -190,10 +181,12 @@ async def bulk_update_test_runs(
 
 
 @router.get("/performance-data")
+@router.get("/performance-data/")  # Handle with trailing slash
 async def get_performance_data(
     request: Request,
     test_run_ids: str = Query(..., description="Comma-separated test run IDs"),
     metric_types: str = Query(..., description="Comma-separated metric types"),
+    user: User = Depends(require_auth),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get performance data for specific test runs"""

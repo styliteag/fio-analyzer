@@ -10,7 +10,7 @@ from datetime import datetime
 import sqlite3
 
 from database.connection import get_db, db_manager
-from database.models import ImportResponse
+# Removed ImportResponse import - using plain dictionaries
 from auth.middleware import require_auth, User
 from utils.logging import log_info, log_error
 from config.settings import settings
@@ -19,7 +19,8 @@ from config.settings import settings
 router = APIRouter()
 
 
-@router.post("/", response_model=ImportResponse)
+@router.post("/")
+@router.post("")  # Handle route without trailing slash
 async def import_fio_data(
     request: Request,
     file: UploadFile = File(...),
@@ -71,11 +72,11 @@ async def import_fio_data(
             "test_name": test_run_data.get("test_name")
         })
         
-        return ImportResponse(
-            message="FIO data imported successfully",
-            test_run_id=test_run_id,
-            filename=file.filename
-        )
+        return {
+            "message": "FIO data imported successfully",
+            "test_run_id": test_run_id,
+            "filename": file.filename
+        }
     
     except HTTPException:
         raise

@@ -41,10 +41,10 @@ if the backend and frontend server need to be run you can ask the User to start 
 ### Authentication & User Management
 ```bash
 # Admin users (full access to all features)
-node backend/scripts/manage-users.js
+python backend/scripts/manage_users.py add --admin --username admin --password your_password
 
 # Upload-only users (can only upload FIO test data)
-node backend/scripts/manage-uploaders.js
+python backend/scripts/manage_users.py add --username uploader --password your_password
 ```
 
 ### Testing Script

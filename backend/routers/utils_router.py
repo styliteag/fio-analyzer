@@ -7,16 +7,19 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 import sqlite3
 
 from database.connection import get_db
-from database.models import FilterOptions
+# Removed FilterOptions import - using plain dictionary
+from auth.middleware import require_auth, User
 from utils.logging import log_info, log_error
 
 
 router = APIRouter()
 
 
-@router.get("/filters", response_model=FilterOptions)
+@router.get("/filters")
+@router.get("/filters/")  # Handle with trailing slash
 async def get_filters(
     request: Request,
+    user: User = Depends(require_auth),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get available filter options"""
@@ -24,7 +27,7 @@ async def get_filters(
     
     try:
         cursor = db.cursor()
-        filters = FilterOptions()
+        filters = {}
         
         # Get distinct values for each filter
         filter_queries = [
@@ -39,16 +42,16 @@ async def get_filters(
         for filter_name, query in filter_queries:
             cursor.execute(query)
             values = [row[0] for row in cursor.fetchall()]
-            setattr(filters, filter_name, values)
+            filters[filter_name] = values
         
         log_info("Filter options retrieved successfully", {
             "request_id": request_id,
-            "hostnames_count": len(filters.hostnames),
-            "protocols_count": len(filters.protocols),
-            "drive_types_count": len(filters.drive_types),
-            "drive_models_count": len(filters.drive_models),
-            "block_sizes_count": len(filters.block_sizes),
-            "patterns_count": len(filters.patterns)
+            "hostnames_count": len(filters["hostnames"]),
+            "protocols_count": len(filters["protocols"]),
+            "drive_types_count": len(filters["drive_types"]),
+            "drive_models_count": len(filters["drive_models"]),
+            "block_sizes_count": len(filters["block_sizes"]),
+            "patterns_count": len(filters["patterns"])
         })
         
         return filters

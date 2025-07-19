@@ -8,16 +8,19 @@ from datetime import datetime, timedelta
 import sqlite3
 
 from database.connection import get_db
-from database.models import ServerInfo, TrendData
+from database.models import TrendData
+from auth.middleware import require_auth, User
 from utils.logging import log_info, log_error
 
 
 router = APIRouter()
 
 
-@router.get("/servers", response_model=List[ServerInfo])
+@router.get("/servers")
+@router.get("/servers/")  # Handle with trailing slash
 async def get_servers(
     request: Request,
+    user: User = Depends(require_auth),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get list of servers with test data"""
@@ -43,14 +46,14 @@ async def get_servers(
         
         servers = []
         for row in cursor.fetchall():
-            servers.append(ServerInfo(
-                hostname=row[0],
-                protocol=row[1],
-                drive_model=row[2],
-                test_count=row[3],
-                last_test_time=row[4],
-                first_test_time=row[5]
-            ))
+            servers.append({
+                "hostname": row[0],
+                "protocol": row[1],
+                "drive_model": row[2],
+                "test_count": row[3],
+                "last_test_time": row[4],
+                "first_test_time": row[5]
+            })
         
         log_info("Servers retrieved successfully", {
             "request_id": request_id,
@@ -65,10 +68,12 @@ async def get_servers(
 
 
 @router.get("/latest")
+@router.get("/latest/")  # Handle with trailing slash
 async def get_latest_time_series(
     request: Request,
     hostnames: Optional[str] = Query(None, description="Comma-separated hostnames"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
+    user: User = Depends(require_auth),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get latest time series data"""
@@ -101,9 +106,18 @@ async def get_latest_time_series(
             LIMIT ?
         """, params + [limit])
         
+        # Flatten metrics into separate TimeSeriesDataPoint objects
         results = []
+        metrics_mapping = [
+            ("iops", 8, "IOPS"),
+            ("avg_latency", 9, "ms"),
+            ("bandwidth", 10, "MB/s"),
+            ("p95_latency", 11, "ms"),
+            ("p99_latency", 12, "ms")
+        ]
+        
         for row in cursor.fetchall():
-            results.append({
+            base_data = {
                 "timestamp": row[0],
                 "hostname": row[1],
                 "protocol": row[2],
@@ -111,22 +125,26 @@ async def get_latest_time_series(
                 "drive_type": row[4],
                 "block_size": row[5],
                 "read_write_pattern": row[6],
-                "queue_depth": row[7],
-                "metrics": {
-                    "iops": row[8],
-                    "avg_latency": row[9],
-                    "bandwidth": row[10],
-                    "p95_latency": row[11],
-                    "p99_latency": row[12]
-                }
-            })
+                "queue_depth": row[7]
+            }
+            
+            # Create separate time series point for each metric
+            for metric_type, col_idx, unit in metrics_mapping:
+                if row[col_idx] is not None:
+                    results.append({
+                        **base_data,
+                        "metric_type": metric_type,
+                        "value": row[col_idx],
+                        "unit": unit
+                    })
         
         log_info("Latest time series data retrieved successfully", {
             "request_id": request_id,
             "results_count": len(results)
         })
         
-        return {"data": results}
+        # Frontend expects direct array, not wrapped object
+        return results
     
     except Exception as e:
         log_error("Error retrieving latest time series data", e, {"request_id": request_id})
@@ -134,12 +152,14 @@ async def get_latest_time_series(
 
 
 @router.get("/history")
+@router.get("/history/")  # Handle with trailing slash
 async def get_historical_time_series(
     request: Request,
     hostnames: Optional[str] = Query(None, description="Comma-separated hostnames"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
     limit: int = Query(1000, ge=1, le=10000, description="Maximum number of results"),
+    user: User = Depends(require_auth),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get historical time series data"""
@@ -217,11 +237,13 @@ async def get_historical_time_series(
 
 
 @router.get("/trends")
+@router.get("/trends/")  # Handle with trailing slash
 async def get_trends(
     request: Request,
     hostname: str = Query(..., description="Hostname to analyze"),
     metric: str = Query("iops", description="Metric to analyze"),
     days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
+    user: User = Depends(require_auth),
     db: sqlite3.Connection = Depends(get_db)
 ):
     """Get trend analysis for a specific host and metric"""

@@ -46,7 +46,7 @@ A full-stack web application that analyzes and visualizes FIO (Flexible I/O Test
 ## Prerequisites
 
 ### For Development
-- **Node.js** (v16+) and npm
+- **Python** (v3.8+) and pip
 - **SQLite3** 
 - **FIO** (for performance testing)
 - **curl** (for script uploads)
@@ -83,10 +83,10 @@ The application will be available at `http://localhost:80`.
 mkdir -p docker/data/auth
 
 # Setup admin users (full access)
-docker exec -it fio-app node scripts/manage-users.js
+docker exec -it fio-app python scripts/manage_users.py add --admin --username admin --password your_password
 
 # Setup upload-only users (restricted access)
-docker exec -it fio-app node scripts/manage-uploaders.js
+docker exec -it fio-app python scripts/manage_users.py add --username uploader --password your_password
 ```
 
 #### Download Testing Script
@@ -130,14 +130,20 @@ For local development with separate frontend/backend:
    cd backend
    ```
 
-2. **Install Dependencies**:
+2. **Create Python Virtual Environment**:
    ```bash
-   npm install
+   python3 -m venv venv
+   source venv/bin/activate
    ```
 
-3. **Run the Backend Server**:
+3. **Install Dependencies**:
    ```bash
-   npm start
+   pip install -r requirements.txt
+   ```
+
+4. **Run the Backend Server**:
+   ```bash
+   uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
    The API will be available at `http://localhost:8000`.
 
@@ -555,8 +561,8 @@ The application provides comprehensive performance analysis:
 - **InteractiveChart** - Chart.js-powered data visualization
 - **Upload.tsx** - FIO file upload interface with metadata forms
 
-### Backend (Express.js/Node.js)
-- **index.js** - Single file containing all API endpoints and database logic
+### Backend (Python FastAPI)
+- **main.py** - FastAPI application with modular routers and database logic
 - **Database Schema** - SQLite with test_runs, performance_metrics, and latency_percentiles tables
 - **Multi-job Import** - Processes all jobs from FIO JSON files
 - **Metadata Support** - Full infrastructure context tracking
@@ -582,7 +588,7 @@ The application uses a consolidated single-container architecture:
 
 ### Container Structure
 - **Frontend**: React app served by nginx on port 80
-- **Backend**: Express.js API running internally on port 8000  
+- **Backend**: FastAPI API running internally on port 8000  
 - **Reverse Proxy**: nginx proxies `/api/*` requests to backend
 - **Static Files**: Testing script and config served by nginx
 - **Build**: Multi-stage Docker build for optimized production deployment

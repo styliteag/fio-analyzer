@@ -1,64 +1,56 @@
-"""
-Database models using Pydantic
-"""
+"""Database models using Python dataclasses"""
 
-from typing import Optional, List
-from datetime import datetime
-from pydantic import BaseModel, Field
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any, TypedDict
 
 
-class TestRunBase(BaseModel):
+@dataclass
+class TestRunBase:
     """Base test run model"""
-    timestamp: str = Field(..., description="Test execution timestamp")
-    test_date: Optional[str] = Field(None, description="Test date from user input")
-    drive_model: str = Field(..., description="Drive model name")
-    drive_type: str = Field(..., description="Drive type (NVMe SSD, SATA SSD, HDD)")
-    test_name: str = Field(..., description="Test name or identifier")
-    block_size: str = Field(..., description="Block size (e.g., 4K, 64K, 1M)")
-    read_write_pattern: str = Field(..., description="I/O pattern (read, write, randread, randwrite)")
-    queue_depth: int = Field(..., description="I/O queue depth")
-    duration: int = Field(..., description="Test duration in seconds")
-    fio_version: Optional[str] = Field(None, description="FIO version")
-    job_runtime: Optional[int] = Field(None, description="Job runtime in milliseconds")
-    rwmixread: Optional[int] = Field(None, description="Read/write mix percentage")
-    total_ios_read: Optional[int] = Field(None, description="Total read operations")
-    total_ios_write: Optional[int] = Field(None, description="Total write operations")
-    usr_cpu: Optional[float] = Field(None, description="User CPU usage percentage")
-    sys_cpu: Optional[float] = Field(None, description="System CPU usage percentage")
-    hostname: Optional[str] = Field(None, description="Server hostname")
-    protocol: Optional[str] = Field(None, description="Storage protocol (Local, iSCSI, NFS, etc.)")
-    description: Optional[str] = Field(None, description="Test description")
-    uploaded_file_path: Optional[str] = Field(None, description="Uploaded file path")
-    
+    timestamp: str
+    drive_model: str
+    drive_type: str
+    test_name: str
+    block_size: str
+    read_write_pattern: str
+    queue_depth: int
+    duration: int
+    test_date: Optional[str] = None
+    fio_version: Optional[str] = None
+    job_runtime: Optional[int] = None
+    rwmixread: Optional[int] = None
+    total_ios_read: Optional[int] = None
+    total_ios_write: Optional[int] = None
+    usr_cpu: Optional[float] = None
+    sys_cpu: Optional[float] = None
+    hostname: Optional[str] = None
+    protocol: Optional[str] = None
+    description: Optional[str] = None
+    uploaded_file_path: Optional[str] = None
     # Job options
-    output_file: Optional[str] = Field(None, description="FIO output filename")
-    num_jobs: Optional[int] = Field(None, description="Number of parallel jobs")
-    direct: Optional[int] = Field(None, description="Direct I/O flag (0 or 1)")
-    test_size: Optional[str] = Field(None, description="Test file size")
-    sync: Optional[int] = Field(None, description="Sync flag (0 or 1)")
-    iodepth: Optional[int] = Field(None, description="I/O depth")
-    
+    output_file: Optional[str] = None
+    num_jobs: Optional[int] = None
+    direct: Optional[int] = None
+    test_size: Optional[str] = None
+    sync: Optional[int] = None
+    iodepth: Optional[int] = None
     # Performance metrics
-    avg_latency: Optional[float] = Field(None, description="Average latency in ms")
-    bandwidth: Optional[float] = Field(None, description="Bandwidth in MB/s")
-    iops: Optional[float] = Field(None, description="IOPS")
-    p95_latency: Optional[float] = Field(None, description="95th percentile latency in ms")
-    p99_latency: Optional[float] = Field(None, description="99th percentile latency in ms")
-    
-    is_latest: int = Field(default=1, description="Latest test flag (0 or 1)")
+    avg_latency: Optional[float] = None
+    bandwidth: Optional[float] = None
+    iops: Optional[float] = None
+    p95_latency: Optional[float] = None
+    p99_latency: Optional[float] = None
+    is_latest: int = 1
 
 
+@dataclass
 class TestRun(TestRunBase):
     """Test run model with ID"""
-    id: int = Field(..., description="Test run ID")
+    id: int = 0
 
 
-class TestRunCreate(TestRunBase):
-    """Test run creation model"""
-    pass
-
-
-class TestRunUpdate(BaseModel):
+@dataclass
+class TestRunUpdate:
     """Test run update model"""
     description: Optional[str] = None
     test_name: Optional[str] = None
@@ -68,69 +60,91 @@ class TestRunUpdate(BaseModel):
     drive_model: Optional[str] = None
 
 
-class BulkUpdateRequest(BaseModel):
+@dataclass 
+class BulkUpdateRequest:
     """Bulk update request model"""
-    test_run_ids: List[int] = Field(..., description="Array of test run IDs to update")
-    updates: TestRunUpdate = Field(..., description="Updates to apply")
+    test_run_ids: List[int]
+    updates: TestRunUpdate
 
 
-class PerformanceMetric(BaseModel):
+@dataclass
+class PerformanceMetric:
     """Performance metric model"""
-    id: int = Field(..., description="Metric ID")
-    test_run_id: int = Field(..., description="Associated test run ID")
-    metric_type: str = Field(..., description="Metric type (iops, avg_latency, bandwidth)")
-    value: float = Field(..., description="Metric value")
-    unit: str = Field(..., description="Measurement unit")
-    operation_type: str = Field(..., description="Operation type (read, write, combined)")
+    id: int
+    test_run_id: int
+    metric_type: str
+    value: float
+    unit: str
+    operation_type: str
 
 
-class ServerInfo(BaseModel):
+@dataclass
+class ServerInfo:
     """Server information model"""
-    hostname: str = Field(..., description="Server hostname")
-    protocol: str = Field(..., description="Storage protocol")
-    drive_model: str = Field(..., description="Drive model")
-    test_count: int = Field(..., description="Total number of tests")
-    last_test_time: str = Field(..., description="Most recent test timestamp")
-    first_test_time: str = Field(..., description="First test timestamp")
+    hostname: str
+    protocol: str
+    drive_model: str
+    test_count: int
+    last_test_time: str
+    first_test_time: str
 
 
-class TrendData(BaseModel):
+@dataclass
+class TrendData:
     """Trend data model"""
-    timestamp: str = Field(..., description="Test timestamp")
-    block_size: str = Field(..., description="Block size")
-    read_write_pattern: str = Field(..., description="Test pattern")
-    queue_depth: int = Field(..., description="Queue depth")
-    value: float = Field(..., description="Metric value")
-    unit: str = Field(..., description="Unit of measurement")
-    moving_avg: Optional[float] = Field(None, description="3-point moving average")
-    percent_change: Optional[str] = Field(None, description="Percentage change from previous value")
+    timestamp: str
+    block_size: str
+    read_write_pattern: str
+    queue_depth: int
+    value: float
+    unit: str
+    moving_avg: Optional[float] = None
+    percent_change: Optional[str] = None
 
 
-class FilterOptions(BaseModel):
-    """Filter options model"""
-    hostnames: List[str] = Field(default=[], description="Available hostnames")
-    protocols: List[str] = Field(default=[], description="Available protocols")
-    drive_types: List[str] = Field(default=[], description="Available drive types")
-    drive_models: List[str] = Field(default=[], description="Available drive models")
-    block_sizes: List[str] = Field(default=[], description="Available block sizes")
-    patterns: List[str] = Field(default=[], description="Available patterns")
+# Simple TypedDict classes for API responses
+class FilterOptions(TypedDict):
+    """Filter options response"""
+    hostnames: List[str]
+    protocols: List[str]
+    drive_types: List[str]
+    drive_models: List[str]
+    block_sizes: List[str]
+    patterns: List[str]
 
 
-class ImportResponse(BaseModel):
-    """Import response model"""
-    message: str = Field(..., description="Success message")
-    test_run_id: int = Field(..., description="Created test run ID")
-    filename: str = Field(..., description="Uploaded filename")
+class ImportResponse(TypedDict):
+    """Import response"""
+    message: str
+    test_run_id: int
+    filename: str
 
 
-class BulkUpdateResponse(BaseModel):
-    """Bulk update response model"""
-    message: str = Field(..., description="Success message")
-    updated: int = Field(..., description="Number of updated records")
-    failed: int = Field(..., description="Number of failed updates")
+class BulkUpdateResponse(TypedDict):
+    """Bulk update response"""
+    message: str
+    updated: int
+    failed: int
 
 
-class ErrorResponse(BaseModel):
-    """Error response model"""
-    error: str = Field(..., description="Error message")
-    request_id: Optional[str] = Field(None, description="Request ID")
+class ErrorResponse(TypedDict):
+    """Error response"""
+    error: str
+    request_id: Optional[str]
+
+
+# Helper functions for dataclass conversion
+def dataclass_to_dict(obj) -> Dict[str, Any]:
+    """Convert dataclass to dictionary"""
+    if hasattr(obj, '__dataclass_fields__'):
+        from dataclasses import asdict
+        return asdict(obj)
+    return obj
+
+
+def dict_to_test_run(data: Dict[str, Any]) -> TestRun:
+    """Convert dictionary to TestRun dataclass"""
+    # Filter out None values and unknown fields
+    known_fields = {f.name for f in TestRun.__dataclass_fields__.values()}
+    filtered_data = {k: v for k, v in data.items() if k in known_fields and v is not None}
+    return TestRun(**filtered_data)
