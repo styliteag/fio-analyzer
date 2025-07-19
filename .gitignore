@@ -1,6 +1,10 @@
 # Node.js
 node_modules/
 
+# ignore all __pycache__ in all subdirectories (backend)
+__pycache__
+*.pyc
+
 # Logs
 logs
 *.log
