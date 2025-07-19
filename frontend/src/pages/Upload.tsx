@@ -62,7 +62,7 @@ export default function Upload() {
 		const finalDriveType = showCustomType ? customDriveType : driveType;
 
 		try {
-			const result = await uploadFioData(file, {
+			await uploadFioData(file, {
 				drive_model: driveModel || "Unknown",
 				drive_type: finalDriveType || "Unknown",
 				hostname: hostname || "Unknown",

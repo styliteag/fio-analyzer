@@ -92,6 +92,67 @@ export const apiCall = async <T>(
     }
 };
 
+// Shared filter interface for API parameters
+export interface ApiFilters {
+    hostnames?: string[];
+    protocols?: string[];
+    drive_types?: string[];
+    drive_models?: string[];
+    patterns?: string[];
+    block_sizes?: (string | number)[];
+    syncs?: (string | number)[];
+    queue_depths?: (string | number)[];
+    directs?: (string | number)[];
+    num_jobs?: (string | number)[];
+    test_sizes?: string[];
+    durations?: (string | number)[];
+}
+
+// Build query parameters from filters
+export const buildFilterParams = (filters: ApiFilters): URLSearchParams => {
+    const params = new URLSearchParams();
+    
+    // Add array parameters if they exist and have values
+    if (filters.hostnames?.length) {
+        params.append('hostnames', filters.hostnames.join(','));
+    }
+    if (filters.protocols?.length) {
+        params.append('protocols', filters.protocols.join(','));
+    }
+    if (filters.drive_types?.length) {
+        params.append('drive_types', filters.drive_types.join(','));
+    }
+    if (filters.drive_models?.length) {
+        params.append('drive_models', filters.drive_models.join(','));
+    }
+    if (filters.patterns?.length) {
+        params.append('patterns', filters.patterns.join(','));
+    }
+    if (filters.block_sizes?.length) {
+        params.append('block_sizes', filters.block_sizes.map(size => String(size)).join(','));
+    }
+    if (filters.syncs?.length) {
+        params.append('syncs', filters.syncs.map(String).join(','));
+    }
+    if (filters.queue_depths?.length) {
+        params.append('queue_depths', filters.queue_depths.map(String).join(','));
+    }
+    if (filters.directs?.length) {
+        params.append('directs', filters.directs.map(String).join(','));
+    }
+    if (filters.num_jobs?.length) {
+        params.append('num_jobs', filters.num_jobs.map(String).join(','));
+    }
+    if (filters.test_sizes?.length) {
+        params.append('test_sizes', filters.test_sizes.join(','));
+    }
+    if (filters.durations?.length) {
+        params.append('durations', filters.durations.map(String).join(','));
+    }
+    
+    return params;
+};
+
 // API call for file uploads
 export const apiUpload = async (
     endpoint: string,

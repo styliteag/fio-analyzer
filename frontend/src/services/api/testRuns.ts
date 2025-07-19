@@ -1,7 +1,7 @@
 // Test runs API service
 import type { TestRun, FilterOptions } from '../../types';
 import type { ActiveFilters } from '../../hooks/useTestRunFilters';
-import { apiCall } from './base';
+import { apiCall, buildFilterParams } from './base';
 
 export interface TestRunUpdateData {
     drive_model?: string;
@@ -44,46 +44,21 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}) => {
         durations
     } = options;
     
-    // Build query parameters
-    const queryParams = new URLSearchParams();
-        
-    // Add filter parameters if they exist and have values
-    if (hostnames && hostnames.length > 0) {
-        queryParams.append('hostnames', hostnames.join(','));
-    }
-    if (protocols && protocols.length > 0) {
-        queryParams.append('protocols', protocols.join(','));
-    }
-    if (drive_types && drive_types.length > 0) {
-        queryParams.append('drive_types', drive_types.join(','));
-    }
-    if (drive_models && drive_models.length > 0) {
-        queryParams.append('drive_models', drive_models.join(','));
-    }
-    if (patterns && patterns.length > 0) {
-        queryParams.append('patterns', patterns.join(','));
-    }
-    if (block_sizes && block_sizes.length > 0) {
-        queryParams.append('block_sizes', block_sizes.map(size => String(size)).join(','));
-    }
-    if (syncs && syncs.length > 0) {
-        queryParams.append('syncs', syncs.join(','));
-    }
-    if (queue_depths && queue_depths.length > 0) {
-        queryParams.append('queue_depths', queue_depths.join(','));
-    }
-    if (directs && directs.length > 0) {
-        queryParams.append('directs', directs.join(','));
-    }
-    if (num_jobs && num_jobs.length > 0) {
-        queryParams.append('num_jobs', num_jobs.join(','));
-    }
-    if (test_sizes && test_sizes.length > 0) {
-        queryParams.append('test_sizes', test_sizes.join(','));
-    }
-    if (durations && durations.length > 0) {
-        queryParams.append('durations', durations.join(','));
-    }
+    // Build query parameters using shared utility
+    const queryParams = buildFilterParams({
+        hostnames,
+        protocols,
+        drive_types,
+        drive_models,
+        patterns,
+        block_sizes,
+        syncs,
+        queue_depths,
+        directs,
+        num_jobs,
+        test_sizes,
+        durations
+    });
     
     const queryString = queryParams.toString();
     const url = `/api/test-runs${queryString ? `?${queryString}` : ''}`;

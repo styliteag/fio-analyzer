@@ -1,14 +1,12 @@
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import { LoginForm } from "./components/LoginForm";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import Dashboard from "./pages/Dashboard";
 import Home from "./pages/Home";
 import Performance from "./pages/Performance";
 import History from "./pages/History";
 import Upload from "./pages/Upload";
 import Admin from "./pages/Admin";
 import UserManager from "./pages/UserManager";
-import Compare from "./pages/Compare";
 import Compare2 from "./pages/Compare2";
 import Host from "./pages/Host";
 
@@ -32,10 +30,8 @@ const ProtectedApp = () => {
 	return (
 		<Routes>
 			<Route path="/" element={<Home />} />
-			<Route path="/dashboard" element={<Dashboard />} />
 			<Route path="/performance" element={<Performance />} />
 			<Route path="/history" element={<History />} />
-			<Route path="/compare" element={<Compare />} />
 			<Route path="/compare2" element={<Compare2 />} />
 			<Route path="/host/:hostname?" element={<Host />} />
 			<Route path="/upload" element={<Upload />} />

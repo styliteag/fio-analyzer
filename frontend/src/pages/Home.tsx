@@ -5,7 +5,7 @@ import Button from "../components/ui/Button";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import { useAuth } from "../contexts/AuthContext";
-import { Activity, Database, TrendingUp, Upload, Users, Settings, BarChart3, RefreshCw, Zap, History, Microscope, Server } from "lucide-react";
+import { Activity, Database, TrendingUp, Upload, Users, Settings, RefreshCw, Zap, History, Microscope, Server } from "lucide-react";
 import { fetchDashboardStats, type DashboardStats } from "../services/api/dashboard";
 
 
@@ -125,14 +125,6 @@ export default function Home() {
 						</Button>
 						<Button
 							variant="outline"
-							onClick={() => window.location.href = "/compare"}
-							className="flex items-center gap-2"
-						>
-							<History className="w-4 h-4" />
-							Compare
-						</Button>
-						<Button
-							variant="outline"
 							onClick={() => window.location.href = "/compare2"}
 							className="flex items-center gap-2"
 						>
@@ -155,30 +147,7 @@ export default function Home() {
 							<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
 							{loading ? "Loading..." : "Refresh Statistics"}
 						</Button>
-						<Button
-							variant="outline"
-							onClick={() => window.location.href = "/dashboard"}
-							className="flex items-center gap-2 text-sm"
-						>
-						<BarChart3 className="w-4 h-4" />
-						Advanced Analytics Dashboard
-					    </Button>
-						<Button
-							variant="outline"
-							onClick={() => window.location.href = "/upload"}
-							className="flex items-center gap-2"
-						>
-							<Upload className="w-4 h-4" />
-							Upload Test Data
-						</Button>
-						<Button
-							variant="outline"
-							onClick={() => window.location.href = "/admin"}
-							className="flex items-center gap-2"
-						>
-							<Settings className="w-4 h-4" />
-							Admin Panel
-						</Button>
+
 									{/* Quick Access to Advanced Dashboard */}
 
 					</div>
@@ -349,18 +318,6 @@ export default function Home() {
 								</div>
 								<p className="theme-text-secondary text-sm">
 									Browse and analyze historical test data
-								</p>
-							</a>
-							<a
-								href="/dashboard"
-								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-							>
-								<div className="flex items-center gap-2 mb-2">
-									<BarChart3 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-									<h3 className="font-medium theme-text-primary">Advanced Dashboard</h3>
-								</div>
-								<p className="theme-text-secondary text-sm">
-									Advanced analytics and visualization
 								</p>
 							</a>
 							<a

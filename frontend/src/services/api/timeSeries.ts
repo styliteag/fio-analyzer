@@ -1,6 +1,7 @@
 // Time series API service
 import type { ServerInfo, TimeSeriesDataPoint, TrendDataPoint } from '../../types';
-import { apiCall } from './base';
+import { apiCall, buildFilterParams } from './base';
+import { TIME_RANGES } from '../config/constants';
 
 export interface TimeSeriesHistoryOptions {
     hostname?: string;
@@ -127,14 +128,8 @@ export const deleteTimeSeriesRuns = async (testRunIds: number[]) => {
     });
 };
 
-// Helper to get common time range options
-export const getTimeRangeOptions = () => [
-    { label: "Last 24 hours", hours: 24 },
-    { label: "Last 3 days", days: 3 },
-    { label: "Last 7 days", days: 7 },
-    { label: "Last 30 days", days: 30 },
-    { label: "Last 90 days", days: 90 },
-];
+// Helper to get common time range options (uses constants for consistency)
+export const getTimeRangeOptions = () => TIME_RANGES.filter(range => range.value !== 'custom');
 
 // Helper to get available metric types for time series
 export const getTimeSeriesMetricTypes = () => [
@@ -160,45 +155,8 @@ export const fetchTimeSeriesAll = async (filters?: {
     test_sizes?: string[];
     durations?: number[];
 }) => {
-    const params = new URLSearchParams();
-    
-    if (filters?.hostnames && filters.hostnames.length > 0) {
-        params.append("hostnames", filters.hostnames.join(","));
-    }
-    if (filters?.protocols && filters.protocols.length > 0) {
-        params.append("protocols", filters.protocols.join(","));
-    }
-    if (filters?.drive_types && filters.drive_types.length > 0) {
-        params.append("drive_types", filters.drive_types.join(","));
-    }
-    if (filters?.drive_models && filters.drive_models.length > 0) {
-        params.append("drive_models", filters.drive_models.join(","));
-    }
-    if (filters?.patterns && filters.patterns.length > 0) {
-        params.append("patterns", filters.patterns.join(","));
-    }
-    if (filters?.block_sizes && filters.block_sizes.length > 0) {
-        params.append("block_sizes", filters.block_sizes.map(b => String(b)).join(","));
-    }
-    if (filters?.syncs && filters.syncs.length > 0) {
-        params.append("syncs", filters.syncs.join(","));
-    }
-    if (filters?.queue_depths && filters.queue_depths.length > 0) {
-        params.append("queue_depths", filters.queue_depths.join(","));
-    }
-    if (filters?.directs && filters.directs.length > 0) {
-        params.append("directs", filters.directs.join(","));
-    }
-    if (filters?.num_jobs && filters.num_jobs.length > 0) {
-        params.append("num_jobs", filters.num_jobs.join(","));
-    }
-    if (filters?.test_sizes && filters.test_sizes.length > 0) {
-        params.append("test_sizes", filters.test_sizes.join(","));
-    }
-    if (filters?.durations && filters.durations.length > 0) {
-        params.append("durations", filters.durations.join(","));
-    }
-
+    // Build query parameters using shared utility
+    const params = buildFilterParams(filters || {});
     const queryString = params.toString();
     const url = `/api/time-series/all${queryString ? `?${queryString}` : ''}`;
     return apiCall<TimeSeriesDataPoint[]>(url);

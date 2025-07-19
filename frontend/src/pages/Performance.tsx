@@ -124,11 +124,13 @@ export default function Performance() {
 			setLoading(true);
 			setError(null);
 
-			const result = await fetchTestRuns();
+			const response = await fetchTestRuns();
 			
-			if (result) {
-				setTestRuns(result);
-				calculateTestRunMetrics(result);
+			if (response.error) {
+				setError(response.error);
+			} else if (response.data) {
+				setTestRuns(response.data);
+				calculateTestRunMetrics(response.data);
 			}
 
 		} catch (err) {
