@@ -14,7 +14,6 @@ export {
     useTimeSeriesLatest,
     useTimeSeriesHistory,
     useTimeSeriesTrends,
-    useTimeSeriesDashboard,
     useUpload,
     useBatchUpload,
     useUploadForm,

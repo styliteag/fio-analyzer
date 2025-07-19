@@ -5,8 +5,6 @@ import {
     fetchTimeSeriesLatest,
     fetchTimeSeriesHistory,
     fetchTimeSeriesTrends,
-    getTimeRangeOptions,
-    getTimeSeriesMetricTypes,
 } from '../../services/api';
 import type { 
     ServerInfo, 
@@ -280,50 +278,3 @@ export const useTimeSeriesTrends = ({
     };
 };
 
-// Combined hook for complete time series dashboard
-export interface UseTimeSeriesDashboardResult {
-    servers: UseTimeSeriesServersResult;
-    latest: UseTimeSeriesLatestResult;
-    history: UseTimeSeriesHistoryResult;
-    trends: UseTimeSeriesTrendsResult;
-    timeRangeOptions: typeof getTimeRangeOptions extends () => infer T ? T : never;
-    metricTypes: typeof getTimeSeriesMetricTypes extends () => infer T ? T : never;
-}
-
-export interface UseTimeSeriesDashboardProps {
-    historyOptions: TimeSeriesHistoryOptions;
-    trendsOptions: TimeSeriesTrendsOptions;
-    autoFetch?: boolean;
-    refreshInterval?: number;
-}
-
-export const useTimeSeriesDashboard = ({
-    historyOptions,
-    trendsOptions,
-    autoFetch = true,
-    refreshInterval,
-}: UseTimeSeriesDashboardProps): UseTimeSeriesDashboardResult => {
-    const servers = useTimeSeriesServers(autoFetch);
-    const latest = useTimeSeriesLatest(autoFetch);
-    const history = useTimeSeriesHistory({ 
-        options: historyOptions, 
-        autoFetch, 
-        refreshInterval 
-    });
-    const trends = useTimeSeriesTrends({ 
-        options: trendsOptions, 
-        autoFetch 
-    });
-
-    const timeRangeOptions = useMemo(() => getTimeRangeOptions(), []);
-    const metricTypes = useMemo(() => getTimeSeriesMetricTypes(), []);
-
-    return {
-        servers,
-        latest,
-        history,
-        trends,
-        timeRangeOptions,
-        metricTypes,
-    };
-};

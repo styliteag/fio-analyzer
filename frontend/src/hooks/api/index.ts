@@ -26,12 +26,10 @@ export {
     useTimeSeriesLatest,
     useTimeSeriesHistory,
     useTimeSeriesTrends,
-    useTimeSeriesDashboard,
     type UseTimeSeriesServersResult,
     type UseTimeSeriesLatestResult,
     type UseTimeSeriesHistoryResult,
     type UseTimeSeriesTrendsResult,
-    type UseTimeSeriesDashboardResult,
 } from './useTimeSeries';
 
 export {
