@@ -125,7 +125,7 @@ export default function Home() {
 						</Button>
 						<Button
 							variant="outline"
-							onClick={() => window.location.href = "/compare2"}
+							onClick={() => window.location.href = "/compare"}
 							className="flex items-center gap-2"
 						>
 							<Microscope className="w-4 h-4" />

@@ -7,7 +7,7 @@ import History from "./pages/History";
 import Upload from "./pages/Upload";
 import Admin from "./pages/Admin";
 import UserManager from "./pages/UserManager";
-import Compare2 from "./pages/Compare2";
+import Compare from "./pages/Compare";
 import Host from "./pages/Host";
 
 const ProtectedApp = () => {
@@ -32,7 +32,7 @@ const ProtectedApp = () => {
 			<Route path="/" element={<Home />} />
 			<Route path="/performance" element={<Performance />} />
 			<Route path="/history" element={<History />} />
-			<Route path="/compare2" element={<Compare2 />} />
+			<Route path="/compare" element={<Compare />} />
 			<Route path="/host/:hostname?" element={<Host />} />
 			<Route path="/upload" element={<Upload />} />
 			<Route path="/admin" element={<Admin />} />

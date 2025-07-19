@@ -14,7 +14,7 @@ import { RefreshCw, Search, Filter, BarChart3, AlertCircle } from 'lucide-react'
 import type { PerformanceData } from '../types';
 import type { ConfigurationComparison } from '../utils/configurationMatcher';
 
-export default function Compare2() {
+export default function Compare() {
   // State management
   const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
