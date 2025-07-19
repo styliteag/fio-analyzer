@@ -211,13 +211,11 @@ async def get_historical_time_series(
                 "block_size": row[5],
                 "read_write_pattern": row[6],
                 "queue_depth": row[7],
-                "metrics": {
-                    "iops": row[8],
-                    "avg_latency": row[9],
-                    "bandwidth": row[10],
-                    "p95_latency": row[11],
-                    "p99_latency": row[12]
-                }
+                "iops": row[8],
+                "avg_latency": row[9],
+                "bandwidth": row[10],
+                "p95_latency": row[11],
+                "p99_latency": row[12]
             })
         
         log_info("Historical time series data retrieved successfully", {
@@ -229,7 +227,7 @@ async def get_historical_time_series(
             }
         })
         
-        return {"data": results}
+        return results
     
     except Exception as e:
         log_error("Error retrieving historical time series data", e, {"request_id": request_id})
