@@ -2,8 +2,10 @@
 node_modules/
 
 # ignore all __pycache__ in all subdirectories (backend)
+backend/venv/
 __pycache__
 *.pyc
+*.pyo
 
 # Logs
 logs
