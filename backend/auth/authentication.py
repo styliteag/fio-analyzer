@@ -8,7 +8,7 @@ from typing import Optional, Dict, Tuple
 from pathlib import Path
 
 from config.settings import settings
-from utils.logging import log_info, log_error, log_warning
+from utils.logging import log_info, log_error, log_warning, log_debug
 
 
 def parse_htpasswd(file_path: Path) -> Optional[Dict[str, str]]:
@@ -29,7 +29,7 @@ def parse_htpasswd(file_path: Path) -> Optional[Dict[str, str]]:
                     users[username] = hash_value
         
         user_count = len(users)
-        log_info("htpasswd file parsed successfully", {
+        log_debug("htpasswd file parsed successfully", {
             "file_path": str(file_path),
             "user_count": user_count,
             "users": list(users.keys())
@@ -69,7 +69,7 @@ def is_admin_user(username: str, password: str) -> bool:
     """Check if user has admin privileges"""
     htpasswd_users = parse_htpasswd(settings.htpasswd_path)
     if not htpasswd_users or username not in htpasswd_users:
-        log_info("Admin authentication failed", {
+        log_debug("Admin authentication failed", {
             "username": username,
             "reason": "no_htpasswd_file" if not htpasswd_users else "user_not_found"
         })
@@ -78,7 +78,7 @@ def is_admin_user(username: str, password: str) -> bool:
     hash_value = htpasswd_users[username]
     is_valid = verify_password(password, hash_value)
     
-    log_info("Admin authentication attempt", {
+    log_debug("Admin authentication attempt", {
         "username": username,
         "success": is_valid
     })
@@ -90,7 +90,7 @@ def is_uploader_user(username: str, password: str) -> bool:
     """Check if user has upload-only privileges"""
     htuploaders_users = parse_htpasswd(settings.htuploaders_path)
     if not htuploaders_users or username not in htuploaders_users:
-        log_info("Uploader authentication failed", {
+        log_debug("Uploader authentication failed", {
             "username": username,
             "reason": "no_htuploaders_file" if not htuploaders_users else "user_not_found"
         })
@@ -99,7 +99,7 @@ def is_uploader_user(username: str, password: str) -> bool:
     hash_value = htuploaders_users[username]
     is_valid = verify_password(password, hash_value)
     
-    log_info("Uploader authentication attempt", {
+    log_debug("Uploader authentication attempt", {
         "username": username,
         "success": is_valid
     })

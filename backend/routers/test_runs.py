@@ -24,7 +24,7 @@ async def get_test_runs(
     protocols: Optional[str] = Query(None, description="Comma-separated protocols to filter"),
     patterns: Optional[str] = Query(None, description="Comma-separated patterns to filter"),
     block_sizes: Optional[str] = Query(None, description="Comma-separated block sizes to filter"),
-    limit: int = Query(50, ge=1, le=1000, description="Number of results to return"),
+    limit: int = Query(1000, ge=1, le=10000, description="Number of results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     user: User = Depends(require_auth),
     db: sqlite3.Connection = Depends(get_db)
@@ -74,9 +74,15 @@ async def get_test_runs(
         cursor.execute(f"SELECT COUNT(*) FROM test_runs WHERE {where_clause}", params)
         total = cursor.fetchone()[0]
         
-        # Get test runs
+        # Get test runs (exclude test_date to match Node.js response format)
         query = f"""
-            SELECT * FROM test_runs 
+            SELECT id, timestamp, drive_model, drive_type, test_name, description,
+                   block_size, read_write_pattern, queue_depth, duration,
+                   fio_version, job_runtime, rwmixread, total_ios_read, 
+                   total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
+                   uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                   avg_latency, bandwidth, iops, p95_latency, p99_latency
+            FROM test_runs 
             WHERE {where_clause} 
             ORDER BY timestamp DESC 
             LIMIT ? OFFSET ?
@@ -185,7 +191,6 @@ async def bulk_update_test_runs(
 async def get_performance_data(
     request: Request,
     test_run_ids: str = Query(..., description="Comma-separated test run IDs"),
-    metric_types: str = Query(..., description="Comma-separated metric types"),
     user: User = Depends(require_auth),
     db: sqlite3.Connection = Depends(get_db)
 ):
@@ -195,7 +200,6 @@ async def get_performance_data(
     try:
         # Parse parameters
         test_run_id_list = [int(id.strip()) for id in test_run_ids.split(',')]
-        metric_type_list = [m.strip() for m in metric_types.split(',')]
         
         # Build query
         placeholders = ','.join(['?' for _ in test_run_id_list])
@@ -203,38 +207,105 @@ async def get_performance_data(
         
         results = []
         for test_run_id in test_run_id_list:
-            cursor.execute("SELECT * FROM test_runs WHERE id = ?", (test_run_id,))
+            cursor.execute("""
+                SELECT id, timestamp, drive_model, drive_type, test_name, description,
+                       block_size, read_write_pattern, queue_depth, duration,
+                       fio_version, job_runtime, rwmixread, total_ios_read, 
+                       total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
+                       uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                       avg_latency, bandwidth, iops, p95_latency, p99_latency
+                FROM test_runs WHERE id = ?
+            """, (test_run_id,))
             row = cursor.fetchone()
             
             if row:
                 test_run_data = dict(row)
-                performance_data = {
-                    "test_run_id": test_run_id,
-                    "metrics": {}
+                
+                # Create response matching Node.js format
+                result = {
+                    "id": test_run_data["id"],
+                    "drive_model": test_run_data["drive_model"],
+                    "drive_type": test_run_data["drive_type"],
+                    "test_name": test_run_data["test_name"],
+                    "description": test_run_data["description"],
+                    "block_size": str(test_run_data["block_size"]),
+                    "read_write_pattern": test_run_data["read_write_pattern"],
+                    "timestamp": test_run_data["timestamp"],
+                    "queue_depth": test_run_data["queue_depth"],
+                    "hostname": test_run_data["hostname"],
+                    "protocol": test_run_data["protocol"],
+                    "output_file": test_run_data["output_file"],
+                    "num_jobs": test_run_data["num_jobs"],
+                    "direct": test_run_data["direct"],
+                    "test_size": test_run_data["test_size"],
+                    "sync": test_run_data["sync"],
+                    "iodepth": test_run_data["iodepth"],
+                    "duration": test_run_data["duration"],
+                    "metrics": {
+                        "avg_latency": {"value": test_run_data["avg_latency"], "unit": "ms"} if test_run_data["avg_latency"] is not None else None,
+                        "bandwidth": {"value": test_run_data["bandwidth"], "unit": "MB/s"} if test_run_data["bandwidth"] is not None else None,
+                        "iops": {"value": test_run_data["iops"], "unit": "IOPS"} if test_run_data["iops"] is not None else None,
+                        "p95_latency": {"value": test_run_data["p95_latency"], "unit": "ms"} if test_run_data["p95_latency"] is not None else None,
+                        "p99_latency": {"value": test_run_data["p99_latency"], "unit": "ms"} if test_run_data["p99_latency"] is not None else None
+                    }
                 }
                 
-                # Extract requested metrics
-                for metric_type in metric_type_list:
-                    if metric_type in test_run_data and test_run_data[metric_type] is not None:
-                        performance_data["metrics"][metric_type] = {
-                            "value": test_run_data[metric_type],
-                            "unit": get_metric_unit(metric_type)
-                        }
-                
-                results.append(performance_data)
+                results.append(result)
         
         log_info("Performance data retrieved successfully", {
             "request_id": request_id,
             "test_run_ids": test_run_id_list,
-            "metric_types": metric_type_list,
             "results_count": len(results)
         })
         
-        return {"performance_data": results}
+        return results
     
     except Exception as e:
         log_error("Error retrieving performance data", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to retrieve performance data")
+
+
+@router.get("/{test_run_id}")
+async def get_test_run(
+    request: Request,
+    test_run_id: int,
+    user: User = Depends(require_auth),
+    db: sqlite3.Connection = Depends(get_db)
+):
+    """Get a single test run by ID"""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    
+    try:
+        cursor = db.cursor()
+        cursor.execute("""
+            SELECT id, timestamp, drive_model, drive_type, test_name, description,
+                   block_size, read_write_pattern, queue_depth, duration,
+                   fio_version, job_runtime, rwmixread, total_ios_read, 
+                   total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
+                   uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                   avg_latency, bandwidth, iops, p95_latency, p99_latency
+            FROM test_runs WHERE id = ?
+        """, (test_run_id,))
+        
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Test run not found")
+        
+        test_run_data = dict(row)
+        test_run_data['block_size'] = str(test_run_data['block_size'])  # Ensure string
+        
+        log_info("Test run retrieved successfully", {
+            "request_id": request_id,
+            "test_run_id": test_run_id
+        })
+        
+        return test_run_data
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error retrieving test run", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to retrieve test run")
 
 
 @router.delete("/{test_run_id}")

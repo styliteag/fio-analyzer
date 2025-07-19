@@ -50,3 +50,13 @@ def log_warning(message: str, context: Optional[Dict[str, Any]] = None):
         logger.warning(f"{message} - {json.dumps(context, default=str)}")
     else:
         logger.warning(message)
+
+
+def log_debug(message: str, context: Optional[Dict[str, Any]] = None):
+    """Log debug message with context"""
+    logger = logging.getLogger(__name__)
+    
+    if context:
+        logger.debug(f"{message} - {json.dumps(context, default=str)}")
+    else:
+        logger.debug(message)
