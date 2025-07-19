@@ -4,14 +4,16 @@ Import API router
 
 import json
 import uuid
-from typing import Any, Dict
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+import os
+from typing import Any, Dict, List
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Body
 from datetime import datetime
 import sqlite3
+from pathlib import Path
 
 from database.connection import get_db, db_manager
 # Removed ImportResponse import - using plain dictionaries
-from auth.middleware import require_uploader, User
+from auth.middleware import require_uploader, require_admin, User
 from utils.logging import log_info, log_error
 from config.settings import settings
 
@@ -83,6 +85,170 @@ async def import_fio_data(
     except Exception as e:
         log_error("Error importing FIO data", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to import FIO data")
+
+
+@router.post("/bulk")
+@router.post("/bulk/")  # Handle with trailing slash
+async def bulk_import_fio_data(
+    request: Request,
+    bulk_request: Dict[str, Any] = Body(...),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db)
+):
+    """Bulk import FIO data from uploaded files directory"""
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    
+    try:
+        # Extract options
+        overwrite = bulk_request.get("overwrite", False)
+        dry_run = bulk_request.get("dryRun", False)
+        
+        # Get uploads directory
+        uploads_dir = settings.upload_dir
+        if not uploads_dir.exists():
+            raise HTTPException(status_code=400, detail="Uploads directory not found")
+        
+        # Find all JSON files recursively
+        json_files = list(uploads_dir.rglob("*.json"))
+        
+        if not json_files:
+            return {
+                "message": "No JSON files found for bulk import",
+                "statistics": {
+                    "totalFiles": 0,
+                    "processedFiles": 0,
+                    "totalTestRuns": 0,
+                    "skippedFiles": 0,
+                    "errorFiles": 0
+                }
+            }
+        
+        processed_files = 0
+        total_test_runs = 0
+        skipped_files = 0
+        error_files = 0
+        dry_run_results = []
+        
+        for json_file in json_files:
+            try:
+                # Read and parse JSON file
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    fio_data = json.load(f)
+                
+                # Extract metadata from file path
+                metadata = extract_metadata_from_path(json_file)
+                
+                # Extract test run data
+                test_run_data = extract_test_run_data(fio_data, json_file.name)
+                
+                # Update metadata with path info
+                test_run_data.update(metadata)
+                
+                if dry_run:
+                    # For dry run, just collect metadata
+                    dry_run_results.append({
+                        "path": str(json_file),
+                        "metadata": test_run_data
+                    })
+                    processed_files += 1
+                else:
+                    # Check if test run already exists
+                    cursor = db.cursor()
+                    cursor.execute("""
+                        SELECT id FROM test_runs_all 
+                        WHERE hostname = ? AND protocol = ? AND drive_model = ? 
+                        AND test_name = ? AND timestamp = ?
+                    """, (
+                        test_run_data.get("hostname"),
+                        test_run_data.get("protocol"),
+                        test_run_data.get("drive_model"),
+                        test_run_data.get("test_name"),
+                        test_run_data.get("timestamp")
+                    ))
+                    
+                    existing = cursor.fetchone()
+                    
+                    if existing and not overwrite:
+                        skipped_files += 1
+                        continue
+                    
+                    # Update latest flags
+                    await db_manager.update_latest_flags(test_run_data)
+                    
+                    # Insert into database
+                    test_run_id = insert_test_run(db, test_run_data)
+                    total_test_runs += 1
+                    processed_files += 1
+                    
+                    # Update file path in database
+                    cursor.execute("UPDATE test_runs SET uploaded_file_path = ? WHERE id = ?", (str(json_file), test_run_id))
+                    cursor.execute("UPDATE test_runs_all SET uploaded_file_path = ? WHERE id = ?", (str(json_file), test_run_id))
+                    db.commit()
+                
+            except Exception as e:
+                log_error(f"Error processing file {json_file}", e, {"request_id": request_id})
+                error_files += 1
+        
+        log_info("Bulk import completed", {
+            "request_id": request_id,
+            "user": user.username,
+            "processed_files": processed_files,
+            "total_test_runs": total_test_runs,
+            "skipped_files": skipped_files,
+            "error_files": error_files,
+            "dry_run": dry_run
+        })
+        
+        response = {
+            "message": f"Bulk import completed: {processed_files} files processed, {total_test_runs} test runs imported",
+            "statistics": {
+                "totalFiles": len(json_files),
+                "processedFiles": processed_files,
+                "totalTestRuns": total_test_runs,
+                "skippedFiles": skipped_files,
+                "errorFiles": error_files
+            }
+        }
+        
+        if dry_run and dry_run_results:
+            response["dryRunResults"] = dry_run_results
+        
+        return response
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error during bulk import", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to perform bulk import")
+
+
+def extract_metadata_from_path(file_path: Path) -> Dict[str, Any]:
+    """Extract metadata from file path structure"""
+    try:
+        # Expected path structure: uploads/hostname/protocol/date/time/filename.json
+        parts = file_path.parts
+        uploads_index = parts.index(settings.upload_dir.name)
+        
+        if len(parts) >= uploads_index + 4:
+            hostname = parts[uploads_index + 1]
+            protocol = parts[uploads_index + 2]
+            date_str = parts[uploads_index + 3]
+            time_str = parts[uploads_index + 4] if len(parts) > uploads_index + 4 else "00-00"
+            
+            return {
+                "hostname": hostname,
+                "protocol": protocol,
+                "test_date": f"{date_str}T{time_str.replace('-', ':')}:00"
+            }
+    except (ValueError, IndexError):
+        pass
+    
+    # Fallback to defaults
+    return {
+        "hostname": "unknown",
+        "protocol": "Local",
+        "test_date": datetime.now().isoformat()
+    }
 
 
 def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, Any]:
