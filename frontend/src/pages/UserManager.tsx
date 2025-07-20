@@ -30,6 +30,13 @@ const UserManager: React.FC = () => {
 	const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 	const [operationLoading, setOperationLoading] = useState<Record<string, boolean>>({});
 
+	// Load users on component mount
+	useEffect(() => {
+		if (isAdmin) {
+			loadUsers();
+		}
+	}, [isAdmin]);
+
 	// Redirect non-admin users
 	if (!isAdmin) {
 		return (
@@ -41,11 +48,6 @@ const UserManager: React.FC = () => {
 			</div>
 		);
 	}
-
-	// Load users on component mount
-	useEffect(() => {
-		loadUsers();
-	}, []);
 
 	const loadUsers = async () => {
 		try {

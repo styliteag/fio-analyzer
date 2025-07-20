@@ -1,19 +1,33 @@
-import { useState, useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { DashboardHeader, DashboardFooter } from "../components/layout";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import { useAuth } from "../contexts/AuthContext";
+import { useApiCall } from "../hooks";
 import { Activity, Database, TrendingUp, Upload, Users, Settings, RefreshCw, Zap, History, Microscope, Server } from "lucide-react";
 import { fetchDashboardStats, type DashboardStats } from "../services/api/dashboard";
 
 
 export default function Home() {
 	const { username } = useAuth();
-	const [stats, setStats] = useState<DashboardStats | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
+	
+	// Memoize callback to prevent recreation
+	const onError = useCallback((error: string) => {
+		console.error('Dashboard stats failed:', error);
+	}, []);
+
+	// Use the standardized API call hook for dashboard stats
+	const {
+		data: stats,
+		loading,
+		error,
+		execute: loadStats
+	} = useApiCall<DashboardStats>({
+		enableLogging: true,
+		onError
+	});
 
 	// Get the correct API documentation URL based on environment
 	const getApiDocsUrl = () => {
@@ -25,28 +39,26 @@ export default function Home() {
 		}
 	};
 
-	// Load dashboard statistics
-	const loadStats = async () => {
+	// Wrapper to convert raw API call to ApiResponse format
+	const loadDashboardStats = useCallback(async () => {
 		try {
-			setLoading(true);
-			setError(null);
-			const dashboardStats = await fetchDashboardStats();
-			setStats(dashboardStats);
-		} catch (err) {
-			console.error('Failed to load dashboard stats:', err);
-			setError('Failed to load dashboard statistics. Please try again.');
-		} finally {
-			setLoading(false);
+			const data = await fetchDashboardStats();
+			return { data, status: 200 };
+		} catch (error) {
+			return {
+				error: error instanceof Error ? error.message : 'Failed to load dashboard statistics',
+				status: 500
+			};
 		}
-	};
+	}, []);
 
 	// Load stats on component mount
 	useEffect(() => {
-		loadStats();
-	}, []);
+		loadStats(loadDashboardStats);
+	}, [loadStats, loadDashboardStats]);
 
 	const handleRefreshStats = () => {
-		loadStats();
+		loadStats(loadDashboardStats);
 	};
 
 	const statCards = [
@@ -173,9 +185,9 @@ export default function Home() {
 									<p className="theme-text-secondary text-sm font-medium">
 										{stat.title}
 									</p>
-									<p className="theme-text-primary text-2xl font-bold mt-1">
+									<div className="theme-text-primary text-2xl font-bold mt-1">
 										{loading ? <Loading size="sm" /> : stat.value}
-									</p>
+									</div>
 								</div>
 								<div className={`${stat.color} opacity-80`}>
 									<stat.icon className="w-8 h-8" />

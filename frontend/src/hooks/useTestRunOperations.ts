@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { TestRun } from '../types';
 import { deleteTestRun } from '../services/api/testRuns';
+import { useApiCall } from './useApiCall';
 
 export interface OperationState {
     editModalOpen: boolean;
@@ -94,6 +95,18 @@ export const useTestRunOperations = (
         onFiltersRefresh();
     }, [setTestRuns, selectedRuns, onSelectionChange, onFiltersRefresh]);
 
+    // Use standardized API call for single test run deletion
+    const {
+        loading: deleteLoading,
+        execute: executeDelete
+    } = useApiCall({
+        onSuccess: () => {
+            // Refresh filters
+            onFiltersRefresh();
+        },
+        onError: (error) => console.error('Delete failed:', error)
+    });
+
     const handleDeleteTestRun = useCallback(async (testRun: TestRun): Promise<DeleteResult> => {
         if (
             !confirm(
@@ -106,10 +119,10 @@ export const useTestRunOperations = (
         setState(prev => ({ ...prev, deleting: testRun.id }));
 
         try {
-            const result = await deleteTestRun(testRun.id);
+            const success = await executeDelete(() => deleteTestRun(testRun.id));
             
-            if (result.error) {
-                return { success: false, error: result.error };
+            if (!success) {
+                return { success: false, error: 'Failed to delete test run' };
             }
 
             // Remove from test runs list
@@ -121,19 +134,11 @@ export const useTestRunOperations = (
             );
             onSelectionChange(updatedSelectedRuns);
 
-            // Refresh filters
-            onFiltersRefresh();
-
             return { success: true };
-        } catch (error) {
-            return { 
-                success: false, 
-                error: error instanceof Error ? error.message : "Network error occurred while deleting test run" 
-            };
         } finally {
             setState(prev => ({ ...prev, deleting: null }));
         }
-    }, [setTestRuns, selectedRuns, onSelectionChange, onFiltersRefresh]);
+    }, [setTestRuns, selectedRuns, onSelectionChange, executeDelete]);
 
     const handleBulkDelete = useCallback(async (): Promise<DeleteResult> => {
         if (
@@ -191,6 +196,7 @@ export const useTestRunOperations = (
 
     return {
         state,
+        deleteLoading,
         handleEditTestRun,
         handleCloseEditModal,
         handleSaveTestRun,
