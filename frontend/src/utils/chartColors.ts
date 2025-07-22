@@ -51,7 +51,14 @@ export class ChartColorManager {
    * Get colors from a specific scheme
    */
   getSchemeColors(scheme: ColorScheme, count?: number): string[] {
-    const colors = chartConfig.colors.schemes[scheme] || chartConfig.colors.primary;
+    let colors: string[];
+    if (scheme === 'primary') {
+      colors = chartConfig.colors.primary;
+    } else if (scheme === 'secondary') {
+      colors = chartConfig.colors.secondary;
+    } else {
+      colors = chartConfig.colors.schemes[scheme as keyof typeof chartConfig.colors.schemes] || chartConfig.colors.primary;
+    }
     return count ? colors.slice(0, count) : colors;
   }
 
