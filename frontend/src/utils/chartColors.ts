@@ -212,10 +212,12 @@ export class ChartColorManager {
     return variations[index % variations.length];
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private adjustHue(color: string, _degrees: number): string {
     // Simplified hue adjustment - in a real implementation, 
-    // you'd convert to HSL, adjust _degrees, and convert back
-    return color; // Placeholder - could implement proper HSL conversion
+    // you'd convert to HSL, adjust hue by _degrees, and convert back
+    // Currently returns original color as placeholder
+    return color; // TODO: implement proper HSL conversion using _degrees
   }
 
   private groupItems(items: ChartDataItem[]): Array<{ name: string; items: ChartDataItem[] }> {
