@@ -5,7 +5,6 @@ Test runs API router
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body, File, Form, UploadFile
 import sqlite3
-from fastapi import FastAPI
 
 from database.connection import get_db
 from database.models import TestRun, BulkUpdateRequest, dataclass_to_dict
@@ -14,24 +13,6 @@ from utils.logging import log_info, log_error
 
 
 router = APIRouter()
-
-app = FastAPI(
-    title="FIO Analyzer API",
-    description="A comprehensive API for FIO (Flexible I/O Tester) performance analysis and time-series monitoring",
-    version="1.0.0",
-    contact={
-        "name": "FIO Analyzer",
-        "url": "https://github.com/fio-analyzer"
-    },
-    license_info={
-        "name": "MIT",
-        "url": "https://opensource.org/licenses/MIT"
-    },
-    servers=[
-        {"url": "http://localhost:8000", "description": "Development server"},
-        {"url": "https://fio-analyzer.stylite-live.net", "description": "Production server"}
-    ]
-)
 
 
 @router.get("/")
