@@ -175,8 +175,9 @@ export const applyGroupingSorting = (
     
     // Special handling for block size sorting
     if (groupBy === "blocksize") {
-      const blockComparison = sortBlockSizes([a.block_size.toString(), b.block_size.toString()])[0] === a.block_size.toString() ? -1 : 1;
-      if (blockComparison !== 0) return blockComparison;
+      const sortedBlocks = sortBlockSizes([a.block_size.toString(), b.block_size.toString()]);
+      const blockComparison = sortedBlocks[0] === a.block_size.toString() ? -1 : 1;
+      return blockComparison;
     } else {
       const groupComparison = typeof aGroupValue === "string"
         ? aGroupValue.localeCompare(bGroupValue)
