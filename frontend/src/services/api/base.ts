@@ -1,7 +1,10 @@
 // Base API service with authentication and common functionality
+import type { ApiFilters } from '../../types/api';
+import { getErrorMessage } from '../../types/api';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
     data?: T;
     error?: string;
     status: number;
@@ -29,7 +32,7 @@ const getAuthHeaders = (): HeadersInit => {
     };
 };
 
-// Authenticated fetch wrapper
+// Authenticated fetch wrapper with AbortSignal support
 export const authenticatedFetch = async (
     endpoint: string,
     options: RequestInit = {},
@@ -43,6 +46,8 @@ export const authenticatedFetch = async (
     const response = await fetch(url, {
         ...options,
         headers,
+        // Pass through AbortSignal if provided
+        signal: options.signal,
     });
 
     // If we get 401, the auth is invalid - clear it
@@ -55,7 +60,7 @@ export const authenticatedFetch = async (
     return response;
 };
 
-// Generic API call handler with error handling
+// Generic API call handler with error handling and AbortSignal support
 export const apiCall = async <T>(
     endpoint: string,
     options: RequestInit = {},
@@ -85,28 +90,22 @@ export const apiCall = async <T>(
             data,
         };
     } catch (error) {
+        // Handle AbortError specifically
+        if (error instanceof Error && error.name === 'AbortError') {
+            return {
+                status: 0,
+                error: 'Request cancelled',
+            };
+        }
+        
         return {
             status: 500,
-            error: error instanceof Error ? error.message : "Unknown error occurred",
+            error: getErrorMessage(error),
         };
     }
 };
 
-// Shared filter interface for API parameters
-export interface ApiFilters {
-    hostnames?: string[];
-    protocols?: string[];
-    drive_types?: string[];
-    drive_models?: string[];
-    patterns?: string[];
-    block_sizes?: (string | number)[];
-    syncs?: (string | number)[];
-    queue_depths?: (string | number)[];
-    directs?: (string | number)[];
-    num_jobs?: (string | number)[];
-    test_sizes?: string[];
-    durations?: (string | number)[];
-}
+// Re-export ApiFilters from types (no need to duplicate)
 
 // Build query parameters from filters
 export const buildFilterParams = (filters: ApiFilters): URLSearchParams => {
@@ -153,10 +152,11 @@ export const buildFilterParams = (filters: ApiFilters): URLSearchParams => {
     return params;
 };
 
-// API call for file uploads
+// API call for file uploads with AbortSignal support
 export const apiUpload = async (
     endpoint: string,
     formData: FormData,
+    signal?: AbortSignal,
 ): Promise<ApiResponse> => {
     try {
         const storedAuth = localStorage.getItem("fio-auth");
@@ -175,6 +175,7 @@ export const apiUpload = async (
             method: "POST",
             headers,
             body: formData,
+            signal, // Add AbortSignal support
         });
 
         if (response.status === 401) {
@@ -195,9 +196,17 @@ export const apiUpload = async (
             data,
         };
     } catch (error) {
+        // Handle AbortError specifically
+        if (error instanceof Error && error.name === 'AbortError') {
+            return {
+                status: 0,
+                error: 'Upload cancelled',
+            };
+        }
+        
         return {
             status: 500,
-            error: error instanceof Error ? error.message : "Upload failed",
+            error: getErrorMessage(error),
         };
     }
 };

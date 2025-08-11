@@ -65,15 +65,18 @@ export const useUpload = (): UseUploadResult => {
             
             clearInterval(progressInterval);
             setUploadProgress(100);
-            if (uploadResponse.data) {
-                setResponse(uploadResponse.data);
+            if (uploadResponse.data && typeof uploadResponse.data === 'object' && 'message' in uploadResponse.data) {
+                setResponse(uploadResponse.data as UploadResponse);
+            } else if (uploadResponse.error) {
+                throw new Error(uploadResponse.error);
             } else {
-                throw new Error(uploadResponse.error || 'Upload failed');
+                throw new Error('Upload failed');
             }
             
             return true;
-        } catch (err: any) {
-            setError(err.message || 'Upload failed');
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Upload failed';
+            setError(errorMessage);
             console.error('Upload error:', err);
             return false;
         } finally {
@@ -202,20 +205,23 @@ export const useBatchUpload = (): UseBatchUploadResult => {
                             ...u, 
                             status: 'completed' as const, 
                             progress: 100,
-                            response: response.data || undefined,
+                            response: response.data && typeof response.data === 'object' && 'message' in response.data 
+                                ? response.data as UploadResponse 
+                                : undefined,
                             error: response.error
                         }
                         : u
                 ));
 
-            } catch (error: any) {
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Upload failed';
                 // Update to failed
                 setUploads(prev => prev.map(u => 
                     u.id === upload.id 
                         ? { 
                             ...u, 
                             status: 'failed' as const, 
-                            error: error.message || 'Upload failed' 
+                            error: errorMessage 
                         }
                         : u
                 ));

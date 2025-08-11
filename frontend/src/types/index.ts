@@ -175,3 +175,61 @@ export interface TimeSeriesChartDataset {
 	pointRadius: number;
 	pointHoverRadius: number;
 }
+
+// Re-export additional type modules (avoiding duplicate ValidationResult)
+export type { 
+  ApiError, 
+  ApiResponse, 
+  UploadResponse, 
+  ApiFilters,
+  BatchOperationResult,
+  AuthCredentials,
+  AuthResponse,
+  HealthCheckResponse,
+  PaginatedResponse,
+  PaginationParams,
+  FilterParams,
+  SortParams,
+  RequestOptions,
+  HttpMethod,
+  getErrorMessage,
+  isApiError,
+  isNetworkError
+} from './api';
+
+export * from './charts';
+
+export type {
+  AsyncState,
+  ExtendedAsyncState,
+  BaseHookOptions,
+  AsyncDataOptions,
+  ApiCallOptions,
+  ProgressState,
+  DataValidator,
+  ErrorHandler,
+  SuccessHandler,
+  CrudOperations,
+  BatchResult,
+  FilterState,
+  SortState,
+  PaginationState,
+  SelectionState,
+  CacheState,
+  DebouncedValue,
+  TimeSeriesHookData,
+  TimeSeriesDataSeries,
+  TimeSeriesPoint,
+  TimeRange,
+  UploadState,
+  UploadedFile,
+  ChartHookData,
+  FilterOptionsData,
+  TestRunOperations,
+  Entity,
+  FilterFunction,
+  SortFunction,
+  TransformFunction,
+  AsyncHookReturn,
+  MutationHookReturn
+} from './hooks';

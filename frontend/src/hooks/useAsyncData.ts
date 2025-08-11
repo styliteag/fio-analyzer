@@ -9,12 +9,15 @@
  * - Data validation
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import type { ValidationResult } from '../types/api';
+import { getErrorMessage, isAbortError, isCancelledError } from '../types/api';
+import type { Entity } from '../types/hooks';
 
 export interface UseAsyncDataOptions<T> {
   autoFetch?: boolean;
   validateData?: boolean;
-  validator?: (data: T) => { valid: boolean; errors?: string[] };
+  validator?: (data: T) => ValidationResult;
   onSuccess?: (data: T) => void;
   onError?: (error: string) => void;
   enableLogging?: boolean;
@@ -30,13 +33,15 @@ export interface UseAsyncDataResult<T> {
   setData: React.Dispatch<React.SetStateAction<T | null>>;
   reset: () => void;
   isEmpty: boolean;
+  cancel: () => void;
+  isCancelled: boolean;
 }
 
 /**
  * Generic async data management hook
  */
 export const useAsyncData = <T>(
-  fetcher: () => Promise<T>,
+  fetcher: (abortSignal?: AbortSignal) => Promise<T>,
   deps: React.DependencyList = [],
   options: UseAsyncDataOptions<T> = {}
 ): UseAsyncDataResult<T> => {
@@ -55,12 +60,31 @@ export const useAsyncData = <T>(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // AbortController management
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [isCancelled, setIsCancelled] = useState(false);
+
   const fetchData = useCallback(async () => {
     try {
+      // Cancel any existing request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      // Create new AbortController for this request
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       setLoading(true);
       setError(null);
+      setIsCancelled(false);
 
-      const result = await fetcher();
+      const result = await fetcher(abortController.signal);
+
+      // Check if request was cancelled
+      if (abortController.signal.aborted) {
+        return;
+      }
 
       // Validate data if enabled
       if (validateData && validator) {
@@ -74,8 +98,14 @@ export const useAsyncData = <T>(
 
       setData(result);
       onSuccess?.(result);
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to fetch data';
+    } catch (err) {
+      // Handle AbortError specifically
+      if (isAbortError(err) || isCancelledError(err)) {
+        setIsCancelled(true);
+        return;
+      }
+
+      const errorMessage = getErrorMessage(err);
       setError(errorMessage);
       
       if (resetDataOnError) {
@@ -89,15 +119,36 @@ export const useAsyncData = <T>(
       onError?.(errorMessage);
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher, validateData, validator, onSuccess, onError, enableLogging, resetDataOnError, initialData, ...deps]);
 
   const reset = useCallback(() => {
+    // Cancel any ongoing requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
     setData(initialData);
     setLoading(false);
     setError(null);
+    setIsCancelled(false);
   }, [initialData]);
+
+  const cancel = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsCancelled(true);
+      setLoading(false);
+      
+      if (enableLogging) {
+        console.log('Async data fetch cancelled by user');
+      }
+    }
+  }, [enableLogging]);
 
   const isEmpty = useMemo(() => {
     if (data === null || data === undefined) return true;
@@ -113,6 +164,15 @@ export const useAsyncData = <T>(
     }
   }, [autoFetch, fetchData]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   return {
     data,
     loading,
@@ -121,6 +181,8 @@ export const useAsyncData = <T>(
     setData,
     reset,
     isEmpty,
+    cancel,
+    isCancelled,
   };
 };
 
@@ -140,13 +202,13 @@ export interface UseCrudDataResult<T, TUpdate = Partial<T>> extends Omit<UseAsyn
   bulkRemove: (ids: (number | string)[]) => Promise<{ successful: number; failed: number; total: number }>;
 }
 
-export const useCrudData = <T extends { id: number | string }, TUpdate = Partial<T>>(
-  fetcher: () => Promise<T[]>,
-  createFn: (item: Omit<T, 'id'>) => Promise<T>,
-  updateFn: (id: number | string, updates: TUpdate) => Promise<void>,
-  deleteFn: (id: number | string) => Promise<void>,
-  bulkUpdateFn?: (ids: (number | string)[], updates: TUpdate) => Promise<void>,
-  bulkDeleteFn?: (ids: (number | string)[]) => Promise<{ successful: number; failed: number; total: number }>,
+export const useCrudData = <T extends Entity, TUpdate = Partial<T>>(
+  fetcher: (abortSignal?: AbortSignal) => Promise<T[]>,
+  createFn: (item: Omit<T, 'id'>, abortSignal?: AbortSignal) => Promise<T>,
+  updateFn: (id: number | string, updates: TUpdate, abortSignal?: AbortSignal) => Promise<void>,
+  deleteFn: (id: number | string, abortSignal?: AbortSignal) => Promise<void>,
+  bulkUpdateFn?: (ids: (number | string)[], updates: TUpdate, abortSignal?: AbortSignal) => Promise<void>,
+  bulkDeleteFn?: (ids: (number | string)[], abortSignal?: AbortSignal) => Promise<{ successful: number; failed: number; total: number }>,
   deps: React.DependencyList = [],
   options: UseCrudDataOptions<T> = {}
 ): UseCrudDataResult<T, TUpdate> => {
@@ -160,6 +222,8 @@ export const useCrudData = <T extends { id: number | string }, TUpdate = Partial
     setData,
     reset,
     isEmpty,
+    cancel,
+    isCancelled,
   } = useAsyncData<T[]>(fetcher, deps, { ...asyncOptions, initialData: [] });
 
   const create = useCallback(async (item: Omit<T, 'id'>): Promise<boolean> => {
@@ -173,8 +237,9 @@ export const useCrudData = <T extends { id: number | string }, TUpdate = Partial
       }
       
       return true;
-    } catch (err: any) {
-      console.error('Error creating item:', err);
+    } catch (err) {
+      const errorMessage = getErrorMessage(err);
+      console.error('Error creating item:', errorMessage);
       return false;
     }
   }, [createFn, updateOptimistically, setData, refetch]);
@@ -194,8 +259,8 @@ export const useCrudData = <T extends { id: number | string }, TUpdate = Partial
       }
       
       return true;
-    } catch (err: any) {
-      console.error('Error updating item:', err);
+    } catch (err) {
+      console.error('Error updating item:', getErrorMessage(err));
       throw err;
     }
   }, [updateFn, updateOptimistically, setData, refetch]);
@@ -211,8 +276,8 @@ export const useCrudData = <T extends { id: number | string }, TUpdate = Partial
       }
       
       return true;
-    } catch (err: any) {
-      console.error('Error deleting item:', err);
+    } catch (err) {
+      console.error('Error deleting item:', getErrorMessage(err));
       return false;
     }
   }, [deleteFn, updateOptimistically, setData, refetch]);
@@ -249,8 +314,8 @@ export const useCrudData = <T extends { id: number | string }, TUpdate = Partial
       }
       
       return { successful: ids.length, failed: 0, total: ids.length };
-    } catch (err: any) {
-      console.error('Error bulk updating items:', err);
+    } catch (err) {
+      console.error('Error bulk updating items:', getErrorMessage(err));
       return { successful: 0, failed: ids.length, total: ids.length };
     }
   }, [bulkUpdateFn, update, updateOptimistically, setData, refetch]);
@@ -279,8 +344,8 @@ export const useCrudData = <T extends { id: number | string }, TUpdate = Partial
       }
       
       return result;
-    } catch (err: any) {
-      console.error('Error bulk deleting items:', err);
+    } catch (err) {
+      console.error('Error bulk deleting items:', getErrorMessage(err));
       return { successful: 0, failed: ids.length, total: ids.length };
     }
   }, [bulkDeleteFn, remove, updateOptimistically, setData, refetch]);
@@ -293,6 +358,8 @@ export const useCrudData = <T extends { id: number | string }, TUpdate = Partial
     setData,
     reset,
     isEmpty,
+    cancel,
+    isCancelled,
     create,
     update,
     remove,
@@ -304,10 +371,10 @@ export const useCrudData = <T extends { id: number | string }, TUpdate = Partial
 /**
  * Hook for filtered and sorted data
  */
-export const useFilteredData = <T>(
+export const useFilteredData = <T extends Record<string, unknown>>(
   data: T[],
-  filters: Record<string, any> = {},
-  sortBy?: string,
+  filters: Partial<T> = {},
+  sortBy?: keyof T,
   sortOrder: 'asc' | 'desc' = 'asc'
 ) => {
   const filteredAndSortedData = useMemo(() => {
@@ -321,7 +388,7 @@ export const useFilteredData = <T>(
             return true;
           }
 
-          const itemValue = (item as any)[key];
+          const itemValue = item[key];
           
           if (Array.isArray(value)) {
             return value.includes(itemValue);
@@ -335,13 +402,21 @@ export const useFilteredData = <T>(
     // Apply sorting
     if (sortBy) {
       filtered.sort((a, b) => {
-        const aValue = (a as any)[sortBy];
-        const bValue = (b as any)[sortBy];
+        const aValue = a[sortBy];
+        const bValue = b[sortBy];
 
-        const comparison = typeof aValue === 'string' 
-          ? aValue.localeCompare(bValue)
-          : aValue - bValue;
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          const comparison = aValue.localeCompare(bValue);
+          return sortOrder === 'asc' ? comparison : -comparison;
+        }
         
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          const comparison = aValue - bValue;
+          return sortOrder === 'asc' ? comparison : -comparison;
+        }
+        
+        // Fallback for other types
+        const comparison = String(aValue).localeCompare(String(bValue));
         return sortOrder === 'asc' ? comparison : -comparison;
       });
     }

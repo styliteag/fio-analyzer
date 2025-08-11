@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { ChartOptions } from "chart.js";
+import type { TimeSeriesChartOptions } from "../types/charts";
 import { 
     generateSeriesDatasets,
     getChartTitle,
@@ -15,8 +15,8 @@ interface UseTimeSeriesChartProps {
 }
 
 interface UseTimeSeriesChartResult {
-    processedChartData: { datasets: any[] } | null;
-    chartOptions: ChartOptions<'line'>;
+    processedChartData: { datasets: any[] } | null; // Chart.js datasets - using any for flexibility
+    chartOptions: TimeSeriesChartOptions;
     hasData: boolean;
 }
 
@@ -40,7 +40,7 @@ export const useTimeSeriesChart = ({
     /**
      * Chart.js configuration options
      */
-    const chartOptions = useMemo((): ChartOptions<'line'> => ({
+    const chartOptions = useMemo((): TimeSeriesChartOptions => ({
         responsive: true,
         maintainAspectRatio: false,
         interaction: {
@@ -112,10 +112,6 @@ export const useTimeSeriesChart = ({
                     display: true,
                     text: "Time",
                 },
-                grid: {
-                    display: true,
-                    color: "rgba(0, 0, 0, 0.1)",
-                },
             },
             y: {
                 type: "linear" as const,
@@ -131,11 +127,11 @@ export const useTimeSeriesChart = ({
                     color: "rgba(59, 130, 246, 0.1)",
                 },
                 ticks: {
-                    callback: function(value) {
+                    callback: function(value): string | number {
                         if (typeof value === 'number') {
                             return value.toLocaleString();
                         }
-                        return value;
+                        return String(value);
                     },
                 },
             },
@@ -152,11 +148,11 @@ export const useTimeSeriesChart = ({
                     display: false,
                 },
                 ticks: {
-                    callback: function(value) {
+                    callback: function(value): string | number {
                         if (typeof value === 'number') {
                             return value.toFixed(2);
                         }
-                        return value;
+                        return String(value);
                     },
                 },
             },
@@ -173,11 +169,11 @@ export const useTimeSeriesChart = ({
                     display: false,
                 },
                 ticks: {
-                    callback: function(value) {
+                    callback: function(value): string | number {
                         if (typeof value === 'number') {
                             return value.toFixed(2);
                         }
-                        return value;
+                        return String(value);
                     },
                 },
             },

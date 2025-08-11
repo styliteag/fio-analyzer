@@ -33,17 +33,21 @@ export interface TimeSeriesTrendsOptions {
 }
 
 // Fetch list of servers with test statistics
-export const fetchTimeSeriesServers = async () => {
-    return apiCall<ServerInfo[]>("/api/time-series/servers");
+export const fetchTimeSeriesServers = async (abortSignal?: AbortSignal) => {
+    return apiCall<ServerInfo[]>("/api/time-series/servers", {
+        signal: abortSignal
+    });
 };
 
 // Fetch latest test results per server
-export const fetchTimeSeriesLatest = async () => {
-    return apiCall<TimeSeriesDataPoint[]>("/api/time-series/latest");
+export const fetchTimeSeriesLatest = async (abortSignal?: AbortSignal) => {
+    return apiCall<TimeSeriesDataPoint[]>("/api/time-series/latest", {
+        signal: abortSignal
+    });
 };
 
 // Fetch historical test data with filtering
-export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions = {}) => {
+export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions = {}, abortSignal?: AbortSignal) => {
     const { 
         hostname, 
         protocol, 
@@ -84,11 +88,13 @@ export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions =
     if (days) params.append("days", days.toString());
     if (hours) params.append("hours", hours.toString());
 
-    return apiCall<TimeSeriesDataPoint[]>(`/api/time-series/history?${params}`);
+    return apiCall<TimeSeriesDataPoint[]>(`/api/time-series/history?${params}`, {
+        signal: abortSignal
+    });
 };
 
 // Fetch trend analysis with moving averages
-export const fetchTimeSeriesTrends = async (options: TimeSeriesTrendsOptions) => {
+export const fetchTimeSeriesTrends = async (options: TimeSeriesTrendsOptions, abortSignal?: AbortSignal) => {
     const { 
         hostname, 
         protocol, 
@@ -108,23 +114,27 @@ export const fetchTimeSeriesTrends = async (options: TimeSeriesTrendsOptions) =>
     if (days) params.append("days", days.toString());
     if (hours) params.append("hours", hours.toString());
 
-    return apiCall<TrendDataPoint[]>(`/api/time-series/trends?${params}`);
+    return apiCall<TrendDataPoint[]>(`/api/time-series/trends?${params}`, {
+        signal: abortSignal
+    });
 };
 
 // Bulk update time-series test runs
-export const bulkUpdateTimeSeries = async (testRunIds: number[], updates: Record<string, any>) => {
+export const bulkUpdateTimeSeries = async (testRunIds: number[], updates: Record<string, any>, abortSignal?: AbortSignal) => {
     return apiCall<{ message: string; updated: number; failed: number }>("/api/time-series/bulk", {
         method: "PUT",
         body: JSON.stringify({ testRunIds, updates }),
+        signal: abortSignal
     });
 };
 
 // Bulk delete time-series test runs from history
-export const deleteTimeSeriesRuns = async (testRunIds: number[]) => {
+export const deleteTimeSeriesRuns = async (testRunIds: number[], abortSignal?: AbortSignal) => {
     return apiCall<{ deleted: number; notFound: number }>("/api/time-series/delete", {
         method: "DELETE",
         body: JSON.stringify({ testRunIds }),
         headers: { "Content-Type": "application/json" },
+        signal: abortSignal
     });
 };
 
@@ -154,10 +164,12 @@ export const fetchTimeSeriesAll = async (filters?: {
     num_jobs?: number[];
     test_sizes?: string[];
     durations?: number[];
-}) => {
+}, abortSignal?: AbortSignal) => {
     // Build query parameters using shared utility
     const params = buildFilterParams(filters || {});
     const queryString = params.toString();
     const url = `/api/time-series/all${queryString ? `?${queryString}` : ''}`;
-    return apiCall<TimeSeriesDataPoint[]>(url);
+    return apiCall<TimeSeriesDataPoint[]>(url, {
+        signal: abortSignal
+    });
 };

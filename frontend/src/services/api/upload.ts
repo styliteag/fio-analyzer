@@ -25,6 +25,7 @@ export interface UploadValidationError {
 export const uploadFioData = async (
     file: File,
     metadata: UploadMetadata,
+    abortSignal?: AbortSignal
 ) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -38,7 +39,7 @@ export const uploadFioData = async (
         formData.append("date", metadata.date);
     }
 
-    return apiUpload("/api/import", formData);
+    return apiUpload("/api/import", formData, abortSignal);
 };
 
 // Validate upload metadata
@@ -143,7 +144,10 @@ export interface BulkImportResponse {
 }
 
 // Bulk import all uploaded FIO files
-export const bulkImportFioData = async (options: BulkImportOptions = {}): Promise<BulkImportResponse> => {
+export const bulkImportFioData = async (
+    options: BulkImportOptions = {},
+    abortSignal?: AbortSignal
+): Promise<BulkImportResponse> => {
     const response = await fetch('/api/import/bulk', {
         method: 'POST',
         headers: {
@@ -153,6 +157,7 @@ export const bulkImportFioData = async (options: BulkImportOptions = {}): Promis
             overwrite: options.overwrite || false,
             dryRun: options.dryRun || false,
         }),
+        signal: abortSignal,
     });
 
     if (!response.ok) {

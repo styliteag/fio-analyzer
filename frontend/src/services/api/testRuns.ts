@@ -28,7 +28,7 @@ export interface TestRunsOptions {
 }
 
 // Fetch test runs with optional historical data and server-side filtering
-export const fetchTestRuns = async (options: TestRunsOptions = {}) => {
+export const fetchTestRuns = async (options: TestRunsOptions = {}, abortSignal?: AbortSignal) => {
     const { 
         hostnames,
         protocols,
@@ -63,7 +63,9 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}) => {
     const queryString = queryParams.toString();
     const url = `/api/test-runs${queryString ? `?${queryString}` : ''}`;
     
-    return apiCall<TestRun[]>(url);
+    return apiCall<TestRun[]>(url, {
+        signal: abortSignal
+    });
 };
 
 // Helper function to convert ActiveFilters to TestRunsOptions
@@ -114,25 +116,30 @@ export const convertActiveFiltersToOptions = (
 };
 
 // Fetch a single test run by ID
-export const fetchTestRun = async (id: number) => {
-    return apiCall<TestRun>(`/api/test-runs/${id}`);
+export const fetchTestRun = async (id: number, abortSignal?: AbortSignal) => {
+    return apiCall<TestRun>(`/api/test-runs/${id}`, {
+        signal: abortSignal
+    });
 };
 
 // Update a specific test run
 export const updateTestRun = async (
     id: number,
     data: TestRunUpdateData,
+    abortSignal?: AbortSignal
 ) => {
     return apiCall(`/api/test-runs/${id}`, {
         method: "PUT",
         body: JSON.stringify(data),
+        signal: abortSignal
     });
 };
 
 // Delete a test run
-export const deleteTestRun = async (id: number) => {
+export const deleteTestRun = async (id: number, abortSignal?: AbortSignal) => {
     return apiCall(`/api/test-runs/${id}`, {
         method: "DELETE",
+        signal: abortSignal
     });
 };
 
@@ -140,6 +147,7 @@ export const deleteTestRun = async (id: number) => {
 export const bulkUpdateTestRuns = async (
     testRunIds: number[],
     updates: TestRunUpdateData,
+    abortSignal?: AbortSignal
 ) => {
     return apiCall(`/api/test-runs/bulk`, {
         method: "PUT",
@@ -147,13 +155,14 @@ export const bulkUpdateTestRuns = async (
             testRunIds,
             updates,
         }),
+        signal: abortSignal
     });
 };
 
 // Bulk delete test runs
-export const deleteTestRuns = async (ids: number[]) => {
+export const deleteTestRuns = async (ids: number[], abortSignal?: AbortSignal) => {
     const results = await Promise.allSettled(
-        ids.map(id => deleteTestRun(id))
+        ids.map(id => deleteTestRun(id, abortSignal))
     );
     
     const successful = results.filter(r => r.status === 'fulfilled').length;
@@ -167,6 +176,8 @@ export const deleteTestRuns = async (ids: number[]) => {
 };
 
 // Fetch filter options for UI
-export const fetchFilters = async () => {
-    return apiCall<FilterOptions>("/api/filters");
+export const fetchFilters = async (abortSignal?: AbortSignal) => {
+    return apiCall<FilterOptions>("/api/filters", {
+        signal: abortSignal
+    });
 };
