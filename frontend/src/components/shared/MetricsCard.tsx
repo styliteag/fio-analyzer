@@ -1,3 +1,4 @@
+import { memo, useMemo, useCallback } from 'react';
 import { LucideIcon } from 'lucide-react';
 import Card from '../ui/Card';
 import Loading from '../ui/Loading';
@@ -39,8 +40,10 @@ export interface MetricsCardProps {
  * Reusable MetricsCard component that handles different metric types
  * Supports single metric or grid of metrics with responsive layout
  * Includes loading states, error handling, and consistent styling
+ * 
+ * Optimized with React.memo and useMemo for performance
  */
-export default function MetricsCard({
+function MetricsCard({
   metrics,
   loading = false,
   error = null,
@@ -50,11 +53,13 @@ export default function MetricsCard({
   formatNumbers = true,
   showCardLoading = true
 }: MetricsCardProps) {
-  // Normalize metrics to always be an array
-  const metricsArray = Array.isArray(metrics) ? metrics : [metrics];
+  // Memoized array normalization to prevent recreation on every render
+  const metricsArray = useMemo(() => {
+    return Array.isArray(metrics) ? metrics : [metrics];
+  }, [metrics]);
 
-  // Generate responsive grid classes
-  const generateGridClasses = () => {
+  // Memoized grid classes generation to prevent recalculation
+  const gridClasses = useMemo(() => {
     const classes = ['grid', 'gap-6'];
     
     if (gridCols.default) classes.push(`grid-cols-${gridCols.default}`);
@@ -64,16 +69,16 @@ export default function MetricsCard({
     if (gridCols.xl) classes.push(`xl:grid-cols-${gridCols.xl}`);
     
     return classes.join(' ');
-  };
+  }, [gridCols]);
 
-  // Format value based on type and options
-  const formatValue = (value: string | number): string => {
+  // Memoized format value function to prevent recreation
+  const formatValue = useCallback((value: string | number): string => {
     if (typeof value === 'string') return value;
     if (typeof value === 'number' && formatNumbers) {
       return value.toLocaleString();
     }
     return value.toString();
-  };
+  }, [formatNumbers]);
 
   // Show error state
   if (error) {
@@ -91,32 +96,17 @@ export default function MetricsCard({
   }
 
   return (
-    <div className={`${generateGridClasses()} ${className}`}>
+    <div className={`${gridClasses} ${className}`}>
       {metricsArray.map((metric, index) => (
-        <Card key={index} className={`p-6 ${cardClassName}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="theme-text-secondary text-sm font-medium mb-1">
-                {metric.title}
-              </p>
-              <div className="theme-text-primary text-2xl font-bold">
-                {loading && showCardLoading ? (
-                  <Loading size="sm" />
-                ) : (
-                  formatValue(metric.value)
-                )}
-              </div>
-              {metric.description && (
-                <p className="theme-text-secondary text-xs mt-1 leading-tight">
-                  {metric.description}
-                </p>
-              )}
-            </div>
-            <div className={`${metric.color} opacity-80 ml-4 flex-shrink-0`}>
-              <metric.icon className="w-8 h-8" />
-            </div>
-          </div>
-        </Card>
+        <IndividualMetricCard
+          key={index}
+          metric={metric}
+          index={index}
+          cardClassName={cardClassName}
+          loading={loading}
+          showCardLoading={showCardLoading}
+          formatValue={formatValue}
+        />
       ))}
     </div>
   );
@@ -136,6 +126,95 @@ export const createMetric = (
   color,
   description
 });
+
+// Individual MetricCard component for better memoization
+const IndividualMetricCard = memo<{
+  metric: MetricCardData;
+  index: number;
+  cardClassName: string;
+  loading: boolean;
+  showCardLoading: boolean;
+  formatValue: (value: string | number) => string;
+}>(({ metric, index, cardClassName, loading, showCardLoading, formatValue }) => {
+  return (
+    <Card key={index} className={`p-6 ${cardClassName}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <p className="theme-text-secondary text-sm font-medium mb-1">
+            {metric.title}
+          </p>
+          <div className="theme-text-primary text-2xl font-bold">
+            {loading && showCardLoading ? (
+              <Loading size="sm" />
+            ) : (
+              formatValue(metric.value)
+            )}
+          </div>
+          {metric.description && (
+            <p className="theme-text-secondary text-xs mt-1 leading-tight">
+              {metric.description}
+            </p>
+          )}
+        </div>
+        <div className={`${metric.color} opacity-80 ml-4 flex-shrink-0`}>
+          <metric.icon className="w-8 h-8" />
+        </div>
+      </div>
+    </Card>
+  );
+});
+
+IndividualMetricCard.displayName = 'IndividualMetricCard';
+
+// Export memoized version with custom props comparison
+export default memo(MetricsCard, (prevProps, nextProps) => {
+  // Quick reference comparison for most props
+  if (prevProps.loading !== nextProps.loading ||
+      prevProps.error !== nextProps.error ||
+      prevProps.className !== nextProps.className ||
+      prevProps.cardClassName !== nextProps.cardClassName ||
+      prevProps.formatNumbers !== nextProps.formatNumbers ||
+      prevProps.showCardLoading !== nextProps.showCardLoading) {
+    return false;
+  }
+  
+  // Deep comparison of gridCols object
+  const prevGrid = prevProps.gridCols;
+  const nextGrid = nextProps.gridCols;
+  if (prevGrid !== nextGrid) {
+    if (!prevGrid || !nextGrid) return false;
+    if (prevGrid.default !== nextGrid.default ||
+        prevGrid.sm !== nextGrid.sm ||
+        prevGrid.md !== nextGrid.md ||
+        prevGrid.lg !== nextGrid.lg ||
+        prevGrid.xl !== nextGrid.xl) {
+      return false;
+    }
+  }
+  
+  // Compare metrics array
+  const prevMetrics = Array.isArray(prevProps.metrics) ? prevProps.metrics : [prevProps.metrics];
+  const nextMetrics = Array.isArray(nextProps.metrics) ? nextProps.metrics : [nextProps.metrics];
+  
+  if (prevMetrics.length !== nextMetrics.length) {
+    return false;
+  }
+  
+  // Compare each metric
+  for (let i = 0; i < prevMetrics.length; i++) {
+    const prev = prevMetrics[i];
+    const next = nextMetrics[i];
+    if (prev.title !== next.title ||
+        prev.value !== next.value ||
+        prev.icon !== next.icon ||
+        prev.color !== next.color ||
+        prev.description !== next.description) {
+      return false;
+    }
+  }
+  
+  return true;
+});;
 
 // Preset color schemes for consistency
 export const metricColors = {

@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import type { TestRun } from "../types";
 import { updateTestRun } from "../services/api/testRuns";
 import BaseTestRunModal from "./shared/BaseTestRunModal";
-import DriveTypeSelector from "./shared/DriveTypeSelector";
-import ProtocolSelector from "./shared/ProtocolSelector";
+import TestRunFormFields, {
+	useTestRunFormData,
+	useTestRunUpdateFlags
+} from "./shared/TestRunFormFields";
 
 interface BulkEditModalProps {
 	testRuns: TestRun[];
@@ -19,49 +21,43 @@ export default function BulkEditModal({
 	onClose,
 	onSave,
 }: BulkEditModalProps) {
-	const [driveModel, setDriveModel] = useState("");
-	const [driveType, setDriveType] = useState("");
-	const [customDriveType, setCustomDriveType] = useState("");
-	const [showCustomType, setShowCustomType] = useState(false);
-	const [hostname, setHostname] = useState("");
-	const [protocol, setProtocol] = useState("");
+	const [formData, setFormData] = useTestRunFormData();
+	const [updateFlags, setUpdateFlags] = useTestRunUpdateFlags();
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [progress, setProgress] = useState({ current: 0, total: 0 });
 
-	// Field update flags
-	const [updateDriveModel, setUpdateDriveModel] = useState(false);
-	const [updateDriveType, setUpdateDriveType] = useState(false);
-	const [updateHostname, setUpdateHostname] = useState(false);
-	const [updateProtocol, setUpdateProtocol] = useState(false);
-
 	useEffect(() => {
 		if (testRuns.length > 0) {
 			// Reset form
-			setDriveModel("");
-			setDriveType("");
-			setCustomDriveType("");
-			setShowCustomType(false);
-			setHostname("");
-			setProtocol("");
-			setUpdateDriveModel(false);
-			setUpdateDriveType(false);
-			setUpdateHostname(false);
-			setUpdateProtocol(false);
+			setFormData({
+				driveModel: "",
+				driveType: "",
+				customDriveType: "",
+				showCustomType: false,
+				hostname: "",
+				protocol: ""
+			});
+			setUpdateFlags({
+				updateDriveModel: false,
+				updateDriveType: false,
+				updateHostname: false,
+				updateProtocol: false
+			});
 			setError(null);
 			setProgress({ current: 0, total: 0 });
 		}
-	}, [testRuns]);
+	}, [testRuns, setFormData, setUpdateFlags]);
 
 	const handleSave = async () => {
 		if (!testRuns.length) return;
 
 		// Check if at least one field is selected for update
 		if (
-			!updateDriveModel &&
-			!updateDriveType &&
-			!updateHostname &&
-			!updateProtocol
+			!updateFlags.updateDriveModel &&
+			!updateFlags.updateDriveType &&
+			!updateFlags.updateHostname &&
+			!updateFlags.updateProtocol
 		) {
 			setError("Please select at least one field to update");
 			return;
@@ -71,7 +67,7 @@ export default function BulkEditModal({
 		setError(null);
 		setProgress({ current: 0, total: testRuns.length });
 
-		const finalDriveType = showCustomType ? customDriveType : driveType;
+		const finalDriveType = formData.showCustomType ? formData.customDriveType : formData.driveType;
 		const updatedRuns: TestRun[] = [];
 		let failed = 0;
 
@@ -83,17 +79,17 @@ export default function BulkEditModal({
 				try {
 					const updateData: any = {};
 
-					if (updateDriveModel && driveModel.trim()) {
-						updateData.drive_model = driveModel.trim();
+					if (updateFlags.updateDriveModel && formData.driveModel.trim()) {
+						updateData.drive_model = formData.driveModel.trim();
 					}
-					if (updateDriveType && finalDriveType.trim()) {
+					if (updateFlags.updateDriveType && finalDriveType.trim()) {
 						updateData.drive_type = finalDriveType.trim();
 					}
-					if (updateHostname && hostname.trim()) {
-						updateData.hostname = hostname.trim();
+					if (updateFlags.updateHostname && formData.hostname.trim()) {
+						updateData.hostname = formData.hostname.trim();
 					}
-					if (updateProtocol && protocol.trim()) {
-						updateData.protocol = protocol.trim();
+					if (updateFlags.updateProtocol && formData.protocol.trim()) {
+						updateData.protocol = formData.protocol.trim();
 					}
 
 					// Only update if we have data to send
@@ -132,11 +128,6 @@ export default function BulkEditModal({
 	};
 
 
-	const handleDriveTypeChange = (driveType: string, customType: string, showCustom: boolean) => {
-		setDriveType(driveType);
-		setCustomDriveType(customType);
-		setShowCustomType(showCustom);
-	};
 
 	if (!isOpen || !testRuns.length) return null;
 
@@ -153,10 +144,10 @@ export default function BulkEditModal({
 			saveButtonIcon={<Save className="h-4 w-4 mr-2" />}
 			maxWidth="lg"
 			saveDisabled={
-				!updateDriveModel &&
-				!updateDriveType &&
-				!updateHostname &&
-				!updateProtocol
+				!updateFlags.updateDriveModel &&
+				!updateFlags.updateDriveType &&
+				!updateFlags.updateHostname &&
+				!updateFlags.updateProtocol
 			}
 		>
 					{/* Selected Runs Preview */}
@@ -178,113 +169,15 @@ export default function BulkEditModal({
 						</div>
 					</div>
 
-					{/* Drive Model */}
-					<div className="theme-form-group">
-						<div className="flex items-center mb-2">
-							<input
-								type="checkbox"
-								id="update-drive-model"
-								checked={updateDriveModel}
-								onChange={(e) => setUpdateDriveModel(e.target.checked)}
-								className="mr-2"
-								disabled={saving}
-							/>
-							<label
-								htmlFor="update-drive-model"
-								className="theme-form-label mb-0"
-							>
-								Update Drive Model
-							</label>
-						</div>
-						<input
-							type="text"
-							value={driveModel}
-							onChange={(e) => setDriveModel(e.target.value)}
-							placeholder="e.g., Samsung 980 PRO"
-							className="theme-form-input"
-							disabled={saving || !updateDriveModel}
-						/>
-					</div>
-
-					{/* Drive Type */}
-					<div className="theme-form-group">
-						<div className="flex items-center mb-2">
-							<input
-								type="checkbox"
-								id="update-drive-type"
-								checked={updateDriveType}
-								onChange={(e) => setUpdateDriveType(e.target.checked)}
-								className="mr-2"
-								disabled={saving}
-							/>
-							<label
-								htmlFor="update-drive-type"
-								className="theme-form-label mb-0"
-							>
-								Update Drive Type
-							</label>
-						</div>
-						<DriveTypeSelector
-							value={driveType}
-							customValue={customDriveType}
-							showCustom={showCustomType}
-							onChange={handleDriveTypeChange}
-							disabled={saving || !updateDriveType}
-						/>
-					</div>
-
-					{/* Hostname */}
-					<div className="theme-form-group">
-						<div className="flex items-center mb-2">
-							<input
-								type="checkbox"
-								id="update-hostname"
-								checked={updateHostname}
-								onChange={(e) => setUpdateHostname(e.target.checked)}
-								className="mr-2"
-								disabled={saving}
-							/>
-							<label
-								htmlFor="update-hostname"
-								className="theme-form-label mb-0"
-							>
-								📡 Update Hostname
-							</label>
-						</div>
-						<input
-							type="text"
-							value={hostname}
-							onChange={(e) => setHostname(e.target.value)}
-							placeholder="e.g., web-server-01"
-							className="theme-form-input"
-							disabled={saving || !updateHostname}
-						/>
-					</div>
-
-					{/* Protocol */}
-					<div className="theme-form-group">
-						<div className="flex items-center mb-2">
-							<input
-								type="checkbox"
-								id="update-protocol"
-								checked={updateProtocol}
-								onChange={(e) => setUpdateProtocol(e.target.checked)}
-								className="mr-2"
-								disabled={saving}
-							/>
-							<label
-								htmlFor="update-protocol"
-								className="theme-form-label mb-0"
-							>
-								🔗 Update Protocol
-							</label>
-						</div>
-						<ProtocolSelector
-							value={protocol}
-							onChange={setProtocol}
-							disabled={saving || !updateProtocol}
-						/>
-					</div>
+			{/* Form Fields */}
+			<TestRunFormFields
+				formData={formData}
+				onFormDataChange={setFormData}
+				mode="bulk"
+				updateFlags={updateFlags}
+				onUpdateFlagsChange={setUpdateFlags}
+				disabled={saving}
+			/>
 
 					{/* Progress */}
 					{saving && (
