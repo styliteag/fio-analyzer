@@ -1,8 +1,8 @@
 import { useEffect, useCallback } from "react";
 import { DashboardHeader, DashboardFooter } from "../components/layout";
+import { MetricsCard, createMetric, metricColors } from "../components/shared";
 import Card from "../components/ui/Card";
 import Button from "../components/ui/Button";
-import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import { useAuth } from "../contexts/AuthContext";
 import { useApiCall } from "../hooks";
@@ -62,42 +62,42 @@ export default function Home() {
 	};
 
 	const statCards = [
-		{
-			title: "Total Test Runs",
-			value: stats?.totalTestRuns.toLocaleString() || "---",
-			icon: Database,
-			color: "text-blue-600 dark:text-blue-400"
-		},
-		{
-			title: "Active Servers",
-			value: stats?.activeServers.toString() || "---",
-			icon: Activity,
-			color: "text-green-600 dark:text-green-400"
-		},
-		{
-			title: "Avg IOPS",
-			value: stats?.avgIOPS.toLocaleString() || "---",
-			icon: TrendingUp,
-			color: "text-purple-600 dark:text-purple-400"
-		},
-		{
-			title: "Avg Latency",
-			value: stats?.avgLatency ? `${stats.avgLatency}ms` : "---",
-			icon: Activity,
-			color: "text-orange-600 dark:text-orange-400"
-		},
-		{
-			title: "Last Upload",
-			value: stats?.lastUpload || "---",
-			icon: Upload,
-			color: "text-indigo-600 dark:text-indigo-400"
-		},
-		{
-			title: "Total Hostnames / with History",
-			value: stats ? `${stats.totalHostnames} / ${stats.hostnamesWithHistory}` : "---",
-			icon: Users,
-			color: "text-red-600 dark:text-red-400"
-		}
+		createMetric(
+			"Total Test Runs",
+			stats?.totalTestRuns || "---",
+			Database,
+			metricColors.blue
+		),
+		createMetric(
+			"Active Servers",
+			stats?.activeServers || "---",
+			Activity,
+			metricColors.green
+		),
+		createMetric(
+			"Avg IOPS",
+			stats?.avgIOPS || "---",
+			TrendingUp,
+			metricColors.purple
+		),
+		createMetric(
+			"Avg Latency",
+			stats?.avgLatency ? `${stats.avgLatency}ms` : "---",
+			Activity,
+			metricColors.orange
+		),
+		createMetric(
+			"Last Upload",
+			stats?.lastUpload || "---",
+			Upload,
+			metricColors.indigo
+		),
+		createMetric(
+			"Total Hostnames / with History",
+			stats ? `${stats.totalHostnames} / ${stats.hostnamesWithHistory}` : "---",
+			Users,
+			metricColors.red
+		)
 	];
 
 	return (
@@ -177,24 +177,15 @@ export default function Home() {
 				)}
 
 				{/* Statistics Grid */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-					{statCards.map((stat, index) => (
-						<Card key={index} className="p-6">
-							<div className="flex items-center justify-between">
-								<div>
-									<p className="theme-text-secondary text-sm font-medium">
-										{stat.title}
-									</p>
-									<div className="theme-text-primary text-2xl font-bold mt-1">
-										{loading ? <Loading size="sm" /> : stat.value}
-									</div>
-								</div>
-								<div className={`${stat.color} opacity-80`}>
-									<stat.icon className="w-8 h-8" />
-								</div>
-							</div>
-						</Card>
-					))}
+				<div className="mb-8">
+					<MetricsCard
+						metrics={statCards}
+						loading={loading}
+						error={error}
+						gridCols={{ default: 1, md: 2, lg: 3 }}
+						formatNumbers={true}
+						showCardLoading={true}
+					/>
 				</div>
 
 				{/* Main Content Area */}
