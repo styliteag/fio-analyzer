@@ -14,6 +14,17 @@ export {
     type UseChartColorsResult
 } from './useChartColors';
 
+// Export filter-related hooks
+export { 
+    useTestRunFilters,
+    type ActiveFilters,
+    type FilterOption,
+    type DynamicFilterOptions
+} from './useTestRunFilters';
+export { useFilterState } from './useFilterState';
+export { useFilterOptions } from './useFilterOptions';
+export { useFilteredData, useFilteredDataWithStats } from './useFilteredData';
+
 // Re-export commonly used API hooks
 export {
     useTestRuns,
