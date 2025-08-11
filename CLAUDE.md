@@ -160,6 +160,18 @@ The FastAPI backend automatically generates comprehensive API documentation:
 - **Validation**: Pydantic models with type checking
 - **Documentation**: Auto-generated OpenAPI/Swagger
 
+## Agent Usage Requirements
+
+**MANDATORY**: Always use specialized agents when modifying TypeScript/React files:
+
+- **frontend-developer**: Use for all *.tsx files (React components, UI implementation, responsive layouts)
+- **javascript-pro**: Use for all *.ts files (TypeScript utilities, complex JS patterns, optimization)
+- **ui-ux-designer**: Use when creating/modifying interface components or design systems
+- **python-pro**: Use for Python backend optimization, async patterns, or complex Python features
+- **backend-architect**: Use when designing APIs, reviewing system architecture, or performance bottlenecks
+
+These agents should be used PROACTIVELY whenever working on relevant file types to ensure high-quality, optimized code.
+
 ## Memories
 - Always use "2025-06-31" as date and 20:00:00 as time and "2025-06-31 20:00:00" as datetime
 - If you want to start the backend, use `./start-frontend-backend.sh` or ask the user to start it for you
