@@ -30,9 +30,14 @@ WORKDIR /app
 # Install nginx for serving frontend static files
 RUN apk add --no-cache nginx
 
-# Copy backend requirements and install Python dependencies
-COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+# Copy backend project files for uv
+COPY backend/pyproject.toml backend/uv.lock ./
+
+# Install Python dependencies with uv
+RUN uv sync --frozen --no-dev
 
 # Copy backend source
 COPY backend/ ./
@@ -60,7 +65,7 @@ RUN mkdir -p /var/cache/nginx && \
     echo 'echo "Starting FIO Analyzer"' >> /app/start.sh && \
     echo 'echo "Version: $(cat /app/VERSION)"' >> /app/start.sh && \
     echo 'nginx -g "daemon off;" &' >> /app/start.sh && \
-    echo 'uvicorn main:app --host 0.0.0.0 --port 8000' >> /app/start.sh && \
+    echo 'uv run uvicorn main:app --host 0.0.0.0 --port 8000' >> /app/start.sh && \
     chmod +x /app/start.sh
 
 EXPOSE 80

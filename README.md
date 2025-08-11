@@ -136,12 +136,26 @@ For local development with separate frontend/backend:
    source venv/bin/activate
    ```
 
-3. **Install Dependencies**:
+3. **Install Dependencies** (choose one):
+   
+   **Option A - Using uv (recommended, faster)**:
    ```bash
-   pip install -r requirements.txt
+   uv sync
+   ```
+   
+   **Option B - Using traditional pip**:
+   ```bash
+   pip install fastapi uvicorn python-multipart bcrypt python-jose
    ```
 
 4. **Run the Backend Server**:
+   
+   **With uv**:
+   ```bash
+   uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   ```
+   
+   **With traditional setup**:
    ```bash
    uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```

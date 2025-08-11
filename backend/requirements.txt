@@ -1,3 +1,7 @@
+# Legacy requirements file for compatibility
+# For new projects, use pyproject.toml with uv instead:
+# uv sync
+
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6

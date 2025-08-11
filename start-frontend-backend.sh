@@ -26,28 +26,18 @@ cleanup() {
 # Trap termination signals to run the cleanup function
 trap cleanup SIGINT SIGTERM
 
-# Start backend in the background with Python virtual environment
+# Start backend in the background with uv
 echo "Setting up and starting backend..."
 (
     cd backend
     
-    # Create virtual environment if it doesn't exist
-    if [ ! -d "venv" ]; then
-        echo "Creating Python virtual environment..."
-        python3 -m venv venv
-    fi
+    # Install/upgrade dependencies with uv
+    echo "Installing Python dependencies with uv..."
+    uv sync
     
-    # Activate virtual environment
-    source venv/bin/activate
-    
-    # Install/upgrade pip and dependencies
-    echo "Installing Python dependencies..."
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    
-    # Start FastAPI server
-    echo "Starting FastAPI backend server..."
-    uvicorn main:app --reload --host 0.0.0.0 --port 8000
+    # Start FastAPI server with uv
+    echo "Starting FastAPI backend server with uv..."
+    uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ) &
 backend_pid=$!
 
