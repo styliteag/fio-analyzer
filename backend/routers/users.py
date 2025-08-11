@@ -8,7 +8,7 @@ from typing import List, Optional
 from pathlib import Path
 import bcrypt
 
-from auth.middleware import require_admin
+from auth.middleware import require_admin, require_auth
 from auth.authentication import parse_htpasswd
 from config.settings import settings
 from utils.logging import log_info, log_error, log_warning
@@ -111,7 +111,7 @@ async def list_users(current_user=Depends(require_admin)):
 
 
 @router.get("/me", response_model=CurrentUserResponse)
-async def get_current_user(current_user=Depends(require_admin)):
+async def get_current_user(current_user=Depends(require_auth)):
     """Get current user information"""
     return CurrentUserResponse(
         username=current_user.username,
