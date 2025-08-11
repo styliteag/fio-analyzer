@@ -2,14 +2,15 @@
 import type { ChartTemplate, PerformanceData, RadarGridData, RadarPoolData, RadarMetrics } from '../../types';
 import { sortBlockSizes } from '../../utils/sorting';
 import { formatBlockSize } from '../../services/data/formatters';
-import type { SortOption, GroupOption } from './ChartControls';
+import type { GroupOption } from './ChartControls';
 import { chartConfig } from '../../services/config';
+import { 
+  applySortingAndGrouping as applySortingAndGroupingUtil, 
+  formatGroupKey,
+  type SortingOptions 
+} from '../../utils/chartSorting';
 
-export interface ProcessorOptions {
-    sortBy: SortOption;
-    sortOrder: 'asc' | 'desc';
-    groupBy: GroupOption;
-}
+export interface ProcessorOptions extends SortingOptions {}
 
 export interface ChartDataset {
     label: string;
@@ -49,193 +50,8 @@ export const getMetricValue = (
     return 0;
 };
 
-// Helper function to format group keys consistently
-export const formatGroupKey = (groupBy: GroupOption, item: PerformanceData): string => {
-    switch (groupBy) {
-        case "drive":
-            return item.drive_model;
-        case "test":
-            return item.read_write_pattern;
-        case "blocksize":
-            return item.block_size.toString();
-        case "protocol":
-            return item.protocol || "Unknown";
-        case "hostname":
-            return item.hostname || "Unknown";
-        case "queuedepth": {
-            const queueDepth = item.queue_depth || (item as any).iodepth || 0;
-            return `QD${queueDepth}`;
-        }
-        case "iodepth": {
-            const ioDepth = (item as any).iodepth || item.queue_depth || 0;
-            return `IOD${ioDepth}`;
-        }
-        case "numjobs": {
-            const numJobs = (item as any).num_jobs || 1;
-            return `${numJobs} Jobs`;
-        }
-        case "direct": {
-            const direct = (item as any).direct;
-            if (direct === null || direct === undefined) return "Direct IO: Unknown";
-            return direct === 1 ? "Direct IO: Yes" : "Direct IO: No";
-        }
-        case "sync": {
-            const sync = (item as any).sync;
-            if (sync === null || sync === undefined) return "Sync: Unknown";
-            return sync === 1 ? "Sync: On" : "Sync: Off";
-        }
-        case "testsize": {
-            const testSize = (item as any).test_size || "Unknown";
-            return `Size: ${testSize}`;
-        }
-        case "duration": {
-            const duration = (item as any).duration || 0;
-            return `${duration}s`;
-        }
-        default:
-            return "Default";
-    }
-};
-
-// Apply sorting and grouping to data
-export const applySortingAndGrouping = (
-    data: PerformanceData[],
-    options: ProcessorOptions,
-): PerformanceData[] => {
-    const { sortBy, sortOrder, groupBy } = options;
-    
-    // Apply sorting
-    const sortedData = [...data];
-    sortedData.sort((a, b) => {
-        let aValue: any, bValue: any;
-
-        switch (sortBy) {
-            case "name":
-                aValue = `${a.test_name}_${a.drive_model}_${a.block_size}`;
-                bValue = `${b.test_name}_${b.drive_model}_${b.block_size}`;
-                break;
-            case "iops":
-                aValue = getMetricValue(a.metrics, "iops");
-                bValue = getMetricValue(b.metrics, "iops");
-                break;
-            case "latency":
-                aValue = getMetricValue(a.metrics, "avg_latency");
-                bValue = getMetricValue(b.metrics, "avg_latency");
-                break;
-            case "bandwidth":
-                aValue = getMetricValue(a.metrics, "bandwidth");
-                bValue = getMetricValue(b.metrics, "bandwidth");
-                break;
-            case "blocksize":
-                aValue = a.block_size;
-                bValue = b.block_size;
-                return sortBlockSizes([aValue, bValue])[0] === aValue ? -1 : 1;
-            case "drivemodel":
-                aValue = a.drive_model;
-                bValue = b.drive_model;
-                break;
-            case "protocol":
-                aValue = a.protocol || "";
-                bValue = b.protocol || "";
-                break;
-            case "hostname":
-                aValue = a.hostname || "";
-                bValue = b.hostname || "";
-                break;
-            case "queuedepth":
-                aValue = a.queue_depth || (a as any).iodepth || 0;
-                bValue = b.queue_depth || (b as any).iodepth || 0;
-                break;
-            default:
-                aValue = a.test_name;
-                bValue = b.test_name;
-        }
-
-        const comparison =
-            typeof aValue === "string"
-                ? aValue.localeCompare(bValue)
-                : aValue - bValue;
-        return sortOrder === "asc" ? comparison : -comparison;
-    });
-
-    // Apply grouping (affects how data is ordered for better visual grouping)
-    if (groupBy !== "none") {
-        sortedData.sort((a, b) => {
-            let aGroupValue: any, bGroupValue: any;
-
-            // Use the helper function to format group values consistently
-            aGroupValue = formatGroupKey(groupBy, a);
-            bGroupValue = formatGroupKey(groupBy, b);
-            
-            // Special handling for block size sorting
-            if (groupBy === "blocksize") {
-                return sortBlockSizes([a.block_size.toString(), b.block_size.toString()])[0] === a.block_size.toString() ? -1 : 1;
-            }
-
-            const groupComparison =
-                typeof aGroupValue === "string"
-                    ? aGroupValue.localeCompare(bGroupValue)
-                    : aGroupValue - bGroupValue;
-
-            // If groups are the same, maintain original sort order
-            if (groupComparison === 0) {
-                // Apply the original sorting within the group
-                let aValue: any, bValue: any;
-                switch (sortBy) {
-                    case "name":
-                        aValue = `${a.test_name}_${a.drive_model}_${a.block_size}`;
-                        bValue = `${b.test_name}_${b.drive_model}_${b.block_size}`;
-                        break;
-                    case "iops":
-                        aValue = getMetricValue(a.metrics, "iops");
-                        bValue = getMetricValue(b.metrics, "iops");
-                        break;
-                    case "latency":
-                        aValue = getMetricValue(a.metrics, "avg_latency");
-                        bValue = getMetricValue(b.metrics, "avg_latency");
-                        break;
-                    case "bandwidth":
-                        aValue = getMetricValue(a.metrics, "bandwidth");
-                        bValue = getMetricValue(b.metrics, "bandwidth");
-                        break;
-                    case "blocksize":
-                        aValue = a.block_size;
-                        bValue = b.block_size;
-                        return sortBlockSizes([aValue, bValue])[0] === aValue ? -1 : 1;
-                    case "drivemodel":
-                        aValue = a.drive_model;
-                        bValue = b.drive_model;
-                        break;
-                    case "protocol":
-                        aValue = a.protocol || "";
-                        bValue = b.protocol || "";
-                        break;
-                    case "hostname":
-                        aValue = a.hostname || "";
-                        bValue = b.hostname || "";
-                        break;
-                    case "queuedepth":
-                        aValue = a.queue_depth || (a as any).iodepth || 0;
-                        bValue = b.queue_depth || (b as any).iodepth || 0;
-                        break;
-                    default:
-                        aValue = a.test_name;
-                        bValue = b.test_name;
-                }
-
-                const comparison =
-                    typeof aValue === "string"
-                        ? aValue.localeCompare(bValue)
-                        : aValue - bValue;
-                return sortOrder === "asc" ? comparison : -comparison;
-            }
-
-            return groupComparison;
-        });
-    }
-
-    return sortedData;
-};
+// Use the utility function for sorting and grouping
+export const applySortingAndGrouping = applySortingAndGroupingUtil;
 
 // Enhanced color assignment for better grouping visualization
 const getColorsForGrouping = (groupCount: number, metricCount: number = 3): string[] => {
