@@ -212,12 +212,100 @@ export class ChartColorManager {
     return variations[index % variations.length];
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private adjustHue(color: string, _degrees: number): string {
-    // Simplified hue adjustment - in a real implementation, 
-    // you'd convert to HSL, adjust hue by _degrees, and convert back
-    // Currently returns original color as placeholder
-    return color; // TODO: implement proper HSL conversion using _degrees
+  private adjustHue(color: string, degrees: number): string {
+    // Parse color to RGB
+    const rgb = this.parseColorToRgb(color);
+    if (!rgb) return color;
+
+    // Convert RGB to HSL
+    const hsl = this.rgbToHsl(rgb.r, rgb.g, rgb.b);
+    
+    // Adjust hue
+    hsl.h = (hsl.h + degrees / 360) % 1;
+    if (hsl.h < 0) hsl.h += 1;
+    
+    // Convert back to RGB
+    const newRgb = this.hslToRgb(hsl.h, hsl.s, hsl.l);
+    
+    // Return as rgba string
+    return `rgba(${Math.round(newRgb.r)}, ${Math.round(newRgb.g)}, ${Math.round(newRgb.b)}, 1)`;
+  }
+
+  private parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
+    // Handle rgba format
+    const rgbaMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (rgbaMatch) {
+      return {
+        r: parseInt(rgbaMatch[1]),
+        g: parseInt(rgbaMatch[2]),
+        b: parseInt(rgbaMatch[3])
+      };
+    }
+
+    // Handle hex format
+    const hexMatch = color.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+    if (hexMatch) {
+      return {
+        r: parseInt(hexMatch[1], 16),
+        g: parseInt(hexMatch[2], 16),
+        b: parseInt(hexMatch[3], 16)
+      };
+    }
+
+    return null;
+  }
+
+  private rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const diff = max - min;
+    
+    let h = 0;
+    const s = max === 0 ? 0 : diff / max;
+    const l = (max + min) / 2;
+
+    if (diff !== 0) {
+      switch (max) {
+        case r: h = ((g - b) / diff) % 6; break;
+        case g: h = (b - r) / diff + 2; break;
+        case b: h = (r - g) / diff + 4; break;
+      }
+      h /= 6;
+    }
+
+    return { h: h < 0 ? h + 1 : h, s, l };
+  }
+
+  private hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
+    const m = l - c / 2;
+
+    let r = 0, g = 0, b = 0;
+
+    if (0 <= h && h < 1/6) {
+      r = c; g = x; b = 0;
+    } else if (1/6 <= h && h < 2/6) {
+      r = x; g = c; b = 0;
+    } else if (2/6 <= h && h < 3/6) {
+      r = 0; g = c; b = x;
+    } else if (3/6 <= h && h < 4/6) {
+      r = 0; g = x; b = c;
+    } else if (4/6 <= h && h < 5/6) {
+      r = x; g = 0; b = c;
+    } else if (5/6 <= h && h < 1) {
+      r = c; g = 0; b = x;
+    }
+
+    return {
+      r: (r + m) * 255,
+      g: (g + m) * 255,
+      b: (b + m) * 255
+    };
   }
 
   private groupItems(items: ChartDataItem[]): Array<{ name: string; items: ChartDataItem[] }> {
