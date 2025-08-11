@@ -1,5 +1,5 @@
 // Chart rendering component with Chart.js integration
-import { forwardRef, useMemo } from 'react';
+import { forwardRef, useMemo, memo, useCallback } from 'react';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -41,7 +41,7 @@ export interface ChartRendererProps {
     className?: string;
 }
 
-const ChartRenderer = forwardRef<any, ChartRendererProps>(({
+const ChartRenderer = memo(forwardRef<any, ChartRendererProps>(({
     chartData,
     template,
     isMaximized = false,
@@ -50,6 +50,11 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
     className = '',
 }, ref) => {
     const themeColors = useThemeColors();
+
+    // Memoized series toggle callback to prevent unnecessary re-renders
+    const handleSeriesToggle = useCallback((label: string) => {
+        onSeriesToggle?.(label);
+    }, [onSeriesToggle]);
 
     // Filter datasets based on visible series
     const filteredChartData = useMemo(() => {
@@ -73,7 +78,7 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
             legend: {
                 position: 'top' as const,
                 onClick: (_e: any, legendItem: any) => {
-                    onSeriesToggle?.(legendItem.text);
+                    handleSeriesToggle(legendItem.text);
                 },
                 labels: {
                     color: themeColors.chart.text,
@@ -217,10 +222,12 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
             duration: 750,
             easing: 'easeInOutQuart' as const,
         },
-    }), [template, themeColors, onSeriesToggle]);
+    }), [template, themeColors, handleSeriesToggle]);
 
-    // Select appropriate chart component
-    const ChartComponent = template.chartType === 'line' ? Line : Bar;
+    // Memoized chart component selection to prevent re-creation
+    const ChartComponent = useMemo(() => {
+        return template.chartType === 'line' ? Line : Bar;
+    }, [template.chartType]);
 
     return (
         <div className={`${isMaximized ? 'h-[calc(100vh-280px)]' : 'h-[600px]'} ${className}`}>
@@ -231,9 +238,69 @@ const ChartRenderer = forwardRef<any, ChartRendererProps>(({
             />
         </div>
     );
-});
+}));
 
 ChartRenderer.displayName = 'ChartRenderer';
+
+// Custom equality check for Chart.js data to prevent unnecessary re-renders
+const arePropsEqual = (prevProps: ChartRendererProps, nextProps: ChartRendererProps) => {
+    // Check if basic props are the same
+    if (prevProps.isMaximized !== nextProps.isMaximized || 
+        prevProps.className !== nextProps.className ||
+        prevProps.template.id !== nextProps.template.id) {
+        return false;
+    }
+
+    // Check if visible series changed
+    if (prevProps.visibleSeries !== nextProps.visibleSeries) {
+        if (!prevProps.visibleSeries && !nextProps.visibleSeries) {
+            // Both are undefined/null, consider equal
+        } else if (!prevProps.visibleSeries || !nextProps.visibleSeries) {
+            return false; // One is undefined, other is not
+        } else {
+            // Compare Set contents
+            if (prevProps.visibleSeries.size !== nextProps.visibleSeries.size) {
+                return false;
+            }
+            for (const item of prevProps.visibleSeries) {
+                if (!nextProps.visibleSeries.has(item)) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    // Deep comparison of chart data is expensive, so we'll do a shallow check
+    // If datasets length or first dataset reference changed, assume different
+    const prevDatasets = prevProps.chartData.datasets;
+    const nextDatasets = nextProps.chartData.datasets;
+    
+    if (prevDatasets.length !== nextDatasets.length) {
+        return false;
+    }
+    
+    // Check if dataset references or labels changed
+    for (let i = 0; i < prevDatasets.length; i++) {
+        if (prevDatasets[i] !== nextDatasets[i] || 
+            prevDatasets[i].label !== nextDatasets[i].label) {
+            return false;
+        }
+    }
+    
+    // Check labels array
+    const prevLabels = prevProps.chartData.labels;
+    const nextLabels = nextProps.chartData.labels;
+    if (prevLabels !== nextLabels) {
+        if (!prevLabels || !nextLabels || prevLabels.length !== nextLabels.length) {
+            return false;
+        }
+    }
+    
+    return true;
+};
+
+// Export memoized version with custom comparison
+const MemoizedChartRenderer = memo(ChartRenderer, arePropsEqual);
 
 // Chart scales configuration based on template
 const getScalesForTemplate = (template: ChartTemplate, themeColors: any) => {
@@ -389,4 +456,4 @@ const getScalesForTemplate = (template: ChartTemplate, themeColors: any) => {
     }
 };
 
-export default ChartRenderer;
+export default MemoizedChartRenderer;

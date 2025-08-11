@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Line } from "react-chartjs-2";
 import { TrendingUp } from "lucide-react";
 import {
@@ -106,4 +106,41 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
     );
 };
 
-export default TimeSeriesChart;
+// Custom comparison function for memo
+const arePropsEqual = (prevProps: TimeSeriesChartProps, nextProps: TimeSeriesChartProps): boolean => {
+    // Check simple props first
+    if (prevProps.loading !== nextProps.loading ||
+        prevProps.isMaximized !== nextProps.isMaximized ||
+        prevProps.timeRange !== nextProps.timeRange) {
+        return false;
+    }
+
+    // Deep comparison of enabledMetrics
+    const prevMetrics = prevProps.enabledMetrics;
+    const nextMetrics = nextProps.enabledMetrics;
+    if (prevMetrics.iops !== nextMetrics.iops ||
+        prevMetrics.latency !== nextMetrics.latency ||
+        prevMetrics.bandwidth !== nextMetrics.bandwidth) {
+        return false;
+    }
+
+    // Compare seriesData array
+    if (prevProps.seriesData === nextProps.seriesData) {
+        return true; // Same reference
+    }
+
+    if (prevProps.seriesData.length !== nextProps.seriesData.length) {
+        return false;
+    }
+
+    // Shallow comparison of series data objects
+    for (let i = 0; i < prevProps.seriesData.length; i++) {
+        if (prevProps.seriesData[i] !== nextProps.seriesData[i]) {
+            return false;
+        }
+    }
+
+    return true;
+};
+
+export default memo(TimeSeriesChart, arePropsEqual);
