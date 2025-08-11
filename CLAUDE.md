@@ -169,6 +169,12 @@ The FastAPI backend automatically generates comprehensive API documentation:
 - **ui-ux-designer**: Use when creating/modifying interface components or design systems
 - **python-pro**: Use for Python backend optimization, async patterns, or complex Python features
 - **backend-architect**: Use when designing APIs, reviewing system architecture, or performance bottlenecks
+- **error-detective**: Use to run ESLint, TypeScript build checks, and syntax validation after code changes
+
+**MANDATORY WORKFLOW**: After modifying any frontend code (*.ts, *.tsx files):
+1. Use the appropriate specialized agent (frontend-developer/javascript-pro/ui-ux-designer)
+2. Use **error-detective** agent to run `npm run lint` and `npx tsc --noEmit` for validation
+3. Fix any syntax/lint errors before proceeding
 
 These agents should be used PROACTIVELY whenever working on relevant file types to ensure high-quality, optimized code.
 
