@@ -76,8 +76,23 @@ export const getTimeRangeParams = (timeRange: TimeRange) => {
     }
 };
 
+// Memoization cache for expensive operations
+const processMetricDataCache = new Map<string, ChartDataset>();
+const timestampCache = new Map<string, number>();
+
 /**
- * Processes chart data for a specific metric type
+ * Optimized timestamp parsing with memoization
+ */
+const getTimestamp = (dateString: string): number => {
+    if (!timestampCache.has(dateString)) {
+        timestampCache.set(dateString, new Date(dateString).getTime());
+    }
+    return timestampCache.get(dateString)!;
+};
+
+/**
+ * Processes chart data for a specific metric type - OPTIMIZED VERSION
+ * Single-pass filtering, mapping, and sorting with memoization
  */
 export const processMetricData = (
     data: TimeSeriesPoint[],
@@ -87,14 +102,30 @@ export const processMetricData = (
     yAxisID: string,
     borderDash?: number[]
 ): ChartDataset => {
-    const filteredData = data
-        .filter((point) => point.metric_type === metricType)
-        .map((point) => ({
-            x: point.timestamp, // keep ISO string for typing
-            y: point.value,
-        }))
-        // Ensure data is in chronological order; otherwise the line will jump back and forth
-        .sort((a, b) => new Date(a.x).getTime() - new Date(b.x).getTime());
+    // Create cache key for memoization
+    const cacheKey = `${metricType}-${label}-${data.length}-${data[0]?.timestamp || ''}`;
+    if (processMetricDataCache.has(cacheKey)) {
+        return processMetricDataCache.get(cacheKey)!;
+    }
+
+    // Single-pass filter, map, and collect timestamps for sorting
+    const filteredPoints: Array<{ point: { x: string; y: number }, timestamp: number }> = [];
+    
+    for (const point of data) {
+        if (point.metric_type === metricType) {
+            const timestamp = getTimestamp(point.timestamp);
+            filteredPoints.push({
+                point: { x: point.timestamp, y: point.value },
+                timestamp
+            });
+        }
+    }
+
+    // Sort by pre-computed timestamps (more efficient than repeated Date parsing)
+    filteredPoints.sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Extract sorted data points
+    const filteredData = filteredPoints.map(item => item.point);
 
     const dataset: ChartDataset = {
         label,
@@ -118,11 +149,14 @@ export const processMetricData = (
         },
     };
 
+    // Cache the result
+    processMetricDataCache.set(cacheKey, dataset);
     return dataset;
 };
 
 /**
- * Generates chart datasets from time series data (legacy function)
+ * Generates chart datasets from time series data - OPTIMIZED VERSION
+ * Single-pass processing with Map-based server lookup and batch metric processing
  */
 export const generateChartDatasets = (
     chartData: { [serverId: string]: any[] },
@@ -132,8 +166,17 @@ export const generateChartDatasets = (
     const datasets: ChartDataset[] = [];
     let colorIndex = 0;
 
+    // Create Map for O(1) server group lookup
+    const serverGroupMap = new Map(serverGroups.map(group => [group.id, group]));
+
+    // Batch process enabled metrics to avoid repeated conditional checks
+    const metricsToProcess: Array<{type: string, label: string, yAxis: string, borderDash?: number[]}> = [];
+    if (enabledMetrics.iops) metricsToProcess.push({ type: "iops", label: "IOPS", yAxis: "y", borderDash: undefined });
+    if (enabledMetrics.latency) metricsToProcess.push({ type: "avg_latency", label: "Latency", yAxis: "y1", borderDash: [5, 5] });
+    if (enabledMetrics.bandwidth) metricsToProcess.push({ type: "bandwidth", label: "Bandwidth", yAxis: "y2", borderDash: [2, 2] });
+
     Object.entries(chartData).forEach(([serverId, data]) => {
-        const group = serverGroups.find(g => g.id === serverId);
+        const group = serverGroupMap.get(serverId);
         if (!group || !data.length) return;
 
         const baseColor = SERVER_COLORS[colorIndex % SERVER_COLORS.length];
@@ -141,45 +184,18 @@ export const generateChartDatasets = (
 
         const serverLabel = `${group.hostname} (${group.protocol})`;
 
-        // Process each enabled metric
-        if (enabledMetrics.iops) {
-            const iopsDataset = processMetricData(
+        // Process all enabled metrics in a single loop
+        for (const metric of metricsToProcess) {
+            const dataset = processMetricData(
                 data,
-                "iops",
-                `${serverLabel} - IOPS`,
+                metric.type,
+                `${serverLabel} - ${metric.label}`,
                 baseColor,
-                "y"
+                metric.yAxis,
+                metric.borderDash
             );
-            if (iopsDataset.data.length > 0) {
-                datasets.push(iopsDataset);
-            }
-        }
-
-        if (enabledMetrics.latency) {
-            const latencyDataset = processMetricData(
-                data,
-                "avg_latency",
-                `${serverLabel} - Latency`,
-                baseColor,
-                "y1",
-                [5, 5]
-            );
-            if (latencyDataset.data.length > 0) {
-                datasets.push(latencyDataset);
-            }
-        }
-
-        if (enabledMetrics.bandwidth) {
-            const bandwidthDataset = processMetricData(
-                data,
-                "bandwidth",
-                `${serverLabel} - Bandwidth`,
-                baseColor,
-                "y2",
-                [2, 2]
-            );
-            if (bandwidthDataset.data.length > 0) {
-                datasets.push(bandwidthDataset);
+            if (dataset.data.length > 0) {
+                datasets.push(dataset);
             }
         }
     });
@@ -202,7 +218,8 @@ export interface TimeSeriesDataSeries {
 }
 
 /**
- * Generates chart datasets from series data - NEW version with individual series
+ * Generates chart datasets from series data - OPTIMIZED VERSION
+ * Batch processing with pre-computed metrics configuration
  */
 export const generateSeriesDatasets = (
     seriesData: TimeSeriesDataSeries[],
@@ -211,49 +228,31 @@ export const generateSeriesDatasets = (
     const datasets: ChartDataset[] = [];
     let colorIndex = 0;
 
+    // Pre-compute metrics configuration to avoid repeated conditional checks
+    const metricsConfig: Array<{type: string, label: string, yAxis: string, borderDash?: number[]}> = [];
+    if (enabledMetrics.iops) metricsConfig.push({ type: "iops", label: "IOPS", yAxis: "y", borderDash: undefined });
+    if (enabledMetrics.latency) metricsConfig.push({ type: "avg_latency", label: "Latency", yAxis: "y1", borderDash: [5, 5] });
+    if (enabledMetrics.bandwidth) metricsConfig.push({ type: "bandwidth", label: "Bandwidth", yAxis: "y2", borderDash: [2, 2] });
+
+    // Early return if no metrics enabled
+    if (metricsConfig.length === 0) return datasets;
+
     seriesData.forEach((series) => {
         const baseColor = SERVER_COLORS[colorIndex % SERVER_COLORS.length];
         colorIndex++;
 
-        // Process each enabled metric for this series
-        if (enabledMetrics.iops) {
-            const iopsDataset = processMetricData(
+        // Process all enabled metrics in a single loop
+        for (const metric of metricsConfig) {
+            const dataset = processMetricData(
                 series.data,
-                "iops",
-                `${series.label} - IOPS`,
+                metric.type,
+                `${series.label} - ${metric.label}`,
                 baseColor,
-                "y"
+                metric.yAxis,
+                metric.borderDash
             );
-            if (iopsDataset.data.length > 0) {
-                datasets.push(iopsDataset);
-            }
-        }
-
-        if (enabledMetrics.latency) {
-            const latencyDataset = processMetricData(
-                series.data,
-                "avg_latency",
-                `${series.label} - Latency`,
-                baseColor,
-                "y1",
-                [5, 5]
-            );
-            if (latencyDataset.data.length > 0) {
-                datasets.push(latencyDataset);
-            }
-        }
-
-        if (enabledMetrics.bandwidth) {
-            const bandwidthDataset = processMetricData(
-                series.data,
-                "bandwidth",
-                `${series.label} - Bandwidth`,
-                baseColor,
-                "y2",
-                [2, 2]
-            );
-            if (bandwidthDataset.data.length > 0) {
-                datasets.push(bandwidthDataset);
+            if (dataset.data.length > 0) {
+                datasets.push(dataset);
             }
         }
     });
@@ -262,21 +261,30 @@ export const generateSeriesDatasets = (
 };
 
 /**
- * Calculates server statistics from time series data
+ * Calculates server statistics from time series data - OPTIMIZED VERSION
+ * Single-pass calculation with accumulated sums
  */
 export const calculateServerStats = (data: any[]) => {
     if (data.length === 0) return null;
 
-    const iopsData = data.filter((p) => p.metric_type === "iops");
-    const latencyData = data.filter((p) => p.metric_type === "avg_latency");
+    // Single-pass accumulation instead of multiple filter operations
+    let iopsSum = 0;
+    let iopsCount = 0;
+    let latencySum = 0;
+    let latencyCount = 0;
+
+    for (const point of data) {
+        if (point.metric_type === "iops") {
+            iopsSum += point.value;
+            iopsCount++;
+        } else if (point.metric_type === "avg_latency") {
+            latencySum += point.value;
+            latencyCount++;
+        }
+    }
     
-    const avgIops = iopsData.length > 0 
-        ? Math.round(iopsData.reduce((sum, p) => sum + p.value, 0) / iopsData.length)
-        : 0;
-    
-    const avgLatency = latencyData.length > 0 
-        ? (latencyData.reduce((sum, p) => sum + p.value, 0) / latencyData.length).toFixed(2)
-        : "0";
+    const avgIops = iopsCount > 0 ? Math.round(iopsSum / iopsCount) : 0;
+    const avgLatency = latencyCount > 0 ? (latencySum / latencyCount).toFixed(2) : "0";
 
     return { avgIops, avgLatency, totalPoints: data.length };
 };
