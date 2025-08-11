@@ -90,6 +90,7 @@ export const useAsyncData = <T>(
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher, validateData, validator, onSuccess, onError, enableLogging, resetDataOnError, initialData, ...deps]);
 
   const reset = useCallback(() => {

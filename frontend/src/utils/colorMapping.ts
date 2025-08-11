@@ -3,79 +3,40 @@
  * Ensures unique colors within each chart context while maintaining consistency
  */
 
-// Color name to hex/rgba mapping
-const COLOR_PALETTE = {
-    red: {
-        primary: 'rgba(239, 68, 68, 0.8)',     // red-500
-        light: 'rgba(239, 68, 68, 0.2)',      // red-500 with low opacity
-        dark: 'rgba(185, 28, 28, 0.8)',       // red-700
-    },
-    green: {
-        primary: 'rgba(16, 185, 129, 0.8)',   // emerald-500
-        light: 'rgba(16, 185, 129, 0.2)',     // emerald-500 with low opacity
-        dark: 'rgba(5, 150, 105, 0.8)',       // emerald-600
-    },
-    blue: {
-        primary: 'rgba(59, 130, 246, 0.8)',   // blue-500
-        light: 'rgba(59, 130, 246, 0.2)',     // blue-500 with low opacity
-        dark: 'rgba(37, 99, 235, 0.8)',       // blue-600
-    },
-    yellow: {
-        primary: 'rgba(245, 158, 11, 0.8)',   // amber-500
-        light: 'rgba(245, 158, 11, 0.2)',     // amber-500 with low opacity
-        dark: 'rgba(217, 119, 6, 0.8)',       // amber-600
-    },
-    purple: {
-        primary: 'rgba(139, 92, 246, 0.8)',   // violet-500
-        light: 'rgba(139, 92, 246, 0.2)',     // violet-500 with low opacity
-        dark: 'rgba(124, 58, 237, 0.8)',      // violet-600
-    },
-    pink: {
-        primary: 'rgba(236, 72, 153, 0.8)',   // pink-500
-        light: 'rgba(236, 72, 153, 0.2)',     // pink-500 with low opacity
-        dark: 'rgba(219, 39, 119, 0.8)',      // pink-600
-    },
-    orange: {
-        primary: 'rgba(249, 115, 22, 0.8)',   // orange-500
-        light: 'rgba(249, 115, 22, 0.2)',     // orange-500 with low opacity
-        dark: 'rgba(234, 88, 12, 0.8)',       // orange-600
-    },
-    cyan: {
-        primary: 'rgba(6, 182, 212, 0.8)',    // cyan-500
-        light: 'rgba(6, 182, 212, 0.2)',      // cyan-500 with low opacity
-        dark: 'rgba(8, 145, 178, 0.8)',       // cyan-600
-    },
-    indigo: {
-        primary: 'rgba(99, 102, 241, 0.8)',   // indigo-500
-        light: 'rgba(99, 102, 241, 0.2)',     // indigo-500 with low opacity
-        dark: 'rgba(79, 70, 229, 0.8)',       // indigo-600
-    },
-    teal: {
-        primary: 'rgba(20, 184, 166, 0.8)',   // teal-500
-        light: 'rgba(20, 184, 166, 0.2)',     // teal-500 with low opacity
-        dark: 'rgba(13, 148, 136, 0.8)',      // teal-600
-    },
-    white: {
-        primary: 'rgba(241, 245, 249, 0.8)',  // slate-100 (light gray instead of pure white)
-        light: 'rgba(241, 245, 249, 0.2)',    // slate-100 with low opacity
-        dark: 'rgba(203, 213, 225, 0.8)',     // slate-300
-    },
-    grey: {
-        primary: 'rgba(107, 114, 128, 0.8)',  // gray-500
-        light: 'rgba(107, 114, 128, 0.2)',    // gray-500 with low opacity
-        dark: 'rgba(75, 85, 99, 0.8)',        // gray-600
-    },
-    gray: {
-        primary: 'rgba(107, 114, 128, 0.8)',  // gray-500 (alias for grey)
-        light: 'rgba(107, 114, 128, 0.2)',    // gray-500 with low opacity
-        dark: 'rgba(75, 85, 99, 0.8)',        // gray-600
-    },
-    black: {
-        primary: 'rgba(51, 65, 85, 0.8)',     // slate-700 (dark charcoal instead of pure black)
-        light: 'rgba(51, 65, 85, 0.2)',       // slate-700 with low opacity
-        dark: 'rgba(30, 41, 59, 0.8)',        // slate-800
-    },
+// Base color definitions (no duplication)
+const BASE_COLORS = {
+    red: { base: 'rgba(239, 68, 68, VAR)', dark: 'rgba(185, 28, 28, VAR)' },
+    green: { base: 'rgba(16, 185, 129, VAR)', dark: 'rgba(5, 150, 105, VAR)' },
+    blue: { base: 'rgba(59, 130, 246, VAR)', dark: 'rgba(37, 99, 235, VAR)' },
+    yellow: { base: 'rgba(245, 158, 11, VAR)', dark: 'rgba(217, 119, 6, VAR)' },
+    purple: { base: 'rgba(139, 92, 246, VAR)', dark: 'rgba(124, 58, 237, VAR)' },
+    pink: { base: 'rgba(236, 72, 153, VAR)', dark: 'rgba(219, 39, 119, VAR)' },
+    orange: { base: 'rgba(249, 115, 22, VAR)', dark: 'rgba(234, 88, 12, VAR)' },
+    cyan: { base: 'rgba(6, 182, 212, VAR)', dark: 'rgba(8, 145, 178, VAR)' },
+    indigo: { base: 'rgba(99, 102, 241, VAR)', dark: 'rgba(79, 70, 229, VAR)' },
+    teal: { base: 'rgba(20, 184, 166, VAR)', dark: 'rgba(13, 148, 136, VAR)' },
+    white: { base: 'rgba(241, 245, 249, VAR)', dark: 'rgba(203, 213, 225, VAR)' },
+    gray: { base: 'rgba(107, 114, 128, VAR)', dark: 'rgba(75, 85, 99, VAR)' },
+    black: { base: 'rgba(51, 65, 85, VAR)', dark: 'rgba(30, 41, 59, VAR)' },
 };
+
+// Generate color palette with opacity variations
+const generateColorVariation = (baseColor: string, opacity: number): string => 
+    baseColor.replace('VAR', opacity.toString());
+
+const COLOR_PALETTE = Object.fromEntries(
+    Object.entries(BASE_COLORS).map(([colorName, colors]) => [
+        colorName,
+        {
+            primary: generateColorVariation(colors.base, 0.8),
+            light: generateColorVariation(colors.base, 0.2),
+            dark: generateColorVariation(colors.dark, 0.8),
+        }
+    ])
+) as Record<string, { primary: string; light: string; dark: string }>;
+
+// Add grey as alias for gray
+COLOR_PALETTE.grey = COLOR_PALETTE.gray;
 
 // Fallback colors for non-color names
 const FALLBACK_COLORS = [
