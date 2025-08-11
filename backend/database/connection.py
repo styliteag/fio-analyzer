@@ -168,10 +168,26 @@ class DatabaseManager:
     def _create_indexes(self, cursor: sqlite3.Cursor):
         """Create database indexes"""
         indexes = [
+            # Primary ordering indexes
+            ("idx_test_runs_timestamp", "test_runs", "timestamp DESC"),
             ("idx_test_runs_all_timestamp", "test_runs_all", "timestamp DESC"),
+            
+            # Filtering indexes for common queries
+            ("idx_test_runs_hostname", "test_runs", "hostname"),
+            ("idx_test_runs_drive_type", "test_runs", "drive_type"),
+            ("idx_test_runs_protocol", "test_runs", "protocol"),
+            ("idx_test_runs_pattern", "test_runs", "read_write_pattern"),
+            
+            # Composite indexes for complex queries
+            ("idx_test_runs_host_timestamp", "test_runs", "hostname, timestamp DESC"),
             ("idx_test_runs_all_host_protocol_time", "test_runs_all", "hostname, protocol, timestamp DESC"),
             ("idx_test_runs_all_config_filter", "test_runs_all", "hostname, protocol, drive_type, drive_model, block_size, read_write_pattern, queue_depth"),
             ("idx_test_runs_config_lookup", "test_runs", "hostname, protocol, drive_type, drive_model"),
+            
+            # Performance metrics indexes
+            ("idx_test_runs_iops", "test_runs", "iops DESC"),
+            ("idx_test_runs_latency", "test_runs", "avg_latency"),
+            ("idx_test_runs_bandwidth", "test_runs", "bandwidth DESC"),
         ]
         
         for index_name, table_name, columns in indexes:

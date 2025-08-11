@@ -344,7 +344,7 @@ async def get_historical_time_series(
     duration: Optional[int] = Query(None, description="Duration filter"),
     start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
     end_date: Optional[str] = Query(None, description="End date (ISO format)"),
-    limit: int = Query(10000, ge=1, le=50000, description="Maximum number of results"),
+    limit: int = Query(500, ge=1, le=5000, description="Maximum number of results"),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):

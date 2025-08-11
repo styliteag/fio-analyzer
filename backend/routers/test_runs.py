@@ -31,7 +31,7 @@ async def get_test_runs(
     num_jobs: Optional[str] = Query(None, description="Comma-separated num_jobs values to filter"),  # ADDED
     test_sizes: Optional[str] = Query(None, description="Comma-separated test sizes to filter"),  # ADDED
     durations: Optional[str] = Query(None, description="Comma-separated durations to filter"),  # ADDED
-    limit: int = Query(1000, ge=1, le=10000, description="Number of results to return"),
+    limit: int = Query(50, ge=1, le=1000, description="Number of results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
