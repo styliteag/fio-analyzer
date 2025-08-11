@@ -4,11 +4,21 @@ Authentication system with htpasswd support
 
 import base64
 import bcrypt
+import hashlib
+import time
 from typing import Optional, Dict, Tuple
 from pathlib import Path
 
 from config.settings import settings
 from utils.logging import log_info, log_error, log_warning, log_debug
+
+# Authentication cache (username_hash -> (role, timestamp))
+_auth_cache: Dict[str, Tuple[str, float]] = {}
+_cache_duration = 300  # 5 minutes cache
+
+def _get_cache_key(username: str, password: str) -> str:
+    """Generate cache key for username/password combination"""
+    return hashlib.sha256(f"{username}:{password}".encode()).hexdigest()
 
 
 def parse_htpasswd(file_path: Path) -> Optional[Dict[str, str]]:
@@ -108,12 +118,44 @@ def is_uploader_user(username: str, password: str) -> bool:
 
 
 def get_user_role(username: str, password: str) -> Optional[str]:
-    """Get user role"""
+    """Get user role with caching"""
+    cache_key = _get_cache_key(username, password)
+    current_time = time.time()
+    
+    # Check cache first
+    if cache_key in _auth_cache:
+        role, timestamp = _auth_cache[cache_key]
+        if current_time - timestamp < _cache_duration:
+            log_debug("Authentication cache hit", {
+                "username": username,
+                "role": role,
+                "cache_age": current_time - timestamp
+            })
+            return role
+        else:
+            # Cache expired, remove it
+            del _auth_cache[cache_key]
+            log_debug("Authentication cache expired", {"username": username})
+    
+    # Cache miss - do actual authentication
+    log_debug("Authentication cache miss", {"username": username})
+    role = None
     if is_admin_user(username, password):
-        return "admin"
+        role = "admin"
     elif is_uploader_user(username, password):
-        return "uploader"
-    return None
+        role = "uploader"
+    
+    # Cache the result (even if None, to avoid repeated bcrypt calls for invalid users)
+    _auth_cache[cache_key] = (role, current_time)
+    
+    # Clean old cache entries periodically (simple cleanup)
+    if len(_auth_cache) > 100:  # Arbitrary limit
+        expired_keys = [k for k, (_, ts) in _auth_cache.items() if current_time - ts > _cache_duration]
+        for key in expired_keys:
+            del _auth_cache[key]
+        log_debug("Cleaned expired auth cache entries", {"removed": len(expired_keys)})
+    
+    return role
 
 
 def parse_auth_header(auth_header: str) -> Optional[Tuple[str, str]]:
