@@ -15,14 +15,91 @@ from utils.logging import log_info, log_error
 router = APIRouter()
 
 
-@router.get("/filters")
-@router.get("/filters/")  # Handle with trailing slash
+@router.get(
+    "/filters",
+    summary="Get Filter Options",
+    description="Retrieve all available filter values from the current test data",
+    response_description="Complete filter options for UI dropdowns and validation",
+    responses={
+        200: {
+            "description": "Filter options retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "drive_models": [
+                            "Samsung SSD 980 PRO",
+                            "WD Black SN850",
+                            "Intel Optane P5800X"
+                        ],
+                        "host_disk_combinations": [
+                            "server-01 - Local - Samsung SSD 980 PRO",
+                            "server-02 - iSCSI - WD Black SN850"
+                        ],
+                        "block_sizes": ["4K", "8K", "64K", "1M"],
+                        "patterns": ["randread", "randwrite", "read", "write"],
+                        "syncs": [0, 1],
+                        "queue_depths": [1, 8, 16, 32, 64],
+                        "directs": [0, 1],
+                        "num_jobs": [1, 4, 8, 16],
+                        "test_sizes": ["1G", "10G", "100G"],
+                        "durations": [30, 60, 300, 600],
+                        "hostnames": ["server-01", "server-02", "server-03"],
+                        "protocols": ["Local", "iSCSI", "NFS"],
+                        "drive_types": ["NVMe", "SATA", "SAS"]
+                    }
+                }
+            }
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
+@router.get(
+    "/filters/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def get_filters(
     request: Request,
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Get available filter options"""
+    """
+    Retrieve all available filter values from the current test data.
+    
+    This endpoint scans the latest test runs and returns all unique values
+    for each filterable field. Use this data to populate UI filter dropdowns
+    and validate filter parameters in other API calls.
+    
+    **Authentication Required:** Admin access
+    
+    **Data Source:** Latest test runs (test_runs table)
+    
+    **Filter Categories:**
+    - **drive_models**: All unique storage drive models
+    - **host_disk_combinations**: Formatted hostname-protocol-drive combinations
+    - **block_sizes**: All I/O block sizes found in test data
+    - **patterns**: All I/O access patterns (randread, write, etc.)
+    - **syncs**: Sync flag values (0=async, 1=sync)
+    - **queue_depths**: All I/O queue depth values
+    - **directs**: Direct I/O flag values (0=buffered, 1=direct)
+    - **num_jobs**: All concurrent job count values
+    - **test_sizes**: All test data size values
+    - **durations**: All test duration values in seconds
+    - **hostnames**: All server hostnames
+    - **protocols**: All storage protocols
+    - **drive_types**: All drive technology types
+    
+    **Use Cases:**
+    - Populating filter dropdown menus
+    - Validating filter parameters
+    - Understanding available test configurations
+    - Building dynamic query interfaces
+    
+    **Note:** Values are sorted alphabetically for consistent presentation.
+    The host_disk_combinations field provides formatted strings for easy
+    system identification in UIs.
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -64,14 +141,72 @@ async def get_filters(
         raise HTTPException(status_code=500, detail="Failed to retrieve filter options")
 
 
-@router.get("/info")
-@router.get("/info/")  # Handle with trailing slash
+@router.get(
+    "/info",
+    summary="Get API Information",
+    description="Retrieve basic information about the FIO Analyzer API",
+    response_description="API metadata and version information",
+    responses={
+        200: {
+            "description": "API information retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "name": "FIO Analyzer API",
+                        "version": "1.0.0",
+                        "description": "API for FIO (Flexible I/O Tester) performance analysis and time-series monitoring",
+                        "endpoints": 14,
+                        "documentation": "/docs"
+                    }
+                }
+            }
+        }
+    },
+    tags=["API Info"]
+)
+@router.get(
+    "/info/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def get_api_info():
-    """Get API information"""
+    """
+    Retrieve basic information about the FIO Analyzer API.
+    
+    This endpoint provides metadata about the API including version,
+    description, and links to documentation. Useful for API discovery
+    and client application initialization.
+    
+    **No Authentication Required**
+    
+    **Returned Information:**
+    - **name**: Human-readable API name
+    - **version**: Current API version following semantic versioning
+    - **description**: Brief description of API capabilities
+    - **endpoints**: Count of available API endpoints
+    - **documentation**: URL path to interactive API documentation
+    
+    **Use Cases:**
+    - API health and version checking
+    - Client application initialization
+    - API discovery and capability detection
+    - Documentation link resolution
+    """
     return {
         "name": "FIO Analyzer API",
         "version": "1.0.0", 
         "description": "API for FIO (Flexible I/O Tester) performance analysis and time-series monitoring",
-        "endpoints": 14,
-        "documentation": "/api-docs"
+        "endpoints": 20,
+        "documentation": "/docs",
+        "redoc_documentation": "/redoc",
+        "openapi_schema": "/openapi.json",
+        "features": [
+            "FIO benchmark data import",
+            "Performance metrics analysis",
+            "Historical time series data",
+            "Trend analysis and statistics",
+            "User management and authentication",
+            "Bulk operations support"
+        ],
+        "supported_formats": ["JSON"],
+        "authentication": "HTTP Basic Auth"
     }

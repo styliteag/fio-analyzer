@@ -21,21 +21,133 @@ from config.settings import settings
 router = APIRouter()
 
 
-@router.post("/")
-@router.post("")  # Handle route without trailing slash
+@router.post(
+    "/",
+    summary="Import FIO Test Data",
+    description="Upload and import FIO benchmark results from a JSON file",
+    response_description="Import operation results with new test run information",
+    responses={
+        200: {
+            "description": "FIO data imported successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "FIO data imported successfully",
+                        "test_run_id": 42,
+                        "filename": "fio_results_2025-06-31.json"
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid file format, file too large, or malformed JSON",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_format": {
+                            "summary": "Invalid file format",
+                            "value": {"error": "Only JSON files are supported"}
+                        },
+                        "file_too_large": {
+                            "summary": "File size exceeded",
+                            "value": {"error": "File too large"}
+                        },
+                        "invalid_json": {
+                            "summary": "Malformed JSON",
+                            "value": {"error": "Invalid JSON format: Expecting ',' delimiter"}
+                        }
+                    }
+                }
+            }
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Upload permission required"},
+        500: {"description": "Internal server error during import"}
+    }
+)
+@router.post(
+    "",
+    include_in_schema=False
+)  # Handle route without trailing slash but hide from docs
 async def import_fio_data(
     request: Request,
-    file: UploadFile = File(...),
-    drive_model: str = Form(...),
-    drive_type: str = Form(...),
-    hostname: str = Form(...),
-    protocol: str = Form(...),
-    description: str = Form(...),
-    date: Optional[str] = Form(None),
+    file: UploadFile = File(
+        ...,
+        description="FIO JSON output file to import. Must be valid JSON format.",
+        media_type="application/json"
+    ),
+    drive_model: str = Form(
+        ...,
+        description="Storage drive model name",
+        example="Samsung SSD 980 PRO",
+        max_length=255
+    ),
+    drive_type: str = Form(
+        ...,
+        description="Storage technology type",
+        example="NVMe",
+        max_length=100
+    ),
+    hostname: str = Form(
+        ...,
+        description="Server hostname where the test was executed",
+        example="server-01",
+        max_length=255
+    ),
+    protocol: str = Form(
+        ...,
+        description="Storage access protocol",
+        example="Local",
+        max_length=100
+    ),
+    description: str = Form(
+        ...,
+        description="Human-readable description of the test",
+        example="4K random read performance baseline test",
+        max_length=1000
+    ),
+    date: Optional[str] = Form(
+        None,
+        description="Test execution date in ISO format (YYYY-MM-DDTHH:MM:SS). Uses current timestamp if not provided.",
+        example="2025-06-31T20:00:00"
+    ),
     user: User = Depends(require_uploader),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Import FIO test data from uploaded file"""
+    """
+    Import FIO benchmark data from uploaded JSON files.
+    
+    This endpoint processes FIO JSON output files and extracts performance metrics,
+    test configuration, and system information. The uploaded data is parsed and
+    stored in the database for analysis and visualization.
+    
+    **Authentication Required:** Upload permission (admin or uploader role)
+    
+    **File Requirements:**
+    - Must be valid JSON format
+    - Must contain FIO job data structure
+    - File size must not exceed configured limit
+    - Must have .json extension
+    
+    **Extracted Metrics:**
+    - IOPS (read/write operations per second)
+    - Latency statistics (average, P95, P99)
+    - Bandwidth measurements
+    - System CPU utilization
+    
+    **Extracted Configuration:**
+    - Block size and I/O pattern
+    - Queue depth and job settings
+    - Test duration and file size
+    - Direct I/O and sync flags
+    
+    **Form Data:**
+    All form fields are required except date. The metadata provided
+    will override any corresponding values in the FIO JSON.
+    
+    **Note:** Uploaded files are stored on disk with metadata for
+    future reference and potential re-import.
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -105,15 +217,124 @@ async def import_fio_data(
         raise HTTPException(status_code=500, detail="Failed to import FIO data")
 
 
-@router.post("/bulk")
-@router.post("/bulk/")  # Handle with trailing slash
+@router.post(
+    "/bulk",
+    summary="Bulk Import FIO Data",
+    description="Import multiple FIO JSON files from the server uploads directory",
+    response_description="Bulk import operation statistics and results",
+    responses={
+        200: {
+            "description": "Bulk import completed with statistics",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "successful_import": {
+                            "summary": "Successful bulk import",
+                            "value": {
+                                "message": "Bulk import completed: 25 files processed, 25 test runs imported",
+                                "statistics": {
+                                    "totalFiles": 30,
+                                    "processedFiles": 25,
+                                    "totalTestRuns": 25,
+                                    "skippedFiles": 3,
+                                    "errorFiles": 2
+                                }
+                            }
+                        },
+                        "dry_run_result": {
+                            "summary": "Dry run with preview",
+                            "value": {
+                                "message": "Bulk import completed: 25 files processed, 0 test runs imported",
+                                "statistics": {
+                                    "totalFiles": 25,
+                                    "processedFiles": 25,
+                                    "totalTestRuns": 0,
+                                    "skippedFiles": 0,
+                                    "errorFiles": 0
+                                },
+                                "dryRunResults": [
+                                    {
+                                        "path": "/uploads/server-01/Local/2025-06-31/20-00/test.json",
+                                        "metadata": {
+                                            "hostname": "server-01",
+                                            "protocol": "Local",
+                                            "test_name": "randread_4k"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        400: {"description": "Invalid request parameters or uploads directory not found"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error during bulk import"}
+    }
+)
+@router.post(
+    "/bulk/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def bulk_import_fio_data(
     request: Request,
-    bulk_request: Dict[str, Any] = Body(...),
+    bulk_request: Dict[str, Any] = Body(
+        ...,
+        description="Bulk import configuration options",
+        example={
+            "overwrite": False,
+            "dryRun": False
+        }
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Bulk import FIO data from uploaded files directory"""
+    """
+    Import multiple FIO data files from the server uploads directory.
+    
+    This endpoint scans the uploads directory for JSON files and imports them
+    automatically. It attempts to extract metadata from the file path structure
+    and .info metadata files when available.
+    
+    **Authentication Required:** Admin access
+    
+    **Request Options:**
+    - **overwrite** (boolean): Whether to overwrite existing test runs (default: false)
+    - **dryRun** (boolean): Preview import without making changes (default: false)
+    
+    **File Discovery:**
+    The system recursively searches for .json files in the uploads directory.
+    Metadata is extracted from:
+    1. Accompanying .info files (created during regular uploads)
+    2. Directory structure: uploads/hostname/protocol/date/time/file.json
+    3. FIO JSON content itself
+    
+    **Expected Directory Structure:**
+    ```
+    uploads/
+    ├── server-01/
+    │   ├── Local/
+    │   │   └── 2025-06-31/
+    │   │       └── 20-00/
+    │   │           ├── test.json
+    │   │           └── test.info
+    ```
+    
+    **Dry Run Mode:**
+    When dryRun is true, the endpoint will:
+    - Scan and parse all files
+    - Extract metadata
+    - Return preview results
+    - Not modify the database
+    
+    **Duplicate Handling:**
+    Existing test runs are identified by matching:
+    - hostname, protocol, drive_model, drive_type
+    - block_size, read_write_pattern, queue_depth
+    - test_name and file path
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -257,7 +478,20 @@ async def bulk_import_fio_data(
 
 
 def extract_metadata_from_path(file_path: Path) -> Dict[str, Any]:
-    """Extract metadata from file path structure"""
+    """
+    Extract metadata from file path structure.
+    
+    Attempts to parse hostname, protocol, and date information from
+    the directory structure. Falls back to defaults if parsing fails.
+    
+    Expected structure: uploads/hostname/protocol/date/time/filename.json
+    
+    Args:
+        file_path: Path object pointing to the JSON file
+        
+    Returns:
+        Dictionary containing extracted metadata with fallback defaults
+    """
     try:
         # Expected path structure: backend/uploads/hostname/protocol/date/time/filename.json
         parts = file_path.parts
@@ -292,7 +526,23 @@ def extract_metadata_from_path(file_path: Path) -> Dict[str, Any]:
 
 
 def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, Any]:
-    """Extract test run data from FIO JSON"""
+    """
+    Extract comprehensive test run data from FIO JSON output.
+    
+    Parses FIO JSON structure to extract test configuration, performance
+    metrics, and system information. Handles both global options and
+    job-specific settings.
+    
+    Args:
+        fio_data: Parsed FIO JSON data structure
+        filename: Original filename for reference
+        
+    Returns:
+        Dictionary containing structured test run data
+        
+    Raises:
+        HTTPException: If FIO data is invalid or missing required fields
+    """
     jobs = fio_data.get("jobs", [])
     if not jobs:
         raise HTTPException(status_code=400, detail="No jobs found in FIO data")
@@ -345,14 +595,35 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
 
 
 def extract_iops(job: Dict[str, Any]) -> float:
-    """Extract IOPS from job data"""
+    """
+    Extract total IOPS (Input/Output Operations Per Second) from FIO job data.
+    
+    Combines read and write IOPS for total throughput measurement.
+    
+    Args:
+        job: FIO job data containing read/write statistics
+        
+    Returns:
+        Combined read + write IOPS value
+    """
     read_iops = job.get("read", {}).get("iops", 0)
     write_iops = job.get("write", {}).get("iops", 0)
     return read_iops + write_iops
 
 
 def extract_latency(job: Dict[str, Any]) -> float:
-    """Extract average latency from job data"""
+    """
+    Extract weighted average latency from FIO job data.
+    
+    Calculates the I/O weighted average latency across read and write
+    operations, converting from nanoseconds to milliseconds.
+    
+    Args:
+        job: FIO job data containing latency statistics
+        
+    Returns:
+        Weighted average latency in milliseconds
+    """
     read_lat = job.get("read", {}).get("lat_ns", {}).get("mean", 0)
     write_lat = job.get("write", {}).get("lat_ns", {}).get("mean", 0)
     
@@ -369,14 +640,38 @@ def extract_latency(job: Dict[str, Any]) -> float:
 
 
 def extract_bandwidth(job: Dict[str, Any]) -> float:
-    """Extract bandwidth from job data"""
+    """
+    Extract total bandwidth from FIO job data.
+    
+    Combines read and write bandwidth measurements and converts
+    from bytes per second to megabytes per second.
+    
+    Args:
+        job: FIO job data containing bandwidth statistics
+        
+    Returns:
+        Combined bandwidth in MB/s
+    """
     read_bw = job.get("read", {}).get("bw_bytes", 0)
     write_bw = job.get("write", {}).get("bw_bytes", 0)
     return (read_bw + write_bw) / (1024 * 1024)  # Convert to MB/s
 
 
 def extract_percentile_latency(job: Dict[str, Any], percentile: int) -> float:
-    """Extract percentile latency from job data"""
+    """
+    Extract percentile latency statistics from FIO job data.
+    
+    Retrieves the specified percentile latency value (P95, P99, etc.)
+    and converts from nanoseconds to milliseconds. Uses the higher
+    value between read and write operations.
+    
+    Args:
+        job: FIO job data containing latency percentile statistics
+        percentile: Percentile value to extract (e.g., 95 for P95)
+        
+    Returns:
+        Percentile latency in milliseconds
+    """
     read_lat = job.get("read", {}).get("clat_ns", {}).get("percentile", {}).get(f"{percentile}.000000", 0)
     write_lat = job.get("write", {}).get("clat_ns", {}).get("percentile", {}).get(f"{percentile}.000000", 0)
     
@@ -386,7 +681,20 @@ def extract_percentile_latency(job: Dict[str, Any], percentile: int) -> float:
 
 
 def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> int:
-    """Insert test run into database"""
+    """
+    Insert test run data into both current and historical database tables.
+    
+    Stores the test run in both test_runs (latest) and test_runs_all
+    (historical) tables. Updates file path references if provided.
+    
+    Args:
+        db: Database connection
+        test_run_data: Complete test run data dictionary
+        file_path: Optional path to the source JSON file
+        
+    Returns:
+        ID of the inserted test run from the test_runs table
+    """
     cursor = db.cursor()
     
     # Define columns and values
@@ -420,7 +728,22 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
 
 
 def save_uploaded_file(content: bytes, filename: str, test_run_data: Dict[str, Any]) -> str:
-    """Save uploaded file to disk"""
+    """
+    Save uploaded file to organized directory structure on disk.
+    
+    Creates a structured directory hierarchy based on hostname, protocol,
+    and timestamp. Generates unique filenames to prevent conflicts.
+    
+    Directory structure: uploads/hostname/protocol/YYYY-MM-DD/HH-MM/
+    
+    Args:
+        content: Raw file content bytes
+        filename: Original filename
+        test_run_data: Test metadata for directory organization
+        
+    Returns:
+        Full path to the saved file
+    """
     import os
     from pathlib import Path
     
@@ -450,7 +773,21 @@ def save_uploaded_file(content: bytes, filename: str, test_run_data: Dict[str, A
 
 
 def create_metadata_file(file_path: str, test_run_data: Dict[str, Any], username: str, original_filename: str) -> str:
-    """Create metadata file alongside the uploaded JSON file (matching Node.js behavior)"""
+    """
+    Create a metadata (.info) file alongside the uploaded JSON file.
+    
+    Stores upload metadata for future bulk import operations and audit trails.
+    The metadata file enables reconstruction of upload context during bulk imports.
+    
+    Args:
+        file_path: Path to the uploaded JSON file
+        test_run_data: Test run metadata
+        username: Username who uploaded the file
+        original_filename: Original name of the uploaded file
+        
+    Returns:
+        Path to the created metadata file
+    """
     from pathlib import Path
     
     # Convert file_path to Path object

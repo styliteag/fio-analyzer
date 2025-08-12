@@ -49,16 +49,96 @@ async def lifespan(app: FastAPI):
     await close_database()
 
 
-# Create FastAPI app
+# Create FastAPI app with comprehensive metadata
 app = FastAPI(
     title="FIO Analyzer API",
-    description="A comprehensive API for FIO (Flexible I/O Tester) performance analysis and time-series monitoring",
+    description="""
+## FIO Performance Analysis and Monitoring API
+
+A comprehensive REST API for analyzing FIO (Flexible I/O Tester) benchmark results 
+and monitoring storage performance over time.
+
+### Key Features
+
+* **Data Import**: Upload and parse FIO JSON benchmark results
+* **Performance Analytics**: Analyze IOPS, latency, bandwidth metrics
+* **Time Series Data**: Historical performance tracking and trend analysis
+* **User Management**: Role-based access control (admin/uploader)
+* **Bulk Operations**: Efficient batch import and update capabilities
+* **Real-time Monitoring**: Latest performance data access
+
+### Authentication
+
+The API uses HTTP Basic Authentication with two user roles:
+- **Admin**: Full access to all endpoints and user management
+- **Uploader**: Can upload test data and view results
+
+### Data Sources
+
+- **Latest Data**: Most recent test results per configuration
+- **Historical Data**: Complete time series of all test runs
+- **Performance Metrics**: IOPS, latency (avg/P95/P99), bandwidth
+
+### Getting Started
+
+1. Import FIO test data via `/api/import`
+2. View available filters at `/api/filters` 
+3. Query test results at `/api/test-runs`
+4. Analyze trends at `/api/time-series/trends`
+
+For detailed examples and testing, visit the interactive documentation below.
+    """,
     version="1.0.0",
     contact={
-        "name": "FIO Analyzer",
-        "url": "https://github.com/fio-analyzer"
+        "name": "FIO Analyzer Project",
+        "url": "https://github.com/fio-analyzer",
+        "email": "admin@fio-analyzer.local"
     },
-    lifespan=lifespan
+    license_info={
+        "name": "MIT",
+        "url": "https://opensource.org/licenses/MIT"
+    },
+    terms_of_service="https://github.com/fio-analyzer/terms",
+    servers=[
+        {
+            "url": "http://localhost:8000",
+            "description": "Development server"
+        },
+        {
+            "url": "http://example.intern",
+            "description": "Production server"
+        }
+    ],
+    tags_metadata=[
+        {
+            "name": "Health",
+            "description": "API health check and status monitoring"
+        },
+        {
+            "name": "Data Import", 
+            "description": "Import FIO benchmark data from JSON files"
+        },
+        {
+            "name": "Test Runs",
+            "description": "Manage and query individual test run data"
+        },
+        {
+            "name": "Time Series Analytics",
+            "description": "Historical data analysis and trend monitoring"
+        },
+        {
+            "name": "Utilities & Filters",
+            "description": "Helper endpoints for filters and API information"
+        },
+        {
+            "name": "User Management",
+            "description": "User account and authentication management (admin only)"
+        }
+    ],
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
 # Add CORS middleware
@@ -116,18 +196,95 @@ async def log_requests(request: Request, call_next):
         raise
 
 
-# Include routers
-app.include_router(test_runs.router, prefix="/api/test-runs", tags=["Test Runs"])
-app.include_router(imports.router, prefix="/api/import", tags=["Import"])
-app.include_router(time_series.router, prefix="/api/time-series", tags=["Time Series"])
-app.include_router(utils_router.router, prefix="/api", tags=["Utils"])
-app.include_router(users.router, tags=["Users"])
+# Include routers with descriptive tags
+app.include_router(
+    test_runs.router, 
+    prefix="/api/test-runs", 
+    tags=["Test Runs"],
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
+app.include_router(
+    imports.router, 
+    prefix="/api/import", 
+    tags=["Data Import"],
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Upload permission required"},
+        500: {"description": "Internal server error"}
+    }
+)
+app.include_router(
+    time_series.router, 
+    prefix="/api/time-series", 
+    tags=["Time Series Analytics"],
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
+app.include_router(
+    utils_router.router, 
+    prefix="/api", 
+    tags=["Utilities & Filters"],
+    responses={
+        401: {"description": "Authentication required"},
+        500: {"description": "Internal server error"}
+    }
+)
+app.include_router(
+    users.router, 
+    tags=["User Management"],
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
 
 
 # Health check endpoint
-@app.get("/health", tags=["Health"])
+@app.get(
+    "/health", 
+    tags=["Health"],
+    summary="Health Check",
+    description="Check API service health and status",
+    response_model=None,  # We'll import the model later
+    responses={
+        200: {
+            "description": "Service is healthy and operational",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "OK",
+                        "timestamp": "2025-06-31T20:00:00Z",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+        }
+    }
+)
 async def health_check():
-    """Health check endpoint"""
+    """
+    Check the health and operational status of the FIO Analyzer API.
+    
+    This endpoint provides a simple health check to verify that the API
+    is running and accessible. It returns basic status information including
+    the current timestamp and API version.
+    
+    **No Authentication Required**
+    
+    **Use Cases:**
+    - Load balancer health checks
+    - Monitoring system integration
+    - Service availability verification
+    - API status validation
+    """
     return {
         "status": "OK",
         "timestamp": "2025-06-31T20:00:00Z",

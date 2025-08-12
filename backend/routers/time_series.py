@@ -16,14 +16,70 @@ from utils.logging import log_info, log_error
 router = APIRouter()
 
 
-@router.get("/servers")
-@router.get("/servers/")  # Handle with trailing slash
+@router.get(
+    "/servers",
+    summary="Get Server List",
+    description="Retrieve list of servers with aggregated test run statistics",
+    response_description="List of servers with test data summaries",
+    responses={
+        200: {
+            "description": "Server list retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "hostname": "server-01",
+                            "config_count": 15,
+                            "total_runs": 342,
+                            "last_test_time": "2025-06-31T20:00:00",
+                            "first_test_time": "2024-01-15T10:30:00"
+                        },
+                        {
+                            "hostname": "server-02",
+                            "config_count": 8,
+                            "total_runs": 156,
+                            "last_test_time": "2025-06-30T15:45:00",
+                            "first_test_time": "2024-03-20T09:15:00"
+                        }
+                    ]
+                }
+            }
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
+@router.get(
+    "/servers/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def get_servers(
     request: Request,
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Get list of servers with test data"""
+    """
+    Retrieve list of servers with aggregated test run statistics.
+    
+    This endpoint provides a summary view of all servers that have
+    submitted test data, including configuration counts and test history.
+    
+    **Authentication Required:** Admin access
+    
+    **Returned Data:**
+    - **hostname**: Server identifier
+    - **config_count**: Number of unique test configurations
+    - **total_runs**: Total number of test executions
+    - **last_test_time**: Most recent test timestamp
+    - **first_test_time**: Oldest test timestamp
+    
+    **Use Cases:**
+    - Server inventory and monitoring
+    - Test activity overview
+    - Historical data availability check
+    - Performance dashboard summaries
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -87,28 +143,152 @@ async def get_servers(
         raise HTTPException(status_code=500, detail="Failed to retrieve servers")
 
 
-@router.get("/all")
-@router.get("/all/")  # Handle with trailing slash
+@router.get(
+    "/all",
+    summary="Get All Historical Data",
+    description="Retrieve complete historical time series data with comprehensive filtering",
+    response_description="Complete historical test run data matching filter criteria",
+    responses={
+        200: {
+            "description": "Historical data retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": 1,
+                            "timestamp": "2025-06-31T20:00:00",
+                            "hostname": "server-01",
+                            "drive_model": "Samsung SSD 980 PRO",
+                            "drive_type": "NVMe",
+                            "test_name": "random_read_4k",
+                            "block_size": "4K",
+                            "read_write_pattern": "randread",
+                            "queue_depth": 32,
+                            "protocol": "Local",
+                            "iops": 125000.5,
+                            "avg_latency": 0.256,
+                            "bandwidth": 488.28,
+                            "p95_latency": 0.512,
+                            "p99_latency": 1.024
+                        }
+                    ]
+                }
+            }
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
+@router.get(
+    "/all/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def get_all_time_series(
     request: Request,
-    hostnames: Optional[str] = Query(None, description="Comma-separated hostnames"),
-    protocols: Optional[str] = Query(None, description="Comma-separated protocols"),
-    drive_types: Optional[str] = Query(None, description="Comma-separated drive types"),
-    drive_models: Optional[str] = Query(None, description="Comma-separated drive models"),
-    patterns: Optional[str] = Query(None, description="Comma-separated patterns"),
-    block_sizes: Optional[str] = Query(None, description="Comma-separated block sizes"),
-    syncs: Optional[str] = Query(None, description="Comma-separated sync values"),
-    queue_depths: Optional[str] = Query(None, description="Comma-separated queue depths"),
-    directs: Optional[str] = Query(None, description="Comma-separated direct values"),
-    num_jobs: Optional[str] = Query(None, description="Comma-separated num_jobs values"),
-    test_sizes: Optional[str] = Query(None, description="Comma-separated test sizes"),
-    durations: Optional[str] = Query(None, description="Comma-separated durations"),
-    limit: int = Query(1000, ge=1, le=10000, description="Maximum number of results"),
-    offset: int = Query(0, ge=0, description="Number of results to skip"),
+    hostnames: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of hostnames to include",
+        example="server-01,server-02"
+    ),
+    protocols: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of storage protocols to include",
+        example="Local,iSCSI,NFS"
+    ),
+    drive_types: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of drive technology types",
+        example="NVMe,SATA,SAS"
+    ),
+    drive_models: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of specific drive models",
+        example="Samsung SSD 980 PRO,WD Black SN850"
+    ),
+    patterns: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of I/O access patterns",
+        example="randread,randwrite,read,write"
+    ),
+    block_sizes: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of I/O block sizes",
+        example="4K,8K,64K,1M"
+    ),
+    syncs: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of sync flags (0=async, 1=sync)",
+        example="0,1"
+    ),
+    queue_depths: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of I/O queue depths",
+        example="1,8,32,64"
+    ),
+    directs: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of direct I/O flags (0=buffered, 1=direct)",
+        example="0,1"
+    ),
+    num_jobs: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of concurrent job counts",
+        example="1,4,8,16"
+    ),
+    test_sizes: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of test data sizes",
+        example="1G,10G,100G"
+    ),
+    durations: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of test durations in seconds",
+        example="30,60,300,600"
+    ),
+    limit: int = Query(
+        1000, 
+        ge=1, 
+        le=10000, 
+        description="Maximum number of records to return",
+        example=500
+    ),
+    offset: int = Query(
+        0, 
+        ge=0, 
+        description="Number of records to skip for pagination",
+        example=0
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Get all historical time series data with filtering"""
+    """
+    Retrieve complete historical time series data with advanced filtering.
+    
+    This endpoint provides access to the full historical dataset (test_runs_all table)
+    with comprehensive filtering capabilities. Ideal for trend analysis, performance
+    comparisons, and historical reporting.
+    
+    **Authentication Required:** Admin access
+    
+    **Data Source:** Complete historical records (test_runs_all table)
+    
+    **Filtering Options:**
+    All filters support multiple values using comma-separated lists.
+    Combine filters to create precise queries (e.g., specific drive models
+    on certain hosts with particular I/O patterns).
+    
+    **Use Cases:**
+    - Long-term performance trend analysis
+    - Cross-system performance comparison
+    - Historical performance regression detection
+    - Data export for external analysis tools
+    - Performance baseline establishment
+    
+    **Pagination:**
+    Use limit and offset parameters for large datasets.
+    Maximum limit is 10,000 records per request.
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -239,16 +419,105 @@ async def get_all_time_series(
         raise HTTPException(status_code=500, detail="Failed to retrieve all time series data")
 
 
-@router.get("/latest")
-@router.get("/latest/")  # Handle with trailing slash
+@router.get(
+    "/latest",
+    summary="Get Latest Time Series Data",
+    description="Retrieve the most recent test data formatted for time series visualization",
+    response_description="Latest test data formatted as time series points",
+    responses={
+        200: {
+            "description": "Latest time series data retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "timestamp": "2025-06-31T20:00:00",
+                            "hostname": "server-01",
+                            "protocol": "Local",
+                            "drive_model": "Samsung SSD 980 PRO",
+                            "drive_type": "NVMe",
+                            "block_size": "4K",
+                            "read_write_pattern": "randread",
+                            "queue_depth": 32,
+                            "metric_type": "iops",
+                            "value": 125000.5,
+                            "unit": "IOPS"
+                        },
+                        {
+                            "timestamp": "2025-06-31T20:00:00",
+                            "hostname": "server-01",
+                            "protocol": "Local",
+                            "drive_model": "Samsung SSD 980 PRO",
+                            "drive_type": "NVMe",
+                            "block_size": "4K",
+                            "read_write_pattern": "randread",
+                            "queue_depth": 32,
+                            "metric_type": "avg_latency",
+                            "value": 0.256,
+                            "unit": "ms"
+                        }
+                    ]
+                }
+            }
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
+@router.get(
+    "/latest/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def get_latest_time_series(
     request: Request,
-    hostnames: Optional[str] = Query(None, description="Comma-separated hostnames"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of results"),
+    hostnames: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of hostnames to include in results",
+        example="server-01,server-02"
+    ),
+    limit: int = Query(
+        100, 
+        ge=1, 
+        le=1000, 
+        description="Maximum number of test runs to process (before metric expansion)",
+        example=50
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Get latest time series data"""
+    """
+    Retrieve latest test data formatted for time series visualization.
+    
+    This endpoint returns the most recent test results formatted as individual
+    time series data points. Each performance metric becomes a separate data point
+    with appropriate units and labels.
+    
+    **Authentication Required:** Admin access
+    
+    **Data Source:** Latest test results (test_runs table)
+    
+    **Data Format:**
+    Each test run is expanded into multiple time series points - one for each
+    performance metric (IOPS, latency, bandwidth, etc.). This format is
+    optimized for time series charting libraries.
+    
+    **Metrics Included:**
+    - **iops**: Input/Output Operations Per Second
+    - **avg_latency**: Average response time in milliseconds
+    - **bandwidth**: Data transfer rate in MB/s
+    - **p95_latency**: 95th percentile latency in milliseconds
+    - **p99_latency**: 99th percentile latency in milliseconds
+    
+    **Use Cases:**
+    - Real-time performance dashboards
+    - Current system status monitoring
+    - Latest performance metric visualization
+    - Time series chart data feeding
+    
+    **Note:** The limit parameter controls the number of test runs processed,
+    but each test run generates multiple data points (one per metric).
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -323,32 +592,181 @@ async def get_latest_time_series(
         raise HTTPException(status_code=500, detail="Failed to retrieve latest time series data")
 
 
-@router.get("/history")
-@router.get("/history/")  # Handle with trailing slash
+@router.get(
+    "/history",
+    summary="Get Historical Time Series",
+    description="Retrieve historical performance data with detailed filtering and date range selection",
+    response_description="Historical time series data matching the specified criteria",
+    responses={
+        200: {
+            "description": "Historical time series data retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "test_run_id": 1,
+                            "timestamp": "2025-06-31T20:00:00",
+                            "hostname": "server-01",
+                            "protocol": "Local",
+                            "drive_model": "Samsung SSD 980 PRO",
+                            "block_size": "4K",
+                            "read_write_pattern": "randread",
+                            "queue_depth": 32,
+                            "iops": 125000.5,
+                            "avg_latency": 0.256,
+                            "bandwidth": 488.28,
+                            "p95_latency": 0.512,
+                            "p99_latency": 1.024
+                        }
+                    ]
+                }
+            }
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
+@router.get(
+    "/history/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def get_historical_time_series(
     request: Request,
-    hostname: Optional[str] = Query(None, description="Single hostname filter"),
-    hostnames: Optional[str] = Query(None, description="Comma-separated hostnames"),
-    protocol: Optional[str] = Query(None, description="Protocol filter"),
-    drive_model: Optional[str] = Query(None, description="Drive model filter"),
-    drive_type: Optional[str] = Query(None, description="Drive type filter"),
-    block_size: Optional[str] = Query(None, description="Block size filter"),
-    read_write_pattern: Optional[str] = Query(None, description="Read/write pattern filter"),
-    queue_depth: Optional[int] = Query(None, description="Queue depth filter"),
-    metric_type: Optional[str] = Query(None, description="Metric type filter"),
-    days: Optional[int] = Query(30, description="Number of days to look back"),
-    test_size: Optional[str] = Query(None, description="Test size filter"),
-    sync: Optional[int] = Query(None, description="Sync flag filter"),
-    direct: Optional[int] = Query(None, description="Direct flag filter"),
-    num_jobs: Optional[int] = Query(None, description="Number of jobs filter"),
-    duration: Optional[int] = Query(None, description="Duration filter"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
-    limit: int = Query(10000, ge=1, le=50000, description="Maximum number of results"),
+    hostname: Optional[str] = Query(
+        None, 
+        description="Single hostname to filter by (alternative to hostnames parameter)",
+        example="server-01"
+    ),
+    hostnames: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of hostnames (alternative to hostname parameter)",
+        example="server-01,server-02"
+    ),
+    protocol: Optional[str] = Query(
+        None, 
+        description="Storage protocol to filter by",
+        example="Local"
+    ),
+    drive_model: Optional[str] = Query(
+        None, 
+        description="Specific drive model to filter by",
+        example="Samsung SSD 980 PRO"
+    ),
+    drive_type: Optional[str] = Query(
+        None, 
+        description="Drive technology type to filter by",
+        example="NVMe"
+    ),
+    block_size: Optional[str] = Query(
+        None, 
+        description="I/O block size to filter by",
+        example="4K"
+    ),
+    read_write_pattern: Optional[str] = Query(
+        None, 
+        description="I/O access pattern to filter by",
+        example="randread"
+    ),
+    queue_depth: Optional[int] = Query(
+        None, 
+        description="I/O queue depth to filter by",
+        example=32
+    ),
+    metric_type: Optional[str] = Query(
+        None, 
+        description="Filter to show only records with non-null values for this metric",
+        example="iops"
+    ),
+    days: Optional[int] = Query(
+        30, 
+        description="Number of days to look back from current time (ignored if start_date/end_date provided)",
+        example=30,
+        ge=1,
+        le=365
+    ),
+    test_size: Optional[str] = Query(
+        None, 
+        description="Test data size to filter by",
+        example="10G"
+    ),
+    sync: Optional[int] = Query(
+        None, 
+        description="Sync flag to filter by (0=async, 1=sync)",
+        example=0
+    ),
+    direct: Optional[int] = Query(
+        None, 
+        description="Direct I/O flag to filter by (0=buffered, 1=direct)",
+        example=1
+    ),
+    num_jobs: Optional[int] = Query(
+        None, 
+        description="Number of concurrent jobs to filter by",
+        example=4
+    ),
+    duration: Optional[int] = Query(
+        None, 
+        description="Test duration in seconds to filter by",
+        example=300
+    ),
+    start_date: Optional[str] = Query(
+        None, 
+        description="Start date for data range in ISO format (overrides days parameter)",
+        example="2025-01-01T00:00:00"
+    ),
+    end_date: Optional[str] = Query(
+        None, 
+        description="End date for data range in ISO format (overrides days parameter)",
+        example="2025-06-31T23:59:59"
+    ),
+    limit: int = Query(
+        10000, 
+        ge=1, 
+        le=50000, 
+        description="Maximum number of records to return",
+        example=1000
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Get historical time series data"""
+    """
+    Retrieve historical performance data with comprehensive filtering options.
+    
+    This endpoint provides flexible access to historical test data with extensive
+    filtering capabilities and date range selection. Perfect for trend analysis,
+    performance comparisons, and data visualization.
+    
+    **Authentication Required:** Admin access
+    
+    **Data Source:** Complete historical records (test_runs_all table)
+    
+    **Date Range Options:**
+    1. **Relative**: Use `days` parameter to look back from current time
+    2. **Absolute**: Use `start_date` and `end_date` for specific ranges
+    3. **Open-ended**: Use only `start_date` or only `end_date`
+    
+    **Hostname Filtering:**
+    Use either `hostname` (single) or `hostnames` (comma-separated list).
+    The `hostnames` parameter takes precedence if both are provided.
+    
+    **Metric Filtering:**
+    The `metric_type` parameter filters results to only include records
+    where the specified metric has a non-null value. Useful for ensuring
+    complete data for specific analysis.
+    
+    **Use Cases:**
+    - Performance trend analysis over time
+    - Before/after performance comparisons
+    - System performance regression detection
+    - Custom date range reporting
+    - Workload-specific performance analysis
+    
+    **Performance Tips:**
+    - Use specific filters to reduce dataset size
+    - Limit date ranges for faster queries
+    - Use metric_type filter to ensure data completeness
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -487,17 +905,110 @@ async def get_historical_time_series(
         raise HTTPException(status_code=500, detail="Failed to retrieve historical time series data")
 
 
-@router.get("/trends")
-@router.get("/trends/")  # Handle with trailing slash
+@router.get(
+    "/trends",
+    summary="Get Performance Trends",
+    description="Analyze performance trends for a specific host and metric over time",
+    response_description="Trend analysis data with statistical insights",
+    responses={
+        200: {
+            "description": "Trend analysis completed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "data": [
+                            {
+                                "timestamp": "2025-06-01T10:00:00",
+                                "block_size": "4K",
+                                "read_write_pattern": "randread",
+                                "queue_depth": 32,
+                                "value": 120000.0,
+                                "unit": "IOPS",
+                                "moving_avg": 118500.0,
+                                "percent_change": "+2.5%"
+                            }
+                        ],
+                        "trend_analysis": {
+                            "total_points": 30,
+                            "min_value": 115000.0,
+                            "max_value": 125000.0,
+                            "avg_value": 120500.0,
+                            "first_value": 118000.0,
+                            "last_value": 122000.0,
+                            "overall_change": "+3.4%"
+                        }
+                    }
+                }
+            }
+        },
+        400: {"description": "Invalid hostname or metric parameter"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        404: {"description": "No data found for the specified parameters"},
+        500: {"description": "Internal server error"}
+    }
+)
+@router.get(
+    "/trends/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def get_trends(
     request: Request,
-    hostname: str = Query(..., description="Hostname to analyze"),
-    metric: str = Query("iops", description="Metric to analyze"),
-    days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
+    hostname: str = Query(
+        ..., 
+        description="Hostname to analyze for performance trends",
+        example="server-01"
+    ),
+    metric: str = Query(
+        "iops", 
+        description="Performance metric to analyze",
+        example="iops",
+        regex="^(iops|avg_latency|bandwidth|p95_latency|p99_latency)$"
+    ),
+    days: int = Query(
+        30, 
+        ge=1, 
+        le=365, 
+        description="Number of days to analyze for trend calculation",
+        example=30
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Get trend analysis for a specific host and metric"""
+    """
+    Analyze performance trends for a specific host and metric over time.
+    
+    This endpoint provides statistical trend analysis including moving averages,
+    percentage changes, and summary statistics for a given performance metric
+    on a specific host.
+    
+    **Authentication Required:** Admin access
+    
+    **Available Metrics:**
+    - **iops**: Input/Output Operations Per Second
+    - **avg_latency**: Average response time in milliseconds
+    - **bandwidth**: Data transfer rate in MB/s
+    - **p95_latency**: 95th percentile latency
+    - **p99_latency**: 99th percentile latency
+    
+    **Analysis Features:**
+    - **Moving Average**: 3-point moving average calculation
+    - **Percentage Change**: Period-over-period change calculation
+    - **Statistical Summary**: Min, max, average, and overall change
+    - **Temporal Ordering**: Data sorted chronologically
+    
+    **Use Cases:**
+    - Performance degradation detection
+    - Capacity planning and forecasting
+    - System optimization validation
+    - Performance baseline establishment
+    - Long-term trend monitoring
+    
+    **Data Requirements:**
+    The analysis requires at least 3 data points for meaningful
+    trend calculation. If insufficient data is available,
+    a message will be returned instead of trend data.
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -583,15 +1094,88 @@ async def get_trends(
         raise HTTPException(status_code=500, detail="Failed to retrieve trend analysis")
 
 
-@router.put("/bulk")
-@router.put("/bulk/")  # Handle with trailing slash
+@router.put(
+    "/bulk",
+    summary="Bulk Update Time Series Data",
+    description="Update multiple historical test runs with new metadata",
+    response_description="Bulk update operation results",
+    responses={
+        200: {
+            "description": "Bulk update completed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Successfully updated 10 time-series test runs",
+                        "updated": 10,
+                        "failed": 0
+                    }
+                }
+            }
+        },
+        400: {"description": "Invalid request data, missing fields, or no valid updates"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error during update"}
+    }
+)
+@router.put(
+    "/bulk/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def bulk_update_time_series(
     request: Request,
-    bulk_request: dict = Body(...),
+    bulk_request: dict = Body(
+        ...,
+        description="Bulk update request containing test run IDs and update fields",
+        example={
+            "testRunIds": [1, 2, 3, 15, 42],
+            "updates": {
+                "description": "Updated batch description",
+                "hostname": "renamed-server"
+            }
+        }
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Bulk update time series test runs"""
+    """
+    Update multiple historical test runs with new metadata in a single operation.
+    
+    This endpoint allows bulk updating of metadata fields across multiple
+    historical test runs. Updates are applied to both current and historical
+    data tables to maintain consistency.
+    
+    **Authentication Required:** Admin access
+    
+    **Request Format:**
+    ```json
+    {
+        "testRunIds": [1, 2, 3],
+        "updates": {
+            "description": "New description",
+            "hostname": "updated-hostname"
+        }
+    }
+    ```
+    
+    **Updatable Fields:**
+    - description: Test description or notes
+    - test_name: Human-readable test name
+    - hostname: Server hostname
+    - protocol: Storage protocol
+    - drive_type: Drive technology type
+    - drive_model: Specific drive model
+    
+    **Transaction Safety:**
+    All updates are performed within a database transaction.
+    If any update fails, all changes are rolled back.
+    
+    **Use Cases:**
+    - Batch hostname updates after server migrations
+    - Standardizing test descriptions
+    - Correcting metadata across multiple test runs
+    - Mass updates for organizational changes
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -706,15 +1290,83 @@ async def bulk_update_time_series(
         raise HTTPException(status_code=500, detail="Failed to update time-series test runs")
 
 
-@router.delete("/delete")
-@router.delete("/delete/")  # Handle with trailing slash
+@router.delete(
+    "/delete",
+    summary="Delete Time Series Data",
+    description="Permanently delete multiple historical test runs",
+    response_description="Deletion operation results",
+    responses={
+        200: {
+            "description": "Deletion completed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "deleted": 8,
+                        "notFound": 2
+                    }
+                }
+            }
+        },
+        400: {"description": "Invalid request data or missing test run IDs"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error during deletion"}
+    }
+)
+@router.delete(
+    "/delete/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def delete_time_series(
     request: Request,
-    delete_request: dict = Body(...),
+    delete_request: dict = Body(
+        ...,
+        description="Deletion request containing test run IDs to remove",
+        example={
+            "testRunIds": [1, 2, 3, 15, 42]
+        }
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Delete time series test runs"""
+    """
+    Permanently delete multiple historical test runs.
+    
+    This endpoint removes test runs from the historical data table
+    (test_runs_all). This operation cannot be undone.
+    
+    **Authentication Required:** Admin access
+    
+    **Request Format:**
+    ```json
+    {
+        "testRunIds": [1, 2, 3, 15, 42]
+    }
+    ```
+    
+    **Response Format:**
+    ```json
+    {
+        "deleted": 8,
+        "notFound": 2
+    }
+    ```
+    
+    **Operation Details:**
+    - Only affects historical data (test_runs_all table)
+    - Returns count of successfully deleted records
+    - Returns count of IDs that were not found
+    - Non-existent IDs are silently ignored
+    
+    **Warning:** This is a permanent operation that cannot be reversed.
+    Consider exporting important data before deletion.
+    
+    **Use Cases:**
+    - Cleaning up test data during system maintenance
+    - Removing invalid or corrupted test results
+    - Data retention policy enforcement
+    - Storage space management
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -756,7 +1408,18 @@ async def delete_time_series(
 
 
 def get_metric_unit(metric: str) -> str:
-    """Get unit for metric"""
+    """
+    Get the appropriate unit string for a given performance metric.
+    
+    Maps metric type names to their standard measurement units
+    for display and API response formatting.
+    
+    Args:
+        metric: Metric type identifier (e.g., 'iops', 'avg_latency')
+        
+    Returns:
+        Unit string for the metric, empty string if unknown
+    """
     units = {
         "iops": "IOPS",
         "avg_latency": "ms",

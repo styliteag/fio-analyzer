@@ -3,7 +3,7 @@ Test runs API router
 """
 
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body, File, Form, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body, File, Form, UploadFile, Path
 import sqlite3
 
 from database.connection import get_db
@@ -15,28 +15,143 @@ from utils.logging import log_info, log_error
 router = APIRouter()
 
 
-@router.get("/")
-@router.get("")  # Handle route without trailing slash
+@router.get(
+    "/",
+    summary="Get Test Runs",
+    description="Retrieve test runs with advanced filtering options for performance analysis",
+    response_description="List of test runs matching the filter criteria",
+    responses={
+        200: {
+            "description": "Successfully retrieved test runs",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": 1,
+                            "timestamp": "2025-06-31T20:00:00",
+                            "hostname": "server-01",
+                            "drive_model": "Samsung SSD 980 PRO",
+                            "drive_type": "NVMe",
+                            "test_name": "random_read_4k",
+                            "block_size": "4K",
+                            "read_write_pattern": "randread",
+                            "queue_depth": 32,
+                            "iops": 125000.5,
+                            "avg_latency": 0.256,
+                            "bandwidth": 488.28
+                        }
+                    ]
+                }
+            }
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
+@router.get(
+    "",
+    include_in_schema=False
+)  # Handle route without trailing slash but hide from docs
 async def get_test_runs(
     request: Request,
-    hostnames: Optional[str] = Query(None, description="Comma-separated hostnames to filter"),
-    drive_types: Optional[str] = Query(None, description="Comma-separated drive types to filter"),
-    drive_models: Optional[str] = Query(None, description="Comma-separated drive models to filter"),  # ADDED
-    protocols: Optional[str] = Query(None, description="Comma-separated protocols to filter"),
-    patterns: Optional[str] = Query(None, description="Comma-separated patterns to filter"),
-    block_sizes: Optional[str] = Query(None, description="Comma-separated block sizes to filter"),
-    syncs: Optional[str] = Query(None, description="Comma-separated sync values to filter"),  # ADDED
-    queue_depths: Optional[str] = Query(None, description="Comma-separated queue depths to filter"),  # ADDED
-    directs: Optional[str] = Query(None, description="Comma-separated direct values to filter"),  # ADDED
-    num_jobs: Optional[str] = Query(None, description="Comma-separated num_jobs values to filter"),  # ADDED
-    test_sizes: Optional[str] = Query(None, description="Comma-separated test sizes to filter"),  # ADDED
-    durations: Optional[str] = Query(None, description="Comma-separated durations to filter"),  # ADDED
-    limit: int = Query(1000, ge=1, le=10000, description="Number of results to return"),
-    offset: int = Query(0, ge=0, description="Number of results to skip"),
+    hostnames: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of hostnames to filter by (e.g., 'server-01,server-02')",
+        example="server-01,server-02"
+    ),
+    drive_types: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of drive types to filter by (e.g., 'NVMe,SATA')",
+        example="NVMe,SATA"
+    ),
+    drive_models: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of drive models to filter by",
+        example="Samsung SSD 980 PRO,WD Black SN850"
+    ),
+    protocols: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of protocols to filter by (e.g., 'Local,iSCSI')",
+        example="Local,iSCSI"
+    ),
+    patterns: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of I/O patterns to filter by (e.g., 'randread,randwrite')",
+        example="randread,randwrite,read"
+    ),
+    block_sizes: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of block sizes to filter by (e.g., '4K,64K')",
+        example="4K,8K,64K"
+    ),
+    syncs: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of sync flag values to filter by (0=async, 1=sync)",
+        example="0,1"
+    ),
+    queue_depths: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of queue depths to filter by",
+        example="1,8,32,64"
+    ),
+    directs: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of direct I/O flag values (0=buffered, 1=direct)",
+        example="0,1"
+    ),
+    num_jobs: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of number of jobs to filter by",
+        example="1,4,8"
+    ),
+    test_sizes: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of test sizes to filter by",
+        example="1G,10G,100G"
+    ),
+    durations: Optional[str] = Query(
+        None, 
+        description="Comma-separated list of test durations in seconds to filter by",
+        example="30,60,300"
+    ),
+    limit: int = Query(
+        1000, 
+        ge=1, 
+        le=10000, 
+        description="Maximum number of test runs to return",
+        example=100
+    ),
+    offset: int = Query(
+        0, 
+        ge=0, 
+        description="Number of test runs to skip for pagination",
+        example=0
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Get test runs with optional filtering"""
+    """
+    Retrieve test runs with comprehensive filtering capabilities.
+    
+    This endpoint provides access to the latest test run data with extensive
+    filtering options for performance analysis and monitoring. All filters support
+    multiple values using comma-separated lists.
+    
+    **Authentication Required:** Admin access
+    
+    **Filter Examples:**
+    - Get all NVMe drives: `?drive_types=NVMe`
+    - Get specific hosts: `?hostnames=server-01,server-02`
+    - Get 4K random reads: `?block_sizes=4K&patterns=randread`
+    - Get high queue depth tests: `?queue_depths=32,64`
+    
+    **Performance Metrics Included:**
+    - IOPS (Input/Output Operations Per Second)
+    - Average latency in milliseconds
+    - Bandwidth in MB/s
+    - 95th and 99th percentile latency
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -174,15 +289,68 @@ async def get_test_runs(
         raise HTTPException(status_code=500, detail="Failed to retrieve test runs")
 
 
-@router.put("/bulk")
-@router.put("/bulk/")  # Handle with trailing slash
+@router.put(
+    "/bulk",
+    summary="Bulk Update Test Runs",
+    description="Update multiple test runs with new metadata in a single operation",
+    response_description="Bulk update operation results",
+    responses={
+        200: {
+            "description": "Bulk update completed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Successfully updated 5 test runs",
+                        "updated": 5,
+                        "failed": 0
+                    }
+                }
+            }
+        },
+        400: {"description": "Invalid request data or no updates provided"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"}
+    }
+)
+@router.put(
+    "/bulk/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def bulk_update_test_runs(
     request: Request,
     bulk_request: BulkUpdateRequest,
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Bulk update test run metadata"""
+    """
+    Perform bulk updates on multiple test runs simultaneously.
+    
+    This endpoint allows you to update metadata fields for multiple test runs
+    in a single atomic operation. Only the specified fields will be updated,
+    leaving other fields unchanged.
+    
+    **Authentication Required:** Admin access
+    
+    **Updatable Fields:**
+    - description: Test description or notes
+    - test_name: Human-readable test name
+    - hostname: Server hostname
+    - protocol: Storage protocol (Local, iSCSI, etc.)
+    - drive_type: Drive technology type
+    - drive_model: Specific drive model
+    
+    **Request Body Example:**
+    ```json
+    {
+        "test_run_ids": [1, 2, 3],
+        "updates": {
+            "description": "Updated description",
+            "hostname": "new-server-name"
+        }
+    }
+    ```
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -242,15 +410,80 @@ async def bulk_update_test_runs(
         raise HTTPException(status_code=500, detail="Failed to update test runs")
 
 
-@router.get("/performance-data")
-@router.get("/performance-data/")  # Handle with trailing slash
+@router.get(
+    "/performance-data",
+    summary="Get Performance Data",
+    description="Retrieve detailed performance metrics for specific test runs",
+    response_description="Performance data with metrics for each test run",
+    responses={
+        200: {
+            "description": "Performance data retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": 1,
+                            "drive_model": "Samsung SSD 980 PRO",
+                            "drive_type": "NVMe",
+                            "test_name": "random_read_4k",
+                            "block_size": "4K",
+                            "read_write_pattern": "randread",
+                            "timestamp": "2025-06-31T20:00:00",
+                            "hostname": "server-01",
+                            "metrics": {
+                                "iops": {"value": 125000.5, "unit": "IOPS"},
+                                "avg_latency": {"value": 0.256, "unit": "ms"},
+                                "bandwidth": {"value": 488.28, "unit": "MB/s"},
+                                "p95_latency": {"value": 0.512, "unit": "ms"},
+                                "p99_latency": {"value": 1.024, "unit": "ms"}
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        400: {"description": "Invalid test run IDs format"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        404: {"description": "One or more test runs not found"},
+        500: {"description": "Internal server error"}
+    }
+)
+@router.get(
+    "/performance-data/",
+    include_in_schema=False
+)  # Handle with trailing slash but hide from docs
 async def get_performance_data(
     request: Request,
-    test_run_ids: str = Query(..., description="Comma-separated test run IDs"),
+    test_run_ids: str = Query(
+        ..., 
+        description="Comma-separated list of test run IDs to retrieve performance data for",
+        example="1,2,3,15,42"
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Get performance data for specific test runs"""
+    """
+    Retrieve detailed performance metrics for specific test runs.
+    
+    This endpoint returns comprehensive performance data including all measured
+    metrics (IOPS, latency, bandwidth) with proper units for each specified test run.
+    
+    **Authentication Required:** Admin access
+    
+    **Performance Metrics:**
+    - **IOPS**: Input/Output Operations Per Second
+    - **Average Latency**: Mean response time in milliseconds
+    - **Bandwidth**: Data transfer rate in MB/s
+    - **P95 Latency**: 95th percentile latency in milliseconds
+    - **P99 Latency**: 99th percentile latency in milliseconds
+    
+    **Use Cases:**
+    - Performance comparison between test runs
+    - Detailed analysis of specific workloads
+    - Generating performance reports
+    - Data visualization and charting
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -321,14 +554,69 @@ async def get_performance_data(
         raise HTTPException(status_code=500, detail="Failed to retrieve performance data")
 
 
-@router.get("/{test_run_id}")
+@router.get(
+    "/{test_run_id}",
+    summary="Get Single Test Run",
+    description="Retrieve detailed information for a specific test run by ID",
+    response_description="Complete test run data including all metrics and metadata",
+    responses={
+        200: {
+            "description": "Test run retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "timestamp": "2025-06-31T20:00:00",
+                        "hostname": "server-01",
+                        "drive_model": "Samsung SSD 980 PRO",
+                        "drive_type": "NVMe",
+                        "test_name": "random_read_4k",
+                        "description": "4K random read performance test",
+                        "block_size": "4K",
+                        "read_write_pattern": "randread",
+                        "queue_depth": 32,
+                        "duration": 300,
+                        "protocol": "Local",
+                        "iops": 125000.5,
+                        "avg_latency": 0.256,
+                        "bandwidth": 488.28,
+                        "p95_latency": 0.512,
+                        "p99_latency": 1.024
+                    }
+                }
+            }
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        404: {"description": "Test run not found"},
+        500: {"description": "Internal server error"}
+    }
+)
 async def get_test_run(
     request: Request,
-    test_run_id: int,
+    test_run_id: int = Path(
+        ..., 
+        description="Unique identifier of the test run to retrieve",
+        example=1,
+        gt=0
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Get a single test run by ID"""
+    """
+    Retrieve complete information for a single test run.
+    
+    This endpoint returns all available data for a specific test run,
+    including configuration parameters, performance metrics, and metadata.
+    
+    **Authentication Required:** Admin access
+    
+    **Returned Data:**
+    - Test configuration (block size, pattern, queue depth, etc.)
+    - Performance metrics (IOPS, latency, bandwidth)
+    - System information (hostname, drive details, protocol)
+    - Test metadata (description, timestamps, FIO version)
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -364,15 +652,68 @@ async def get_test_run(
         raise HTTPException(status_code=500, detail="Failed to retrieve test run")
 
 
-@router.put("/{test_run_id}")
+@router.put(
+    "/{test_run_id}",
+    summary="Update Test Run",
+    description="Update metadata fields for a specific test run",
+    response_description="Update operation confirmation",
+    responses={
+        200: {
+            "description": "Test run updated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Test run updated successfully"
+                    }
+                }
+            }
+        },
+        400: {"description": "Invalid field names or values provided"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        404: {"description": "Test run not found"},
+        500: {"description": "Internal server error"}
+    }
+)
 async def update_test_run(
     request: Request,
-    test_run_id: int,
-    update_data: dict = Body(...),
+    test_run_id: int = Path(
+        ..., 
+        description="Unique identifier of the test run to update",
+        example=1,
+        gt=0
+    ),
+    update_data: dict = Body(
+        ...,
+        description="Fields to update with their new values",
+        example={
+            "description": "Updated test description",
+            "hostname": "new-server-name",
+            "test_name": "Updated test name"
+        }
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Update a test run"""
+    """
+    Update metadata fields for a specific test run.
+    
+    This endpoint allows updating editable metadata fields while preserving
+    the original performance data and test configuration.
+    
+    **Authentication Required:** Admin access
+    
+    **Updatable Fields:**
+    - description: Test description or notes
+    - test_name: Human-readable test name
+    - hostname: Server hostname
+    - protocol: Storage protocol
+    - drive_type: Drive technology type
+    - drive_model: Specific drive model
+    
+    **Note:** Performance metrics and test configuration parameters
+    (block size, queue depth, etc.) cannot be modified.
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
@@ -472,14 +813,50 @@ async def update_test_run(
         raise HTTPException(status_code=500, detail="Failed to update test run")
 
 
-@router.delete("/{test_run_id}")
+@router.delete(
+    "/{test_run_id}",
+    summary="Delete Test Run",
+    description="Permanently delete a test run and all associated data",
+    response_description="Deletion confirmation",
+    responses={
+        200: {
+            "description": "Test run deleted successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Test run deleted successfully"
+                    }
+                }
+            }
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        404: {"description": "Test run not found"},
+        500: {"description": "Internal server error"}
+    }
+)
 async def delete_test_run(
     request: Request,
-    test_run_id: int,
+    test_run_id: int = Path(
+        ..., 
+        description="Unique identifier of the test run to delete",
+        example=1,
+        gt=0
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    """Delete a test run"""
+    """
+    Permanently delete a test run and all associated data.
+    
+    This operation removes the test run from both the latest test runs table
+    and the historical data table. This action cannot be undone.
+    
+    **Authentication Required:** Admin access
+    
+    **Warning:** This is a permanent operation that cannot be reversed.
+    Consider exporting important data before deletion.
+    """
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     try:
