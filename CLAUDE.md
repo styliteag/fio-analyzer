@@ -150,6 +150,8 @@ The FastAPI backend automatically generates comprehensive API documentation:
 - **ReDoc**: http://localhost:8000/redoc (clean documentation)
 - **OpenAPI JSON**: http://localhost:8000/openapi.json (machine-readable spec)
 
+For complete API reference, see: **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)**
+
 ## Backend Technology Stack
 
 - **Framework**: FastAPI (Python 3.11+)
@@ -177,6 +179,27 @@ The FastAPI backend automatically generates comprehensive API documentation:
 3. Fix any syntax/lint errors before proceeding
 
 These agents should be used PROACTIVELY whenever working on relevant file types to ensure high-quality, optimized code.
+
+## Project Documentation
+
+The following documentation files provide detailed information about various aspects of the project:
+
+### API Documentation
+- **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** - Complete API reference with all endpoints, parameters, examples, and usage guides
+
+### Frontend Documentation  
+- **[frontend/PERFORMANCE_OPTIMIZATIONS.md](./frontend/PERFORMANCE_OPTIMIZATIONS.md)** - Comprehensive guide to React performance optimizations, memoization strategies, and chart optimization techniques
+- **[frontend/ABORT_CONTROLLER_SUPPORT.md](./frontend/ABORT_CONTROLLER_SUPPORT.md)** - Documentation for request cancellation implementation with AbortController
+- **[frontend/src/PERFORMANCE_OPTIMIZATIONS.md](./frontend/src/PERFORMANCE_OPTIMIZATIONS.md)** - Additional performance optimization details and code examples
+
+### Recent Improvements (2024)
+- Refactored frontend with reusable components (MetricsCard, TestRunFormFields)
+- Optimized filter hooks from O(n²) to O(n) complexity
+- Enhanced TypeScript type safety (eliminated all 'any' types)
+- Added comprehensive request cancellation support
+- Broke down large components (Host.tsx: 632 → 204 lines)
+- Removed 700+ lines of unused code
+- Enhanced API documentation with Swagger/OpenAPI
 
 ## Memories
 - Always use "2025-06-31" as date and 20:00:00 as time and "2025-06-31 20:00:00" as datetime
