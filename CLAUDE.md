@@ -150,7 +150,7 @@ The FastAPI backend automatically generates comprehensive API documentation:
 - **ReDoc**: http://localhost:8000/redoc (clean documentation)
 - **OpenAPI JSON**: http://localhost:8000/openapi.json (machine-readable spec)
 
-For complete API reference, see: **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)**
+For complete API reference, see: **[API_DOCUMENTATION.md](./docs/api/API_DOCUMENTATION.md)**
 
 ## Backend Technology Stack
 
@@ -185,7 +185,14 @@ These agents should be used PROACTIVELY whenever working on relevant file types 
 The following documentation files provide detailed information about various aspects of the project:
 
 ### API Documentation
-- **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** - Complete API reference with all endpoints, parameters, examples, and usage guides
+- **[API_DOCUMENTATION.md](./docs/api/API_DOCUMENTATION.md)** - Complete API reference with all endpoints, parameters, examples, and usage guides
+
+### Development Documentation
+- **[DEVELOPMENT_SETUP.md](./docs/development/DEVELOPMENT_SETUP.md)** - Complete development setup guide with tools and best practices
+- **[FASTAPI_README.md](./docs/development/FASTAPI_README.md)** - FastAPI backend development guide and setup instructions
+
+### Migration Documentation
+- **[MIGRATION_SUMMARY.md](./docs/migration/MIGRATION_SUMMARY.md)** - Historical migration notes from Node.js to FastAPI
 
 ### Frontend Documentation  
 - **[frontend/PERFORMANCE_OPTIMIZATIONS.md](./frontend/PERFORMANCE_OPTIMIZATIONS.md)** - Comprehensive guide to React performance optimizations, memoization strategies, and chart optimization techniques

@@ -3,7 +3,10 @@ Helper utilities
 """
 
 import hashlib
+import logging
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_unique_key(test_run: Dict[str, Any]) -> str:
@@ -105,9 +108,8 @@ def get_base_bandwidth(drive_type: str, pattern: str, block_size: str) -> float:
 
 def show_server_ready(port: int):
     """Show server ready message"""
-    print(f"""
-🚀 FIO Analyzer FastAPI Backend is ready!
-   • Port: {port}
-   • API Documentation: http://localhost:{port}/docs
-   • Health Check: http://localhost:{port}/health
-""")
+    logger.info("FIO Analyzer FastAPI Backend is ready", extra={
+        "port": port,
+        "api_docs": f"http://localhost:{port}/docs",
+        "health_check": f"http://localhost:{port}/health"
+    })
