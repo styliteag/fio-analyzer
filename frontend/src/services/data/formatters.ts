@@ -133,24 +133,6 @@ export const formatTimestamp = (
     }
 };
 
-// Format duration in seconds to human readable
-export const formatDuration = (seconds: number): string => {
-    if (seconds < 60) {
-        return `${seconds}s`;
-    } else if (seconds < 3600) {
-        const minutes = Math.floor(seconds / 60);
-        const remainingSeconds = seconds % 60;
-        return remainingSeconds > 0 
-            ? `${minutes}m ${remainingSeconds}s`
-            : `${minutes}m`;
-    } else {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        return minutes > 0 
-            ? `${hours}h ${minutes}m`
-            : `${hours}h`;
-    }
-};
 
 // Format percentage values
 export const formatPercentage = (value: number, precision: number = 1): string => {
@@ -290,20 +272,4 @@ export const formatErrorMessage = (error: any): string => {
     return 'An unexpected error occurred';
 };
 
-// Format loading states
-export const formatLoadingMessage = (operation: string): string => {
-    return `Loading ${operation}...`;
-};
 
-// Format empty state messages
-export const formatEmptyMessage = (context: string): string => {
-    const messages: Record<string, string> = {
-        'test_runs': 'No test runs available',
-        'performance_data': 'No performance data found',
-        'time_series': 'No time series data available',
-        'servers': 'No servers found',
-        'filters': 'No filter options available'
-    };
-    
-    return messages[context] || `No ${context} available`;
-};

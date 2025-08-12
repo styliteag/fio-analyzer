@@ -1,7 +1,7 @@
 // Data transformation utilities for charts and UI
 import type { PerformanceData, TestRun, PerformanceMetric } from '../../types';
 
-export interface ChartDataPoint {
+interface ChartDataPoint {
     x: string | number;
     y: number;
     label?: string;
@@ -126,23 +126,6 @@ export const transformTimeSeriesData = (
     }];
 };
 
-// Calculate summary statistics
-export const calculateSummaryStats = (values: number[]) => {
-    if (values.length === 0) return null;
-
-    const sorted = [...values].sort((a, b) => a - b);
-    const sum = values.reduce((acc, val) => acc + val, 0);
-
-    return {
-        count: values.length,
-        min: sorted[0],
-        max: sorted[sorted.length - 1],
-        mean: sum / values.length,
-        median: sorted[Math.floor(sorted.length / 2)],
-        p95: sorted[Math.floor(sorted.length * 0.95)],
-        p99: sorted[Math.floor(sorted.length * 0.99)],
-    };
-};
 
 // Group test runs by criteria
 export const groupTestRuns = (
@@ -186,27 +169,5 @@ export const filterTestRuns = (
     });
 };
 
-// Sort functions for different data types
-export const sortBlockSizes = (sizes: (string | number)[]): (string | number)[] => {
-    return sizes.sort((a, b) => {
-        const aNum = parseBlockSizeToBytes(a);
-        const bNum = parseBlockSizeToBytes(b);
-        return aNum - bNum;
-    });
-};
-
-// Convert block size to bytes for sorting
-const parseBlockSizeToBytes = (size: string | number): number => {
-    if (typeof size === 'number') return size;
-    
-    const sizeStr = size.toString().toUpperCase();
-    const num = parseInt(sizeStr);
-    
-    if (sizeStr.includes('M')) {
-        return num * 1024 * 1024;
-    } else if (sizeStr.includes('K')) {
-        return num * 1024;
-    }
-    
-    return num;
-};
+// Re-export sortBlockSizes from utils for backward compatibility
+export { sortBlockSizes } from '../../utils/sorting';

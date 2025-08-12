@@ -1,7 +1,6 @@
 // Reusable Modal component
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
-import Button from './Button';
 
 export interface ModalProps {
     isOpen: boolean;
@@ -131,67 +130,6 @@ const Modal: React.FC<ModalProps> = ({
     );
 };
 
-// Confirmation modal
-export interface ConfirmModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onConfirm: () => void;
-    title: string;
-    message: string;
-    confirmText?: string;
-    cancelText?: string;
-    variant?: 'danger' | 'warning' | 'info';
-    loading?: boolean;
-}
-
-export const ConfirmModal: React.FC<ConfirmModalProps> = ({
-    isOpen,
-    onClose,
-    onConfirm,
-    title,
-    message,
-    confirmText = 'Confirm',
-    cancelText = 'Cancel',
-    variant = 'info',
-    loading = false,
-}) => {
-    const confirmVariant = variant === 'danger' ? 'danger' : 'primary';
-
-    const footer = (
-        <div className="flex justify-end space-x-3">
-            <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={loading}
-            >
-                {cancelText}
-            </Button>
-            <Button
-                variant={confirmVariant}
-                onClick={onConfirm}
-                loading={loading}
-            >
-                {confirmText}
-            </Button>
-        </div>
-    );
-
-    return (
-        <Modal
-            isOpen={isOpen}
-            onClose={onClose}
-            title={title}
-            size="sm"
-            footer={footer}
-            closeOnOverlayClick={!loading}
-            closeOnEscape={!loading}
-        >
-            <p className="theme-text-secondary">
-                {message}
-            </p>
-        </Modal>
-    );
-};
 
 // Modal hooks for imperative usage
 export const useModal = () => {

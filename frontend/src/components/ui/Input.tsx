@@ -99,63 +99,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({
 
 Input.displayName = 'Input';
 
-// Textarea component
-export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-    label?: string;
-    error?: string;
-    helpText?: string;
-    resize?: 'none' | 'vertical' | 'horizontal' | 'both';
-    fullWidth?: boolean;
-}
-
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
-    label,
-    error,
-    helpText,
-    resize = 'vertical',
-    fullWidth = true,
-    className = '',
-    ...props
-}, ref) => {
-    const baseClasses = 'border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors theme-border-primary theme-bg-primary theme-text-primary';
-    const errorClasses = error ? 'border-red-500 focus:ring-red-500' : '';
-    const resizeClasses = `resize-${resize}`;
-    const widthClasses = fullWidth ? 'w-full' : '';
-
-    const textareaClasses = [
-        baseClasses,
-        errorClasses,
-        resizeClasses,
-        widthClasses,
-        className,
-    ].filter(Boolean).join(' ');
-
-    return (
-        <div className={fullWidth ? 'w-full' : ''}>
-            {label && (
-                <label className="block text-sm font-medium mb-2 theme-text-primary">
-                    {label}
-                    {props.required && <span className="text-red-500 ml-1">*</span>}
-                </label>
-            )}
-            
-            <textarea
-                ref={ref}
-                className={textareaClasses}
-                {...props}
-            />
-            
-            {error && <InlineError error={error} />}
-            {helpText && !error && (
-                <p className="mt-1 text-sm theme-text-tertiary">
-                    {helpText}
-                </p>
-            )}
-        </div>
-    );
-});
-
-Textarea.displayName = 'Textarea';
 
 // Select component
 export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
@@ -274,37 +217,5 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(({
 
 Checkbox.displayName = 'Checkbox';
 
-// Radio component
-export interface RadioProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
-    label?: string;
-    error?: string;
-}
-
-export const Radio = forwardRef<HTMLInputElement, RadioProps>(({
-    label,
-    error,
-    className = '',
-    ...props
-}, ref) => {
-    return (
-        <div className="flex items-center">
-            <input
-                ref={ref}
-                type="radio"
-                className={`w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 theme-border-primary ${className}`}
-                {...props}
-            />
-            {label && (
-                <label className="ml-3 text-sm font-medium theme-text-primary">
-                    {label}
-                    {props.required && <span className="text-red-500 ml-1">*</span>}
-                </label>
-            )}
-            {error && <InlineError error={error} className="ml-7" />}
-        </div>
-    );
-});
-
-Radio.displayName = 'Radio';
 
 export default Input;

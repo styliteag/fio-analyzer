@@ -6,9 +6,6 @@ export * from './theme';
 // Import constants for use in appConfig
 import { 
     API_CONFIG, 
-    UI_CONFIG, 
-    VALIDATION_RULES, 
-    UPLOAD_CONSTRAINTS,
     METRIC_TYPES
 } from './constants';
 import { chartConfig, chartTemplates } from './chartTemplates';
@@ -34,9 +31,6 @@ export {
     BLOCK_SIZES,
     TIME_RANGES,
     API_CONFIG,
-    UPLOAD_CONSTRAINTS,
-    VALIDATION_RULES,
-    UI_CONFIG,
     APP_CONSTANTS,
     getMetricConfig,
     getDriveTypeConfig,
@@ -63,14 +57,6 @@ export const appConfig = {
     // API settings
     api: API_CONFIG,
     
-    // UI settings  
-    ui: UI_CONFIG,
-    
-    // Validation rules
-    validation: VALIDATION_RULES,
-    
-    // Upload constraints
-    upload: UPLOAD_CONSTRAINTS,
     
     // Default chart settings
     charts: {

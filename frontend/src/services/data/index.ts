@@ -8,7 +8,6 @@ export {
     transformPerformanceDataForChart,
     transformBlockSizeData,
     transformTimeSeriesData,
-    calculateSummaryStats,
     groupTestRuns,
     filterTestRuns,
     sortBlockSizes,
@@ -18,11 +17,6 @@ export {
     validatePerformanceData,
     validateTestRun,
     validateMetrics,
-    validateChartConfig,
-    validateDateRange,
-    validateFilters,
-    validateNumericRange,
-    validateUniqueArray,
 } from './validators';
 
 export {
@@ -32,7 +26,6 @@ export {
     formatBandwidth,
     formatBlockSize,
     formatTimestamp,
-    formatDuration,
     formatTestRunName,
     formatMetricLabel,
     formatAxisLabel,

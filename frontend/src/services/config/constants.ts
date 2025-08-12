@@ -215,76 +215,8 @@ export const API_CONFIG = {
     },
 } as const;
 
-// File upload constraints
-export const UPLOAD_CONSTRAINTS = {
-    maxFileSize: 50 * 1024 * 1024, // 50MB
-    allowedTypes: ['application/json', 'text/json'],
-    allowedExtensions: ['.json'],
-    maxFiles: 1,
-} as const;
 
-// Validation rules
-export const VALIDATION_RULES = {
-    testName: {
-        minLength: 1,
-        maxLength: 255,
-        required: true,
-    },
-    driveModel: {
-        minLength: 1,
-        maxLength: 255,
-        required: true,
-    },
-    hostname: {
-        minLength: 1,
-        maxLength: 255,
-        required: true,
-        pattern: /^[a-zA-Z0-9\-._]+$/,
-    },
-    description: {
-        minLength: 1,
-        maxLength: 1000,
-        required: true,
-    },
-    dateRange: {
-        maxDays: 730, // 2 years
-    },
-    metricValue: {
-        min: 0,
-        max: Number.MAX_SAFE_INTEGER,
-    },
-    queueDepth: {
-        min: 1,
-        max: 1024,
-    },
-} as const;
 
-// UI configuration
-export const UI_CONFIG = {
-    animation: {
-        duration: 200,
-        easing: 'ease-in-out',
-    },
-    pagination: {
-        defaultPageSize: 20,
-        pageSizeOptions: [10, 20, 50, 100],
-    },
-    chart: {
-        defaultHeight: 400,
-        maximizedHeight: 600,
-        refreshInterval: 30000, // 30 seconds for time series
-        maxDataPoints: 1000,
-    },
-    table: {
-        maxRows: 10000,
-        defaultSort: 'timestamp',
-        defaultOrder: 'desc',
-    },
-    toast: {
-        duration: 5000,
-        position: 'top-right',
-    },
-} as const;
 
 // Default export with all constants
 export const APP_CONSTANTS = {
@@ -295,9 +227,6 @@ export const APP_CONSTANTS = {
     BLOCK_SIZES,
     TIME_RANGES,
     API_CONFIG,
-    UPLOAD_CONSTRAINTS,
-    VALIDATION_RULES,
-    UI_CONFIG,
 } as const;
 
 // Helper functions for constants

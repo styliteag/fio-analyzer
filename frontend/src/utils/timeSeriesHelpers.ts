@@ -289,18 +289,6 @@ export const calculateServerStats = (data: any[]) => {
     return { avgIops, avgLatency, totalPoints: data.length };
 };
 
-/**
- * Formats timestamp as time ago string
- */
-export const formatTimeAgo = (timestamp: string): string => {
-    const diff = Date.now() - new Date(timestamp).getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    return "< 1h ago";
-};
 
 /**
  * Gets chart title based on time range
