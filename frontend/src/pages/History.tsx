@@ -21,6 +21,7 @@ import {
 	fetchTimeSeriesServers,
 	getTimeSeriesMetricTypes,
 } from "../services/api/timeSeries";
+import { usePaginatedTimeSeriesData } from "../hooks/usePaginatedTimeSeriesData";
 import type { TimeSeriesDataPoint, ServerInfo } from "../types";
 
 // Register chart.js pieces once
@@ -42,8 +43,11 @@ export default function History() {
 	const [selectedMetrics, setSelectedMetrics] = useState<string[]>(["iops"]);
 	const [days, setDays] = useState(30);
 	const [data, setData] = useState<TimeSeriesDataPoint[]>([]);
-	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	const [serversLoading, setServersLoading] = useState(false);
+	const [serversError, setServersError] = useState<string | null>(null);
+
+	// Use pagination hook for data fetching
+	const paginatedData = usePaginatedTimeSeriesData();
 
 
 	const getServerId = (s: ServerInfo) => `${s.hostname}|${s.protocol}|${s.drive_model}`;
@@ -51,19 +55,29 @@ export default function History() {
 	// Fetch list of servers once
 	useEffect(() => {
 		const fetchServers = async () => {
+			setServersLoading(true);
+			setServersError(null);
 			const res = await fetchTimeSeriesServers();
-			if (!res.error) {
+			if (res.error) {
+				setServersError(res.error);
+			} else {
 				setServers(res.data || []);
 			}
+			setServersLoading(false);
 		};
 		fetchServers();
 	}, []);
 
 	const load = useCallback(async () => {
-		setLoading(true);
-		setError(null);
+		console.log('🚀 [History] Starting paginated data fetch...');
 
-		const opts: any = { days };
+		const opts: any = {};
+		
+		// Only add days filter if not "all time" (0)
+		if (days > 0) {
+			opts.days = days;
+		}
+		
 		if (selectedMetrics.length === 1) {
 			opts.metricType = selectedMetrics[0];
 		}
@@ -86,33 +100,52 @@ export default function History() {
 			// Do not filter by config on API level; we'll filter client-side to support multi-select
 		}
 
-		const res = await fetchTimeSeriesHistory(opts);
-		if (res.error) {
-			setError(res.error);
-			setData([]);
-			setConfigOptions([]);
-		} else {
-			const newData = res.data || [];
-			setData(newData);
-			// Recompute config options
-			const unique = new Set<string>();
-			newData.forEach((d) => {
-				unique.add(`${d.read_write_pattern}|${d.block_size}|${d.queue_depth}`);
-			});
-			setConfigOptions(Array.from(unique));
-			// Reset selectedConfigs only if invalid selections exist to avoid unnecessary re-renders
-			setSelectedConfigs((prev) => {
-				const filtered = prev.filter((cfg) => unique.has(cfg));
-				return filtered.length === prev.length ? prev : filtered;
-			});
+		console.log('📊 [History] Fetch options:', opts);
+
+		// Use pagination hook to fetch ALL data
+		try {
+			await paginatedData.fetchAllData(opts);
+		} catch (err) {
+			console.error('❌ [History] Failed to load paginated data:', err);
 		}
-		setLoading(false);
 	}, [selectedMetrics, days, selectedServerId, selectedConfigs.length]);
 
-	// Reload when dependencies change
+	// Update local data when pagination hook data changes
 	useEffect(() => {
-		load();
-	}, [load]);
+		const newData = paginatedData.data;
+		console.log('✅ [History] Received paginated data:', newData.length, 'records');
+		
+		setData(newData);
+		
+		// Recompute config options
+		const unique = new Set<string>();
+		newData.forEach((d) => {
+			unique.add(`${d.read_write_pattern}|${d.block_size}|${d.queue_depth}`);
+		});
+		setConfigOptions(Array.from(unique));
+		
+		// Reset selectedConfigs only if invalid selections exist
+		setSelectedConfigs((prev) => {
+			const filtered = prev.filter((cfg) => unique.has(cfg));
+			return filtered.length === prev.length ? prev : filtered;
+		});
+	}, [paginatedData.data]);
+
+	// Auto-refresh when time range changes (but not on initial mount)
+	const [isInitialMount, setIsInitialMount] = useState(true);
+	
+	useEffect(() => {
+		if (isInitialMount) {
+			setIsInitialMount(false);
+			return;
+		}
+		
+		// Only auto-refresh if a server is selected to prevent unnecessary API calls
+		if (selectedServerId) {
+			console.log('🔄 [History] Auto-refreshing due to time range change:', days);
+			load();
+		}
+	}, [days, load, selectedServerId, isInitialMount]);
 
 	// Build chart.js dataset structure
 	const chartData = useMemo(() => {
@@ -208,7 +241,18 @@ export default function History() {
 	}, [data, selectedConfigs, selectedMetrics]);
 
 	const chartOptions = useMemo(() => {
-		const timeUnit: "day" | "week" = days <= 7 ? "day" : "week";
+		// Determine appropriate time unit based on time range
+		let timeUnit: "hour" | "day" | "week" | "month" = "day";
+		if (days === 0) {
+			// All time - use monthly grouping for better readability
+			timeUnit = "month";
+		} else if (days <= 7) {
+			timeUnit = "day";
+		} else if (days <= 90) {
+			timeUnit = "week";
+		} else {
+			timeUnit = "month";
+		}
 		
 		// DEBUG: Log Chart.js configuration
 		console.log("🐛 [History] Chart options time unit:", timeUnit);
@@ -352,6 +396,7 @@ export default function History() {
 							onChange={(e) => setDays(parseInt(e.target.value, 10))}
 							className="w-full px-3 py-2 border rounded theme-bg-primary theme-text-primary"
 						>
+							<option value={0}>All time</option>
 							{[7, 30, 90, 365].map((d) => (
 								<option key={d} value={d}>
 									Last {d} days
@@ -360,14 +405,41 @@ export default function History() {
 						</select>
 					</div>
 
-					<Button onClick={load} disabled={loading} className="w-full">
-						{loading ? "Loading..." : "Refresh Data"}
+					<Button onClick={load} disabled={paginatedData.loading || serversLoading} className="w-full">
+						{(paginatedData.loading || serversLoading) ? "Loading..." : "Refresh Data"}
 					</Button>
 				</div>
 
-				{error && (
+				{(paginatedData.error || serversError) && (
 					<div className="mt-4">
-						<ErrorDisplay error={error} onRetry={load} showRetry />
+						<ErrorDisplay 
+							error={paginatedData.error || serversError || 'Unknown error'} 
+							onRetry={load} 
+							showRetry 
+						/>
+					</div>
+				)}
+
+				{/* Pagination Progress Display */}
+				{paginatedData.progress && (
+					<div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-md">
+						<div className="flex items-center">
+							<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+							<span className="text-blue-700 text-sm">
+								Loading batch {paginatedData.progress.currentBatch} of {paginatedData.progress.totalBatches}
+								{' '}({paginatedData.progress.loadedRecords.toLocaleString()} of {paginatedData.progress.totalRecords.toLocaleString()} records)
+							</span>
+						</div>
+						<div className="mt-2">
+							<div className="w-full bg-blue-200 rounded-full h-2">
+								<div 
+									className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+									style={{ 
+										width: `${(paginatedData.progress.loadedRecords / paginatedData.progress.totalRecords) * 100}%`
+									}}
+								/>
+							</div>
+						</div>
 					</div>
 				)}
 			</div>
@@ -378,7 +450,7 @@ export default function History() {
 				<div className="flex-1 p-4 flex flex-col">
 					<Card className="flex-1 p-2">
 						<div className="h-full w-full" style={{ minHeight: '600px' }}>
-							{loading ? (
+							{(paginatedData.loading || serversLoading) ? (
 								<Loading />
 							) : (
 								<Line data={chartData} options={chartOptions} />

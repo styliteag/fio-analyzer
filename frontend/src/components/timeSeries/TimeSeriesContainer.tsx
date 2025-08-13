@@ -37,6 +37,7 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
         loading,
         serversLoading,
         error,
+        paginationProgress,
         loadTimeSeriesData,
         refreshServers,
         clearError,
@@ -158,6 +159,29 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
                             >
                                 ×
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Pagination Progress Display */}
+                {paginationProgress && (
+                    <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-md">
+                        <div className="flex items-center">
+                            <RefreshCw className="h-5 w-5 text-blue-500 mr-2 animate-spin" />
+                            <span className="text-blue-700">
+                                Loading batch {paginationProgress.currentBatch} of {paginationProgress.totalBatches}
+                                {' '}({paginationProgress.loadedRecords.toLocaleString()} of {paginationProgress.totalRecords.toLocaleString()} records)
+                            </span>
+                        </div>
+                        <div className="mt-2">
+                            <div className="w-full bg-blue-200 rounded-full h-2">
+                                <div 
+                                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                                    style={{ 
+                                        width: `${(paginationProgress.loadedRecords / paginationProgress.totalRecords) * 100}%`
+                                    }}
+                                />
+                            </div>
                         </div>
                     </div>
                 )}

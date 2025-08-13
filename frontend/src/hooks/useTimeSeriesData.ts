@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchTimeSeriesServers, fetchTimeSeriesHistory, type TimeSeriesHistoryOptions } from "../services/api/timeSeries";
+import { fetchTimeSeriesServers, type TimeSeriesHistoryOptions } from "../services/api/timeSeries";
+import { usePaginatedTimeSeriesData } from "./usePaginatedTimeSeriesData";
 import { 
     groupServers, 
     getTimeRangeParams, 
@@ -10,6 +11,13 @@ import {
 } from "../utils/timeSeriesHelpers";
 import type { TimeSeriesFilters } from "../utils/filterConverters";
 import { isAbortError, isCancelledError } from '../types/api';
+
+interface PaginationProgress {
+    currentBatch: number;
+    totalBatches: number;
+    loadedRecords: number;
+    totalRecords: number;
+}
 
 interface UseTimeSeriesDataResult {
     // Server data
@@ -22,6 +30,9 @@ interface UseTimeSeriesDataResult {
     // Loading states
     loading: boolean;
     serversLoading: boolean;
+    
+    // Pagination progress
+    paginationProgress: PaginationProgress | null;
     
     // Error states
     error: string | null;
@@ -44,9 +55,11 @@ export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
     const [serversLoading, setServersLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // AbortController management for complex time series queries
+    // Use the new pagination hook
+    const paginatedData = usePaginatedTimeSeriesData();
+
+    // AbortController management for servers request
     const serversAbortControllerRef = useRef<AbortController | null>(null);
-    const timeSeriesAbortControllerRef = useRef<AbortController | null>(null);
     const [isCancelled, setIsCancelled] = useState(false);
 
     /**
@@ -99,235 +112,127 @@ export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
     }, []);
 
     /**
-     * Loads time series data for selected servers and time range
+     * Loads time series data for selected servers and time range using pagination
      */
     const loadTimeSeriesData = useCallback(async (selectedServerIds: string[], timeRange: TimeRange, filters?: TimeSeriesFilters) => {
         if (!validateServerSelection(selectedServerIds)) {
             setChartData({});
+            setSeriesData([]);
             return;
         }
 
+        setLoading(true);
+        setError(null);
+        setIsCancelled(false);
+
         try {
-            // Cancel any existing time series request
-            if (timeSeriesAbortControllerRef.current) {
-                timeSeriesAbortControllerRef.current.abort();
-            }
-
-            // Create new AbortController for this complex request
-            const abortController = new AbortController();
-            timeSeriesAbortControllerRef.current = abortController;
-
-            setLoading(true);
-            setError(null);
-            setIsCancelled(false);
-
             const { days, hours } = getTimeRangeParams(timeRange);
 
-            // Create a base query for all combinations of filters
-            const baseQuery: TimeSeriesHistoryOptions = {
+            // Build query options for pagination
+            const queryOptions: TimeSeriesHistoryOptions = {
                 days,
                 hours,
+                metricType: 'iops', // Focus on IOPS data for now
             };
 
-            // Add hostname/protocol filters if provided
+            // Add hostname filter if provided
+            if (filters && filters.hostnames.length > 0) {
+                queryOptions.hostname = filters.hostnames[0]; // Use first hostname for now
+            }
+
+            // Add other filters
             if (filters) {
-                if (filters.hostnames.length > 0) {
-                    baseQuery.hostname = filters.hostnames[0]; // Start with first hostname
-                }
                 if (filters.protocols.length > 0) {
-                    baseQuery.protocol = filters.protocols[0]; // Start with first protocol
+                    queryOptions.protocol = filters.protocols[0];
                 }
                 if (filters.drive_models.length > 0) {
-                    baseQuery.driveModel = filters.drive_models[0];
+                    queryOptions.driveModel = filters.drive_models[0];
                 }
                 if (filters.drive_types.length > 0) {
-                    baseQuery.driveType = filters.drive_types[0];
+                    queryOptions.driveType = filters.drive_types[0];
                 }
                 if (filters.block_sizes.length > 0) {
-                    baseQuery.blockSize = filters.block_sizes[0];
+                    queryOptions.blockSize = filters.block_sizes[0];
                 }
                 if (filters.patterns.length > 0) {
-                    baseQuery.readWritePattern = filters.patterns[0];
+                    queryOptions.readWritePattern = filters.patterns[0];
                 }
                 if (filters.start_date) {
-                    baseQuery.startDate = filters.start_date;
+                    queryOptions.startDate = filters.start_date;
                 }
                 if (filters.end_date) {
-                    baseQuery.endDate = filters.end_date;
+                    queryOptions.endDate = filters.end_date;
                 }
             }
 
-            // OPTIMIZED: Generate queries with reduced complexity and batching
-            const queries: Promise<any>[] = [];
-            
-            // Create Map for O(1) server lookup
-            // serverGroupMap removed as it's not used in the optimized version
-            const hostnameMap = new Map<string, ServerGroup[]>();
-            serverGroups.forEach(group => {
-                if (!hostnameMap.has(group.hostname)) {
-                    hostnameMap.set(group.hostname, []);
-                }
-                hostnameMap.get(group.hostname)!.push(group);
-            });
+            console.log('🚀 [useTimeSeriesData] Starting paginated fetch with options:', queryOptions);
 
-            // Determine servers to query with optimized filtering
-            let serversToQuery: ServerGroup[];
-            if (filters && filters.hostnames.length > 0) {
-                // Use hostname map for O(1) lookup instead of filter
-                serversToQuery = [];
-                for (const hostname of filters.hostnames) {
-                    const groupsForHost = hostnameMap.get(hostname);
-                    if (groupsForHost) {
-                        serversToQuery.push(...groupsForHost.filter(group => 
-                            !filters.protocols.length || filters.protocols.includes(group.protocol)
-                        ));
-                    }
-                }
-            } else {
-                serversToQuery = serverGroups.filter(group => selectedServerIds.includes(group.id));
-            }
+            // Use pagination hook to fetch all data
+            await paginatedData.fetchAllData(queryOptions);
 
-            // Pre-compute filter combinations to avoid nested loops
-            const filterCombinations = [];
-            const blockSizes = filters && filters.block_sizes.length > 0 ? filters.block_sizes : [''];
-            const patterns = filters && filters.patterns.length > 0 ? filters.patterns : [''];
-            
-            // Generate combinations more efficiently
-            for (const blockSize of blockSizes) {
-                for (const pattern of patterns) {
-                    filterCombinations.push({ blockSize, pattern });
-                }
-            }
+            // Process the paginated data into chart format
+            const allData = paginatedData.data;
+            console.log('📊 [useTimeSeriesData] Processing paginated data:', allData.length, 'records');
 
-            // Generate queries with reduced nesting
-            for (const group of serversToQuery) {
-                // Filter drive models for this group upfront
-                const relevantDriveModels = filters && filters.drive_models.length > 0 
-                    ? filters.drive_models.filter(model => group.driveModels.includes(model))
-                    : [''];
+            if (allData.length > 0) {
+                // Group data by configuration
+                const seriesMap = new Map<string, TimeSeriesDataSeries>();
+                const serverDataMap: { [serverId: string]: any[] } = {};
 
-                for (const { blockSize, pattern } of filterCombinations) {
-                    for (const driveModel of relevantDriveModels) {
-                        // Build query options efficiently
-                        const queryOptions: TimeSeriesHistoryOptions = {
-                            hostname: group.hostname,
-                            protocol: group.protocol,
-                            days,
-                            hours,
-                        };
+                // Find the server group for this hostname
+                const hostname = queryOptions.hostname;
+                const serverGroup = serverGroups.find(group => group.hostname === hostname);
+                
+                if (serverGroup) {
+                    const serverId = serverGroup.id;
+                    serverDataMap[serverId] = allData;
 
-                        // Apply filters in batch
-                        if (filters) {
-                            if (blockSize) queryOptions.blockSize = blockSize;
-                            if (pattern) queryOptions.readWritePattern = pattern;
-                            if (driveModel) queryOptions.driveModel = driveModel;
-                            
-                            // Apply single-value filters efficiently
-                            const singleValueFilters = [
-                                { filter: filters.drive_types, key: 'driveType' },
-                                { filter: filters.queue_depths, key: 'queueDepth' },
-                                { filter: filters.test_sizes, key: 'testSize' },
-                                { filter: filters.syncs, key: 'sync' },
-                                { filter: filters.directs, key: 'direct' },
-                                { filter: filters.num_jobs, key: 'numJobs' },
-                                { filter: filters.durations, key: 'duration' },
-                            ];
-
-                            for (const { filter, key } of singleValueFilters) {
-                                if (filter.length > 0) {
-                                    (queryOptions as any)[key] = filter[0];
-                                }
-                            }
-                            
-                            if (filters.start_date) queryOptions.startDate = filters.start_date;
-                            if (filters.end_date) queryOptions.endDate = filters.end_date;
+                    // Group by configuration
+                    const dataByConfig = new Map<string, any[]>();
+                    
+                    for (const dataPoint of allData) {
+                        const configKey = `${dataPoint.block_size}-${dataPoint.read_write_pattern}-${dataPoint.queue_depth}`;
+                        
+                        let configData = dataByConfig.get(configKey);
+                        if (!configData) {
+                            configData = [];
+                            dataByConfig.set(configKey, configData);
                         }
-
-                        queries.push(
-                            fetchTimeSeriesHistory(queryOptions, abortController.signal).then(response => ({
-                                serverId: group.id,
-                                data: response.data || [],
-                                error: response.error,
-                                queryKey: `${group.id}-${blockSize}-${pattern}-${driveModel}` // Add for better debugging
-                            }))
-                        );
+                        configData.push(dataPoint);
                     }
-                }
-            }
-
-            const results = await Promise.all(queries);
-            
-            // Check if operation was cancelled after all promises complete
-            if (abortController.signal.aborted) {
-                return;
-            }
-            
-            // OPTIMIZED: Process results with Maps and single-pass operations
-            const seriesMap = new Map<string, TimeSeriesDataSeries>();
-            const serverDataMap: { [serverId: string]: any[] } = {};
-            const resultServerGroupMap = new Map(serverGroups.map(group => [group.id, group]));
-            
-            // Pre-initialize serverDataMap for better performance
-            for (const group of serverGroups) {
-                if (selectedServerIds.includes(group.id)) {
-                    serverDataMap[group.id] = [];
-                }
-            }
-            
-            results.forEach(result => {
-                if (result.error) {
-                    console.warn(`Failed to fetch data: ${result.error}`);
-                    return;
-                }
-                
-                // Single-pass grouping by configuration
-                const dataByConfig = new Map<string, any[]>();
-                
-                for (const dataPoint of result.data) {
-                    // Create unique key for this test configuration
-                    const configKey = `${dataPoint.block_size}-${dataPoint.read_write_pattern}-${dataPoint.queue_depth}`;
                     
-                    let configData = dataByConfig.get(configKey);
-                    if (!configData) {
-                        configData = [];
-                        dataByConfig.set(configKey, configData);
-                    }
-                    configData.push(dataPoint);
-                }
-                
-                // Create series for each unique configuration
-                const serverGroup = resultServerGroupMap.get(result.serverId);
-                if (!serverGroup) return;
-                
-                dataByConfig.forEach((data, configKey) => {
-                    if (data.length === 0) return;
-                    
-                    const firstPoint = data[0];
-                    const seriesId = `${result.serverId}-${configKey}`;
-                    const label = `${serverGroup.hostname} (${serverGroup.protocol}) - ${firstPoint.block_size} ${firstPoint.read_write_pattern} Q${firstPoint.queue_depth}`;
-                    
-                    seriesMap.set(seriesId, {
-                        id: seriesId,
-                        serverId: result.serverId,
-                        hostname: serverGroup.hostname,
-                        protocol: serverGroup.protocol,
-                        driveModel: firstPoint.drive_model || '',
-                        blockSize: firstPoint.block_size,
-                        pattern: firstPoint.read_write_pattern,
-                        queueDepth: firstPoint.queue_depth,
-                        data: data,
-                        label: label
+                    // Create series for each configuration
+                    dataByConfig.forEach((data, configKey) => {
+                        if (data.length === 0) return;
+                        
+                        const firstPoint = data[0];
+                        const seriesId = `${serverId}-${configKey}`;
+                        const label = `${serverGroup.hostname} (${serverGroup.protocol}) - ${firstPoint.block_size} ${firstPoint.read_write_pattern} Q${firstPoint.queue_depth}`;
+                        
+                        seriesMap.set(seriesId, {
+                            id: seriesId,
+                            serverId: serverId,
+                            hostname: serverGroup.hostname,
+                            protocol: serverGroup.protocol,
+                            driveModel: firstPoint.drive_model || '',
+                            blockSize: firstPoint.block_size,
+                            pattern: firstPoint.read_write_pattern,
+                            queueDepth: firstPoint.queue_depth,
+                            data: data,
+                            label: label
+                        });
                     });
-                });
-                
-                // Efficiently append to existing array
-                if (serverDataMap[result.serverId]) {
-                    serverDataMap[result.serverId].push(...result.data);
                 }
-            });
 
-            setChartData(serverDataMap);
-            setSeriesData(Array.from(seriesMap.values()));
+                setChartData(serverDataMap);
+                setSeriesData(Array.from(seriesMap.values()));
+
+                console.log('✅ [useTimeSeriesData] Data processing complete:', {
+                    servers: Object.keys(serverDataMap).length,
+                    series: seriesMap.size,
+                    totalRecords: allData.length
+                });
+            }
 
         } catch (err) {
             // Handle AbortError specifically
@@ -341,9 +246,8 @@ export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
             console.error("Failed to fetch time-series data:", err);
         } finally {
             setLoading(false);
-            timeSeriesAbortControllerRef.current = null;
         }
-    }, [serverGroups]);
+    }, [serverGroups, paginatedData]);
 
     /**
      * Refreshes server data
@@ -369,17 +273,15 @@ export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
             serversAbortControllerRef.current = null;
         }
         
-        if (timeSeriesAbortControllerRef.current) {
-            timeSeriesAbortControllerRef.current.abort();
-            timeSeriesAbortControllerRef.current = null;
-        }
+        // Also cancel pagination requests
+        paginatedData.cancel();
         
         setIsCancelled(true);
         setLoading(false);
         setServersLoading(false);
         
         console.log('Time series data fetch cancelled by user');
-    }, []);
+    }, [paginatedData]);
 
     // Load servers on component mount
     useEffect(() => {
@@ -392,23 +294,22 @@ export const useTimeSeriesData = (): UseTimeSeriesDataResult => {
             if (serversAbortControllerRef.current) {
                 serversAbortControllerRef.current.abort();
             }
-            if (timeSeriesAbortControllerRef.current) {
-                timeSeriesAbortControllerRef.current.abort();
-            }
+            paginatedData.cancel();
         };
-    }, []);
+    }, [paginatedData]);
 
     return {
         serverGroups,
         chartData,
         seriesData,
-        loading,
+        loading: loading || paginatedData.loading,
         serversLoading,
-        error,
+        paginationProgress: paginatedData.progress,
+        error: error || paginatedData.error,
         loadTimeSeriesData,
         refreshServers,
         clearError,
         cancel,
-        isCancelled,
+        isCancelled: isCancelled || paginatedData.isCancelled,
     };
 };

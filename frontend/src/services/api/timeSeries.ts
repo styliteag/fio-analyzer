@@ -21,6 +21,9 @@ export interface TimeSeriesHistoryOptions {
     direct?: number;
     numJobs?: number;
     duration?: number;
+    // Pagination parameters
+    limit?: number;
+    offset?: number;
 }
 
 export interface TimeSeriesTrendsOptions {
@@ -88,10 +91,20 @@ export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions =
     if (days) params.append("days", days.toString());
     if (hours) params.append("hours", hours.toString());
     
-    // Add a high limit to ensure we get all historical data
-    params.append("limit", "50000");
+    // Add offset parameter support for pagination
+    if (options.offset !== undefined) {
+        params.append("offset", options.offset.toString());
+    }
 
-    return apiCall<TimeSeriesDataPoint[]>(`/api/time-series/history?${params}`, {
+    // Add limit parameter support for pagination
+    if (options.limit !== undefined) {
+        params.append("limit", options.limit.toString());
+    } else {
+        // TEST: Using limited batch size to verify truncation behavior  
+        params.append("limit", "5000");
+    }
+
+    return apiCall<any>(`/api/time-series/history?${params}`, {
         signal: abortSignal
     });
 };

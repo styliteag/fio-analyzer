@@ -727,6 +727,12 @@ async def get_historical_time_series(
         description="Maximum number of records to return",
         example=1000
     ),
+    offset: int = Query(
+        0, 
+        ge=0, 
+        description="Number of records to skip for pagination",
+        example=0
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db)
 ):
@@ -850,7 +856,15 @@ async def get_historical_time_series(
         
         where_clause = " AND ".join(where_conditions)
         
-        # Get historical data
+        # Get total count first for pagination metadata
+        cursor.execute(f"""
+            SELECT COUNT(*)
+            FROM test_runs_all
+            WHERE {where_clause}
+        """, params)
+        total_count = cursor.fetchone()[0]
+        
+        # Get historical data with LIMIT and OFFSET
         cursor.execute(f"""
             SELECT 
                 id, timestamp, hostname, protocol, drive_model, drive_type,
@@ -859,8 +873,8 @@ async def get_historical_time_series(
             FROM test_runs_all
             WHERE {where_clause}
             ORDER BY timestamp DESC
-            LIMIT ?
-        """, params + [limit])
+            LIMIT ? OFFSET ?
+        """, params + [limit, offset])
         
         results = []
         for row in cursor.fetchall():
@@ -889,16 +903,31 @@ async def get_historical_time_series(
             
             results.append(result)
         
+        # Prepare paginated response
+        has_more = len(results) == limit and (offset + len(results)) < total_count
+        response = {
+            "data": results,
+            "pagination": {
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+                "returned_count": len(results),
+                "has_more": has_more
+            }
+        }
+        
         log_info("Historical time series data retrieved successfully", {
             "request_id": request_id,
             "results_count": len(results),
+            "total_count": total_count,
+            "has_more": has_more,
             "date_range": {
                 "start": start_date,
                 "end": end_date
             }
         })
         
-        return results
+        return response
     
     except Exception as e:
         log_error("Error retrieving historical time series data", e, {"request_id": request_id})
