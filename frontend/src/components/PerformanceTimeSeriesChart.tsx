@@ -14,7 +14,7 @@ import "chartjs-adapter-date-fns";
 import { Maximize2, Minimize2, Activity, RefreshCw } from "lucide-react";
 import type { PerformanceData } from "../types";
 import type { ActiveFilters } from "../hooks/useTestRunFilters";
-import { fetchTimeSeriesHistory } from "../services/api/timeSeries";
+import { usePaginatedTimeSeriesData } from "../hooks/usePaginatedTimeSeriesData";
 
 // Register chart.js components
 ChartJS.register(
@@ -54,9 +54,8 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
         bandwidth: false,
     });
     
-    const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    // Use pagination hook for data fetching
+    const paginatedData = usePaginatedTimeSeriesData();
 
     const handleMetricToggle = (metric: keyof EnabledMetrics) => {
         setEnabledMetrics(prev => ({
@@ -65,62 +64,54 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
         }));
     };
 
-    // Fetch time series data when filters change
+    // Fetch time series data when filters change using pagination
     useEffect(() => {
         const fetchData = async () => {
-            setIsLoading(true);
-            setError(null);
+            console.log('🚀 [PerformanceTimeSeriesChart] Starting paginated fetch...');
+            
+            // Build query parameters based on shared filters
+            const queryParams: any = {
+                days: 30, // Default to last 30 days
+            };
+            
+            // Add filters if they exist
+            if (sharedFilters?.hostnames?.length && sharedFilters.hostnames.length > 0) {
+                queryParams.hostname = sharedFilters.hostnames[0];
+            }
+            if (sharedFilters?.protocols?.length && sharedFilters.protocols.length > 0) {
+                queryParams.protocol = sharedFilters.protocols[0];
+            }
+            if (sharedFilters?.drive_models?.length && sharedFilters.drive_models.length > 0) {
+                queryParams.driveModel = sharedFilters.drive_models[0];
+            }
+            if (sharedFilters?.drive_types?.length && sharedFilters.drive_types.length > 0) {
+                queryParams.driveType = sharedFilters.drive_types[0];
+            }
+            if (sharedFilters?.block_sizes?.length && sharedFilters.block_sizes.length > 0) {
+                queryParams.blockSize = sharedFilters.block_sizes[0];
+            }
+            if (sharedFilters?.patterns?.length && sharedFilters.patterns.length > 0) {
+                queryParams.readWritePattern = sharedFilters.patterns[0];
+            }
+
+            console.log('📊 [PerformanceTimeSeriesChart] Fetch params:', queryParams);
             
             try {
-                // Build query parameters based on shared filters
-                const queryParams: any = {
-                    days: 30, // Default to last 30 days
-                };
-                
-                // Add filters if they exist
-                if (sharedFilters?.hostnames?.length && sharedFilters.hostnames.length > 0) {
-                    queryParams.hostname = sharedFilters.hostnames[0];
-                }
-                if (sharedFilters?.protocols?.length && sharedFilters.protocols.length > 0) {
-                    queryParams.protocol = sharedFilters.protocols[0];
-                }
-                if (sharedFilters?.drive_models?.length && sharedFilters.drive_models.length > 0) {
-                    queryParams.driveModel = sharedFilters.drive_models[0];
-                }
-                if (sharedFilters?.drive_types?.length && sharedFilters.drive_types.length > 0) {
-                    queryParams.driveType = sharedFilters.drive_types[0];
-                }
-                if (sharedFilters?.block_sizes?.length && sharedFilters.block_sizes.length > 0) {
-                    queryParams.blockSize = sharedFilters.block_sizes[0];
-                }
-                if (sharedFilters?.patterns?.length && sharedFilters.patterns.length > 0) {
-                    queryParams.readWritePattern = sharedFilters.patterns[0];
-                }
-
-                console.log('Fetching time series data with params:', queryParams);
-                
-                const response = await fetchTimeSeriesHistory(queryParams);
-                
-                if (response.error) {
-                    setError(response.error);
-                    setTimeSeriesData([]);
-                } else {
-                    setTimeSeriesData(response.data || []);
-                    console.log('Time series data fetched:', response.data?.length || 0, 'points');
-                }
+                // Use pagination hook to fetch ALL data
+                await paginatedData.fetchAllData(queryParams);
+                console.log('✅ [PerformanceTimeSeriesChart] Paginated data loaded:', paginatedData.data.length, 'records');
             } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to fetch time series data');
-                setTimeSeriesData([]);
-            } finally {
-                setIsLoading(false);
+                console.error('❌ [PerformanceTimeSeriesChart] Failed to load paginated data:', err);
             }
         };
 
         fetchData();
-    }, [sharedFilters]);
+    }, [sharedFilters, paginatedData.fetchAllData]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Process data for chart display
     const chartData = useMemo(() => {
+        const timeSeriesData = paginatedData.data;
+        
         if (timeSeriesData.length === 0) {
             return { datasets: [] };
         }
@@ -178,7 +169,7 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
         }));
         
         return { datasets };
-    }, [timeSeriesData, enabledMetrics]);
+    }, [paginatedData.data, enabledMetrics]);
 
     // Chart options
     const chartOptions = useMemo(() => {
@@ -254,10 +245,10 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
         };
     }, [enabledMetrics]);
 
-    // Filter validation
+    // Filter validation  
     const hasValidMetrics = Object.values(enabledMetrics).some(enabled => enabled);
-    const hasData = timeSeriesData.length > 0;
-    const actualLoading = loading || isLoading;
+    const hasData = paginatedData.data.length > 0;
+    const actualLoading = loading || paginatedData.loading;
 
     return (
         <div
@@ -304,16 +295,39 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
                 </div>
 
                 {/* Error Display */}
-                {error && (
+                {paginatedData.error && (
                     <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded-md">
                         <span className="text-red-700">
-                            Error: {error}
+                            Error: {paginatedData.error}
                         </span>
                     </div>
                 )}
 
+                {/* Pagination Progress Display */}
+                {paginatedData.progress && (
+                    <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-md">
+                        <div className="flex items-center">
+                            <RefreshCw className="h-4 w-4 text-blue-500 mr-2 animate-spin" />
+                            <span className="text-blue-700 text-sm">
+                                Loading batch {paginatedData.progress.currentBatch} of {paginatedData.progress.totalBatches}
+                                {' '}({paginatedData.progress.loadedRecords.toLocaleString()} of {paginatedData.progress.totalRecords.toLocaleString()} records)
+                            </span>
+                        </div>
+                        <div className="mt-2">
+                            <div className="w-full bg-blue-200 rounded-full h-2">
+                                <div 
+                                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                                    style={{ 
+                                        width: `${(paginatedData.progress.loadedRecords / paginatedData.progress.totalRecords) * 100}%`
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Validation Messages */}
-                {!hasValidMetrics && !error && (
+                {!hasValidMetrics && !paginatedData.error && (
                     <div className="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-md">
                         <span className="text-yellow-700">
                             Please select at least one metric to display
@@ -321,7 +335,7 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
                     </div>
                 )}
 
-                {!hasData && hasValidMetrics && !error && !actualLoading && (
+                {!hasData && hasValidMetrics && !paginatedData.error && !actualLoading && (
                     <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-md">
                         <span className="text-blue-700">
                             No time series data available for the selected test runs
@@ -344,9 +358,9 @@ const PerformanceTimeSeriesChart: React.FC<PerformanceTimeSeriesChartProps> = ({
                         </div>
                     )}
                     
-                    {hasData && hasValidMetrics && !error ? (
+                    {hasData && hasValidMetrics && !paginatedData.error ? (
                         <Line data={chartData} options={chartOptions} />
-                    ) : !actualLoading && !error ? (
+                    ) : !actualLoading && !paginatedData.error ? (
                         <div className="flex items-center justify-center h-full">
                             <div className="text-center">
                                 <Activity className="w-12 h-12 mx-auto text-gray-400 mb-4" />

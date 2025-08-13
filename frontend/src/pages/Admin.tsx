@@ -7,8 +7,9 @@ import Modal from '../components/ui/Modal';
 import { useServerSideTestRuns } from '../hooks/useServerSideTestRuns';
 import { bulkUpdateTestRuns, deleteTestRuns } from '../services/api/testRuns';
 import { bulkImportFioData } from '../services/api/upload';
-import { fetchTimeSeriesHistory, fetchTimeSeriesServers } from '../services/api/timeSeries';
+import { fetchTimeSeriesServers } from '../services/api/timeSeries';
 import { bulkUpdateTimeSeries, deleteTimeSeriesRuns } from '../services/api/timeSeries';
+import { usePaginatedTimeSeriesData } from '../hooks/usePaginatedTimeSeriesData';
 import { useNavigate } from 'react-router-dom';
 import type { TestRun } from '../types';
 
@@ -84,6 +85,9 @@ const Admin: React.FC = () => {
   const [selectedHistoryRuns, setSelectedHistoryRuns] = useState<Set<number>>(new Set());
   const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
   const [timeSeriesLoading, setTimeSeriesLoading] = useState(false);
+  
+  // Use pagination hook for time-series data
+  const paginatedTimeSeriesData = usePaginatedTimeSeriesData();
   const [bulkEditState, setBulkEditState] = useState<BulkEditState>({
     isOpen: false,
     fields: {},
@@ -179,39 +183,48 @@ const Admin: React.FC = () => {
     }
   }, [view, setActiveFilters]);
 
-  // Fetch time-series data for history view only if a host is selected
+  // Fetch time-series data for history view using pagination
   const fetchTimeSeriesData = useCallback(async () => {
     if (view === 'history' && activeFilters.hostnames[0]) {
-      setTimeSeriesLoading(true);
+      console.log('🚀 [Admin] Starting paginated time-series fetch...');
+      
+      const filterOptions: import('../services/api/timeSeries').TimeSeriesHistoryOptions = { days: 30 };
+      filterOptions.hostname = activeFilters.hostnames[0];
+      if (activeFilters.protocols.length > 0) filterOptions.protocol = activeFilters.protocols[0];
+      if (activeFilters.drive_types.length > 0) filterOptions.driveType = activeFilters.drive_types[0];
+      if (activeFilters.drive_models.length > 0) filterOptions.driveModel = activeFilters.drive_models[0];
+      if (activeFilters.patterns.length > 0) filterOptions.readWritePattern = activeFilters.patterns[0];
+      if (activeFilters.block_sizes.length > 0) filterOptions.blockSize = String(activeFilters.block_sizes[0]);
+      if (activeFilters.queue_depths.length > 0) filterOptions.queueDepth = activeFilters.queue_depths[0];
+      if (activeFilters.syncs.length > 0) filterOptions.sync = activeFilters.syncs[0];
+      if (activeFilters.directs.length > 0) filterOptions.direct = activeFilters.directs[0];
+      if (activeFilters.num_jobs.length > 0) filterOptions.numJobs = activeFilters.num_jobs[0];
+      if (activeFilters.durations.length > 0) filterOptions.duration = activeFilters.durations[0];
+      
+      console.log('📊 [Admin] Fetch options:', filterOptions);
+      
       try {
-        const filterOptions: import('../services/api/timeSeries').TimeSeriesHistoryOptions = { days: 30 };
-        filterOptions.hostname = activeFilters.hostnames[0];
-        if (activeFilters.protocols.length > 0) filterOptions.protocol = activeFilters.protocols[0];
-        if (activeFilters.drive_types.length > 0) filterOptions.driveType = activeFilters.drive_types[0];
-        if (activeFilters.drive_models.length > 0) filterOptions.driveModel = activeFilters.drive_models[0];
-        if (activeFilters.patterns.length > 0) filterOptions.readWritePattern = activeFilters.patterns[0];
-        if (activeFilters.block_sizes.length > 0) filterOptions.blockSize = String(activeFilters.block_sizes[0]);
-        if (activeFilters.queue_depths.length > 0) filterOptions.queueDepth = activeFilters.queue_depths[0];
-        if (activeFilters.syncs.length > 0) filterOptions.sync = activeFilters.syncs[0];
-        if (activeFilters.directs.length > 0) filterOptions.direct = activeFilters.directs[0];
-        if (activeFilters.num_jobs.length > 0) filterOptions.numJobs = activeFilters.num_jobs[0];
-        if (activeFilters.durations.length > 0) filterOptions.duration = activeFilters.durations[0];
-        const response = await fetchTimeSeriesHistory(filterOptions);
-        if (response.data) {
-          setTimeSeriesData(response.data);
-        } else {
-          setTimeSeriesData([]);
-        }
+        // Use pagination hook to fetch ALL data for admin operations
+        await paginatedTimeSeriesData.fetchAllData(filterOptions);
+        console.log('✅ [Admin] Paginated data loaded:', paginatedTimeSeriesData.data.length, 'records');
       } catch (error) {
-        console.error('Error fetching time-series data:', error);
-        setTimeSeriesData([]);
-      } finally {
-        setTimeSeriesLoading(false);
+        console.error('❌ [Admin] Failed to load paginated data:', error);
       }
     } else if (view === 'history') {
-      setTimeSeriesData([]);
+      // Clear data if no hostname selected
+      // Note: We don't clear paginatedTimeSeriesData here as it manages its own state
     }
-  }, [view, activeFilters]);
+  }, [view, activeFilters, paginatedTimeSeriesData.fetchAllData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update local timeSeriesData when pagination data changes
+  useEffect(() => {
+    setTimeSeriesData(paginatedTimeSeriesData.data);
+  }, [paginatedTimeSeriesData.data]);
+
+  // Update loading state from pagination hook
+  useEffect(() => {
+    setTimeSeriesLoading(paginatedTimeSeriesData.loading);
+  }, [paginatedTimeSeriesData.loading]);
 
   // Fetch data when view changes
   useEffect(() => {

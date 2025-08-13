@@ -3,9 +3,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     fetchTimeSeriesServers,
     fetchTimeSeriesLatest,
-    fetchTimeSeriesHistory,
     fetchTimeSeriesTrends,
 } from '../../services/api';
+import { usePaginatedTimeSeriesData } from '../usePaginatedTimeSeriesData';
 import type { 
     ServerInfo, 
     TimeSeriesDataPoint, 
@@ -141,28 +141,28 @@ export const useTimeSeriesHistory = ({
     autoFetch = true,
     refreshInterval,
 }: UseTimeSeriesHistoryProps): UseTimeSeriesHistoryResult => {
+    // Use pagination hook for complete data access
+    const paginatedData = usePaginatedTimeSeriesData();
+    
+    // Keep local state for backward compatibility
     const [data, setData] = useState<TimeSeriesDataPoint[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
+    
     const fetchHistory = useCallback(async (fetchOptions?: TimeSeriesHistoryOptions) => {
+        console.log('🚀 [useTimeSeriesHistory] Starting paginated fetch...');
+        
         try {
-            setLoading(true);
-            setError(null);
-            
-            const response = await fetchTimeSeriesHistory(fetchOptions || options);
-            if (response.data) {
-                setData(response.data);
-            } else {
-                throw new Error(response.error || 'Failed to fetch history data');
-            }
-        } catch (err: any) {
-            setError(err.message || 'Failed to fetch history data');
-            console.error('Error fetching time series history:', err);
-        } finally {
-            setLoading(false);
+            // Use pagination hook to fetch ALL data
+            await paginatedData.fetchAllData(fetchOptions || options);
+            console.log('✅ [useTimeSeriesHistory] Paginated data loaded:', paginatedData.data.length, 'records');
+        } catch (error) {
+            console.error('❌ [useTimeSeriesHistory] Failed to load paginated data:', error);
         }
-    }, [options]);
+    }, [options, paginatedData.fetchAllData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Update local data state when pagination data changes
+    useEffect(() => {
+        setData(paginatedData.data);
+    }, [paginatedData.data]);
 
     const isEmpty = useMemo(() => data.length === 0, [data.length]);
 
@@ -186,8 +186,8 @@ export const useTimeSeriesHistory = ({
 
     return {
         data,
-        loading,
-        error,
+        loading: paginatedData.loading,
+        error: paginatedData.error,
         refetch: fetchHistory,
         isEmpty,
     };

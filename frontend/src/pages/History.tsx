@@ -17,7 +17,6 @@ import Card from "../components/ui/Card";
 import Loading from "../components/ui/Loading";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import {
-	fetchTimeSeriesHistory,
 	fetchTimeSeriesServers,
 	getTimeSeriesMetricTypes,
 } from "../services/api/timeSeries";
@@ -108,7 +107,7 @@ export default function History() {
 		} catch (err) {
 			console.error('❌ [History] Failed to load paginated data:', err);
 		}
-	}, [selectedMetrics, days, selectedServerId, selectedConfigs.length]);
+	}, [selectedMetrics, days, selectedServerId, selectedConfigs.length, paginatedData.fetchAllData]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	// Update local data when pagination hook data changes
 	useEffect(() => {
