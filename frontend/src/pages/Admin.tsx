@@ -7,9 +7,8 @@ import Modal from '../components/ui/Modal';
 import { useServerSideTestRuns } from '../hooks/useServerSideTestRuns';
 import { bulkUpdateTestRuns, deleteTestRuns } from '../services/api/testRuns';
 import { bulkImportFioData } from '../services/api/upload';
-import { fetchTimeSeriesServers } from '../services/api/timeSeries';
+import { fetchTimeSeriesHistory, fetchTimeSeriesServers } from '../services/api/timeSeries';
 import { bulkUpdateTimeSeries, deleteTimeSeriesRuns } from '../services/api/timeSeries';
-import { usePaginatedTimeSeriesData } from '../hooks/usePaginatedTimeSeriesData';
 import { useNavigate } from 'react-router-dom';
 import type { TestRun } from '../types';
 
@@ -85,9 +84,6 @@ const Admin: React.FC = () => {
   const [selectedHistoryRuns, setSelectedHistoryRuns] = useState<Set<number>>(new Set());
   const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
   const [timeSeriesLoading, setTimeSeriesLoading] = useState(false);
-  
-  // Use pagination hook for time-series data
-  const paginatedTimeSeriesData = usePaginatedTimeSeriesData();
   const [bulkEditState, setBulkEditState] = useState<BulkEditState>({
     isOpen: false,
     fields: {},
@@ -183,48 +179,55 @@ const Admin: React.FC = () => {
     }
   }, [view, setActiveFilters]);
 
-  // Fetch time-series data for history view using pagination
+  // Fetch time-series data for history view - use regular API call for admin purposes
   const fetchTimeSeriesData = useCallback(async () => {
     if (view === 'history' && activeFilters.hostnames[0]) {
-      console.log('🚀 [Admin] Starting paginated time-series fetch...');
-      
-      const filterOptions: import('../services/api/timeSeries').TimeSeriesHistoryOptions = { days: 30 };
-      filterOptions.hostname = activeFilters.hostnames[0];
-      if (activeFilters.protocols.length > 0) filterOptions.protocol = activeFilters.protocols[0];
-      if (activeFilters.drive_types.length > 0) filterOptions.driveType = activeFilters.drive_types[0];
-      if (activeFilters.drive_models.length > 0) filterOptions.driveModel = activeFilters.drive_models[0];
-      if (activeFilters.patterns.length > 0) filterOptions.readWritePattern = activeFilters.patterns[0];
-      if (activeFilters.block_sizes.length > 0) filterOptions.blockSize = String(activeFilters.block_sizes[0]);
-      if (activeFilters.queue_depths.length > 0) filterOptions.queueDepth = activeFilters.queue_depths[0];
-      if (activeFilters.syncs.length > 0) filterOptions.sync = activeFilters.syncs[0];
-      if (activeFilters.directs.length > 0) filterOptions.direct = activeFilters.directs[0];
-      if (activeFilters.num_jobs.length > 0) filterOptions.numJobs = activeFilters.num_jobs[0];
-      if (activeFilters.durations.length > 0) filterOptions.duration = activeFilters.durations[0];
-      
-      console.log('📊 [Admin] Fetch options:', filterOptions);
-      
+      setTimeSeriesLoading(true);
       try {
-        // Use pagination hook to fetch ALL data for admin operations
-        await paginatedTimeSeriesData.fetchAllData(filterOptions);
-        console.log('✅ [Admin] Paginated data loaded:', paginatedTimeSeriesData.data.length, 'records');
+        const filterOptions: import('../services/api/timeSeries').TimeSeriesHistoryOptions = { 
+          days: 30,
+          limit: 10000 // Sufficient for admin operations - no need for complete dataset
+        };
+        filterOptions.hostname = activeFilters.hostnames[0];
+        if (activeFilters.protocols.length > 0) filterOptions.protocol = activeFilters.protocols[0];
+        if (activeFilters.drive_types.length > 0) filterOptions.driveType = activeFilters.drive_types[0];
+        if (activeFilters.drive_models.length > 0) filterOptions.driveModel = activeFilters.drive_models[0];
+        if (activeFilters.patterns.length > 0) filterOptions.readWritePattern = activeFilters.patterns[0];
+        if (activeFilters.block_sizes.length > 0) filterOptions.blockSize = String(activeFilters.block_sizes[0]);
+        if (activeFilters.queue_depths.length > 0) filterOptions.queueDepth = activeFilters.queue_depths[0];
+        if (activeFilters.syncs.length > 0) filterOptions.sync = activeFilters.syncs[0];
+        if (activeFilters.directs.length > 0) filterOptions.direct = activeFilters.directs[0];
+        if (activeFilters.num_jobs.length > 0) filterOptions.numJobs = activeFilters.num_jobs[0];
+        if (activeFilters.durations.length > 0) filterOptions.duration = activeFilters.durations[0];
+        
+        const response = await fetchTimeSeriesHistory(filterOptions);
+        if (response.error) {
+          console.error('Error fetching time-series data:', response.error);
+          setTimeSeriesData([]);
+        } else {
+          // Handle both old array format and new paginated format for compatibility
+          let responseData = [];
+          if (response.data) {
+            if (response.data.data && Array.isArray(response.data.data)) {
+              // New paginated format
+              responseData = response.data.data;
+            } else if (Array.isArray(response.data)) {
+              // Old array format
+              responseData = response.data;
+            }
+          }
+          setTimeSeriesData(responseData);
+        }
       } catch (error) {
-        console.error('❌ [Admin] Failed to load paginated data:', error);
+        console.error('Error fetching time-series data:', error);
+        setTimeSeriesData([]);
+      } finally {
+        setTimeSeriesLoading(false);
       }
     } else if (view === 'history') {
-      // Clear data if no hostname selected
-      // Note: We don't clear paginatedTimeSeriesData here as it manages its own state
+      setTimeSeriesData([]);
     }
-  }, [view, activeFilters, paginatedTimeSeriesData.fetchAllData]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Update local timeSeriesData when pagination data changes
-  useEffect(() => {
-    setTimeSeriesData(paginatedTimeSeriesData.data);
-  }, [paginatedTimeSeriesData.data]);
-
-  // Update loading state from pagination hook
-  useEffect(() => {
-    setTimeSeriesLoading(paginatedTimeSeriesData.loading);
-  }, [paginatedTimeSeriesData.loading]);
+  }, [view, activeFilters]);
 
   // Fetch data when view changes
   useEffect(() => {
