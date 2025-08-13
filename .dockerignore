@@ -5,6 +5,7 @@ backend/.npm
 backend/db/storage_performance.db
 backend/uploads/*
 backend/venv/*
+backend/.venv/*
 __pycache__/
 backend/__pycache__/*
 *.pyc

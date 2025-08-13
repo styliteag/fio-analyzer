@@ -72,7 +72,8 @@ RUN mkdir -p /var/cache/nginx && \
     echo 'echo "Starting FIO Analyzer"' >> /app/start.sh && \
     echo 'echo "Version: $(cat /app/VERSION)"' >> /app/start.sh && \
     echo 'nginx -g "daemon off;" &' >> /app/start.sh && \
-    echo 'uvicorn main:app --host 0.0.0.0 --port 8000' >> /app/start.sh && \
+    echo './.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000' >> /app/start.sh && \
+    echo 'sleep 1h' >> /app/start.sh && \
     chmod +x /app/start.sh
 
 EXPOSE 80
