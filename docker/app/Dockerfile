@@ -39,8 +39,11 @@ COPY backend/pyproject.toml backend/uv.lock ./
 # Install Python dependencies with uv and create venv
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
-# Create virtual environment at /app/.venv and install dependencies
-RUN uv venv /app/.venv && \
+# Set the virtual environment path
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+# Create virtual environment and install dependencies
+RUN uv venv && \
     uv sync --frozen --no-dev
 
 # Copy backend source
@@ -69,7 +72,7 @@ RUN mkdir -p /var/cache/nginx && \
     echo 'echo "Starting FIO Analyzer"' >> /app/start.sh && \
     echo 'echo "Version: $(cat /app/VERSION)"' >> /app/start.sh && \
     echo 'nginx -g "daemon off;" &' >> /app/start.sh && \
-    echo '/app/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000' >> /app/start.sh && \
+    echo 'uvicorn main:app --host 0.0.0.0 --port 8000' >> /app/start.sh && \
     chmod +x /app/start.sh
 
 EXPOSE 80
