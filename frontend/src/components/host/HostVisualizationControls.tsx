@@ -1,8 +1,8 @@
 import React from 'react';
-import { HardDrive, BarChart3, Radar, TrendingUp, Activity, Box, Zap } from 'lucide-react';
+import { HardDrive, BarChart3, BarChart, Radar, TrendingUp, Activity, Box, Zap } from 'lucide-react';
 import { Button } from '../ui';
 
-export type VisualizationView = 'overview' | 'matrix' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | '3d';
+export type VisualizationView = 'overview' | 'matrix' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | '3d';
 export type MatrixMetric = 'iops' | 'avg_latency' | 'bandwidth';
 
 export interface HostVisualizationControlsProps {
@@ -77,6 +77,14 @@ const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
                 >
                     <Zap className="w-4 h-4" />
                     Facet Scatter Grids
+                </Button>
+                <Button
+                    variant={activeView === 'stacked' ? 'primary' : 'outline'}
+                    onClick={() => onViewChange('stacked')}
+                    className="flex items-center gap-2"
+                >
+                    <BarChart className="w-4 h-4" />
+                    Stacked Bar
                 </Button>
                 <Button
                     variant={activeView === '3d' ? 'primary' : 'outline'}

@@ -15,6 +15,7 @@ import PerformanceScatterPlot from '../components/host/PerformanceScatterPlot';
 import ParallelCoordinatesChart from '../components/host/ParallelCoordinatesChart';
 import BoxPlotChart from '../components/host/BoxPlotChart';
 import FacetScatterGrid from '../components/host/FacetScatterGrid';
+import StackedBarChart from '../components/host/StackedBarChart';
 import Performance3DChart from '../components/host/Performance3DChart';
 
 const Host: React.FC = () => {
@@ -185,6 +186,10 @@ const Host: React.FC = () => {
 
                                     {activeView === 'facets' && (
                                         <FacetScatterGrid data={filteredDrives} />
+                                    )}
+
+                                    {activeView === 'stacked' && (
+                                        <StackedBarChart filteredDrives={filteredDrives} />
                                     )}
 
                                     {activeView === '3d' && (
