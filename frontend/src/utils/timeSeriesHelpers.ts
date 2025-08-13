@@ -71,6 +71,14 @@ export const getTimeRangeParams = (timeRange: TimeRange) => {
             return { days: 7, hours: undefined };
         case "30d":
             return { days: 30, hours: undefined };
+        case "90d":
+            return { days: 90, hours: undefined };
+        case "6m":
+            return { days: 180, hours: undefined };
+        case "1y":
+            return { days: 365, hours: undefined };
+        case "all":
+            return { days: undefined, hours: undefined };
         default:
             return { days: 7, hours: undefined };
     }
@@ -85,7 +93,16 @@ const timestampCache = new Map<string, number>();
  */
 const getTimestamp = (dateString: string): number => {
     if (!timestampCache.has(dateString)) {
-        timestampCache.set(dateString, new Date(dateString).getTime());
+        const timestamp = new Date(dateString).getTime();
+        
+        // DEBUG: Log timestamp parsing
+        if (import.meta.env.DEV) {
+            console.log("🐛 [timeSeriesHelpers] getTimestamp input:", dateString);
+            console.log("🐛 [timeSeriesHelpers] getTimestamp parsed Date:", new Date(dateString));
+            console.log("🐛 [timeSeriesHelpers] getTimestamp result:", timestamp);
+        }
+        
+        timestampCache.set(dateString, timestamp);
     }
     return timestampCache.get(dateString)!;
 };
@@ -114,6 +131,15 @@ export const processMetricData = (
     for (const point of data) {
         if (point.metric_type === metricType) {
             const timestamp = getTimestamp(point.timestamp);
+            
+            // DEBUG: Log data processing
+            if (import.meta.env.DEV && filteredPoints.length < 3) {
+                console.log("🐛 [processMetricData] Processing point:", point);
+                console.log("🐛 [processMetricData] Point timestamp:", point.timestamp);
+                console.log("🐛 [processMetricData] Processed timestamp:", timestamp);
+                console.log("🐛 [processMetricData] Creating chart point x:", point.timestamp);
+            }
+            
             filteredPoints.push({
                 point: { x: point.timestamp, y: point.value },
                 timestamp
@@ -294,7 +320,16 @@ export const calculateServerStats = (data: any[]) => {
  * Gets chart title based on time range
  */
 export const getChartTitle = (timeRange: TimeRange): string => {
-    return `Performance Monitoring - ${timeRange.toUpperCase()}`;
+    const titleMap: Record<TimeRange, string> = {
+        "24h": "Last 24 Hours",
+        "7d": "Last 7 Days", 
+        "30d": "Last 30 Days",
+        "90d": "Last 90 Days",
+        "6m": "Last 6 Months",
+        "1y": "Last Year",
+        "all": "All Time"
+    };
+    return `Performance Monitoring - ${titleMap[timeRange] || timeRange.toUpperCase()}`;
 };
 
 /**

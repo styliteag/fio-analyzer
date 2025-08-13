@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, TrendingUp, Filter } from "lucide-react";
+import { Clock, TrendingUp, Filter, Activity } from "lucide-react";
 import type { 
     TimeRange, 
     EnabledMetrics 
@@ -13,6 +13,7 @@ interface TimeSeriesControlsProps {
     onMetricToggle: (metric: keyof EnabledMetrics) => void;
     loading?: boolean;
     inheritedFilters?: ActiveFilters;
+    totalDataPoints?: number;
 }
 
 const TimeSeriesControls: React.FC<TimeSeriesControlsProps> = ({
@@ -22,11 +23,16 @@ const TimeSeriesControls: React.FC<TimeSeriesControlsProps> = ({
     onMetricToggle,
     loading = false,
     inheritedFilters,
+    totalDataPoints = 0,
 }) => {
     const timeRangeOptions: { value: TimeRange; label: string }[] = [
         { value: "24h", label: "24h" },
         { value: "7d", label: "7d" },
         { value: "30d", label: "30d" },
+        { value: "90d", label: "90d" },
+        { value: "6m", label: "6m" },
+        { value: "1y", label: "1y" },
+        { value: "all", label: "All time" },
     ];
 
     const metricOptions: { key: keyof EnabledMetrics; label: string }[] = [
@@ -37,6 +43,21 @@ const TimeSeriesControls: React.FC<TimeSeriesControlsProps> = ({
 
     return (
         <div className="space-y-4">
+            {/* Data Points Indicator */}
+            {totalDataPoints > 0 && (
+                <div className="flex items-center justify-between p-3 theme-bg-tertiary rounded-lg">
+                    <div className="flex items-center gap-2">
+                        <Activity className="h-4 w-4 theme-text-secondary" />
+                        <span className="text-sm theme-text-secondary">
+                            Displaying <span className="font-semibold theme-text-primary">{totalDataPoints.toLocaleString()}</span> data points
+                        </span>
+                    </div>
+                    <div className="text-xs theme-text-secondary">
+                        {timeRange === "all" ? "All available data" : `${timeRange} timeframe`}
+                    </div>
+                </div>
+            )}
+
             {/* Basic Controls */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
@@ -46,7 +67,7 @@ const TimeSeriesControls: React.FC<TimeSeriesControlsProps> = ({
                     <Clock className="h-4 w-4 mr-1" />
                     Time Range
                 </label>
-                <div className="flex space-x-2">
+                <div className="flex flex-wrap gap-2">
                     {timeRangeOptions.map((option) => (
                         <button
                             key={option.value}

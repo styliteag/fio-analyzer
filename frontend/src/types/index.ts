@@ -161,7 +161,7 @@ export interface TimeSeriesEnabledMetrics {
 	bandwidth: boolean;
 }
 
-export type TimeSeriesTimeRange = "24h" | "7d" | "30d";
+export type TimeSeriesTimeRange = "24h" | "7d" | "30d" | "90d" | "6m" | "1y" | "all";
 
 export interface TimeSeriesChartDataset {
 	label: string;

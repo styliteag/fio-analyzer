@@ -116,6 +116,30 @@ export default function History() {
 
 	// Build chart.js dataset structure
 	const chartData = useMemo(() => {
+		// DEBUG: Log raw data from API
+		console.log("🐛 [History] Raw API data sample:", data.slice(0, 3));
+		console.log("🐛 [History] Total data points:", data.length);
+		
+		// DEBUG: Log browser timezone and locale info
+		console.log("🐛 [History] Browser timezone:", Intl.DateTimeFormat().resolvedOptions().timeZone);
+		console.log("🐛 [History] Browser locale:", navigator.language);
+		console.log("🐛 [History] Current time:", new Date());
+		console.log("🐛 [History] Timezone offset minutes:", new Date().getTimezoneOffset());
+		
+		if (data.length > 0) {
+			console.log("🐛 [History] First timestamp raw:", data[0].timestamp);
+			console.log("🐛 [History] Last timestamp raw:", data[data.length - 1].timestamp);
+			console.log("🐛 [History] First timestamp as Date:", new Date(data[0].timestamp));
+			console.log("🐛 [History] Last timestamp as Date:", new Date(data[data.length - 1].timestamp));
+			
+			// Test different date parsing approaches
+			const firstTs = data[0].timestamp;
+			console.log("🐛 [History] Testing different date parsing for:", firstTs);
+			console.log("🐛 [History] new Date(timestamp):", new Date(firstTs));
+			console.log("🐛 [History] Date.parse(timestamp):", new Date(Date.parse(firstTs)));
+			console.log("🐛 [History] Raw Date.parse() result:", Date.parse(firstTs));
+		}
+
 		let filtered = selectedConfigs.length > 0
 			? data.filter((d) => selectedConfigs.includes(`${d.read_write_pattern}|${d.block_size}|${d.queue_depth}`))
 			: data;
@@ -159,8 +183,12 @@ export default function History() {
 				};
 				colorIdx += 1;
 			}
-			map[key].data.push({ x: d.timestamp, y: d.value });
+			// DEBUG: Log what we're pushing to chart data
+			const chartPoint = { x: d.timestamp, y: d.value };
+			console.log("🐛 [History] Adding chart point:", chartPoint, "Date parsed:", new Date(d.timestamp));
+			map[key].data.push(chartPoint);
 		});
+		
 		const datasets = Object.values(map).map((ds) => ({
 			label: ds.label,
 			data: ds.data,
@@ -171,12 +199,21 @@ export default function History() {
 			pointRadius: 1,
 			pointHoverRadius: 3,
 		}));
+
+		// DEBUG: Log final datasets
+		console.log("🐛 [History] Final chart datasets:", datasets);
+		console.log("🐛 [History] First dataset sample points:", datasets[0]?.data?.slice(0, 3));
 		
 		return { datasets };
 	}, [data, selectedConfigs, selectedMetrics]);
 
 	const chartOptions = useMemo(() => {
 		const timeUnit: "day" | "week" = days <= 7 ? "day" : "week";
+		
+		// DEBUG: Log Chart.js configuration
+		console.log("🐛 [History] Chart options time unit:", timeUnit);
+		console.log("🐛 [History] Chart options days:", days);
+		
 		return {
 			responsive: true,
 			maintainAspectRatio: false,
@@ -194,6 +231,8 @@ export default function History() {
 						tooltipFormat: 'yyyy-MM-dd HH:mm:ss',
 					},
 					title: { display: true, text: "Time" },
+					// DEBUG: Add parser setting to see if it helps
+					parser: false, // Let Chart.js auto-detect the format
 				},
 				y: {
 					beginAtZero: false,
@@ -208,8 +247,16 @@ export default function History() {
 					callbacks: {
 						title: (context: any) => {
 							if (context.length > 0) {
+								// DEBUG: Log what context[0].parsed.x contains
+								console.log("🐛 [History] Tooltip context[0].parsed.x:", context[0].parsed.x);
+								console.log("🐛 [History] Tooltip context[0].parsed.x type:", typeof context[0].parsed.x);
+								
 								const date = new Date(context[0].parsed.x);
-								return date.toLocaleString('en-US', {
+								console.log("🐛 [History] Tooltip Date object:", date);
+								console.log("🐛 [History] Tooltip Date.getTime():", date.getTime());
+								console.log("🐛 [History] Tooltip Date.toISOString():", date.toISOString());
+								
+								const formatted = date.toLocaleString('en-US', {
 									year: 'numeric',
 									month: '2-digit',
 									day: '2-digit',
@@ -218,6 +265,8 @@ export default function History() {
 									second: '2-digit',
 									hour12: false
 								});
+								console.log("🐛 [History] Tooltip formatted date:", formatted);
+								return formatted;
 							}
 							return '';
 						},

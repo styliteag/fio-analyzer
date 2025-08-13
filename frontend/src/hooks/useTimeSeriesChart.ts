@@ -73,10 +73,20 @@ export const useTimeSeriesChart = ({
                     title: (context) => {
                         // Format the date consistently
                         if (context.length > 0 && context[0].parsed.x) {
+                            // DEBUG: Log what we're receiving in the tooltip
+                            console.log("🐛 [useTimeSeriesChart] Tooltip context[0].parsed.x:", context[0].parsed.x);
+                            console.log("🐛 [useTimeSeriesChart] Tooltip context[0].parsed.x type:", typeof context[0].parsed.x);
+                            
                             const date = new Date(context[0].parsed.x);
+                            console.log("🐛 [useTimeSeriesChart] Tooltip Date object:", date);
+                            console.log("🐛 [useTimeSeriesChart] Tooltip Date.getTime():", date.getTime());
+                            console.log("🐛 [useTimeSeriesChart] Tooltip Date.toISOString():", date.toISOString());
+                            
                             const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
                             const formattedTime = date.toTimeString().split(' ')[0]; // HH:MM:SS
-                            return `${formattedDate} ${formattedTime}`;
+                            const result = `${formattedDate} ${formattedTime}`;
+                            console.log("🐛 [useTimeSeriesChart] Tooltip formatted result:", result);
+                            return result;
                         }
                         return '';
                     },
@@ -102,15 +112,26 @@ export const useTimeSeriesChart = ({
             x: {
                 type: "time" as const,
                 time: {
+                    parser: 'YYYY-MM-DDTHH:mm:ss.SSSZ',
                     displayFormats: {
-                        hour: "MM-dd HH:mm",
-                        day: "MM-dd",
-                        week: "MM-dd",
+                        hour: "yyyy-MM-dd HH:mm",
+                        day: "yyyy-MM-dd",
+                        week: "yyyy-MM-dd",
+                        month: "yyyy-MM",
+                        year: "yyyy",
                     },
+                    tooltipFormat: "yyyy-MM-dd HH:mm:ss",
                 },
                 title: {
                     display: true,
                     text: "Time",
+                },
+                ticks: {
+                    callback: function(value) {
+                        const date = new Date(value);
+                        console.log('🐛 [Chart Tick] value:', value, 'date:', date, 'year:', date.getFullYear());
+                        return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+                    }
                 },
             },
             y: {

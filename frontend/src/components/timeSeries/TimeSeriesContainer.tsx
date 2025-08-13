@@ -42,6 +42,13 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
         clearError,
     } = useTimeSeriesData();
 
+    // Calculate total data points across all series
+    const totalDataPoints = useMemo(() => {
+        return seriesData.reduce((total, series) => {
+            return total + (series.data ? series.data.length : 0);
+        }, 0);
+    }, [seriesData]);
+
     // Convert shared filters from TestRun format to TimeSeries format
     const activeFilters = useMemo(() => {
         if (!sharedFilters) {
@@ -176,6 +183,7 @@ const TimeSeriesContainer: React.FC<TimeSeriesContainerProps> = ({
                     loading={loading || serversLoading}
                     // Show inherited filters from Test Run Selection
                     inheritedFilters={sharedFilters}
+                    totalDataPoints={totalDataPoints}
                 />
             </div>
 

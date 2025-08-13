@@ -179,7 +179,7 @@ export interface TimeSeriesPoint {
   metric: string;
 }
 
-export type TimeRange = '24h' | '7d' | '30d' | '90d' | 'custom';
+export type TimeRange = '24h' | '7d' | '30d' | '90d' | '6m' | '1y' | 'all' | 'custom';
 
 // Upload hook interfaces
 export interface UploadState {

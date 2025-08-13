@@ -87,6 +87,9 @@ export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions =
     if (metricType) params.append("metric_type", metricType);
     if (days) params.append("days", days.toString());
     if (hours) params.append("hours", hours.toString());
+    
+    // Add a high limit to ensure we get all historical data
+    params.append("limit", "50000");
 
     return apiCall<TimeSeriesDataPoint[]>(`/api/time-series/history?${params}`, {
         signal: abortSignal
