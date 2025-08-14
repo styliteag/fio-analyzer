@@ -164,6 +164,60 @@ check_libaio() {
     fi
 }
 
+# Function to validate test configuration
+validate_test_config() {
+    print_status "Validating test configuration..."
+    
+    local warnings=0
+    
+    # Check for high job counts with small test sizes
+    for num_jobs in "${NUM_JOBS[@]}"; do
+        for test_size in "${TEST_SIZE[@]}"; do
+            # Convert test size to bytes for comparison
+            local size_bytes
+            if [[ "$test_size" =~ ^([0-9]+)([KMG])$ ]]; then
+                local size_num="${BASH_REMATCH[1]}"
+                local size_unit="${BASH_REMATCH[2]}"
+                case "$size_unit" in
+                    K) size_bytes=$((size_num * 1024)) ;;
+                    M) size_bytes=$((size_num * 1024 * 1024)) ;;
+                    G) size_bytes=$((size_num * 1024 * 1024 * 1024)) ;;
+                esac
+                
+                # Calculate bytes per job
+                local bytes_per_job=$((size_bytes / num_jobs))
+                
+                # Warn if less than 1MB per job
+                if [ "$bytes_per_job" -lt 1048576 ]; then
+                    print_warning "Configuration issue: ${num_jobs} jobs with ${test_size} test size"
+                    print_warning "  → Each job gets only $((bytes_per_job / 1024))KB"
+                    print_warning "  → This may cause shared memory errors"
+                    print_warning "  → Consider using TEST_SIZE=$((num_jobs))M or larger"
+                    warnings=$((warnings + 1))
+                fi
+                
+                # Critical warning for very high job counts
+                if [ "$num_jobs" -ge 32 ]; then
+                    print_warning "High job count detected: ${num_jobs} jobs"
+                    print_warning "  → May exceed system shared memory limits"
+                    print_warning "  → Recommended: NUM_JOBS=16 or less for stability"
+                    print_warning "  → If you must use ${num_jobs} jobs, ensure TEST_SIZE is at least $((num_jobs * 10))M"
+                    warnings=$((warnings + 1))
+                fi
+            fi
+        done
+    done
+    
+    if [ "$warnings" -gt 0 ]; then
+        print_warning "Found $warnings potential configuration issues"
+        print_status "Tests may fail with shared memory errors"
+        return 1  # Return non-zero to indicate warnings
+    else
+        print_success "Test configuration validated successfully"
+        return 0
+    fi
+}
+
 # Function to check API connectivity
 check_api_connectivity() {
     print_status "Checking API connectivity to $BACKEND_URL"
@@ -289,7 +343,10 @@ run_fio_test() {
     local iodepth=$8
     local runtime=$9
 
-    print_status "Running FIO test: ${pattern} with ${block_size} block size"
+    print_status "Running FIO test: ${pattern} with ${block_size} block size, ${num_jobs} jobs"
+    
+    # Capture stderr to detect specific errors
+    local error_file="/tmp/fio_error_$$_$(date +%s).txt"
     
     fio --name="${DESCRIPTION},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},runtime:${runtime},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --rw="$pattern" \
@@ -308,16 +365,47 @@ run_fio_test() {
         --ioengine="$IOENGINE" \
         --norandommap \
         --randrepeat=0 \
-        --thread 2>/dev/null
-    echo "FIO test completed: ${pattern} with ${block_size}"
-    # delete the file
-    rm "${TARGET_DIR}/fio_test_${pattern}_${block_size}" || true
+        --thread 2>"$error_file"
+    
+    local fio_exit_code=$?
+    
+    # Clean up test file
+    rm -f "${TARGET_DIR}/fio_test_${pattern}_${block_size}" 2>/dev/null || true
 
-    if [ $? -eq 0 ]; then
-        print_success "FIO test completed: ${pattern} with ${block_size}"
+    if [ $fio_exit_code -eq 0 ]; then
+        print_success "FIO test completed: ${pattern} with ${block_size}, ${num_jobs} jobs"
+        rm -f "$error_file"
         return 0
     else
-        print_error "FIO test failed: ${pattern} with ${block_size}"
+        print_error "FIO test failed: ${pattern} with ${block_size}, ${num_jobs} jobs"
+        
+        # Check for specific error patterns and provide helpful messages
+        if grep -q "failed to setup shm segment" "$error_file" 2>/dev/null; then
+            print_error "  → Shared memory error detected. This usually means:"
+            print_error "    • Too many jobs (${num_jobs}) for available shared memory"
+            print_error "    • Test size too small (${test_size}) for ${num_jobs} jobs"
+            print_warning "  → Suggestions:"
+            print_warning "    • Reduce number of jobs (try NUM_JOBS=8 or less)"
+            print_warning "    • Increase test size (try TEST_SIZE=100M or more)"
+            print_warning "    • Check system shared memory limits: sysctl kern.sysv.shmmax"
+        elif grep -q "No space left on device" "$error_file" 2>/dev/null; then
+            print_error "  → Disk full error detected"
+            print_warning "  → Check available space in ${TARGET_DIR}"
+        elif grep -q "Permission denied" "$error_file" 2>/dev/null; then
+            print_error "  → Permission error detected"
+            print_warning "  → Check permissions for ${TARGET_DIR}"
+        elif grep -q "file not found" "$error_file" 2>/dev/null; then
+            print_error "  → File not found error"
+            print_warning "  → Ensure ${TARGET_DIR} exists and is writable"
+        else
+            # Show the actual error if we don't recognize it
+            print_error "  → FIO error output:"
+            cat "$error_file" | head -5 | while IFS= read -r line; do
+                print_error "    $line"
+            done
+        fi
+        
+        rm -f "$error_file"
         return 1
     fi
 }
@@ -486,6 +574,10 @@ main() {
     # Show configuration
     show_config
     
+    # Validate test configuration for potential issues
+    validate_test_config
+    local config_warnings=$?
+    
     # Validate API connectivity and credentials (skip if --yes flag is used)
     if [ "$skip_confirmation" = false ]; then
         check_api_connectivity
@@ -496,7 +588,12 @@ main() {
     
     # Confirm before starting tests (unless --yes flag is used)
     echo
-    print_status "All checks passed! Ready to start FIO performance testing."
+    if [ "$config_warnings" -eq 0 ]; then
+        print_status "All checks passed! Ready to start FIO performance testing."
+    else
+        print_warning "Configuration warnings detected! Tests may fail."
+    fi
+    
     local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]} * ${#NUM_JOBS[@]} * ${#DIRECT[@]} * ${#TEST_SIZE[@]} * ${#SYNC[@]} * ${#IODEPTH[@]} * ${#RUNTIME[@]}))
     print_status "  Block sizes: ${BLOCK_SIZES[*]}"
     print_status "  Direct: ${DIRECT[*]}"
@@ -511,10 +608,20 @@ main() {
     print_status "  Estimated total time: $((total_tests * max_runtime / 60)) minutes"
     echo
     print_status "This will run $total_tests tests with the listed configurations!"
+    
+    if [ "$config_warnings" -ne 0 ]; then
+        echo
+        print_warning "⚠️  Configuration issues detected - some tests may fail!"
+        print_warning "   See warnings above for details and suggestions."
+    fi
     echo
     
     if [ "$skip_confirmation" = false ]; then
-        read -p "Do you want to proceed? (y/N): " -n 1 -r
+        if [ "$config_warnings" -ne 0 ]; then
+            read -p "Configuration warnings detected. Do you still want to proceed? (y/N): " -n 1 -r
+        else
+            read -p "Do you want to proceed? (y/N): " -n 1 -r
+        fi
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             print_warning "Test cancelled by user"
