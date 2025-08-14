@@ -141,6 +141,7 @@ export const useHostData = ({ hostname }: UseHostDataProps = {}): UseHostDataRet
         const allBlockSizes = [...new Set(allHosts.flatMap(h => h.testCoverage.blockSizes))].sort();
         const allPatterns = [...new Set(allHosts.flatMap(h => h.testCoverage.patterns))].sort();
         const allQueueDepths = [...new Set(allHosts.flatMap(h => h.testCoverage.queueDepths))].sort((a, b) => a - b);
+        const allNumJobs = [...new Set(allHosts.flatMap(h => h.testCoverage.numJobs))].sort((a, b) => a - b);
         const allProtocols = [...new Set(allHosts.flatMap(h => h.testCoverage.protocols))].sort();
         const allHostDiskCombinations = [...new Set(allHosts.flatMap(h => h.testCoverage.hostDiskCombinations))].sort();
         
@@ -153,6 +154,7 @@ export const useHostData = ({ hostname }: UseHostDataProps = {}): UseHostDataRet
                 blockSizes: allBlockSizes,
                 patterns: allPatterns,
                 queueDepths: allQueueDepths,
+                numJobs: allNumJobs,
                 protocols: allProtocols,
                 hostDiskCombinations: allHostDiskCombinations
             },

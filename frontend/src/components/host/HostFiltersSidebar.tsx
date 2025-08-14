@@ -9,11 +9,13 @@ export interface HostFiltersSidebarProps {
     selectedBlockSizes: string[];
     selectedPatterns: string[];
     selectedQueueDepths: number[];
+    selectedNumJobs: number[];
     selectedProtocols: string[];
     selectedHostDiskCombinations: string[];
     onBlockSizeChange: (sizes: string[]) => void;
     onPatternChange: (patterns: string[]) => void;
     onQueueDepthChange: (depths: number[]) => void;
+    onNumJobsChange: (numJobs: number[]) => void;
     onProtocolChange: (protocols: string[]) => void;
     onHostDiskCombinationChange: (combinations: string[]) => void;
     onReset: () => void;
@@ -24,11 +26,13 @@ const HostFiltersSidebar: React.FC<HostFiltersSidebarProps> = ({
     selectedBlockSizes,
     selectedPatterns,
     selectedQueueDepths,
+    selectedNumJobs,
     selectedProtocols,
     selectedHostDiskCombinations,
     onBlockSizeChange,
     onPatternChange,
     onQueueDepthChange,
+    onNumJobsChange,
     onProtocolChange,
     onHostDiskCombinationChange,
     onReset
@@ -41,11 +45,13 @@ const HostFiltersSidebar: React.FC<HostFiltersSidebarProps> = ({
                 selectedBlockSizes={selectedBlockSizes}
                 selectedPatterns={selectedPatterns}
                 selectedQueueDepths={selectedQueueDepths}
+                selectedNumJobs={selectedNumJobs}
                 selectedProtocols={selectedProtocols}
                 selectedHostDiskCombinations={selectedHostDiskCombinations}
                 onBlockSizeChange={onBlockSizeChange}
                 onPatternChange={onPatternChange}
                 onQueueDepthChange={onQueueDepthChange}
+                onNumJobsChange={onNumJobsChange}
                 onProtocolChange={onProtocolChange}
                 onHostDiskCombinationChange={onHostDiskCombinationChange}
                 onReset={onReset}

@@ -41,11 +41,13 @@ const Host: React.FC = () => {
         selectedBlockSizes,
         selectedPatterns,
         selectedQueueDepths,
+        selectedNumJobs,
         selectedProtocols,
         selectedHostDiskCombinations,
         setSelectedBlockSizes,
         setSelectedPatterns,
         setSelectedQueueDepths,
+        setSelectedNumJobs,
         setSelectedProtocols,
         setSelectedHostDiskCombinations,
         filteredDrives,
@@ -147,11 +149,13 @@ const Host: React.FC = () => {
                                 selectedBlockSizes={selectedBlockSizes}
                                 selectedPatterns={selectedPatterns}
                                 selectedQueueDepths={selectedQueueDepths}
+                                selectedNumJobs={selectedNumJobs}
                                 selectedProtocols={selectedProtocols}
                                 selectedHostDiskCombinations={selectedHostDiskCombinations}
                                 onBlockSizeChange={setSelectedBlockSizes}
                                 onPatternChange={setSelectedPatterns}
                                 onQueueDepthChange={setSelectedQueueDepths}
+                                onNumJobsChange={setSelectedNumJobs}
                                 onProtocolChange={setSelectedProtocols}
                                 onHostDiskCombinationChange={setSelectedHostDiskCombinations}
                                 onReset={resetFilters}

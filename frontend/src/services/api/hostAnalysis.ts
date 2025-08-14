@@ -27,6 +27,7 @@ export interface TestConfiguration {
     block_size: string;
     read_write_pattern: string;
     queue_depth: number;
+    num_jobs: number | null | undefined;
     iops: number | null | undefined;
     avg_latency: number | null | undefined;
     bandwidth: number | null | undefined;
@@ -39,6 +40,7 @@ export interface TestCoverage {
     blockSizes: string[];
     patterns: string[];
     queueDepths: number[];
+    numJobs: number[];
     protocols: string[];
     hostDiskCombinations: string[];
 }
@@ -87,6 +89,7 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
             block_size: String(run.block_size),
             read_write_pattern: run.read_write_pattern,
             queue_depth: run.queue_depth,
+            num_jobs: run.num_jobs || null,
             iops: run.iops,
             avg_latency: run.avg_latency,
             bandwidth: run.bandwidth,
@@ -117,6 +120,7 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
         blockSizes: [...new Set(validRuns.map((r: TestRun) => String(r.block_size)))].sort(),
         patterns: [...new Set(validRuns.map((r: TestRun) => r.read_write_pattern))].sort(),
         queueDepths: [...new Set(validRuns.map((r: TestRun) => r.queue_depth))].sort((a: number, b: number) => a - b),
+        numJobs: [...new Set(validRuns.filter((r: TestRun) => r.num_jobs !== null && r.num_jobs !== undefined).map((r: TestRun) => r.num_jobs!))].sort((a: number, b: number) => a - b),
         protocols: [...new Set(validRuns.map((r: TestRun) => r.protocol || 'unknown'))].sort(),
         hostDiskCombinations: [...new Set(validRuns.map((r: TestRun) => 
             `${r.hostname} - ${r.protocol} - ${r.drive_model}`

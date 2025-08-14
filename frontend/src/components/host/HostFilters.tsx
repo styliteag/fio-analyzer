@@ -8,11 +8,13 @@ interface HostFiltersProps {
     selectedBlockSizes: string[];
     selectedPatterns: string[];
     selectedQueueDepths: number[];
+    selectedNumJobs: number[];
     selectedProtocols: string[];
     selectedHostDiskCombinations: string[];
     onBlockSizeChange: (blockSizes: string[]) => void;
     onPatternChange: (patterns: string[]) => void;
     onQueueDepthChange: (queueDepths: number[]) => void;
+    onNumJobsChange: (numJobs: number[]) => void;
     onProtocolChange: (protocols: string[]) => void;
     onHostDiskCombinationChange: (combinations: string[]) => void;
     onReset: () => void;
@@ -70,16 +72,18 @@ const ActiveFilters = memo<{
     selectedBlockSizes: string[];
     selectedPatterns: string[];
     selectedQueueDepths: number[];
+    selectedNumJobs: number[];
     selectedProtocols: string[];
     selectedHostDiskCombinations: string[];
-}>(({ selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedProtocols, selectedHostDiskCombinations }) => {
+}>(({ selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols, selectedHostDiskCombinations }) => {
     const hasActiveFilters = useMemo(() => {
         return selectedBlockSizes.length > 0 || 
                selectedPatterns.length > 0 || 
                selectedQueueDepths.length > 0 || 
+               selectedNumJobs.length > 0 ||
                selectedProtocols.length > 0 || 
                selectedHostDiskCombinations.length > 0;
-    }, [selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedProtocols, selectedHostDiskCombinations]);
+    }, [selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols, selectedHostDiskCombinations]);
 
     return (
         <div className="pt-4 border-t border-gray-200 dark:border-gray-600">
@@ -96,6 +100,9 @@ const ActiveFilters = memo<{
                     )}
                     {selectedQueueDepths.length > 0 && (
                         <div>Queue Depths: {selectedQueueDepths.map(qd => `QD${qd}`).join(', ')}</div>
+                    )}
+                    {selectedNumJobs.length > 0 && (
+                        <div>Num Jobs: {selectedNumJobs.map(nj => `Jobs:${nj}`).join(', ')}</div>
                     )}
                     {selectedProtocols.length > 0 && (
                         <div>Protocols: {selectedProtocols.join(', ')}</div>
@@ -119,11 +126,13 @@ const HostFilters: React.FC<HostFiltersProps> = ({
     selectedBlockSizes,
     selectedPatterns,
     selectedQueueDepths,
+    selectedNumJobs,
     selectedProtocols,
     selectedHostDiskCombinations,
     onBlockSizeChange,
     onPatternChange,
     onQueueDepthChange,
+    onNumJobsChange,
     onProtocolChange,
     onHostDiskCombinationChange,
     onReset
@@ -178,6 +187,15 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                 />
                 
                 <FilterSection
+                    title="Number of Jobs"
+                    options={testCoverage.numJobs}
+                    selectedValues={selectedNumJobs}
+                    onChange={onNumJobsChange}
+                    colorClass="bg-cyan-500"
+                    prefix="Jobs:"
+                />
+                
+                <FilterSection
                     title="Protocols"
                     options={testCoverage.protocols}
                     selectedValues={selectedProtocols}
@@ -197,6 +215,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedBlockSizes={selectedBlockSizes}
                     selectedPatterns={selectedPatterns}
                     selectedQueueDepths={selectedQueueDepths}
+                    selectedNumJobs={selectedNumJobs}
                     selectedProtocols={selectedProtocols}
                     selectedHostDiskCombinations={selectedHostDiskCombinations}
                 />
@@ -217,6 +236,7 @@ export default memo(HostFilters, (prevProps, nextProps) => {
         prevProps.onBlockSizeChange !== nextProps.onBlockSizeChange ||
         prevProps.onPatternChange !== nextProps.onPatternChange ||
         prevProps.onQueueDepthChange !== nextProps.onQueueDepthChange ||
+        prevProps.onNumJobsChange !== nextProps.onNumJobsChange ||
         prevProps.onProtocolChange !== nextProps.onProtocolChange ||
         prevProps.onHostDiskCombinationChange !== nextProps.onHostDiskCombinationChange) {
         return false;
@@ -232,6 +252,7 @@ export default memo(HostFilters, (prevProps, nextProps) => {
     return arraysEqual(prevProps.selectedBlockSizes, nextProps.selectedBlockSizes) &&
            arraysEqual(prevProps.selectedPatterns, nextProps.selectedPatterns) &&
            arraysEqual(prevProps.selectedQueueDepths, nextProps.selectedQueueDepths) &&
+           arraysEqual(prevProps.selectedNumJobs, nextProps.selectedNumJobs) &&
            arraysEqual(prevProps.selectedProtocols, nextProps.selectedProtocols) &&
            arraysEqual(prevProps.selectedHostDiskCombinations, nextProps.selectedHostDiskCombinations);
 });
