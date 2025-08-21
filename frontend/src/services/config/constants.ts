@@ -207,6 +207,7 @@ export const API_CONFIG = {
             trends: '/api/time-series/trends',
         },
         upload: '/api/import',
+        info: '/api/info',
         auth: {
             login: '/auth/login',
             logout: '/auth/logout',

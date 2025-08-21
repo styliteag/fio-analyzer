@@ -288,7 +288,7 @@ async def health_check():
     return {
         "status": "OK",
         "timestamp": "2025-06-31T20:00:00Z",
-        "version": "1.0.0"
+        "version": settings.version
     }
 
 

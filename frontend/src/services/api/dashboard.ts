@@ -1,5 +1,6 @@
 // Dashboard statistics API service
 import type { TestRun, ServerInfo } from '../../types';
+import type { ApiInfoResponse } from '../../types/api';
 import { apiCall } from './base';
 import { fetchTestRuns } from './testRuns';
 import { fetchTimeSeriesServers, fetchTimeSeriesLatest } from './timeSeries';
@@ -358,5 +359,16 @@ export const fetchQuickStats = async () => {
             totalTestRuns: 0,
             hasData: false
         };
+    }
+};
+
+// Fetch API info including version
+export const fetchApiInfo = async (): Promise<ApiInfoResponse> => {
+    try {
+        const response = await apiCall('/api/info');
+        return response.data as ApiInfoResponse;
+    } catch (error) {
+        console.error('Failed to fetch API info:', error);
+        throw error;
     }
 };

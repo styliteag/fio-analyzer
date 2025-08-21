@@ -184,3 +184,17 @@ export interface HealthCheckResponse {
     recordCount?: number;
   };
 }
+
+// API Info response
+export interface ApiInfoResponse {
+  name: string;
+  version: string;
+  description: string;
+  endpoints: number;
+  documentation: string;
+  redoc_documentation: string;
+  openapi_schema: string;
+  features: string[];
+  supported_formats: string[];
+  authentication: string;
+}

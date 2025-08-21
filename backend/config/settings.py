@@ -31,11 +31,24 @@ class Settings:
         # Ensure directories exist
         self.db_path.parent.mkdir(exist_ok=True)
         self.upload_dir.mkdir(exist_ok=True)
+        
+        # Version configuration
+        self.version_file = self.base_dir.parent / "VERSION"
     
     @property
     def database_url(self) -> str:
         """Get database URL"""
         return f"sqlite:///{self.db_path}"
+    
+    @property
+    def version(self) -> str:
+        """Get application version from VERSION file"""
+        try:
+            if self.version_file.exists():
+                return self.version_file.read_text().strip()
+            return "unknown"
+        except Exception:
+            return "unknown"
 
 
 # Global settings instance

@@ -1,11 +1,14 @@
 // Dashboard footer component with links and information
 import { Download, Book } from 'lucide-react';
+import { useApiInfo } from '../../hooks/api/useApiInfo';
 
 interface DashboardFooterProps {
     getApiDocsUrl: () => string;
 }
 
 export const DashboardFooter: React.FC<DashboardFooterProps> = ({ getApiDocsUrl }) => {
+    const { version } = useApiInfo();
+    
     return (
         <footer className="theme-header mt-12">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -14,6 +17,7 @@ export const DashboardFooter: React.FC<DashboardFooterProps> = ({ getApiDocsUrl 
                         <p>
                             Storage Performance Visualizer - Analyze FIO benchmark results
                             with interactive charts
+                            {version && <span className="ml-2 text-xs opacity-75">v{version}</span>}
                         </p>
                         <p className="mt-1">
                             Features: Multi-drive comparison, latency analysis, throughput

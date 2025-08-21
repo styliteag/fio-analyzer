@@ -10,6 +10,7 @@ from database.connection import get_db
 # Removed FilterOptions import - using plain dictionary
 from auth.middleware import require_auth, User, require_admin
 from utils.logging import log_info, log_error
+from config.settings import settings
 
 
 router = APIRouter()
@@ -193,7 +194,7 @@ async def get_api_info():
     """
     return {
         "name": "FIO Analyzer API",
-        "version": "1.0.0", 
+        "version": settings.version, 
         "description": "API for FIO (Flexible I/O Tester) performance analysis and time-series monitoring",
         "endpoints": 20,
         "documentation": "/docs",
