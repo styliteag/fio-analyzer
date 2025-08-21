@@ -32,8 +32,12 @@ class Settings:
         self.db_path.parent.mkdir(exist_ok=True)
         self.upload_dir.mkdir(exist_ok=True)
         
-        # Version configuration
+        # Version configuration - check multiple locations
+        # In development: ../VERSION (relative to backend/)
+        # In Docker: /app/VERSION (same directory as backend files)
         self.version_file = self.base_dir.parent / "VERSION"
+        if not self.version_file.exists():
+            self.version_file = self.base_dir / "VERSION"
     
     @property
     def database_url(self) -> str:
