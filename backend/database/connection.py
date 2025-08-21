@@ -202,7 +202,7 @@ class DatabaseManager:
     async def _populate_sample_data(self, cursor: sqlite3.Cursor):
         """Populate sample data"""
         import random
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         
         # Define sample servers
         servers = [
@@ -222,7 +222,7 @@ class DatabaseManager:
         for server in servers:
             for drive_model, drive_type in server["drives"]:
                 for day_offset in range(0, 30, 2 + random.randint(0, 3)):
-                    timestamp = (datetime.now() - timedelta(days=day_offset)).isoformat()
+                    timestamp = (datetime.now(timezone.utc) - timedelta(days=day_offset)).isoformat()
                     
                     block_size = random.choice(block_sizes)
                     pattern = random.choice(patterns)

@@ -7,7 +7,7 @@ import uuid
 import os
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Body
-from datetime import datetime
+from datetime import datetime, timezone
 import sqlite3
 from pathlib import Path
 
@@ -521,7 +521,7 @@ def extract_metadata_from_path(file_path: Path) -> Dict[str, Any]:
     return {
         "hostname": "unknown",
         "protocol": "Local",
-        "test_date": datetime.now().isoformat()
+        "test_date": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -553,8 +553,8 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
     
     # Extract basic information
     test_run_data = {
-        "timestamp": datetime.now().isoformat(),
-        "test_date": datetime.now().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "test_date": datetime.now(timezone.utc).isoformat(),
         "fio_version": fio_data.get("fio version", "unknown"),
         "job_runtime": job.get("job_runtime", 0),
         "duration": job.get("duration", 0) // 1000,  # Convert to seconds
@@ -750,7 +750,7 @@ def save_uploaded_file(content: bytes, filename: str, test_run_data: Dict[str, A
     # Create directory structure
     hostname = test_run_data.get("hostname", "unknown")
     protocol = test_run_data.get("protocol", "unknown")
-    timestamp = datetime.now()
+    timestamp = datetime.now(timezone.utc)
     
     dir_path = (
         settings.upload_dir / 
@@ -804,7 +804,7 @@ def create_metadata_file(file_path: str, test_run_data: Dict[str, Any], username
         "protocol": test_run_data.get("protocol"),
         "description": test_run_data.get("description"),
         "test_date": test_run_data.get("test_date"),
-        "upload_timestamp": datetime.now().isoformat(),
+        "upload_timestamp": datetime.now(timezone.utc).isoformat(),
         "original_filename": original_filename,
         "uploaded_by": username
     }

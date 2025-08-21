@@ -4,7 +4,7 @@ Time series API router
 
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import sqlite3
 
 from database.connection import get_db
@@ -837,8 +837,8 @@ async def get_historical_time_series(
         
         # Handle days parameter (takes precedence over start_date/end_date)
         if days is not None and not start_date and not end_date:
-            from datetime import datetime, timedelta
-            end_time = datetime.now()
+            from datetime import datetime, timedelta, timezone, timezone
+            end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(days=days)
             where_conditions.append("timestamp >= ?")
             where_conditions.append("timestamp <= ?")
@@ -1044,7 +1044,7 @@ async def get_trends(
         cursor = db.cursor()
         
         # Calculate date range
-        end_date = datetime.now()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
         
         # Get trend data
