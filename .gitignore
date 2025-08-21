@@ -77,3 +77,4 @@ coverage/
 *.tmp
 *.temp
 .cache/
+.grok/settings.json
