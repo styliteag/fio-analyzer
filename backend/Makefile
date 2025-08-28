@@ -1,6 +1,6 @@
 # FIO Analyzer Backend Makefile
 
-.PHONY: check syntax lint test start clean help
+.PHONY: check syntax lint test start clean help api-index
 
 # Quick syntax and import check (no venv needed)
 check:
@@ -62,6 +62,13 @@ help:
 	@echo "  make start    - Run pre-flight checks and start server"
 	@echo "  make install  - Set up virtual environment and dependencies"
 	@echo "  make clean    - Remove cache files"
+	@echo "  make api-index - Regenerate docs/api/endpoints.json from routers"
 	@echo "  make help     - Show this help message"
 	@echo ""
 	@echo "Before starting the server, always run 'make check' first!"
+
+# Generate machine-readable API endpoints index
+api-index:
+	@echo "📚 Generating API endpoints index..."
+	@cd .. && python3 scripts/generate_endpoints.py
+	@echo "✅ Wrote docs/api/endpoints.json"

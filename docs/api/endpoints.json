@@ -1,0 +1,154 @@
+{
+  "name": "FIO Analyzer API",
+  "version": "1.0.0",
+  "base_urls": {
+    "backend": "http://localhost:8000",
+    "nginx_api_base": "http://localhost/api"
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/filters",
+      "auth": "admin",
+      "summary": "Get Filter Options"
+    },
+    {
+      "method": "POST",
+      "path": "/api/import",
+      "auth": "uploader",
+      "summary": "Import FIO Test Data"
+    },
+    {
+      "method": "POST",
+      "path": "/api/import/bulk",
+      "auth": "admin",
+      "summary": "Bulk Import FIO Data"
+    },
+    {
+      "method": "GET",
+      "path": "/api/info",
+      "auth": "none",
+      "summary": "Get API Information"
+    },
+    {
+      "method": "GET",
+      "path": "/api/test-runs",
+      "auth": "admin",
+      "summary": "Get Test Runs"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/test-runs/bulk",
+      "auth": "admin",
+      "summary": "Bulk Update Test Runs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/test-runs/performance-data",
+      "auth": "admin",
+      "summary": "Get Performance Data"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/test-runs/{test_run_id}",
+      "auth": "admin",
+      "summary": "Delete Test Run"
+    },
+    {
+      "method": "GET",
+      "path": "/api/test-runs/{test_run_id}",
+      "auth": "admin",
+      "summary": "Get Single Test Run"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/test-runs/{test_run_id}",
+      "auth": "admin",
+      "summary": "Update Test Run"
+    },
+    {
+      "method": "GET",
+      "path": "/api/time-series/all",
+      "auth": "admin",
+      "summary": "Get All Historical Data"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/time-series/bulk",
+      "auth": "admin",
+      "summary": "Bulk Update Time Series Data"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/time-series/delete",
+      "auth": "admin",
+      "summary": "Delete Time Series Data"
+    },
+    {
+      "method": "GET",
+      "path": "/api/time-series/history",
+      "auth": "admin",
+      "summary": "Get Historical Time Series"
+    },
+    {
+      "method": "GET",
+      "path": "/api/time-series/latest",
+      "auth": "admin",
+      "summary": "Get Latest Time Series Data"
+    },
+    {
+      "method": "GET",
+      "path": "/api/time-series/servers",
+      "auth": "admin",
+      "summary": "Get Server List"
+    },
+    {
+      "method": "GET",
+      "path": "/api/time-series/trends",
+      "auth": "admin",
+      "summary": "Get Performance Trends"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users",
+      "auth": "admin",
+      "summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/users",
+      "auth": "admin",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/me",
+      "auth": "auth",
+      "summary": ""
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/users/{username}",
+      "auth": "admin",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/{username}",
+      "auth": "admin",
+      "summary": ""
+    },
+    {
+      "method": "PUT",
+      "path": "/api/users/{username}",
+      "auth": "admin",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "auth": "none",
+      "summary": ""
+    }
+  ]
+}
