@@ -162,17 +162,6 @@ For complete API reference, see: **[API_DOCUMENTATION.md](./docs/api/API_DOCUMEN
 - **Validation**: Pydantic models with type checking
 - **Documentation**: Auto-generated OpenAPI/Swagger
 
-## Agent Usage Requirements
-
-**MANDATORY**: Always use specialized agents when modifying TypeScript/React files:
-
-- **frontend-developer**: Use for all *.tsx files (React components, UI implementation, responsive layouts)
-- **javascript-pro**: Use for all *.ts files (TypeScript utilities, complex JS patterns, optimization)
-- **ui-ux-designer**: Use when creating/modifying interface components or design systems
-- **python-pro**: Use for Python backend optimization, async patterns, or complex Python features
-- **backend-architect**: Use when designing APIs, reviewing system architecture, or performance bottlenecks
-- **error-detective**: Use to run ESLint, TypeScript build checks, and syntax validation after code changes
-
 **MANDATORY WORKFLOW**: After modifying any frontend code (*.ts, *.tsx files):
 1. Use the appropriate specialized agent (frontend-developer/javascript-pro/ui-ux-designer)
 2. Use **error-detective** agent to run `npm run lint` and `npx tsc --noEmit` for validation
