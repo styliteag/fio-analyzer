@@ -168,8 +168,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     console.log('Unique hostKeys:', Array.from(processedKeys));
     console.log('=== END ROW DEFINITIONS DEBUG ===');
 
-    // Calculate max IOPS for each hostname-driveModel combination for normalization
+    // Calculate max values for each hostname-driveModel combination for normalization
     const hostMaxIOPS = new Map<string, number>();
+    const hostMaxBandwidth = new Map<string, number>();
+    const hostMaxResponsiveness = new Map<string, number>();
     const processedHostKeys = new Set<string>();
 
     drives.forEach((drive, driveIndex) => {
@@ -186,16 +188,33 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         processedHostKeys.add(hostKey);
 
         let maxIOPS = 0;
+        let maxBandwidth = 0;
+        let maxResponsiveness = 0;
 
-        // For each individual drive, calculate its max IOPS
+        // For each individual drive, calculate its max values
         drive.configurations.forEach(config => {
             if (config.iops && config.iops > maxIOPS) {
                 maxIOPS = config.iops;
             }
+            if (config.bandwidth && config.bandwidth > maxBandwidth) {
+                maxBandwidth = config.bandwidth;
+            }
+            if (config.avg_latency && config.avg_latency > 0) {
+                const responsiveness = 1000 / config.avg_latency;
+                if (responsiveness > maxResponsiveness) {
+                    maxResponsiveness = responsiveness;
+                }
+            }
         });
 
         hostMaxIOPS.set(hostKey, maxIOPS);
-        console.log(`Max IOPS for ${hostKey}: ${maxIOPS}`);
+        hostMaxBandwidth.set(hostKey, maxBandwidth);
+        hostMaxResponsiveness.set(hostKey, maxResponsiveness);
+
+        console.log(`Max values for ${hostKey}:`);
+        console.log(`  IOPS: ${maxIOPS}`);
+        console.log(`  Bandwidth: ${maxBandwidth}`);
+        console.log(`  Responsiveness: ${maxResponsiveness}`);
     });
 
     console.log('Host max IOPS:', Object.fromEntries(hostMaxIOPS));
@@ -381,34 +400,50 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                     Performance Fingerprint Heatmap
                 </h4>
                 <p className="text-sm theme-text-secondary mb-4">
-                    Normalized IOPS performance across block sizes and test patterns.
-                    Each cell shows performance relative to the host&apos;s maximum IOPS (0-100%).
+                    Multi-dimensional performance visualization across block sizes and test patterns.
+                    Each cell shows three normalized metrics: IOPS, Bandwidth, and Responsiveness (1000/Latency).
                 </p>
 
                 {/* Legend */}
-                <div className="flex flex-wrap items-center gap-4 text-xs theme-text-secondary mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(0, actualTheme === 'dark')}`}></div>
-                        <span>0% (No data)</span>
+                <div className="space-y-2 text-xs theme-text-secondary mb-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-2 bg-blue-500 dark:bg-blue-400 rounded"></div>
+                            <span>IOPS</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-2 bg-green-500 dark:bg-green-400 rounded"></div>
+                            <span>Bandwidth</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-2 bg-red-500 dark:bg-red-400 rounded"></div>
+                            <span>Responsiveness</span>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(20, actualTheme === 'dark')}`}></div>
-                        <span>20%</span>
+                    <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(0, actualTheme === 'dark')}`}></div>
+                            <span>0% (No data)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(25, actualTheme === 'dark')}`}></div>
+                            <span>25%</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(50, actualTheme === 'dark')}`}></div>
+                            <span>50%</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(75, actualTheme === 'dark')}`}></div>
+                            <span>75%</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(100, actualTheme === 'dark')}`}></div>
+                            <span>100% (Max)</span>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(50, actualTheme === 'dark')}`}></div>
-                        <span>50%</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(80, actualTheme === 'dark')}`}></div>
-                        <span>80%</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded ${getColorForNormalizedIOPS(100, actualTheme === 'dark')}`}></div>
-                        <span>100% (Max)</span>
-                    </div>
-                    <div className="ml-4">
-                        <span>Hover cells for details • Higher = Better performance</span>
+                    <div className="text-xs opacity-75">
+                        Hover cells for detailed metrics • Higher bars = Better performance
                     </div>
                 </div>
             </div>
@@ -425,7 +460,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                     Pattern
                                 </th>
                                 {allBlockSizes.map(blockSize => (
-                                    <th key={blockSize} className="border border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-700 text-sm font-semibold theme-text-primary text-center">
+                                    <th key={blockSize} className="border border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-700 text-sm font-semibold theme-text-primary text-center" style={{ minWidth: '120px' }}>
                                         {blockSize}
                                     </th>
                                 ))}
@@ -487,18 +522,61 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                     }}
                                                     onMouseLeave={() => setHoveredCell(null)}
                                                     style={{
-                                                        minWidth: '80px',
-                                                        height: '60px',
+                                                        minWidth: '120px',
+                                                        height: '70px',
                                                         backgroundColor: cell.iops > 0 ? undefined : '#f3f4f6'
                                                     }}
                                                 >
-                                                    <div className="text-sm font-bold mb-1">
-                                                        {cell.iops > 0 ? `IOPS: ${formatIOPS(cell.iops)}` : '—'}
-                                                    </div>
-                                                    {cell.normalizedIops > 0 && (
-                                                        <div className="text-xs opacity-75">
-                                                            {cell.normalizedIops.toFixed(0)}%
+                                                    {cell.iops > 0 ? (
+                                                        <div className="space-y-1">
+                                                            {/* IOPS Bar */}
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-xs text-blue-600 dark:text-blue-400 font-medium w-8">IOPS</span>
+                                                                <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                                    <div
+                                                                        className="bg-blue-500 dark:bg-blue-400 h-2 rounded-full"
+                                                                        style={{ width: `${cell.normalizedIops}%` }}
+                                                                    ></div>
+                                                                </div>
+                                                                <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
+                                                                    {cell.normalizedIops.toFixed(0)}%
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Bandwidth Bar */}
+                                                            {cell.bandwidth && (
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-xs text-green-600 dark:text-green-400 font-medium w-8">BW</span>
+                                                                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                                        <div
+                                                                            className="bg-green-500 dark:bg-green-400 h-2 rounded-full"
+                                                                            style={{ width: `${(cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100}%` }}
+                                                                        ></div>
+                                                                    </div>
+                                                                    <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
+                                                                        {(cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth) * 100).toFixed(0)}%
+                                                                    </span>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Latency Bar (1000/Latency for responsiveness) */}
+                                                            {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 && (
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-xs text-red-600 dark:text-red-400 font-medium w-8">RESP</span>
+                                                                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                                        <div
+                                                                            className="bg-red-500 dark:bg-red-400 h-2 rounded-full"
+                                                                            style={{ width: `${Math.min(100, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100)}%` }}
+                                                                        ></div>
+                                                                    </div>
+                                                                    <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
+                                                                        {Math.min(100, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100).toFixed(0)}%
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                         </div>
+                                                    ) : (
+                                                        <div className="text-sm font-bold">—</div>
                                                     )}
                                                 </td>
                                             );
