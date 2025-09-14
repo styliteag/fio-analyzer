@@ -280,7 +280,8 @@ main() {
    
     # Commit version changes to current branch
     print_info "Committing version changes to $current_branch"
-    git add VERSION backend/Cargo.toml backend/Cargo.lock CHANGELOG.md
+    # git add backend/Cargo.toml backend/Cargo.lock
+    git add VERSION CHANGELOG.md
     git commit -m "chore: bump version to $new_version"
 
     # Create tag on current branch
