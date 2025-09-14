@@ -466,7 +466,11 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                 <td
                                                     key={`${rowDef.hostname}-${rowDef.pattern}-${blockSize}`}
                                                     className={`border border-gray-300 dark:border-gray-600 p-2 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${
-                                                isFirstRowOfHost ? 'border-t-4 border-t-blue-500' : ''} ${colorClass}`}
+                                                isFirstRowOfHost ? 'border-t-4 border-t-blue-500' : ''} ${colorClass} ${
+                                                        (cell.iops !== undefined && cell.iops !== null && cell.iops > 0)
+                                                            ? ''
+                                                            : 'bg-gray-100 dark:bg-gray-800'
+                                                    }`}
                                                     onMouseEnter={(e) => {
                                                         const rect = e.currentTarget.getBoundingClientRect();
                                                         setHoveredCell({
@@ -478,8 +482,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                     onMouseLeave={() => setHoveredCell(null)}
                                                     style={{
                                                         minWidth: '120px',
-                                                        height: '70px',
-                                                        backgroundColor: (cell.iops !== undefined && cell.iops !== null && cell.iops > 0) ? undefined : '#f3f4f6'
+                                                        height: '70px'
                                                     }}
                                                 >
                                                     {/* Always show bars if cell has any data (IOPS can be 0 but still show configuration exists) */}
@@ -487,8 +490,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                         <div className="space-y-1">
                                                             {/* IOPS Bar - Always show, even if 0 */}
                                                             <div className="flex items-center gap-1">
-                                                                <span className="text-xs text-blue-600 dark:text-blue-400 font-medium w-8">IOPS</span>
-                                                                <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                                <span className="text-xs text-blue-600 dark:text-blue-300 font-medium w-8">IOPS</span>
+                                                                <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                                                                     <div
                                                                         className="bg-blue-500 dark:bg-blue-400 h-2 rounded-full"
                                                                         style={{
@@ -497,7 +500,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                         }}
                                                                     ></div>
                                                                 </div>
-                                                                <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
+                                                                <span className="text-xs text-gray-700 dark:text-gray-300 w-10 text-right">
                                                                     {cell.normalizedIops.toFixed(0)}%
                                                                 </span>
                                                             </div>
@@ -505,8 +508,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                             {/* Bandwidth Bar - Show if data exists */}
                                                             {cell.bandwidth !== undefined && cell.bandwidth !== null ? (
                                                                 <div className="flex items-center gap-1">
-                                                                    <span className="text-xs text-green-600 dark:text-green-400 font-medium w-8">BW</span>
-                                                                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                                    <span className="text-xs text-green-600 dark:text-green-300 font-medium w-8">BW</span>
+                                                                    <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                                                                         <div
                                                                             className="bg-green-500 dark:bg-green-400 h-2 rounded-full"
                                                                             style={{
@@ -515,7 +518,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                             }}
                                                                         ></div>
                                                                     </div>
-                                                                    <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
+                                                                    <span className="text-xs text-gray-700 dark:text-gray-300 w-10 text-right">
                                                                         {((cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100).toFixed(0)}%
                                                                     </span>
                                                                 </div>
@@ -532,8 +535,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                             {/* Latency Bar (1000/Latency for responsiveness) - Show if data exists */}
                                                             {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? (
                                                                 <div className="flex items-center gap-1">
-                                                                    <span className="text-xs text-red-600 dark:text-red-400 font-medium w-8">RESP</span>
-                                                                    <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                                                    <span className="text-xs text-red-600 dark:text-red-300 font-medium w-8">RESP</span>
+                                                                    <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                                                                         <div
                                                                             className="bg-red-500 dark:bg-red-400 h-2 rounded-full"
                                                                             style={{
@@ -542,7 +545,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                             }}
                                                                         ></div>
                                                                     </div>
-                                                                    <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
+                                                                    <span className="text-xs text-gray-700 dark:text-gray-300 w-10 text-right">
                                                                         {Math.min(100, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100).toFixed(0)}%
                                                                     </span>
                                                                 </div>
@@ -557,7 +560,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <div className="text-sm font-bold text-gray-400">—</div>
+                                                        <div className="text-sm font-bold text-gray-400 dark:text-gray-500">—</div>
                                                     )}
                                                 </td>
                                             );
