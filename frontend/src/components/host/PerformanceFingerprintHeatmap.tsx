@@ -328,12 +328,21 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
 
         const intensity = normalizedIops / 100;
 
-        // Subtle color mapping with opacity for better readability
-        if (intensity > 0.8) return 'bg-green-200/70 text-gray-900';
-        if (intensity > 0.6) return 'bg-green-100/60 text-gray-900';
-        if (intensity > 0.4) return 'bg-yellow-100/70 text-gray-900';
-        if (intensity > 0.2) return 'bg-orange-100/70 text-gray-900';
-        return 'bg-red-100/70 text-gray-900';
+        // Color mapping with proper dark mode support
+        if (isDark) {
+            if (intensity > 0.8) return 'bg-green-900/30 text-green-300';
+            if (intensity > 0.6) return 'bg-green-900/25 text-green-400';
+            if (intensity > 0.4) return 'bg-yellow-900/30 text-yellow-300';
+            if (intensity > 0.2) return 'bg-orange-900/30 text-orange-300';
+            return 'bg-red-900/30 text-red-300';
+        } else {
+            // Light mode colors
+            if (intensity > 0.8) return 'bg-green-200/70 text-gray-900';
+            if (intensity > 0.6) return 'bg-green-100/60 text-gray-900';
+            if (intensity > 0.4) return 'bg-yellow-100/70 text-gray-900';
+            if (intensity > 0.2) return 'bg-orange-100/70 text-gray-900';
+            return 'bg-red-100/70 text-gray-900';
+        }
     };
 
     const formatIOPS = (iops: number): string => {
@@ -409,17 +418,17 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
 
             <div className="overflow-x-auto">
                 <div className="inline-block min-w-full">
-                    <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-600" style={{ fontSize: '12px' }}>
+                    <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-500" style={{ fontSize: '12px' }}>
                         <thead>
                             <tr>
-                                <th className="border border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-700 text-sm font-semibold theme-text-primary">
+                                <th className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary">
                                     Host
                                 </th>
-                                <th className="border border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-700 text-sm font-semibold theme-text-primary">
+                                <th className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary">
                                     Pattern
                                 </th>
                                 {allBlockSizes.map(blockSize => (
-                                    <th key={blockSize} className="border border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-700 text-sm font-semibold theme-text-primary text-center" style={{ minWidth: '120px' }}>
+                                    <th key={blockSize} className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary text-center" style={{ minWidth: '120px' }}>
                                         {blockSize}
                                     </th>
                                 ))}
@@ -433,9 +442,9 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
 
                                 return (
                                     <tr key={rowKey} className={isFirstRowOfHost ? 'border-t-4 border-t-blue-500' : ''}>
-                                        <td className={`border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium theme-text-primary ${
-                                            isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-900/30' :
-                                            isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700' : 'bg-gray-25 dark:bg-gray-750'}`}>
+                                        <td className={`border border-gray-300 dark:border-gray-500 p-3 text-sm font-medium theme-text-primary ${
+                                            isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-950/20' :
+                                            isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700/50' : 'bg-white dark:bg-gray-800'}`}>
                                             <div>
                                                 <div className="font-bold">{rowDef.hostname}</div>
                                                 <div className="text-xs theme-text-secondary mt-1">
@@ -446,9 +455,9 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className={`border border-gray-300 dark:border-gray-600 p-3 text-sm theme-text-primary ${
-                                            isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-900/30' :
-                                            isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700' : 'bg-gray-25 dark:bg-gray-750'}`}>
+                                        <td className={`border border-gray-300 dark:border-gray-500 p-3 text-sm theme-text-primary ${
+                                            isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-950/20' :
+                                            isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700/50' : 'bg-white dark:bg-gray-800'}`}>
                                             <div className="text-xs theme-text-secondary">
                                                 {rowDef.pattern.replace('_', ' ').toUpperCase()}
                                             </div>
@@ -465,12 +474,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                             return (
                                                 <td
                                                     key={`${rowDef.hostname}-${rowDef.pattern}-${blockSize}`}
-                                                    className={`border border-gray-300 dark:border-gray-600 p-2 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${
-                                                isFirstRowOfHost ? 'border-t-4 border-t-blue-500' : ''} ${colorClass} ${
-                                                        (cell.iops !== undefined && cell.iops !== null && cell.iops > 0)
-                                                            ? ''
-                                                            : 'bg-gray-100 dark:bg-gray-800'
-                                                    }`}
+                                                    className={`border border-gray-300 dark:border-gray-500 p-2 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${
+                                                isFirstRowOfHost ? 'border-t-4 border-t-blue-500 dark:border-t-blue-400' : ''} ${colorClass}`}
                                                     onMouseEnter={(e) => {
                                                         const rect = e.currentTarget.getBoundingClientRect();
                                                         setHoveredCell({
@@ -482,7 +487,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                     onMouseLeave={() => setHoveredCell(null)}
                                                     style={{
                                                         minWidth: '120px',
-                                                        height: '70px'
+                                                        height: '70px',
+                                                        backgroundColor: (cell.iops !== undefined && cell.iops !== null && cell.iops > 0) ? undefined : (actualTheme === 'dark' ? '#374151' : '#f3f4f6')
                                                     }}
                                                 >
                                                     {/* Always show bars if cell has any data (IOPS can be 0 but still show configuration exists) */}
@@ -493,14 +499,14 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                 <span className="text-xs text-blue-600 dark:text-blue-300 font-medium w-8">IOPS</span>
                                                                 <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                                                                     <div
-                                                                        className="bg-blue-500 dark:bg-blue-400 h-2 rounded-full"
+                                                                        className="bg-blue-500 dark:bg-blue-500/40 h-2 rounded-full"
                                                                         style={{
                                                                             width: cell.iops > 0 ? `${Math.max(5, cell.normalizedIops)}%` : '3px',
                                                                             minWidth: cell.iops > 0 ? 'auto' : '3px'
                                                                         }}
                                                                     ></div>
                                                                 </div>
-                                                                <span className="text-xs text-gray-700 dark:text-gray-300 w-10 text-right">
+                                                                <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
                                                                     {cell.normalizedIops.toFixed(0)}%
                                                                 </span>
                                                             </div>
@@ -511,21 +517,21 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                     <span className="text-xs text-green-600 dark:text-green-300 font-medium w-8">BW</span>
                                                                     <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                                                                         <div
-                                                                            className="bg-green-500 dark:bg-green-400 h-2 rounded-full"
+                                                                            className="bg-green-500 dark:bg-green-500/40 h-2 rounded-full"
                                                                             style={{
                                                                                 width: cell.bandwidth > 0 ? `${Math.max(5, (cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100)}%` : '3px',
                                                                                 minWidth: cell.bandwidth > 0 ? 'auto' : '3px'
                                                                             }}
                                                                         ></div>
                                                                     </div>
-                                                                    <span className="text-xs text-gray-700 dark:text-gray-300 w-10 text-right">
+                                                                    <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
                                                                         {((cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100).toFixed(0)}%
                                                                     </span>
                                                                 </div>
                                                             ) : (
                                                                 <div className="flex items-center gap-1">
                                                                     <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-8">BW</span>
-                                                                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+                                                                    <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
                                                                         <div className="bg-gray-300 dark:bg-gray-600 h-2 rounded-full" style={{ width: '0%' }}></div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-400 dark:text-gray-500 w-10 text-right">—</span>
@@ -538,21 +544,21 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                     <span className="text-xs text-red-600 dark:text-red-300 font-medium w-8">RESP</span>
                                                                     <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                                                                         <div
-                                                                            className="bg-red-500 dark:bg-red-400 h-2 rounded-full"
+                                                                            className="bg-red-500 dark:bg-red-500/40 h-2 rounded-full"
                                                                             style={{
                                                                                 width: `${Math.min(100, Math.max(5, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100))}%`,
                                                                                 minWidth: 'auto'
                                                                             }}
                                                                         ></div>
                                                                     </div>
-                                                                    <span className="text-xs text-gray-700 dark:text-gray-300 w-10 text-right">
+                                                                    <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
                                                                         {Math.min(100, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100).toFixed(0)}%
                                                                     </span>
                                                                 </div>
                                                             ) : (
                                                                 <div className="flex items-center gap-1">
                                                                     <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-8">RESP</span>
-                                                                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+                                                                    <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
                                                                         <div className="bg-gray-300 dark:bg-gray-600 h-2 rounded-full" style={{ width: '0%' }}></div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-400 dark:text-gray-500 w-10 text-right">—</span>
