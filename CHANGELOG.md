@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Authentication API calls from nested routes (e.g., /host/redshark) by using absolute paths instead of relative paths
+
 ### Added
 - Comprehensive VITE_API_URL documentation in AGENTS.md
 - Performance Fingerprint Heatmap visualization with comprehensive data analysis features

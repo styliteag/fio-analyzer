@@ -54,7 +54,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
  * Get all users
  */
 export async function getUsers(): Promise<User[]> {
-	const apiUrl = import.meta.env.VITE_API_URL || '.';
+	const apiUrl = import.meta.env.VITE_API_URL || "";
 	const response = await fetch(`${apiUrl}/api/users/`, {
 		headers: getAuthHeaders(),
 	});
@@ -65,7 +65,7 @@ export async function getUsers(): Promise<User[]> {
  * Get current user information
  */
 export async function getCurrentUser(): Promise<CurrentUser> {
-	const apiUrl = import.meta.env.VITE_API_URL || '.';
+	const apiUrl = import.meta.env.VITE_API_URL || "";
 	const response = await fetch(`${apiUrl}/api/users/me`, {
 		headers: getAuthHeaders(),
 	});
@@ -76,7 +76,7 @@ export async function getCurrentUser(): Promise<CurrentUser> {
  * Get user by username
  */
 export async function getUser(username: string): Promise<User> {
-	const apiUrl = import.meta.env.VITE_API_URL || '.';
+	const apiUrl = import.meta.env.VITE_API_URL || "";
 	const response = await fetch(`${apiUrl}/api/users/${encodeURIComponent(username)}`, {
 		headers: getAuthHeaders(),
 	});
@@ -87,7 +87,7 @@ export async function getUser(username: string): Promise<User> {
  * Create a new user
  */
 export async function createUser(userData: UserCreate): Promise<User> {
-	const apiUrl = import.meta.env.VITE_API_URL || '.';
+	const apiUrl = import.meta.env.VITE_API_URL || "";
 	const response = await fetch(`${apiUrl}/api/users/`, {
 		method: 'POST',
 		headers: getAuthHeaders(),
@@ -100,7 +100,7 @@ export async function createUser(userData: UserCreate): Promise<User> {
  * Update an existing user
  */
 export async function updateUser(username: string, userData: UserUpdate): Promise<User> {
-	const apiUrl = import.meta.env.VITE_API_URL || '.';
+	const apiUrl = import.meta.env.VITE_API_URL || "";
 	const response = await fetch(`${apiUrl}/api/users/${encodeURIComponent(username)}`, {
 		method: 'PUT',
 		headers: getAuthHeaders(),
@@ -113,7 +113,7 @@ export async function updateUser(username: string, userData: UserUpdate): Promis
  * Delete a user
  */
 export async function deleteUser(username: string): Promise<{ message: string }> {
-	const apiUrl = import.meta.env.VITE_API_URL || '.';
+	const apiUrl = import.meta.env.VITE_API_URL || "";
 	const response = await fetch(`${apiUrl}/api/users/${encodeURIComponent(username)}`, {
 		method: 'DELETE',
 		headers: getAuthHeaders(),

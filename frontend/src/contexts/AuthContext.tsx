@@ -44,7 +44,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 	const verifyCredentials = useCallback(async (credentials: string): Promise<{valid: boolean, role?: 'admin' | 'uploader'}> => {
 		try {
 			const response = await fetch(
-				`${import.meta.env.VITE_API_URL || "."}/api/users/me`,
+				`${import.meta.env.VITE_API_URL || ""}/api/users/me`,
 				{
 					headers: {
 						Authorization: `Basic ${credentials}`,
