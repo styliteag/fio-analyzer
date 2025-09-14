@@ -105,7 +105,7 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
     console.log('=== END DRIVE GROUPING DEBUG ===');
 
     // Analyze each drive
-    const drives: DriveAnalysis[] = Object.entries(driveGroups).map(([driveKey, runs]) => {
+    const drives: DriveAnalysis[] = Object.entries(driveGroups).map(([, runs]) => {
         const configurations: TestConfiguration[] = runs.map((run: TestRun) => ({
             block_size: String(run.block_size),
             read_write_pattern: run.read_write_pattern,

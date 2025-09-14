@@ -1,22 +1,17 @@
 import React from 'react';
-import { HardDrive, BarChart3, BarChart, Radar, TrendingUp, Activity, Box, Zap, Grid3X3 } from 'lucide-react';
+import { HardDrive, BarChart, Radar, TrendingUp, Activity, Box, Zap, Grid3X3 } from 'lucide-react';
 import { Button } from '../ui';
 
-export type VisualizationView = 'overview' | 'matrix' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | '3d' | 'heatmap';
-export type MatrixMetric = 'iops' | 'avg_latency' | 'bandwidth';
+export type VisualizationView = 'overview' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | '3d' | 'heatmap';
 
 export interface HostVisualizationControlsProps {
     activeView: VisualizationView;
-    matrixMetric: MatrixMetric;
     onViewChange: (view: VisualizationView) => void;
-    onMatrixMetricChange: (metric: MatrixMetric) => void;
 }
 
 const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
     activeView,
-    matrixMetric,
-    onViewChange,
-    onMatrixMetricChange
+    onViewChange
 }) => {
     return (
         <div className="mb-8">
@@ -37,14 +32,6 @@ const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
                 >
                     <Grid3X3 className="w-4 h-4" />
                     Performance Heatmap
-                </Button>
-                <Button
-                    variant={activeView === 'matrix' ? 'primary' : 'outline'}
-                    onClick={() => onViewChange('matrix')}
-                    className="flex items-center gap-2"
-                >
-                    <BarChart3 className="w-4 h-4" />
-                    Performance Matrix
                 </Button>
                 <Button
                     variant={activeView === 'radar' ? 'primary' : 'outline'}
@@ -104,33 +91,6 @@ const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
                 </Button>
             </div>
 
-            {/* Matrix Metric Selection */}
-            {activeView === 'matrix' && (
-                <div className="flex gap-2 mb-4">
-                    <span className="text-sm theme-text-secondary self-center">Metric:</span>
-                    <Button
-                        variant={matrixMetric === 'iops' ? 'primary' : 'outline'}
-                        size="sm"
-                        onClick={() => onMatrixMetricChange('iops')}
-                    >
-                        IOPS
-                    </Button>
-                    <Button
-                        variant={matrixMetric === 'avg_latency' ? 'primary' : 'outline'}
-                        size="sm"
-                        onClick={() => onMatrixMetricChange('avg_latency')}
-                    >
-                        Latency
-                    </Button>
-                    <Button
-                        variant={matrixMetric === 'bandwidth' ? 'primary' : 'outline'}
-                        size="sm"
-                        onClick={() => onMatrixMetricChange('bandwidth')}
-                    >
-                        Bandwidth
-                    </Button>
-                </div>
-            )}
         </div>
     );
 };

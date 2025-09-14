@@ -6,10 +6,9 @@ import { useHostData } from '../hooks/useHostData';
 import { useHostFilters } from '../hooks/useHostFilters';
 import HostSelector from '../components/host/HostSelector';
 import HostSummaryCards from '../components/host/HostSummaryCards';
-import HostVisualizationControls, { type VisualizationView, type MatrixMetric } from '../components/host/HostVisualizationControls';
+import HostVisualizationControls, { type VisualizationView } from '../components/host/HostVisualizationControls';
 import HostFiltersSidebar from '../components/host/HostFiltersSidebar';
 import HostOverview from '../components/host/HostOverview';
-import PerformanceMatrix from '../components/host/PerformanceMatrix';
 import DriveRadarChart from '../components/host/DriveRadarChart';
 import PerformanceScatterPlot from '../components/host/PerformanceScatterPlot';
 import ParallelCoordinatesChart from '../components/host/ParallelCoordinatesChart';
@@ -24,7 +23,6 @@ const Host: React.FC = () => {
     
     // Visualization states
     const [activeView, setActiveView] = useState<VisualizationView>('overview');
-    const [matrixMetric, setMatrixMetric] = useState<MatrixMetric>('iops');
 
     // Use custom hooks for data and filters
     const {
@@ -137,9 +135,7 @@ const Host: React.FC = () => {
                         {/* Visualization Controls */}
                         <HostVisualizationControls
                             activeView={activeView}
-                            matrixMetric={matrixMetric}
                             onViewChange={setActiveView}
-                            onMatrixMetricChange={setMatrixMetric}
                         />
 
                         {/* Main Content Area */}
@@ -169,9 +165,6 @@ const Host: React.FC = () => {
                                         <HostOverview filteredDrives={filteredDrives} />
                                     )}
 
-                                    {activeView === 'matrix' && (
-                                        <PerformanceMatrix drives={filteredDrives} metric={matrixMetric} />
-                                    )}
 
                                     {activeView === 'radar' && (
                                         <DriveRadarChart drives={filteredDrives} />

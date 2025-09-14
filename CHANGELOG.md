@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Latency values of 0.00ms were not displaying in Performance Fingerprint Heatmap hover tooltips due to incorrect null coalescing
 - Multi-host filtering issues when selecting 2+ hosts - key mismatch between filter logic and heatmap processing
 - Performance Fingerprint Heatmap dark mode styling issues with borders, backgrounds, and bar colors
+- ESLint warning about unused variable in hostAnalysis.ts
 
 ### Added
 - Comprehensive VITE_API_URL documentation in AGENTS.md
@@ -28,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance Fingerprint Heatmap cell display: larger IOPS numbers with "IOPS:" label, removed redundant debug text for cleaner appearance
 - Performance Fingerprint Heatmap tooltips now display latency in nanoseconds instead of milliseconds for better precision
 - Performance Fingerprint Heatmap includes detailed Responsiveness calculation explanation and actual values
+- Reordered visualization controls: Performance Heatmap now appears second after Overview for better user experience
+
+### Removed
+- Performance Matrix visualization option from host analysis interface
 
 ## [0.5.6] - 2025-09-14
 
