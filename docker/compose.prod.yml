@@ -14,8 +14,6 @@ services:
       - ./data/backend/uploads:/app/uploads
       - ./data/auth/.htpasswd:/app/.htpasswd
       - ./data/auth/.htuploaders:/app/.htuploaders
-    #environment:
-    #  - VITE_API_URL=${EXTERNAL_URL}/api
     networks:
       - fio-network
     restart: unless-stopped

@@ -92,7 +92,8 @@ jobs:
         build-args: |
           VERSION=${{ steps.version.outputs.version }}
           VCS_REF=${{ github.sha }}
-          xxxVITE_API_URL=
+        # The $VITE_API_URL is set to empty string in the Dockerfile
+        # VITE_API_URL=
         tags: |
           styliteag/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}
           ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}

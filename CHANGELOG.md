@@ -7,8 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-
 ### Added
+- Comprehensive VITE_API_URL documentation in AGENTS.md
 
 ## [0.5.6] - 2025-09-14
 

@@ -63,7 +63,38 @@
 ## Docker URLs & Nginx Paths
 - Frontend: http://localhost/ (served by nginx).
 - API base: http://localhost/api/ → proxies to backend `:8000`.
-- Frontend API base config: set `VITE_API_URL="/api"` for Docker builds (Dockerfile passes `ARG VITE_API_URL` → `ENV VITE_API_URL`). For local dev, `.env` may point to `http://localhost:8000`.
+
+## VITE_API_URL Configuration
+
+`VITE_API_URL` is a **build-time environment variable** that configures the API base URL for the frontend application:
+
+### How It Works
+- **Vite Build System**: Variables prefixed with `VITE_` are embedded into the built application at compile time
+- **Client-Side Access**: Available in browser code via `import.meta.env.VITE_API_URL`
+- **Build vs Runtime**: Cannot be changed without rebuilding the application
+
+### Environment Configurations
+
+**Development (Default)**:
+- `VITE_API_URL=""` (empty string)
+- Uses relative URLs like `/api/endpoints`
+- Vite dev server proxies `/api` to `http://localhost:8000`
+
+**Docker Production**:
+- `VITE_API_URL="/api"`
+- Full paths like `/api/endpoints`
+- Nginx proxies `/api` to backend container
+
+**Local Development with .env**:
+- `VITE_API_URL="http://localhost:8000"`
+- Absolute URLs like `http://localhost:8000/api/endpoints`
+- Useful when running frontend separately from backend
+
+### Build Process
+- **GitHub Actions**: Passes `VITE_API_URL=/api` as build argument
+- **Dockerfile**: `ARG VITE_API_URL` → `ENV VITE_API_URL` → embedded in build
+- **Frontend Code**: `const API_BASE_URL = import.meta.env.VITE_API_URL || "";`
+
 - Docs: backend serves `/docs` and `/redoc`. If `/api-docs` returns 404, use `/docs` and `/redoc` or adjust nginx:
   - `location /api-docs { proxy_pass http://localhost:8000/docs; }`
   - `location /api-redoc { proxy_pass http://localhost:8000/redoc; }`
