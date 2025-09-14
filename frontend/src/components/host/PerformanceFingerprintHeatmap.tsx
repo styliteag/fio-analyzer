@@ -399,23 +399,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             </div>
 
             <div className="overflow-x-auto">
-                <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900 rounded">
-                    <p className="text-sm theme-text-primary">
-                        Debug: Found {allHostnames.length} hosts, {allPatterns.length} patterns, {allBlockSizes.length} block sizes
-                    </p>
-                    <p className="text-xs theme-text-secondary">
-                        Hostnames: {allHostnames.join(', ')}
-                    </p>
-                    <p className="text-xs theme-text-secondary">
-                        Patterns: {allPatterns.join(', ')}
-                    </p>
-                    <p className="text-xs theme-text-secondary">
-                        Block sizes: {allBlockSizes.join(', ')}
-                    </p>
-                    <p className="text-xs theme-text-secondary">
-                        Theme: {actualTheme}, Table rows: {rowDefinitions.length}, Total cells: {rowDefinitions.length * allBlockSizes.length}
-                    </p>
-                </div>
                 <div className="inline-block min-w-full">
                     <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-600" style={{ fontSize: '12px' }}>
                         <thead>
