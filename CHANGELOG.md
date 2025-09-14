@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Authentication API calls from nested routes (e.g., /host/redshark) by using absolute paths instead of relative paths
 - Latency values of 0.00ms were not displaying in Performance Fingerprint Heatmap hover tooltips due to incorrect null coalescing
+- Empty Performance Fingerprint Heatmap cells now show bar graphs even when IOPS is 0, with placeholder bars for missing bandwidth/latency data
 
 ### Added
 - Comprehensive VITE_API_URL documentation in AGENTS.md
