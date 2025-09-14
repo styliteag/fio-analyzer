@@ -24,6 +24,12 @@
 - TypeScript/React: ESLint (see `eslint.config.js`) and Prettier via pre-commit; components `PascalCase` (e.g., `HostSelector.tsx`), hooks `camelCase` (e.g., `useChartColors.ts`).
 - Run `pre-commit install` once; commits should pass hooks.
 
+#### CHANGELOG Maintenance
+⚠️ **IMPORTANT**: Always update `CHANGELOG.md` when making commits!
+- Add new changes under `[Unreleased]` section before committing
+- Move to new version section when releasing
+- Use semantic versioning format
+
 ## Testing Guidelines
 - Backend: `pytest` available via `uv run pytest`. Quick smoke: `cd backend && make check` or `python3 test_api.py`.
 - Test names: `test_*.py` in `backend/`. Add focused unit tests for routers and utils.

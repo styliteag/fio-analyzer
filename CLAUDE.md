@@ -17,6 +17,13 @@ The backend has been migrated from Node.js/Express to Python FastAPI for improve
 
 ## Key Commands
 
+#### CHANGELOG Maintenance
+⚠️ **IMPORTANT**: Always update `CHANGELOG.md` when making commits!
+- Add new changes under `[Unreleased]` section before committing
+- Move to new version section when releasing
+- Use semantic versioning format
+
+
 ### Development
 ```bash
 # Frontend development (in frontend/ directory)
