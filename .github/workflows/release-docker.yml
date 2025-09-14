@@ -92,7 +92,7 @@ jobs:
         build-args: |
           VERSION=${{ steps.version.outputs.version }}
           VCS_REF=${{ github.sha }}
-          VITE_API_URL=/
+          xxxVITE_API_URL=
         tags: |
           styliteag/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}
           ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}

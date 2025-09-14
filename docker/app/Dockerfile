@@ -70,6 +70,7 @@ RUN mkdir -p /var/cache/nginx && \
     chmod +x /app/health-check.sh && \
     echo '#!/bin/sh' > /app/start.sh && \
     echo 'echo "Starting FIO Analyzer"' >> /app/start.sh && \
+    echo 'echo "VITE_API_URL: $VITE_API_URL"' >> /app/start.sh && \
     echo 'echo "Version: $(cat /app/VERSION)"' >> /app/start.sh && \
     echo 'nginx -g "daemon off;" &' >> /app/start.sh && \
     echo './.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000' >> /app/start.sh && \
