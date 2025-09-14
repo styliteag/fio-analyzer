@@ -18,6 +18,7 @@ import FacetScatterGrid from '../components/host/FacetScatterGrid';
 import StackedBarChart from '../components/host/StackedBarChart';
 import Performance3DChart from '../components/host/Performance3DChart';
 import PerformanceFingerprintHeatmap from '../components/host/PerformanceFingerprintHeatmap';
+import BlockSizeEfficiencyMatrix from '../components/host/BlockSizeEfficiencyMatrix';
 
 const Host: React.FC = () => {
     const { hostname } = useParams<{ hostname: string }>();
@@ -203,6 +204,10 @@ const Host: React.FC = () => {
 
                                     {activeView === 'heatmap' && (
                                         <PerformanceFingerprintHeatmap drives={filteredDrives} />
+                                    )}
+
+                                    {activeView === 'efficiency' && (
+                                        <BlockSizeEfficiencyMatrix drives={filteredDrives} />
                                     )}
                                 </Card>
                             </div>
