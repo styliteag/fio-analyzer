@@ -217,6 +217,13 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         console.log(`  Responsiveness: ${maxResponsiveness}`);
     });
 
+    console.log('=== MAX VALUES SUMMARY ===');
+    console.log('hostMaxIOPS keys:', Array.from(hostMaxIOPS.keys()));
+    console.log('hostMaxBandwidth keys:', Array.from(hostMaxBandwidth.keys()));
+    console.log('hostMaxResponsiveness keys:', Array.from(hostMaxResponsiveness.keys()));
+    console.log('All row definition hostKeys:', rowDefinitions.map(rd => rd.hostKey));
+    console.log('=== END MAX VALUES SUMMARY ===');
+
     console.log('Host max IOPS:', Object.fromEntries(hostMaxIOPS));
     console.log('All block sizes:', allBlockSizes);
     console.log('All hostnames:', allHostnames);
@@ -250,9 +257,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             };
         });
     });
-
-    console.log(`Initialized heatmap with ${rowDefinitions.length} rows and ${allBlockSizes.length} columns`);
-    console.log('Sample initialized cell:', heatmapData[0]?.[0]);
 
     // Fill with actual data
     drives.forEach((drive, driveIndex) => {
@@ -340,6 +344,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             const normalizedIops = (iopsValue / maxIOPSForHost) * 100;
 
             console.log(`Processing config for ${hostKey}: pattern=${mappedPattern}, blockSize=${blockSize}, iops=${iopsValue}`);
+            console.log(`  rowIndex=${rowIndex}, colIndex=${colIndex}, rowDef.hostKey=${rowDefinitions[rowIndex]?.hostKey}`);
 
             heatmapData[rowIndex][colIndex] = {
                 iops: iopsValue,
@@ -368,6 +373,16 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     });
 
     console.log('Final heatmap data structure created with', heatmapData.length, 'rows and', heatmapData[0]?.length || 0, 'columns');
+
+    // Debug: Check sample data from different rows
+    console.log('=== SAMPLE HEATMAP DATA ===');
+    for (let i = 0; i < Math.min(5, heatmapData.length); i++) {
+        const sampleCell = heatmapData[i]?.[0];
+        if (sampleCell) {
+            console.log(`Row ${i} (hostKey: ${rowDefinitions[i]?.hostKey}): iops=${sampleCell.iops}, normalized=${sampleCell.normalizedIops}, bandwidth=${sampleCell.bandwidth}, avgLatency=${sampleCell.avgLatency}`);
+        }
+    }
+    console.log('=== END SAMPLE HEATMAP DATA ===');
 
     const getColorForNormalizedIOPS = (normalizedIops: number, isDark: boolean): string => {
         if (normalizedIops === 0) {
@@ -506,15 +521,28 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                             const colorClass = getColorForNormalizedIOPS(cell.normalizedIops, actualTheme === 'dark');
 
             // Debug each cell
+            const maxIOPSForCell = hostMaxIOPS.get(rowDef.hostKey);
+            const maxBandwidthForCell = hostMaxBandwidth.get(rowDef.hostKey);
+            const maxResponsivenessForCell = hostMaxResponsiveness.get(rowDef.hostKey);
+
+            const iopsBarWidth = cell.iops > 0 ? `${Math.max(5, cell.normalizedIops)}%` : '3px';
+            const bandwidthBarWidth = cell.bandwidth !== undefined && cell.bandwidth !== null ?
+                (cell.bandwidth > 0 ? `${Math.max(5, (cell.bandwidth / (maxBandwidthForCell || cell.bandwidth)) * 100)}%` : '3px') : '0%';
+            const respBarWidth = cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ?
+                `${Math.min(100, Math.max(5, (1000 / cell.avgLatency) / (maxResponsivenessForCell || (1000 / cell.avgLatency)) * 100))}%` : '0%';
+
             console.log(`Rendering Cell ${rowDef.hostname}-${rowDef.pattern}-${blockSize}:`, {
-                iops: cell.iops,
-                normalizedIops: cell.normalizedIops,
-                blockSize: cell.blockSize,
-                bandwidth: cell.bandwidth,
-                avgLatency: cell.avgLatency,
-                hasIopsData: cell.iops !== undefined && cell.iops !== null,
-                iopsGreaterThanZero: cell.iops > 0,
-                willShowBars: cell.iops !== undefined && cell.iops !== null
+                hostKey: rowDef.hostKey,
+                maxIOPSForCell,
+                maxBandwidthForCell,
+                maxResponsivenessForCell,
+                cellIOPS: cell.iops,
+                cellNormalizedIOPS: cell.normalizedIops,
+                cellBandwidth: cell.bandwidth,
+                cellAvgLatency: cell.avgLatency,
+                iopsBarWidth,
+                bandwidthBarWidth,
+                respBarWidth
             });
 
                                             return (
@@ -546,7 +574,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                 <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                                     <div
                                                                         className="bg-blue-500 dark:bg-blue-400 h-2 rounded-full"
-                                                                        style={{ width: `${Math.max(0, cell.normalizedIops)}%` }}
+                                                                        style={{
+                                                                            width: cell.iops > 0 ? `${Math.max(5, cell.normalizedIops)}%` : '3px',
+                                                                            minWidth: cell.iops > 0 ? 'auto' : '3px'
+                                                                        }}
                                                                     ></div>
                                                                 </div>
                                                                 <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
@@ -561,7 +592,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                     <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                                         <div
                                                                             className="bg-green-500 dark:bg-green-400 h-2 rounded-full"
-                                                                            style={{ width: `${Math.max(0, (cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100)}%` }}
+                                                                            style={{
+                                                                                width: cell.bandwidth > 0 ? `${Math.max(5, (cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100)}%` : '3px',
+                                                                                minWidth: cell.bandwidth > 0 ? 'auto' : '3px'
+                                                                            }}
                                                                         ></div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
@@ -585,7 +619,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                     <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                                         <div
                                                                             className="bg-red-500 dark:bg-red-400 h-2 rounded-full"
-                                                                            style={{ width: `${Math.min(100, Math.max(0, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100))}%` }}
+                                                                            style={{
+                                                                                width: `${Math.min(100, Math.max(5, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100))}%`,
+                                                                                minWidth: 'auto'
+                                                                            }}
                                                                         ></div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
