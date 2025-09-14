@@ -7,18 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
 ### Added
-- 
 
 ## [0.5.6] - 2025-09-14
 
+### Fixed
+- VITE_API_URL configuration in GitHub Actions Docker build
+
 ### Added
-- 
 
 ## [0.5.5] - 2025-09-14
 
 ### Added
-- 
 
 ## [0.5.4] - 2025-09-14
 
