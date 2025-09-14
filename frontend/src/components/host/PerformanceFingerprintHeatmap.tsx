@@ -260,6 +260,14 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             console.log(`block_size:`, config.block_size);
             console.log(`read_write_pattern:`, config.read_write_pattern);
 
+            // Check latency fields
+            const latencyFields = ['avg_latency', 'p95_latency', 'p99_latency', 'latency', 'Latency'];
+            const foundLatencyFields = latencyFields.filter(field => Object.prototype.hasOwnProperty.call(config, field));
+            console.log(`Available latency fields:`, foundLatencyFields);
+            foundLatencyFields.forEach(field => {
+                console.log(`${field}:`, (config as any)[field], 'Type:', typeof (config as any)[field]);
+            });
+
             // Try to parse IOPS as number if it's a string
             let iopsValue = config.iops;
             if (typeof iopsValue === 'string') {
@@ -316,11 +324,18 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 driveModel: drive.drive_model,
                 queueDepth: config.queue_depth,
                 timestamp: config.timestamp,
-                avgLatency: config.avg_latency || undefined,
-                bandwidth: config.bandwidth || undefined,
-                p95Latency: config.p95_latency || undefined,
-                p99Latency: config.p99_latency || undefined,
+                avgLatency: config.avg_latency !== null && config.avg_latency !== undefined ? config.avg_latency : undefined,
+                bandwidth: config.bandwidth !== null && config.bandwidth !== undefined ? config.bandwidth : undefined,
+                p95Latency: config.p95_latency !== null && config.p95_latency !== undefined ? config.p95_latency : undefined,
+                p99Latency: config.p99_latency !== null && config.p99_latency !== undefined ? config.p99_latency : undefined,
             };
+
+            // Debug latency values being assigned
+            console.log(`Assigned latency values for ${hostKey}-${mappedPattern}-${blockSize}:`);
+            console.log(`  avgLatency:`, config.avg_latency, 'Type:', typeof config.avg_latency);
+            console.log(`  p95Latency:`, config.p95_latency, 'Type:', typeof config.p95_latency);
+            console.log(`  p99Latency:`, config.p99_latency, 'Type:', typeof config.p99_latency);
+            console.log(`  Final cell avgLatency:`, config.avg_latency !== null && config.avg_latency !== undefined ? config.avg_latency : undefined);
 
             console.log(`Updated cell [${rowIndex}][${colIndex}]:`, hostKey, mappedPattern, blockSize, 'IOPS:', iopsValue, 'Max IOPS:', maxIOPSForHost);
         });
