@@ -75,8 +75,14 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
                 console.log(`Including drive (no filters): hostname=${drive.hostname}, protocol=${drive.protocol}, drive_model=${drive.drive_model}`);
                 return true;
             }
-            const driveCombo = `${drive.hostname} - ${drive.protocol} - ${drive.drive_model}`;
-            const included = selectedHostDiskCombinations.includes(driveCombo);
+            // Use the same key format as the heatmap component: hostname-protocol-driveModel-driveType-driveIndex
+            // Since we don't have driveIndex here, we'll match by hostname-protocol-driveModel-driveType pattern
+            const included = selectedHostDiskCombinations.some(combo => {
+                const [comboHostname, comboProtocol, comboDriveModel] = combo.split(' - ');
+                return drive.hostname === comboHostname &&
+                       drive.protocol === comboProtocol &&
+                       drive.drive_model === comboDriveModel;
+            });
             console.log(`Drive ${drive.hostname}-${drive.protocol}-${drive.drive_model}: ${included ? 'INCLUDED' : 'FILTERED OUT'}`);
             return included;
         }).map(drive => ({

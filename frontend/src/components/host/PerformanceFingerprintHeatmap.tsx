@@ -25,48 +25,20 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     const { actualTheme } = useTheme();
     const [hoveredCell, setHoveredCell] = React.useState<{ cell: HeatmapCell; x: number; y: number } | null>(null);
 
-    // Quick debug check
+    // Debug input data
     console.log('=== HEATMAP INPUT DEBUG ===');
     console.log('Heatmap received drives count:', drives?.length || 0);
     if (drives && drives.length > 0) {
         console.log('Hostnames in received drives:', [...new Set(drives.map(d => d.hostname))]);
-        console.log('Protocols in received drives:', [...new Set(drives.map(d => d.protocol))]);
-        console.log('Drive models in received drives:', [...new Set(drives.map(d => d.drive_model))]);
         console.log('Total configurations across all drives:', drives.reduce((total, drive) => total + drive.configurations.length, 0));
-
-        // List all drives with their details
-        drives.forEach((drive, index) => {
-            console.log(`Drive ${index}: hostname=${drive.hostname}, protocol=${drive.protocol}, drive_model=${drive.drive_model}, drive_type=${drive.drive_type}, configs=${drive.configurations?.length || 0}`);
-        });
-
-        if (drives[0].configurations && drives[0].configurations.length > 0) {
-            const sampleConfig = drives[0].configurations[0];
-            console.log('Sample config IOPS:', sampleConfig?.iops);
-            console.log('Sample config block_size:', sampleConfig?.block_size);
-            console.log('Sample config pattern:', sampleConfig?.read_write_pattern);
-        }
-    } else {
-        console.log('No drives received!');
     }
     console.log('=== END HEATMAP INPUT DEBUG ===');
 
     // Debug logging
     React.useEffect(() => {
-        console.log('Heatmap received drives:', drives);
-        console.log('Number of drives:', drives?.length || 0);
+        console.log('Heatmap received drives count:', drives?.length || 0);
         if (drives && drives.length > 0) {
-            console.log('First drive structure:', drives[0]);
-        console.log('First drive configurations count:', drives[0].configurations?.length || 0);
-        if (drives[0].configurations && drives[0].configurations.length > 0) {
-            console.log('First drive configurations:', drives[0].configurations);
-            console.log('First config sample:', drives[0].configurations[0]);
-            console.log('First config keys:', Object.keys(drives[0].configurations[0]));
-            console.log('First config iops:', drives[0].configurations[0].iops);
-            console.log('First config iops type:', typeof drives[0].configurations[0].iops);
-        }
             console.log('Available hostnames:', [...new Set(drives.map(d => d.hostname))]);
-            console.log('Available block sizes:', [...new Set(drives.flatMap(d => d.configurations.map(c => c.block_size)))]);
-            console.log('Available patterns:', [...new Set(drives.flatMap(d => d.configurations.map(c => c.read_write_pattern)))]);
         }
     }, [drives]);
 
@@ -123,23 +95,19 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     console.log('=== ROW DEFINITIONS DEBUG ===');
     drivesByHostname.forEach((hostDrives, hostname) => {
         console.log(`Host: ${hostname}, Drive count: ${hostDrives.length}`);
-        hostDrives.forEach((drive, index) => {
-            console.log(`  Drive ${index}: protocol=${drive.protocol}, drive_model=${drive.drive_model}, drive_type=${drive.drive_type}, configurations=${drive.configurations?.length || 0}`);
-            console.log(`    Full drive object:`, drive);
-        });
     });
 
     // For each hostname, create separate sections for each unique protocol-driveModel-driveType combination
     const processedKeys = new Set<string>();
     drivesByHostname.forEach((hostDrives, hostname) => {
-        hostDrives.forEach((drive, driveIndex) => {
+        hostDrives.forEach((drive) => {
             const driveModel = drive.drive_model || '';
             const protocol = drive.protocol || 'unknown';
             const driveType = drive.drive_type || '';
-            const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}-${driveIndex}`; // Include driveIndex to differentiate identical combinations
+            const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
 
             // For debugging, show what we're processing
-            console.log(`Processing drive ${driveIndex}: ${hostKey}`);
+            console.log(`Processing drive: ${hostKey}`);
 
             // Only skip truly identical drives (same hostname, protocol, driveModel, driveType, and configurations)
             const isDuplicate = processedKeys.has(hostKey) && drive.configurations?.length === 0;
@@ -174,12 +142,12 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     const hostMaxResponsiveness = new Map<string, number>();
     const processedHostKeys = new Set<string>();
 
-    drives.forEach((drive, driveIndex) => {
+    drives.forEach((drive) => {
         const hostname = drive.hostname;
         const driveModel = drive.drive_model || '';
         const protocol = drive.protocol || 'unknown';
         const driveType = drive.drive_type || '';
-        const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}-${driveIndex}`;
+        const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
 
         // Skip if we've already processed this combination
         if (processedHostKeys.has(hostKey)) {
@@ -271,48 +239,19 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             .map(config => config.iops)
             .filter(iops => iops !== null && iops !== undefined);
 
-        console.log('All IOPS values in drive:', allIOPSValues);
-        console.log('Non-zero IOPS values:', allIOPSValues.filter(iops => iops > 0));
+        console.log(`Drive ${hostname}: ${allIOPSValues.length} total configs, ${allIOPSValues.filter(iops => iops > 0).length} with IOPS > 0`);
 
         drive.configurations.forEach((config, index) => {
-            console.log(`=== Configuration ${index} ===`);
-            console.log('Full config object:', JSON.stringify(config, null, 2));
-
-            // Check all possible IOPS field names
-            const possibleIOPSFields = ['iops', 'IOPS', 'iops_value', 'IOPS_value'];
-            const foundFields = possibleIOPSFields.filter(field => Object.prototype.hasOwnProperty.call(config, field));
-
-            console.log(`Available IOPS fields:`, foundFields);
-            foundFields.forEach(field => {
-                console.log(`${field}:`, (config as any)[field], 'Type:', typeof (config as any)[field]);
-            });
-
-            console.log(`block_size:`, config.block_size);
-            console.log(`read_write_pattern:`, config.read_write_pattern);
-
-            // Check latency fields
-            const latencyFields = ['avg_latency', 'p95_latency', 'p99_latency', 'latency', 'Latency'];
-            const foundLatencyFields = latencyFields.filter(field => Object.prototype.hasOwnProperty.call(config, field));
-            console.log(`Available latency fields:`, foundLatencyFields);
-            foundLatencyFields.forEach(field => {
-                console.log(`${field}:`, (config as any)[field], 'Type:', typeof (config as any)[field]);
-            });
-
             // Try to parse IOPS as number if it's a string
             let iopsValue = config.iops;
             if (typeof iopsValue === 'string') {
                 iopsValue = parseFloat(iopsValue);
-                console.log(`Parsed IOPS from string:`, iopsValue);
             }
-
-            console.log(`Final IOPS value:`, iopsValue, 'Type:', typeof iopsValue);
 
             if (!iopsValue || iopsValue <= 0) {
-                console.log('❌ Skipping config - invalid IOPS:', iopsValue);
+                console.log(`❌ Config ${index}: invalid IOPS:`, iopsValue);
                 return;
             }
-
-            console.log('✅ Using IOPS value:', iopsValue);
 
             // Use the mapped pattern for row lookup
             const mappedPattern = patternMapping[config.read_write_pattern] || config.read_write_pattern;
@@ -320,9 +259,9 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             const driveModel = drive.drive_model || '';
             const protocol = drive.protocol || 'unknown';
             const driveType = drive.drive_type || '';
-            const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}-${driveIndex}`;
+            const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
 
-            // Find the row for this hostname-protocol-driveModel-driveType-driveIndex + mapped pattern combination
+            // Find the row for this hostname-protocol-driveModel-driveType + mapped pattern combination
             const rowIndex = rowDefinitions.findIndex(row =>
                 row.hostKey === hostKey && row.pattern === mappedPattern
             );
@@ -361,12 +300,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 p99Latency: config.p99_latency !== null && config.p99_latency !== undefined ? config.p99_latency : undefined,
             };
 
-            // Debug latency values being assigned
-            console.log(`Assigned latency values for ${hostKey}-${mappedPattern}-${blockSize}:`);
-            console.log(`  avgLatency:`, config.avg_latency, 'Type:', typeof config.avg_latency);
-            console.log(`  p95Latency:`, config.p95_latency, 'Type:', typeof config.p95_latency);
-            console.log(`  p99Latency:`, config.p99_latency, 'Type:', typeof config.p99_latency);
-            console.log(`  Final cell avgLatency:`, config.avg_latency !== null && config.avg_latency !== undefined ? config.avg_latency : undefined);
+            // Debug latency assignment for troubleshooting
+            if (config.avg_latency !== null && config.avg_latency !== undefined) {
+                console.log(`Latency for ${hostKey}-${mappedPattern}-${blockSize}: ${config.avg_latency}`);
+            }
 
             console.log(`Updated cell [${rowIndex}][${colIndex}]:`, hostKey, mappedPattern, blockSize, 'IOPS:', iopsValue, 'Max IOPS:', maxIOPSForHost);
         });
@@ -520,30 +457,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                             const cell = heatmapData[rowIndex][blockIndex];
                                             const colorClass = getColorForNormalizedIOPS(cell.normalizedIops, actualTheme === 'dark');
 
-            // Debug each cell
-            const maxIOPSForCell = hostMaxIOPS.get(rowDef.hostKey);
-            const maxBandwidthForCell = hostMaxBandwidth.get(rowDef.hostKey);
-            const maxResponsivenessForCell = hostMaxResponsiveness.get(rowDef.hostKey);
-
-            const iopsBarWidth = cell.iops > 0 ? `${Math.max(5, cell.normalizedIops)}%` : '3px';
-            const bandwidthBarWidth = cell.bandwidth !== undefined && cell.bandwidth !== null ?
-                (cell.bandwidth > 0 ? `${Math.max(5, (cell.bandwidth / (maxBandwidthForCell || cell.bandwidth)) * 100)}%` : '3px') : '0%';
-            const respBarWidth = cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ?
-                `${Math.min(100, Math.max(5, (1000 / cell.avgLatency) / (maxResponsivenessForCell || (1000 / cell.avgLatency)) * 100))}%` : '0%';
-
-            console.log(`Rendering Cell ${rowDef.hostname}-${rowDef.pattern}-${blockSize}:`, {
-                hostKey: rowDef.hostKey,
-                maxIOPSForCell,
-                maxBandwidthForCell,
-                maxResponsivenessForCell,
-                cellIOPS: cell.iops,
-                cellNormalizedIOPS: cell.normalizedIops,
-                cellBandwidth: cell.bandwidth,
-                cellAvgLatency: cell.avgLatency,
-                iopsBarWidth,
-                bandwidthBarWidth,
-                respBarWidth
-            });
+            // Debug cell rendering for troubleshooting
+            if (cell.iops > 0) {
+                console.log(`Cell ${rowDef.hostname}-${rowDef.pattern}-${blockSize}: IOPS=${cell.iops}, BW=${cell.bandwidth}, Latency=${cell.avgLatency}`);
+            }
 
                                             return (
                                                 <td
