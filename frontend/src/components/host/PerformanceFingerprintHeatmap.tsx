@@ -243,9 +243,16 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 driveModel: rowDef.driveModel,
                 queueDepth: 0,
                 timestamp: '',
+                avgLatency: undefined,
+                bandwidth: undefined,
+                p95Latency: undefined,
+                p99Latency: undefined,
             };
         });
     });
+
+    console.log(`Initialized heatmap with ${rowDefinitions.length} rows and ${allBlockSizes.length} columns`);
+    console.log('Sample initialized cell:', heatmapData[0]?.[0]);
 
     // Fill with actual data
     drives.forEach((drive, driveIndex) => {
@@ -499,12 +506,15 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                             const colorClass = getColorForNormalizedIOPS(cell.normalizedIops, actualTheme === 'dark');
 
             // Debug each cell
-            console.log(`Cell ${rowDef.hostname}-${rowDef.pattern}-${blockSize}:`, {
+            console.log(`Rendering Cell ${rowDef.hostname}-${rowDef.pattern}-${blockSize}:`, {
                 iops: cell.iops,
                 normalizedIops: cell.normalizedIops,
                 blockSize: cell.blockSize,
-                hasData: cell.iops > 0,
-                configFound: !!cell.iops
+                bandwidth: cell.bandwidth,
+                avgLatency: cell.avgLatency,
+                hasIopsData: cell.iops !== undefined && cell.iops !== null,
+                iopsGreaterThanZero: cell.iops > 0,
+                willShowBars: cell.iops !== undefined && cell.iops !== null
             });
 
                                             return (
@@ -524,18 +534,19 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                     style={{
                                                         minWidth: '120px',
                                                         height: '70px',
-                                                        backgroundColor: cell.iops > 0 ? undefined : '#f3f4f6'
+                                                        backgroundColor: (cell.iops !== undefined && cell.iops !== null && cell.iops > 0) ? undefined : '#f3f4f6'
                                                     }}
                                                 >
-                                                    {cell.iops > 0 ? (
+                                                    {/* Always show bars if cell has any data (IOPS can be 0 but still show configuration exists) */}
+                                                    {cell.iops !== undefined && cell.iops !== null ? (
                                                         <div className="space-y-1">
-                                                            {/* IOPS Bar */}
+                                                            {/* IOPS Bar - Always show, even if 0 */}
                                                             <div className="flex items-center gap-1">
                                                                 <span className="text-xs text-blue-600 dark:text-blue-400 font-medium w-8">IOPS</span>
                                                                 <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                                     <div
                                                                         className="bg-blue-500 dark:bg-blue-400 h-2 rounded-full"
-                                                                        style={{ width: `${cell.normalizedIops}%` }}
+                                                                        style={{ width: `${Math.max(0, cell.normalizedIops)}%` }}
                                                                     ></div>
                                                                 </div>
                                                                 <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
@@ -543,40 +554,56 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                 </span>
                                                             </div>
 
-                                                            {/* Bandwidth Bar */}
-                                                            {cell.bandwidth && (
+                                                            {/* Bandwidth Bar - Show if data exists */}
+                                                            {cell.bandwidth !== undefined && cell.bandwidth !== null ? (
                                                                 <div className="flex items-center gap-1">
                                                                     <span className="text-xs text-green-600 dark:text-green-400 font-medium w-8">BW</span>
                                                                     <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                                         <div
                                                                             className="bg-green-500 dark:bg-green-400 h-2 rounded-full"
-                                                                            style={{ width: `${(cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100}%` }}
+                                                                            style={{ width: `${Math.max(0, (cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100)}%` }}
                                                                         ></div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
-                                                                        {(cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth) * 100).toFixed(0)}%
+                                                                        {((cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100).toFixed(0)}%
                                                                     </span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-8">BW</span>
+                                                                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+                                                                        <div className="bg-gray-300 dark:bg-gray-600 h-2 rounded-full" style={{ width: '0%' }}></div>
+                                                                    </div>
+                                                                    <span className="text-xs text-gray-400 dark:text-gray-500 w-10 text-right">—</span>
                                                                 </div>
                                                             )}
 
-                                                            {/* Latency Bar (1000/Latency for responsiveness) */}
-                                                            {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 && (
+                                                            {/* Latency Bar (1000/Latency for responsiveness) - Show if data exists */}
+                                                            {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? (
                                                                 <div className="flex items-center gap-1">
                                                                     <span className="text-xs text-red-600 dark:text-red-400 font-medium w-8">RESP</span>
                                                                     <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                                                                         <div
                                                                             className="bg-red-500 dark:bg-red-400 h-2 rounded-full"
-                                                                            style={{ width: `${Math.min(100, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100)}%` }}
+                                                                            style={{ width: `${Math.min(100, Math.max(0, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100))}%` }}
                                                                         ></div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">
                                                                         {Math.min(100, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100).toFixed(0)}%
                                                                     </span>
                                                                 </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-8">RESP</span>
+                                                                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+                                                                        <div className="bg-gray-300 dark:bg-gray-600 h-2 rounded-full" style={{ width: '0%' }}></div>
+                                                                    </div>
+                                                                    <span className="text-xs text-gray-400 dark:text-gray-500 w-10 text-right">—</span>
+                                                                </div>
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <div className="text-sm font-bold">—</div>
+                                                        <div className="text-sm font-bold text-gray-400">—</div>
                                                     )}
                                                 </td>
                                             );
