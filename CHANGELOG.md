@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Comprehensive VITE_API_URL documentation in AGENTS.md
+- Performance Fingerprint Heatmap visualization with comprehensive data analysis features
+
+### Enhanced
+- **Performance Fingerprint Heatmap** - Major improvements to data visualization and user experience:
+  - Fixed pattern mapping between API and display formats (randread → random_read, etc.)
+  - Added intelligent IOPS number formatting (624k, 1.5M) for better readability
+  - Implemented proper block size ordering by actual numeric size (1K → 4K → 64K)
+  - Made background colors more subtle with opacity for enhanced readability
+  - Added thick blue borders and highlights for clear hostname separation
+  - Restructured table with separate Host and Pattern columns for better organization
+  - Fixed drive model display to show for all rows of each host
+  - Enhanced Host-Protocol-Disk combination handling to prevent data loss
+  - Improved API data grouping from drive_model-only to protocol+drive_model combinations
+  - Added comprehensive debugging output for data flow visibility
+  - Implemented proper deduplication while preserving distinct combinations
+  - Enhanced IOPS normalization per unique hostname-driveModel combination
 
 ## [0.5.6] - 2025-09-14
 
