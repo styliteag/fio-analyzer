@@ -73,19 +73,11 @@ export const useTimeSeriesChart = ({
                     title: (context) => {
                         // Format the date consistently
                         if (context.length > 0 && context[0].parsed.x) {
-                            // DEBUG: Log what we're receiving in the tooltip
-                            console.log("🐛 [useTimeSeriesChart] Tooltip context[0].parsed.x:", context[0].parsed.x);
-                            console.log("🐛 [useTimeSeriesChart] Tooltip context[0].parsed.x type:", typeof context[0].parsed.x);
-                            
                             const date = new Date(context[0].parsed.x);
-                            console.log("🐛 [useTimeSeriesChart] Tooltip Date object:", date);
-                            console.log("🐛 [useTimeSeriesChart] Tooltip Date.getTime():", date.getTime());
-                            console.log("🐛 [useTimeSeriesChart] Tooltip Date.toISOString():", date.toISOString());
                             
                             const formattedDate = date.toISOString().split('T')[0]; // YYYY-MM-DD
                             const formattedTime = date.toTimeString().split(' ')[0]; // HH:MM:SS
                             const result = `${formattedDate} ${formattedTime}`;
-                            console.log("🐛 [useTimeSeriesChart] Tooltip formatted result:", result);
                             return result;
                         }
                         return '';

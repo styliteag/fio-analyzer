@@ -68,7 +68,6 @@ export default function History() {
 	}, []);
 
 	const load = useCallback(async () => {
-		console.log('🚀 [History] Starting paginated data fetch...');
 
 		const opts: any = {};
 		
@@ -99,7 +98,6 @@ export default function History() {
 			// Do not filter by config on API level; we'll filter client-side to support multi-select
 		}
 
-		console.log('📊 [History] Fetch options:', opts);
 
 		// Use pagination hook to fetch ALL data
 		try {
@@ -112,7 +110,6 @@ export default function History() {
 	// Update local data when pagination hook data changes
 	useEffect(() => {
 		const newData = paginatedData.data;
-		console.log('✅ [History] Received paginated data:', newData.length, 'records');
 		
 		setData(newData);
 		
@@ -141,7 +138,6 @@ export default function History() {
 		
 		// Only auto-refresh if a server is selected to prevent unnecessary API calls
 		if (selectedServerId) {
-			console.log('🔄 [History] Auto-refreshing due to time range change:', days);
 			load();
 		}
 	}, [days, load, selectedServerId, isInitialMount]);

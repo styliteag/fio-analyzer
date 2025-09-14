@@ -25,35 +25,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     const { actualTheme } = useTheme();
     const [hoveredCell, setHoveredCell] = React.useState<{ cell: HeatmapCell; x: number; y: number } | null>(null);
 
-    // Debug input data - verify we're getting filtered data
-    console.log('=== HEATMAP INPUT VERIFICATION ===');
-    console.log('Heatmap received drives count:', drives?.length || 0);
-    if (drives && drives.length > 0) {
-        console.log('Hostnames in received drives:', [...new Set(drives.map(d => d.hostname))]);
-        console.log('Drive models in received drives:', [...new Set(drives.map(d => d.drive_model))]);
-        console.log('Total configurations across all drives:', drives.reduce((total, drive) => total + drive.configurations.length, 0));
 
-        // Log sample configurations to verify filtering
-        console.log('=== SAMPLE CONFIGURATIONS ===');
-        drives.slice(0, 2).forEach((drive, driveIndex) => {
-            console.log(`Drive ${driveIndex}: ${drive.hostname}-${drive.protocol}-${drive.drive_model}`);
-            drive.configurations.slice(0, 3).forEach((config, configIndex) => {
-                console.log(`  Config ${configIndex}: IOPS=${config.iops}, BW=${config.bandwidth}, Latency=${config.avg_latency}`);
-            });
-        });
-        console.log('=== END SAMPLE CONFIGURATIONS ===');
-    } else {
-        console.log('WARNING: No drives received by heatmap!');
-    }
-    console.log('=== END HEATMAP INPUT VERIFICATION ===');
-
-    // Debug logging
-    React.useEffect(() => {
-        console.log('Heatmap received drives count:', drives?.length || 0);
-        if (drives && drives.length > 0) {
-            console.log('Available hostnames:', [...new Set(drives.map(d => d.hostname))]);
-        }
-    }, [drives]);
 
     // Get all unique block sizes and hostnames
     const allBlockSizes = [...new Set(
@@ -105,11 +77,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         drivesByHostname.get(drive.hostname)!.push(drive);
     });
 
-    console.log('=== ROW DEFINITIONS DEBUG ===');
-    drivesByHostname.forEach((hostDrives, hostname) => {
-        console.log(`Host: ${hostname}, Drive count: ${hostDrives.length}`);
-    });
-
     // For each hostname, create separate sections for each unique protocol-driveModel-driveType combination
     const processedKeys = new Set<string>();
     drivesByHostname.forEach((hostDrives, hostname) => {
@@ -119,18 +86,12 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             const driveType = drive.drive_type || '';
             const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
 
-            // For debugging, show what we're processing
-            console.log(`Processing drive: ${hostKey}`);
-
             // Only skip truly identical drives (same hostname, protocol, driveModel, driveType, and configurations)
             const isDuplicate = processedKeys.has(hostKey) && drive.configurations?.length === 0;
             if (isDuplicate) {
-                console.log(`Skipping duplicate hostKey: ${hostKey}`);
                 return;
             }
             processedKeys.add(hostKey);
-
-            console.log(`Creating row definitions for: ${hostKey}`);
 
             allPatterns.forEach(pattern => {
                 rowDefinitions.push({
@@ -144,10 +105,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             });
         });
     });
-
-    console.log(`Total row definitions created: ${rowDefinitions.length}`);
-    console.log('Unique hostKeys:', Array.from(processedKeys));
-    console.log('=== END ROW DEFINITIONS DEBUG ===');
 
     // Calculate maximum values from VISIBLE/FILTERED data for normalization
     // This ensures fair comparison within the current filtered dataset
@@ -175,34 +132,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         });
     });
 
-    console.log('=== VISIBLE DATA MAXIMUMS (for normalization) ===');
-    console.log(`Visible Max IOPS: ${visibleMaxIOPS}`);
-    console.log(`Visible Max Bandwidth: ${visibleMaxBandwidth}`);
-    console.log(`Visible Max Responsiveness: ${visibleMaxResponsiveness}`);
-
-    // Verify calculation by checking the highest values found
-    console.log('=== VERIFICATION: Top values found ===');
-    let topIOPS = 0, topBandwidth = 0, topResponsiveness = 0;
-    drives.forEach(drive => {
-        drive.configurations.forEach(config => {
-            if (config.iops && config.iops > topIOPS) topIOPS = config.iops;
-            if (config.bandwidth && config.bandwidth > topBandwidth) topBandwidth = config.bandwidth;
-            if (config.avg_latency && config.avg_latency > 0) {
-                const resp = 1000 / config.avg_latency;
-                if (resp > topResponsiveness) topResponsiveness = resp;
-            }
-        });
-    });
-    console.log(`Verification - Top IOPS found: ${topIOPS} (should match visibleMaxIOPS: ${visibleMaxIOPS})`);
-    console.log(`Verification - Top Bandwidth found: ${topBandwidth} (should match visibleMaxBandwidth: ${visibleMaxBandwidth})`);
-    console.log(`Verification - Top Responsiveness found: ${topResponsiveness} (should match visibleMaxResponsiveness: ${visibleMaxResponsiveness})`);
-    console.log('=== END VERIFICATION ===');
-    console.log('=== END VISIBLE DATA MAXIMUMS ===');
-
-    console.log('=== NORMALIZATION STRATEGY ===');
-    console.log('Using VISIBLE DATA normalization for fair comparison within filtered results');
-    console.log('This allows users to see relative performance within their current view');
-    console.log('=== END NORMALIZATION STRATEGY ===');
     console.log('All block sizes:', allBlockSizes);
     console.log('All hostnames:', allHostnames);
     console.log('All patterns:', allPatterns);
@@ -237,21 +166,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     });
 
     // Fill with actual data
-    drives.forEach((drive, driveIndex) => {
-        console.log('Processing drive:', drive.hostname, 'index:', driveIndex);
-        console.log('Drive full structure:', drive);
-        console.log('Drive configurations count:', drive.configurations?.length || 0);
-
+    drives.forEach((drive) => {
         const hostname = drive.hostname;
 
-        // First, let's find all non-zero IOPS values to understand the data
-        const allIOPSValues = drive.configurations
-            .map(config => config.iops)
-            .filter(iops => iops !== null && iops !== undefined);
-
-        console.log(`Drive ${hostname}: ${allIOPSValues.length} total configs, ${allIOPSValues.filter(iops => iops > 0).length} with IOPS > 0`);
-
-        drive.configurations.forEach((config, index) => {
+        drive.configurations.forEach((config) => {
             // Try to parse IOPS as number if it's a string
             let iopsValue = config.iops;
             if (typeof iopsValue === 'string') {
@@ -259,7 +177,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             }
 
             if (!iopsValue || iopsValue <= 0) {
-                console.log(`❌ Config ${index}: invalid IOPS:`, iopsValue);
                 return;
             }
 
@@ -291,8 +208,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             // Normalize IOPS against visible data maximum for fair comparison
             const normalizedIops = visibleMaxIOPS > 0 ? (iopsValue / visibleMaxIOPS) * 100 : 0;
 
-            console.log(`Processing config for ${hostKey}: pattern=${mappedPattern}, blockSize=${blockSize}, iops=${iopsValue}`);
-            console.log(`  rowIndex=${rowIndex}, colIndex=${colIndex}, rowDef.hostKey=${rowDefinitions[rowIndex]?.hostKey}`);
 
             heatmapData[rowIndex][colIndex] = {
                 iops: iopsValue,
@@ -309,26 +224,9 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 p99Latency: config.p99_latency !== null && config.p99_latency !== undefined ? config.p99_latency : undefined,
             };
 
-            // Debug latency assignment for troubleshooting
-            if (config.avg_latency !== null && config.avg_latency !== undefined) {
-                console.log(`Latency for ${hostKey}-${mappedPattern}-${blockSize}: ${config.avg_latency}`);
-            }
-
-            console.log(`Updated cell [${rowIndex}][${colIndex}]:`, hostKey, mappedPattern, blockSize, 'IOPS:', iopsValue, 'Normalized:', normalizedIops.toFixed(1) + '%');
         });
     });
 
-    console.log('Final heatmap data structure created with', heatmapData.length, 'rows and', heatmapData[0]?.length || 0, 'columns');
-
-    // Debug: Check sample data from different rows
-    console.log('=== SAMPLE HEATMAP DATA ===');
-    for (let i = 0; i < Math.min(5, heatmapData.length); i++) {
-        const sampleCell = heatmapData[i]?.[0];
-        if (sampleCell) {
-            console.log(`Row ${i} (hostKey: ${rowDefinitions[i]?.hostKey}): iops=${sampleCell.iops}, normalized=${sampleCell.normalizedIops}, bandwidth=${sampleCell.bandwidth}, avgLatency=${sampleCell.avgLatency}`);
-        }
-    }
-    console.log('=== END SAMPLE HEATMAP DATA ===');
 
     const getColorForNormalizedIOPS = (normalizedIops: number, isDark: boolean): string => {
         if (normalizedIops === 0) {
@@ -478,10 +376,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                             const cell = heatmapData[rowIndex][blockIndex];
                                             const colorClass = getColorForNormalizedIOPS(cell.normalizedIops, actualTheme === 'dark');
 
-            // Debug cell rendering for troubleshooting
-            if (cell.iops > 0) {
-                console.log(`Cell ${rowDef.hostname}-${rowDef.pattern}-${blockSize}: IOPS=${cell.iops}, BW=${cell.bandwidth}, Latency=${cell.avgLatency}`);
-            }
 
                                             return (
                                                 <td

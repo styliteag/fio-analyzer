@@ -50,46 +50,13 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
 
     // Filter drives based on selected criteria
     const filteredDrives = useMemo((): any[] => {
-        console.log('=== FILTER DEBUG ===');
-        console.log('selectedHostDiskCombinations:', selectedHostDiskCombinations);
-        console.log('selectedBlockSizes:', selectedBlockSizes);
-        console.log('selectedPatterns:', selectedPatterns);
-        console.log('selectedQueueDepths:', selectedQueueDepths);
-        console.log('selectedNumJobs:', selectedNumJobs);
-
-        // Show what filters are actually active
-        console.log('=== ACTIVE FILTERS SUMMARY ===');
-        console.log(`Host-Disk filters active: ${selectedHostDiskCombinations.length > 0}`);
-        console.log(`Block size filters active: ${selectedBlockSizes.length > 0}`);
-        console.log(`Pattern filters active: ${selectedPatterns.length > 0}`);
-        console.log(`Queue depth filters active: ${selectedQueueDepths.length > 0}`);
-        console.log(`Num jobs filters active: ${selectedNumJobs.length > 0}`);
-        console.log('=== END ACTIVE FILTERS SUMMARY ===');
-
         if (!combinedHostData) {
-            console.log('No combinedHostData available');
             return [];
         }
-
-        console.log('Total drives before filtering:', combinedHostData.drives.length);
-
-        // Debug: show all drives before filtering
-        console.log('=== ALL DRIVES BEFORE FILTERING ===');
-        combinedHostData.drives.forEach((drive, index) => {
-            console.log(`Pre-filter drive ${index}: hostname=${drive.hostname}, protocol=${drive.protocol}, drive_model=${drive.drive_model}, drive_type=${drive.drive_type}, configs=${drive.configurations?.length || 0}`);
-        });
-        console.log('=== END ALL DRIVES BEFORE FILTERING ===');
-
-        // Show available host-disk combinations for debugging
-        const availableCombinations = [...new Set(combinedHostData.drives.map(drive =>
-            `${drive.hostname} - ${drive.protocol} - ${drive.drive_model}`
-        ))];
-        console.log('Available host-disk combinations:', availableCombinations);
 
         const result = combinedHostData.drives.filter(drive => {
             // Filter drives by selected host-disk combinations
             if (selectedHostDiskCombinations.length === 0) {
-                console.log(`Including drive (no filters): hostname=${drive.hostname}, protocol=${drive.protocol}, drive_model=${drive.drive_model}`);
                 return true;
             }
             // Use the same key format as the heatmap component: hostname-protocol-driveModel-driveType-driveIndex
@@ -100,7 +67,6 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
                        drive.protocol === comboProtocol &&
                        drive.drive_model === comboDriveModel;
             });
-            console.log(`Drive ${drive.hostname}-${drive.protocol}-${drive.drive_model}: ${included ? 'INCLUDED' : 'FILTERED OUT'}`);
             return included;
         }).map(drive => ({
             ...drive,
@@ -114,28 +80,6 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
             })
         })).filter(drive => drive.configurations.length > 0);
 
-        // Debug: show final filtered drives
-        result.forEach((drive, index) => {
-            console.log(`Post-filter drive ${index}: hostname=${drive.hostname}, protocol=${drive.protocol}, drive_model=${drive.drive_model}, configs=${drive.configurations?.length || 0}`);
-        });
-
-        console.log('=== FINAL FILTERED RESULT ===');
-        console.log('Filtered drives result:', result.length);
-        console.log('Hostnames in filtered drives:', [...new Set(result.map((d: any) => d.hostname))]);
-        console.log('Drive models in filtered drives:', [...new Set(result.map((d: any) => d.drive_model))]);
-        console.log('Protocols in filtered drives:', [...new Set(result.map((d: any) => d.protocol))]);
-
-        // Show sample configurations from filtered data
-        if (result.length > 0) {
-            console.log('Sample filtered configurations:');
-            result.slice(0, 2).forEach((drive, driveIndex) => {
-                drive.configurations.slice(0, 2).forEach((config, configIndex) => {
-                    console.log(`  Drive ${driveIndex} Config ${configIndex}: IOPS=${config.iops}, BW=${config.bandwidth}, Pattern=${config.read_write_pattern}`);
-                });
-            });
-        }
-        console.log('=== END FINAL FILTERED RESULT ===');
-        console.log('=== END FILTER DEBUG ===');
 
         return result;
     }, [

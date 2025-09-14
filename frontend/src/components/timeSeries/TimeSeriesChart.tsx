@@ -61,18 +61,13 @@ const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
         // Expose for console inspection
         // @ts-ignore
         window.seriesData = seriesData;
-        console.log('🐛 [TimeSeriesChart] seriesData sample', seriesData.slice(0, 2));
         
-        // DEBUG: Log processed chart data
+        // Expose for console inspection in development
         if (processedChartData && processedChartData.datasets.length > 0) {
-            console.log('🐛 [TimeSeriesChart] processedChartData sample:', processedChartData);
-            console.log('🐛 [TimeSeriesChart] First dataset data sample:', processedChartData.datasets[0].data?.slice(0, 3));
-            
             // Check if the data points have the right timestamp format
             const firstDataPoint = processedChartData.datasets[0].data?.[0];
             if (firstDataPoint && typeof firstDataPoint === 'object' && 'x' in firstDataPoint) {
-                console.log('🐛 [TimeSeriesChart] First data point x value:', firstDataPoint.x);
-                console.log('🐛 [TimeSeriesChart] First data point x as Date:', new Date(firstDataPoint.x as string));
+                // Data format validation - ensure timestamps are properly formatted
             }
         }
     }

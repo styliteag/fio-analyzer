@@ -95,12 +95,6 @@ const getTimestamp = (dateString: string): number => {
     if (!timestampCache.has(dateString)) {
         const timestamp = new Date(dateString).getTime();
         
-        // DEBUG: Log timestamp parsing
-        if (import.meta.env.DEV) {
-            console.log("🐛 [timeSeriesHelpers] getTimestamp input:", dateString);
-            console.log("🐛 [timeSeriesHelpers] getTimestamp parsed Date:", new Date(dateString));
-            console.log("🐛 [timeSeriesHelpers] getTimestamp result:", timestamp);
-        }
         
         timestampCache.set(dateString, timestamp);
     }
@@ -132,13 +126,6 @@ export const processMetricData = (
         if (point.metric_type === metricType) {
             const timestamp = getTimestamp(point.timestamp);
             
-            // DEBUG: Log data processing
-            if (import.meta.env.DEV && filteredPoints.length < 3) {
-                console.log("🐛 [processMetricData] Processing point:", point);
-                console.log("🐛 [processMetricData] Point timestamp:", point.timestamp);
-                console.log("🐛 [processMetricData] Processed timestamp:", timestamp);
-                console.log("🐛 [processMetricData] Creating chart point x:", point.timestamp);
-            }
             
             filteredPoints.push({
                 point: { x: point.timestamp, y: point.value },

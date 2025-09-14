@@ -63,21 +63,11 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
     
     const testRuns = response.data;
 
-    // Debug: Show what data we received
-    console.log(`=== API DEBUG for ${hostname} ===`);
-    console.log(`Total test runs received: ${testRuns.length}`);
-    testRuns.forEach((run, index) => {
-        console.log(`Run ${index}: hostname=${run.hostname}, protocol=${run.protocol}, drive_model=${run.drive_model}, drive_type=${run.drive_type}, iops=${run.iops}`);
-    });
-
     // Filter out test runs with null performance data
     // Note: avg_latency is optional since it may not be available for all test data
     const validRuns = testRuns.filter((run: TestRun) =>
         run.iops !== null && run.bandwidth !== null
     );
-
-    console.log(`Valid runs after filtering: ${validRuns.length}`);
-    console.log('=== END API DEBUG ===');
     
     if (validRuns.length === 0) {
         throw new Error(`No valid performance data found for host: ${hostname}`);
@@ -95,14 +85,6 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
         return acc;
     }, {} as Record<string, TestRun[]>);
     
-    // Debug: Show drive grouping results
-    console.log('=== DRIVE GROUPING DEBUG ===');
-    console.log(`Number of drive groups: ${Object.keys(driveGroups).length}`);
-    Object.entries(driveGroups).forEach(([key, runs]) => {
-        console.log(`Group ${key}: ${runs.length} test runs`);
-        console.log(`  Sample run: protocol=${runs[0].protocol}, drive_model=${runs[0].drive_model}, drive_type=${runs[0].drive_type}`);
-    });
-    console.log('=== END DRIVE GROUPING DEBUG ===');
 
     // Analyze each drive
     const drives: DriveAnalysis[] = Object.entries(driveGroups).map(([, runs]) => {

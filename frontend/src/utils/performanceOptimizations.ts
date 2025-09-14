@@ -172,7 +172,7 @@ export const measurePerformance = <T>(
     const duration = performance.now() - start;
     
     if (duration > logThreshold) {
-        console.log(`Performance: ${name} took ${duration.toFixed(2)}ms`);
+        // Performance threshold exceeded - could add logging here if needed
     }
     
     return result;
@@ -182,5 +182,4 @@ export const measurePerformance = <T>(
 export const clearAllCaches = (): void => {
     // This would need to be implemented per memoized function
     // For now, it's a placeholder for potential cache clearing functionality
-    console.log('Cache clearing functionality would be implemented here');
 };

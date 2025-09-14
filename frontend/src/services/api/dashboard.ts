@@ -125,7 +125,6 @@ const getFallbackMetrics = async (recentTestRuns: TestRun[]): Promise<{avgIOPS: 
     try {
         // Get performance data for the most recent test runs (up to 10)
         const testRunIds = recentTestRuns.slice(0, 10).map(run => run.id);
-        console.log('Fetching performance data for fallback metrics, test run IDs:', testRunIds);
         
         const perfResult = await fetchPerformanceData({
             testRunIds: testRunIds,
@@ -133,7 +132,6 @@ const getFallbackMetrics = async (recentTestRuns: TestRun[]): Promise<{avgIOPS: 
         });
         
         if (!perfResult.data || perfResult.data.length === 0) {
-            console.log('No performance data found for fallback');
             return { avgIOPS: 0, avgLatency: 0 };
         }
         
@@ -175,7 +173,6 @@ const getFallbackMetrics = async (recentTestRuns: TestRun[]): Promise<{avgIOPS: 
         const avgIOPS = iopsCount > 0 ? Math.round(totalIOPS / iopsCount) : 0;
         const avgLatency = latencyCount > 0 ? Math.round((totalLatency / latencyCount) * 10) / 10 : 0;
         
-        console.log(`Fallback metrics calculated: avgIOPS=${avgIOPS} (from ${iopsCount} samples), avgLatency=${avgLatency} (from ${latencyCount} samples)`);
         
         return { avgIOPS, avgLatency };
         
@@ -229,18 +226,11 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
         const totalTestRuns = testRuns.length;
         const activeServers = servers.filter(s => s.test_count > 0).length;
         
-        // Debug logging to understand data structure
-        console.log('Latest data sample:', latestData.slice(0, 3));
-        console.log('Latest data length:', latestData.length);
-        if (latestData.length > 0) {
-            console.log('Available metric types:', [...new Set(latestData.map(d => d.metric_type))]);
-        }
         
         // Calculate average IOPS and latency from latest data
         const iopsData = latestData.filter(d => d.metric_type === 'iops' && d.value > 0);
         const latencyData = latestData.filter(d => d.metric_type === 'avg_latency' && d.value > 0);
         
-        console.log('IOPS data points:', iopsData.length, 'Latency data points:', latencyData.length);
         
         let avgIOPS = 0;
         let avgLatency = 0;
