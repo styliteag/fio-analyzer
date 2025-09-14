@@ -10,19 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Authentication API calls from nested routes (e.g., /host/redshark) by using absolute paths instead of relative paths
 - Latency values of 0.00ms were not displaying in Performance Fingerprint Heatmap hover tooltips due to incorrect null coalescing
+- Multi-host filtering issues when selecting 2+ hosts - key mismatch between filter logic and heatmap processing
+- Performance Fingerprint Heatmap dark mode styling issues with borders, backgrounds, and bar colors
 
 ### Added
 - Comprehensive VITE_API_URL documentation in AGENTS.md
 - Performance Fingerprint Heatmap visualization with comprehensive data analysis features
-
-### Enhanced
-- Performance Fingerprint Heatmap cell display: larger IOPS numbers with "IOPS:" label, removed redundant debug text for cleaner appearance
-
-### Added
 - Mini bar graphs in Performance Fingerprint Heatmap cells showing three metrics: IOPS (blue), Bandwidth (green), Responsiveness (1000/Latency, red)
 - Each bar displays normalized performance percentage relative to the host/drive maximum
 - Updated legend with metric color coding and improved layout
 - Enhanced cell tooltips with detailed multi-dimensional performance data
+- IOPS numbers prominently displayed at the top of each heatmap cell with clear labeling
+- Responsiveness values shown in tooltips with "ops/ms" units and calculation explanation
+- User-friendly explanation of how Responsiveness is calculated (1000 ÷ Latency)
+
+### Enhanced
+- Performance Fingerprint Heatmap cell display: larger IOPS numbers with "IOPS:" label, removed redundant debug text for cleaner appearance
+- Performance Fingerprint Heatmap tooltips now display latency in nanoseconds instead of milliseconds for better precision
+- Performance Fingerprint Heatmap includes detailed Responsiveness calculation explanation and actual values
 
 ## [0.5.6] - 2025-09-14
 
