@@ -407,7 +407,7 @@ export const processIOPSLatencyDual = (
     colors: string[],
     options: ProcessorOptions,
 ): ChartData => {
-    return measurePerformance('processIOPSLatencyDual', () => {
+    return measurePerformance(() => {
         const sortedData = applySortingAndGrouping(data, options);
         const { groupBy } = options;
         
@@ -636,7 +636,7 @@ export const processRadarGridData = (
     colors: string[],
     options: ProcessorOptions,
 ): RadarGridData[] => {
-    return measurePerformance('processRadarGridData', () => {
+    return measurePerformance(() => {
         const sortedData = applySortingAndGrouping(data, options);
         
         // Use groupByMap utility for efficient grouping

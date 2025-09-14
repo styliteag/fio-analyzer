@@ -101,7 +101,7 @@ clearAllCaches();
 ```typescript
 import { measurePerformance } from '../utils/performanceOptimizations';
 
-const result = measurePerformance('operationName', () => {
+const result = measurePerformance(() => {
     // Expensive operation
     return processData();
 }, 10); // Log if takes more than 10ms

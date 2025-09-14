@@ -163,7 +163,6 @@ export const getNestedProperty = <T>(
 
 // Performance monitoring helper
 export const measurePerformance = <T>(
-    name: string,
     fn: () => T,
     logThreshold: number = 10 // Log if execution takes more than 10ms
 ): T => {
