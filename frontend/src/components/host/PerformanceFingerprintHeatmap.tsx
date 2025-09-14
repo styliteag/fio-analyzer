@@ -26,13 +26,29 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     const [hoveredCell, setHoveredCell] = React.useState<{ cell: HeatmapCell; x: number; y: number } | null>(null);
 
     // Quick debug check
+    console.log('=== HEATMAP INPUT DEBUG ===');
     console.log('Heatmap received drives count:', drives?.length || 0);
-    if (drives && drives.length > 0 && drives[0].configurations) {
-        const sampleConfig = drives[0].configurations[0];
-        console.log('Sample config IOPS:', sampleConfig?.iops);
-        console.log('Sample config block_size:', sampleConfig?.block_size);
-        console.log('Sample config pattern:', sampleConfig?.read_write_pattern);
+    if (drives && drives.length > 0) {
+        console.log('Hostnames in received drives:', [...new Set(drives.map(d => d.hostname))]);
+        console.log('Protocols in received drives:', [...new Set(drives.map(d => d.protocol))]);
+        console.log('Drive models in received drives:', [...new Set(drives.map(d => d.drive_model))]);
+        console.log('Total configurations across all drives:', drives.reduce((total, drive) => total + drive.configurations.length, 0));
+
+        // List all drives with their details
+        drives.forEach((drive, index) => {
+            console.log(`Drive ${index}: hostname=${drive.hostname}, protocol=${drive.protocol}, drive_model=${drive.drive_model}, drive_type=${drive.drive_type}, configs=${drive.configurations?.length || 0}`);
+        });
+
+        if (drives[0].configurations && drives[0].configurations.length > 0) {
+            const sampleConfig = drives[0].configurations[0];
+            console.log('Sample config IOPS:', sampleConfig?.iops);
+            console.log('Sample config block_size:', sampleConfig?.block_size);
+            console.log('Sample config pattern:', sampleConfig?.read_write_pattern);
+        }
+    } else {
+        console.log('No drives received!');
     }
+    console.log('=== END HEATMAP INPUT DEBUG ===');
 
     // Debug logging
     React.useEffect(() => {
@@ -60,14 +76,17 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             drive.configurations.map(config => config.block_size)
         )
     )].sort((a, b) => {
-        // Custom sort for block sizes (4K, 8K, 16K, 64K, 1M)
-        const order = ['4K', '8K', '16K', '64K', '1M'];
-        const aIndex = order.indexOf(a);
-        const bIndex = order.indexOf(b);
-        if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-        if (aIndex !== -1) return -1;
-        if (bIndex !== -1) return 1;
-        return a.localeCompare(b);
+        // Sort by actual size (convert to bytes for comparison)
+        const parseSize = (size: string): number => {
+            const match = size.match(/^(\d+(?:\.\d+)?)([KMGT]?)$/i);
+            if (!match) return 0;
+            const [, num, unit] = match;
+            const value = parseFloat(num);
+            const multipliers: Record<string, number> = { 'K': 1024, 'M': 1024*1024, 'G': 1024*1024*1024, 'T': 1024*1024*1024*1024 };
+            return value * (multipliers[unit.toUpperCase()] || 1);
+        };
+
+        return parseSize(a) - parseSize(b);
     });
 
     const allHostnames = [...new Set(drives.map(drive => drive.hostname))].sort();
@@ -89,34 +108,94 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     console.log('Raw patterns from data:', rawPatterns);
     console.log('Mapped patterns:', allPatterns);
 
-    // Create row definitions - each row is hostname + pattern
-    const rowDefinitions: { hostname: string; pattern: string; driveModel: string }[] = [];
-    allHostnames.forEach(hostname => {
-        const drive = drives.find(d => d.hostname === hostname);
-        const driveModel = drive?.drive_model || '';
-        allPatterns.forEach(pattern => {
-            rowDefinitions.push({ hostname, pattern, driveModel });
+    // Create row definitions - each row is hostname + protocol + driveModel + pattern
+    const rowDefinitions: { hostname: string; pattern: string; driveModel: string; protocol: string; driveType: string; hostKey: string }[] = [];
+
+    // Group drives by hostname to handle multiple drive models per host
+    const drivesByHostname = new Map<string, typeof drives>();
+    drives.forEach(drive => {
+        if (!drivesByHostname.has(drive.hostname)) {
+            drivesByHostname.set(drive.hostname, []);
+        }
+        drivesByHostname.get(drive.hostname)!.push(drive);
+    });
+
+    console.log('=== ROW DEFINITIONS DEBUG ===');
+    drivesByHostname.forEach((hostDrives, hostname) => {
+        console.log(`Host: ${hostname}, Drive count: ${hostDrives.length}`);
+        hostDrives.forEach((drive, index) => {
+            console.log(`  Drive ${index}: protocol=${drive.protocol}, drive_model=${drive.drive_model}, drive_type=${drive.drive_type}, configurations=${drive.configurations?.length || 0}`);
+            console.log(`    Full drive object:`, drive);
         });
     });
 
-    // Calculate max IOPS for each hostname for normalization
-    const hostMaxIOPS = new Map<string, number>();
+    // For each hostname, create separate sections for each unique protocol-driveModel-driveType combination
+    const processedKeys = new Set<string>();
+    drivesByHostname.forEach((hostDrives, hostname) => {
+        hostDrives.forEach((drive, driveIndex) => {
+            const driveModel = drive.drive_model || '';
+            const protocol = drive.protocol || 'unknown';
+            const driveType = drive.drive_type || '';
+            const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}-${driveIndex}`; // Include driveIndex to differentiate identical combinations
 
-    drives.forEach(drive => {
+            // For debugging, show what we're processing
+            console.log(`Processing drive ${driveIndex}: ${hostKey}`);
+
+            // Only skip truly identical drives (same hostname, protocol, driveModel, driveType, and configurations)
+            const isDuplicate = processedKeys.has(hostKey) && drive.configurations?.length === 0;
+            if (isDuplicate) {
+                console.log(`Skipping duplicate hostKey: ${hostKey}`);
+                return;
+            }
+            processedKeys.add(hostKey);
+
+            console.log(`Creating row definitions for: ${hostKey}`);
+
+            allPatterns.forEach(pattern => {
+                rowDefinitions.push({
+                    hostname,
+                    pattern,
+                    driveModel,
+                    protocol,
+                    driveType,
+                    hostKey
+                });
+            });
+        });
+    });
+
+    console.log(`Total row definitions created: ${rowDefinitions.length}`);
+    console.log('Unique hostKeys:', Array.from(processedKeys));
+    console.log('=== END ROW DEFINITIONS DEBUG ===');
+
+    // Calculate max IOPS for each hostname-driveModel combination for normalization
+    const hostMaxIOPS = new Map<string, number>();
+    const processedHostKeys = new Set<string>();
+
+    drives.forEach((drive, driveIndex) => {
         const hostname = drive.hostname;
+        const driveModel = drive.drive_model || '';
+        const protocol = drive.protocol || 'unknown';
+        const driveType = drive.drive_type || '';
+        const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}-${driveIndex}`;
+
+        // Skip if we've already processed this combination
+        if (processedHostKeys.has(hostKey)) {
+            return;
+        }
+        processedHostKeys.add(hostKey);
+
         let maxIOPS = 0;
 
+        // For each individual drive, calculate its max IOPS
         drive.configurations.forEach(config => {
             if (config.iops && config.iops > maxIOPS) {
                 maxIOPS = config.iops;
             }
         });
 
-        if (hostMaxIOPS.has(hostname)) {
-            hostMaxIOPS.set(hostname, Math.max(hostMaxIOPS.get(hostname)!, maxIOPS));
-        } else {
-            hostMaxIOPS.set(hostname, maxIOPS);
-        }
+        hostMaxIOPS.set(hostKey, maxIOPS);
+        console.log(`Max IOPS for ${hostKey}: ${maxIOPS}`);
     });
 
     console.log('Host max IOPS:', Object.fromEntries(hostMaxIOPS));
@@ -150,13 +229,12 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     });
 
     // Fill with actual data
-    drives.forEach(drive => {
-        console.log('Processing drive:', drive.hostname);
+    drives.forEach((drive, driveIndex) => {
+        console.log('Processing drive:', drive.hostname, 'index:', driveIndex);
         console.log('Drive full structure:', drive);
         console.log('Drive configurations count:', drive.configurations?.length || 0);
 
         const hostname = drive.hostname;
-        const maxIOPS = hostMaxIOPS.get(hostname) || 1;
 
         // First, let's find all non-zero IOPS values to understand the data
         const allIOPSValues = drive.configurations
@@ -201,14 +279,18 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             // Use the mapped pattern for row lookup
             const mappedPattern = patternMapping[config.read_write_pattern] || config.read_write_pattern;
             const blockSize = config.block_size;
+            const driveModel = drive.drive_model || '';
+            const protocol = drive.protocol || 'unknown';
+            const driveType = drive.drive_type || '';
+            const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}-${driveIndex}`;
 
-            // Find the row for this hostname + mapped pattern combination
+            // Find the row for this hostname-protocol-driveModel-driveType-driveIndex + mapped pattern combination
             const rowIndex = rowDefinitions.findIndex(row =>
-                row.hostname === hostname && row.pattern === mappedPattern
+                row.hostKey === hostKey && row.pattern === mappedPattern
             );
 
             if (rowIndex === -1) {
-                console.log('Row not found for:', hostname, mappedPattern, 'original pattern:', config.read_write_pattern);
+                console.log('Row not found for:', hostKey, mappedPattern, 'original pattern:', config.read_write_pattern);
                 return;
             }
 
@@ -219,8 +301,11 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 return;
             }
 
-            // Update the cell
-            const normalizedIops = (iopsValue / maxIOPS) * 100;
+            // Get max IOPS for this specific hostname-driveModel combination
+            const maxIOPSForHost = hostMaxIOPS.get(hostKey) || 1;
+            const normalizedIops = (iopsValue / maxIOPSForHost) * 100;
+
+            console.log(`Processing config for ${hostKey}: pattern=${mappedPattern}, blockSize=${blockSize}, iops=${iopsValue}`);
 
             heatmapData[rowIndex][colIndex] = {
                 iops: iopsValue,
@@ -237,7 +322,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 p99Latency: config.p99_latency || undefined,
             };
 
-            console.log(`Updated cell [${rowIndex}][${colIndex}]:`, hostname, mappedPattern, blockSize, 'IOPS:', iopsValue);
+            console.log(`Updated cell [${rowIndex}][${colIndex}]:`, hostKey, mappedPattern, blockSize, 'IOPS:', iopsValue, 'Max IOPS:', maxIOPSForHost);
         });
     });
 
@@ -245,22 +330,22 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
 
     const getColorForNormalizedIOPS = (normalizedIops: number, isDark: boolean): string => {
         if (normalizedIops === 0) {
-            return isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600';
+            return isDark ? 'bg-gray-700/50 text-gray-300' : 'bg-gray-200/50 text-gray-600';
         }
 
         const intensity = normalizedIops / 100;
 
-        // Simple color mapping using basic Tailwind classes
-        if (intensity > 0.8) return 'bg-green-500 text-white';
-        if (intensity > 0.6) return 'bg-green-400 text-black';
-        if (intensity > 0.4) return 'bg-yellow-400 text-black';
-        if (intensity > 0.2) return 'bg-orange-400 text-black';
-        return 'bg-red-400 text-white';
+        // Subtle color mapping with opacity for better readability
+        if (intensity > 0.8) return 'bg-green-200/70 text-gray-900';
+        if (intensity > 0.6) return 'bg-green-100/60 text-gray-900';
+        if (intensity > 0.4) return 'bg-yellow-100/70 text-gray-900';
+        if (intensity > 0.2) return 'bg-orange-100/70 text-gray-900';
+        return 'bg-red-100/70 text-gray-900';
     };
 
     const formatIOPS = (iops: number): string => {
         if (iops >= 1000000) return (iops / 1000000).toFixed(1) + 'M';
-        if (iops >= 1000) return (iops / 1000).toFixed(1) + 'K';
+        if (iops >= 1000) return (iops / 1000).toFixed(0) + 'k';
         return iops.toFixed(0);
     };
 
@@ -328,7 +413,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                         Block sizes: {allBlockSizes.join(', ')}
                     </p>
                     <p className="text-xs theme-text-secondary">
-                        Theme: {actualTheme}, Table rows: {allHostnames.length * allPatterns.length}, Total cells: {allHostnames.length * allPatterns.length * allBlockSizes.length}
+                        Theme: {actualTheme}, Table rows: {rowDefinitions.length}, Total cells: {rowDefinitions.length * allBlockSizes.length}
                     </p>
                 </div>
                 <div className="inline-block min-w-full">
@@ -336,7 +421,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                         <thead>
                             <tr>
                                 <th className="border border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-700 text-sm font-semibold theme-text-primary">
-                                    Host / Pattern
+                                    Host
+                                </th>
+                                <th className="border border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-700 text-sm font-semibold theme-text-primary">
+                                    Pattern
                                 </th>
                                 {allBlockSizes.map(blockSize => (
                                     <th key={blockSize} className="border border-gray-300 dark:border-gray-600 p-3 bg-gray-50 dark:bg-gray-700 text-sm font-semibold theme-text-primary text-center">
@@ -347,22 +435,29 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                         </thead>
                         <tbody>
                             {rowDefinitions.map((rowDef, rowIndex) => {
-                                const rowKey = `${rowDef.hostname}-${rowDef.pattern}`;
+                                const rowKey = `${rowDef.hostKey}-${rowDef.pattern}`;
                                 const isFirstPatternForHost = rowDef.pattern === 'random_read';
+                                const isFirstRowOfHost = rowIndex === 0 || rowDefinitions[rowIndex - 1].hostKey !== rowDef.hostKey;
 
                                 return (
-                                    <tr key={rowKey}>
+                                    <tr key={rowKey} className={isFirstRowOfHost ? 'border-t-4 border-t-blue-500' : ''}>
                                         <td className={`border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium theme-text-primary ${
+                                            isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-900/30' :
                                             isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700' : 'bg-gray-25 dark:bg-gray-750'}`}>
-                                            {isFirstPatternForHost ? (
-                                                <div>
-                                                    <div className="font-bold">{rowDef.hostname}</div>
-                                                    <div className="text-xs theme-text-secondary mt-1">
-                                                        {rowDef.driveModel}
-                                                    </div>
+                                            <div>
+                                                <div className="font-bold">{rowDef.hostname}</div>
+                                                <div className="text-xs theme-text-secondary mt-1">
+                                                    {rowDef.protocol} • {rowDef.driveModel}
                                                 </div>
-                                            ) : null}
-                                            <div className={`text-xs theme-text-secondary ${isFirstPatternForHost ? 'mt-2' : ''}`}>
+                                                <div className="text-xs theme-text-secondary">
+                                                    {rowDef.driveType}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className={`border border-gray-300 dark:border-gray-600 p-3 text-sm theme-text-primary ${
+                                            isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-900/30' :
+                                            isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700' : 'bg-gray-25 dark:bg-gray-750'}`}>
+                                            <div className="text-xs theme-text-secondary">
                                                 {rowDef.pattern.replace('_', ' ').toUpperCase()}
                                             </div>
                                         </td>
@@ -382,7 +477,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                             return (
                                                 <td
                                                     key={`${rowDef.hostname}-${rowDef.pattern}-${blockSize}`}
-                                                    className={`border border-gray-300 dark:border-gray-600 p-2 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${colorClass}`}
+                                                    className={`border border-gray-300 dark:border-gray-600 p-2 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${
+                                                isFirstRowOfHost ? 'border-t-4 border-t-blue-500' : ''} ${colorClass}`}
                                                     onMouseEnter={(e) => {
                                                         const rect = e.currentTarget.getBoundingClientRect();
                                                         setHoveredCell({
@@ -407,8 +503,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                         </div>
                                                     )}
                                                     {/* Debug info */}
-                                                    <div className="text-xs text-red-500 mt-1">
-                                                        iops:{cell.iops} norm:{cell.normalizedIops.toFixed(1)}
+                                                    <div className="text-xs text-gray-600 opacity-90 mt-1">
+                                                        iops:{cell.iops > 0 ? formatIOPS(cell.iops) : '—'} norm:{cell.normalizedIops.toFixed(1)}
                                                     </div>
                                                 </td>
                                             );

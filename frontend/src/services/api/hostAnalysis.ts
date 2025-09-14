@@ -62,20 +62,32 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
     }
     
     const testRuns = response.data;
-    
+
+    // Debug: Show what data we received
+    console.log(`=== API DEBUG for ${hostname} ===`);
+    console.log(`Total test runs received: ${testRuns.length}`);
+    testRuns.forEach((run, index) => {
+        console.log(`Run ${index}: hostname=${run.hostname}, protocol=${run.protocol}, drive_model=${run.drive_model}, drive_type=${run.drive_type}, iops=${run.iops}`);
+    });
+
     // Filter out test runs with null performance data
     // Note: avg_latency is optional since it may not be available for all test data
-    const validRuns = testRuns.filter((run: TestRun) => 
+    const validRuns = testRuns.filter((run: TestRun) =>
         run.iops !== null && run.bandwidth !== null
     );
+
+    console.log(`Valid runs after filtering: ${validRuns.length}`);
+    console.log('=== END API DEBUG ===');
     
     if (validRuns.length === 0) {
         throw new Error(`No valid performance data found for host: ${hostname}`);
     }
     
-    // Group by drive models
+    // Group by protocol + drive model combination (not just drive model)
     const driveGroups = validRuns.reduce((acc: Record<string, TestRun[]>, run: TestRun) => {
-        const key = run.drive_model;
+        const protocol = run.protocol || 'unknown';
+        const driveModel = run.drive_model || 'unknown';
+        const key = `${protocol}-${driveModel}`;
         if (!acc[key]) {
             acc[key] = [];
         }
@@ -83,8 +95,17 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
         return acc;
     }, {} as Record<string, TestRun[]>);
     
+    // Debug: Show drive grouping results
+    console.log('=== DRIVE GROUPING DEBUG ===');
+    console.log(`Number of drive groups: ${Object.keys(driveGroups).length}`);
+    Object.entries(driveGroups).forEach(([key, runs]) => {
+        console.log(`Group ${key}: ${runs.length} test runs`);
+        console.log(`  Sample run: protocol=${runs[0].protocol}, drive_model=${runs[0].drive_model}, drive_type=${runs[0].drive_type}`);
+    });
+    console.log('=== END DRIVE GROUPING DEBUG ===');
+
     // Analyze each drive
-    const drives: DriveAnalysis[] = Object.entries(driveGroups).map(([driveModel, runs]) => {
+    const drives: DriveAnalysis[] = Object.entries(driveGroups).map(([driveKey, runs]) => {
         const configurations: TestConfiguration[] = runs.map((run: TestRun) => ({
             block_size: String(run.block_size),
             read_write_pattern: run.read_write_pattern,
@@ -97,11 +118,11 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
             p99_latency: run.p99_latency,
             timestamp: run.timestamp
         }));
-        
+
         const validConfigs = configurations.filter(c => c.iops !== null);
-        
+
         return {
-            drive_model: driveModel,
+            drive_model: runs[0].drive_model || 'unknown',
             drive_type: runs[0].drive_type,
             protocol: runs[0].protocol || 'unknown',
             hostname: runs[0].hostname || 'unknown',
