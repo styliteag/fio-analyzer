@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Block Size Efficiency Matrix visualization showing IOPS efficiency per block size
 - New visualization control for efficiency analysis with color-coded performance metrics
 
+### Changed
+- Improved Performance Heatmap cell display readability
+- Added 'IOPS:' prefix for clearer metric identification
+- Removed redundant debug information from heatmap cells
+- Increased font size for better visibility of performance metrics
+
 ## [0.5.6] - 2025-09-14
 
 ### Fixed
