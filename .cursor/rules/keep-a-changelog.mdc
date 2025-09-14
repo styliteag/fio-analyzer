@@ -7,3 +7,5 @@ alwaysApply: true
 - The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - The file is called CHANGELOG.md and is located in the root of the project.
 - Add new changes under `[Unreleased]` section before committing
+
+- If you write code, dont git commit anything without permission from the user!

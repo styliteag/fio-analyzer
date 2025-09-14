@@ -36,6 +36,7 @@
 - Browser smoke: `tests-with-browser/` (Playwright). After app is running: `cd tests-with-browser && npm i && node test-app.js`.
 
 ## Commit & Pull Request Guidelines
+-- If you write code, dont git commit anything without permission from the user!
 - Follow Conventional Commits used here (e.g., `feat: …`, `fix: …`, `chore: …`, `refactor: …`). Keep subject imperative and ≤72 chars; add scope when useful.
 - PRs: clear description, linked issues, screenshots for UI changes, test plan/steps, and any config notes. Ensure `make check`, `npm run lint`, and pre-commit hooks pass.
 - If you change/add/delete API endpoints, run: `python3 scripts/generate_endpoints.py` and commit the updated `docs/api/endpoints.json`.
