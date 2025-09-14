@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Comprehensive VITE_API_URL documentation in AGENTS.md
 - Performance Fingerprint Heatmap visualization with comprehensive data analysis features
+- Block Size Efficiency Matrix visualization showing IOPS efficiency per block size
+- New visualization control for efficiency analysis with color-coded performance metrics
 
 ## [0.5.6] - 2025-09-14
 
