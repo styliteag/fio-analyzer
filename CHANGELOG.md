@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Enhanced
 - Performance Fingerprint Heatmap cell display: larger IOPS numbers with "IOPS:" label, removed redundant debug text for cleaner appearance
 
+### Added
+- Mini bar graphs in Performance Fingerprint Heatmap cells showing three metrics: IOPS (blue), Bandwidth (green), Responsiveness (1000/Latency, red)
+- Each bar displays normalized performance percentage relative to the host/drive maximum
+- Updated legend with metric color coding and improved layout
+- Enhanced cell tooltips with detailed multi-dimensional performance data
+
 ## [0.5.6] - 2025-09-14
 
 ### Fixed
