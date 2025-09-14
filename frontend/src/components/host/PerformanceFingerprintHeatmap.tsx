@@ -477,12 +477,12 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                         backgroundColor: cell.iops > 0 ? undefined : '#f3f4f6'
                                                     }}
                                                 >
-                                                    <div className="text-sm font-bold">
+                                                    <div className="text-sm font-bold mb-1">
                                                         {cell.iops > 0 ? `IOPS: ${formatIOPS(cell.iops)}` : '—'}
                                                     </div>
                                                     {cell.normalizedIops > 0 && (
-                                                        <div className="text-sm opacity-75 mt-1">
-                                                            {cell.normalizedIops.toFixed(1)}%
+                                                        <div className="text-xs opacity-75">
+                                                            {cell.normalizedIops.toFixed(0)}%
                                                         </div>
                                                     )}
                                                 </td>
@@ -532,7 +532,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                             <h4 className="font-semibold theme-text-primary text-xs mb-2">Performance Metrics</h4>
                             <div className="text-xs theme-text-secondary space-y-1">
                                 <div>IOPS: <span className="font-bold text-blue-600 dark:text-blue-400">{hoveredCell.cell.iops > 0 ? formatIOPS(hoveredCell.cell.iops) : 'N/A'}</span></div>
-                                <div>Normalized Performance: <span className="font-medium">{hoveredCell.cell.normalizedIops.toFixed(1)}%</span></div>
+                                <div>Normalized: <span className="font-medium">{hoveredCell.cell.normalizedIops.toFixed(1)}%</span></div>
                                 {hoveredCell.cell.avgLatency && (
                                     <div>Avg Latency: <span className="font-medium">{hoveredCell.cell.avgLatency.toFixed(2)}ms</span></div>
                                 )}
