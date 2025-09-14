@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- 
+
+## [0.5.7] - 2025-09-14
+
 ### Fixed
 - Authentication API calls from nested routes (e.g., /host/redshark) by using absolute paths instead of relative paths
 - Latency values of 0.00ms were not displaying in Performance Fingerprint Heatmap hover tooltips due to incorrect null coalescing
