@@ -1,8 +1,8 @@
 import React from 'react';
-import { HardDrive, BarChart3, BarChart, Radar, TrendingUp, Activity, Box, Zap } from 'lucide-react';
+import { HardDrive, BarChart3, BarChart, Radar, TrendingUp, Activity, Box, Zap, Grid3X3 } from 'lucide-react';
 import { Button } from '../ui';
 
-export type VisualizationView = 'overview' | 'matrix' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | '3d';
+export type VisualizationView = 'overview' | 'matrix' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | '3d' | 'heatmap';
 export type MatrixMetric = 'iops' | 'avg_latency' | 'bandwidth';
 
 export interface HostVisualizationControlsProps {
@@ -93,6 +93,14 @@ const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
                 >
                     <Box className="w-4 h-4" />
                     3D Performance
+                </Button>
+                <Button
+                    variant={activeView === 'heatmap' ? 'primary' : 'outline'}
+                    onClick={() => onViewChange('heatmap')}
+                    className="flex items-center gap-2"
+                >
+                    <Grid3X3 className="w-4 h-4" />
+                    Performance Heatmap
                 </Button>
             </div>
 
