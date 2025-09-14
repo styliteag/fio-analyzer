@@ -78,6 +78,14 @@ RUN mkdir -p /var/cache/nginx && \
 EXPOSE 80
 
 COPY VERSION /app/VERSION
-LABEL version="$(cat /app/VERSION)"
+
+# Image metadata
+# The $VERSION and $VCS_REF are passed in as build arguments (from the .github/workflows/release-docker.yml file)
+LABEL org.opencontainers.image.title="fio-analyzer" \
+      org.opencontainers.image.version=$VERSION \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.source="https://github.com/styliteag/fio-analyzer"
+LABEL version=$VERSION
+
 
 CMD ["/app/start.sh"]
