@@ -136,65 +136,42 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     console.log('Unique hostKeys:', Array.from(processedKeys));
     console.log('=== END ROW DEFINITIONS DEBUG ===');
 
-    // Calculate max values for each hostname-driveModel combination for normalization
-    const hostMaxIOPS = new Map<string, number>();
-    const hostMaxBandwidth = new Map<string, number>();
-    const hostMaxResponsiveness = new Map<string, number>();
-    const processedHostKeys = new Set<string>();
+    // Calculate maximum values from VISIBLE/FILTERED data for normalization
+    // This ensures fair comparison within the current filtered dataset
+    let visibleMaxIOPS = 0;
+    let visibleMaxBandwidth = 0;
+    let visibleMaxResponsiveness = 0;
 
     drives.forEach((drive) => {
-        const hostname = drive.hostname;
-        const driveModel = drive.drive_model || '';
-        const protocol = drive.protocol || 'unknown';
-        const driveType = drive.drive_type || '';
-        const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
-
-        // Skip if we've already processed this combination
-        if (processedHostKeys.has(hostKey)) {
-            return;
-        }
-        processedHostKeys.add(hostKey);
-
-        let maxIOPS = 0;
-        let maxBandwidth = 0;
-        let maxResponsiveness = 0;
-
-        // For each individual drive, calculate its max values
+        // For each drive, find the maximum values across all its configurations
         drive.configurations.forEach(config => {
-            if (config.iops && config.iops > maxIOPS) {
-                maxIOPS = config.iops;
+            if (config.iops && config.iops > visibleMaxIOPS) {
+                visibleMaxIOPS = config.iops;
             }
-            if (config.bandwidth && config.bandwidth > maxBandwidth) {
-                maxBandwidth = config.bandwidth;
+            if (config.bandwidth && config.bandwidth > visibleMaxBandwidth) {
+                visibleMaxBandwidth = config.bandwidth;
             }
             // Calculate responsiveness: 1000 ÷ latency = operations per millisecond
             // Higher responsiveness values indicate better performance
             if (config.avg_latency && config.avg_latency > 0) {
                 const responsiveness = 1000 / config.avg_latency;
-                if (responsiveness > maxResponsiveness) {
-                    maxResponsiveness = responsiveness;
+                if (responsiveness > visibleMaxResponsiveness) {
+                    visibleMaxResponsiveness = responsiveness;
                 }
             }
         });
-
-        hostMaxIOPS.set(hostKey, maxIOPS);
-        hostMaxBandwidth.set(hostKey, maxBandwidth);
-        hostMaxResponsiveness.set(hostKey, maxResponsiveness);
-
-        console.log(`Max values for ${hostKey}:`);
-        console.log(`  IOPS: ${maxIOPS}`);
-        console.log(`  Bandwidth: ${maxBandwidth}`);
-        console.log(`  Responsiveness: ${maxResponsiveness}`);
     });
 
-    console.log('=== MAX VALUES SUMMARY ===');
-    console.log('hostMaxIOPS keys:', Array.from(hostMaxIOPS.keys()));
-    console.log('hostMaxBandwidth keys:', Array.from(hostMaxBandwidth.keys()));
-    console.log('hostMaxResponsiveness keys:', Array.from(hostMaxResponsiveness.keys()));
-    console.log('All row definition hostKeys:', rowDefinitions.map(rd => rd.hostKey));
-    console.log('=== END MAX VALUES SUMMARY ===');
+    console.log('=== VISIBLE DATA MAXIMUMS (for normalization) ===');
+    console.log(`Visible Max IOPS: ${visibleMaxIOPS}`);
+    console.log(`Visible Max Bandwidth: ${visibleMaxBandwidth}`);
+    console.log(`Visible Max Responsiveness: ${visibleMaxResponsiveness}`);
+    console.log('=== END VISIBLE DATA MAXIMUMS ===');
 
-    console.log('Host max IOPS:', Object.fromEntries(hostMaxIOPS));
+    console.log('=== NORMALIZATION STRATEGY ===');
+    console.log('Using VISIBLE DATA normalization for fair comparison within filtered results');
+    console.log('This allows users to see relative performance within their current view');
+    console.log('=== END NORMALIZATION STRATEGY ===');
     console.log('All block sizes:', allBlockSizes);
     console.log('All hostnames:', allHostnames);
     console.log('All patterns:', allPatterns);
@@ -280,9 +257,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 return;
             }
 
-            // Get max IOPS for this specific hostname-driveModel combination
-            const maxIOPSForHost = hostMaxIOPS.get(hostKey) || 1;
-            const normalizedIops = (iopsValue / maxIOPSForHost) * 100;
+            // Normalize IOPS against visible data maximum for fair comparison
+            const normalizedIops = visibleMaxIOPS > 0 ? (iopsValue / visibleMaxIOPS) * 100 : 0;
 
             console.log(`Processing config for ${hostKey}: pattern=${mappedPattern}, blockSize=${blockSize}, iops=${iopsValue}`);
             console.log(`  rowIndex=${rowIndex}, colIndex=${colIndex}, rowDef.hostKey=${rowDefinitions[rowIndex]?.hostKey}`);
@@ -307,7 +283,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 console.log(`Latency for ${hostKey}-${mappedPattern}-${blockSize}: ${config.avg_latency}`);
             }
 
-            console.log(`Updated cell [${rowIndex}][${colIndex}]:`, hostKey, mappedPattern, blockSize, 'IOPS:', iopsValue, 'Max IOPS:', maxIOPSForHost);
+            console.log(`Updated cell [${rowIndex}][${colIndex}]:`, hostKey, mappedPattern, blockSize, 'IOPS:', iopsValue, 'Normalized:', normalizedIops.toFixed(1) + '%');
         });
     });
 
@@ -516,7 +492,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                     ></div>
                                                                 </div>
                                                                 <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
-                                                                    {cell.normalizedIops.toFixed(0)}%
+                                                                    {cell.iops > 0 ? `${(cell.iops / visibleMaxIOPS * 100).toFixed(0)}%` : '—'}
                                                                 </span>
                                                             </div>
 
@@ -528,13 +504,13 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                         <div
                                                                             className="bg-green-500 dark:bg-green-500/40 h-2 rounded-full"
                                                                             style={{
-                                                                                width: cell.bandwidth > 0 ? `${Math.max(5, (cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100)}%` : '3px',
+                                                                                width: cell.bandwidth > 0 ? `${Math.max(5, (cell.bandwidth / visibleMaxBandwidth) * 100)}%` : '3px',
                                                                                 minWidth: cell.bandwidth > 0 ? 'auto' : '3px'
                                                                             }}
                                                                         ></div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
-                                                                        {((cell.bandwidth / (hostMaxBandwidth.get(rowDef.hostKey) || cell.bandwidth)) * 100).toFixed(0)}%
+                                                                        {cell.bandwidth > 0 ? `${(cell.bandwidth / visibleMaxBandwidth * 100).toFixed(0)}%` : '—'}
                                                                     </span>
                                                                 </div>
                                                             ) : (
@@ -556,13 +532,13 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                         <div
                                                                             className="bg-red-500 dark:bg-red-500/40 h-2 rounded-full"
                                                                             style={{
-                                                                                width: `${Math.min(100, Math.max(5, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100))}%`,
+                                                                                width: `${Math.min(100, Math.max(5, ((1000 / cell.avgLatency) / visibleMaxResponsiveness) * 100))}%`,
                                                                                 minWidth: 'auto'
                                                                             }}
                                                                         ></div>
                                                                     </div>
                                                                     <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
-                                                                        {Math.min(100, (1000 / cell.avgLatency) / (hostMaxResponsiveness.get(rowDef.hostKey) || (1000 / cell.avgLatency)) * 100).toFixed(0)}%
+                                                                        {cell.avgLatency > 0 ? `${(((1000 / cell.avgLatency) / visibleMaxResponsiveness) * 100).toFixed(0)}%` : '—'}
                                                                     </span>
                                                                 </div>
                                                             ) : (

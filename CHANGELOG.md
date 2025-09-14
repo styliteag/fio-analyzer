@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Performance Fingerprint Heatmap tooltips now display latency in nanoseconds instead of milliseconds for better precision
 - Performance Fingerprint Heatmap includes detailed Responsiveness calculation explanation and actual values
 - Reordered visualization controls: Performance Heatmap now appears second after Overview for better user experience
+- Performance Fingerprint Heatmap bars now normalize against visible/filtered data for fair comparison within current view
 
 ### Removed
 - Performance Matrix visualization option from host analysis interface
