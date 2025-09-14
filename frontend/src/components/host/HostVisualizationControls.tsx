@@ -31,6 +31,14 @@ const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
                     Overview
                 </Button>
                 <Button
+                    variant={activeView === 'heatmap' ? 'primary' : 'outline'}
+                    onClick={() => onViewChange('heatmap')}
+                    className="flex items-center gap-2"
+                >
+                    <Grid3X3 className="w-4 h-4" />
+                    Performance Heatmap
+                </Button>
+                <Button
                     variant={activeView === 'matrix' ? 'primary' : 'outline'}
                     onClick={() => onViewChange('matrix')}
                     className="flex items-center gap-2"
@@ -93,14 +101,6 @@ const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
                 >
                     <Box className="w-4 h-4" />
                     3D Performance
-                </Button>
-                <Button
-                    variant={activeView === 'heatmap' ? 'primary' : 'outline'}
-                    onClick={() => onViewChange('heatmap')}
-                    className="flex items-center gap-2"
-                >
-                    <Grid3X3 className="w-4 h-4" />
-                    Performance Heatmap
                 </Button>
             </div>
 
