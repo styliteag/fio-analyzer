@@ -1,0 +1,209 @@
+name: Release Docker Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (optional, defaults to VERSION file)'
+        required: false
+        type: string
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-22.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Extract version from VERSION file
+      id: version
+      run: |
+        # Use provided version from workflow_dispatch or read from VERSION file
+        if [ -n "${{ inputs.version }}" ]; then
+          VERSION="${{ inputs.version }}"
+        else
+          VERSION=$(cat VERSION | tr -d '\n')
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+        # Extract major and minor versions for additional tags
+        IFS='.' read -r -a version_parts <<< "$VERSION"
+        MAJOR="${version_parts[0]}"
+        MINOR="${version_parts[1]}"
+        echo "major=$MAJOR" >> $GITHUB_OUTPUT
+        echo "minor=$MINOR" >> $GITHUB_OUTPUT
+        echo "Major: $MAJOR, Minor: $MINOR"
+        
+    - name: Extract tag name
+      id: tag
+      run: |
+        # Handle both tag push and manual workflow dispatch
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+        else
+          TAG_NAME="v${{ steps.version.outputs.version }}"
+        fi
+        echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "Tag: $TAG_NAME"
+        
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3    
+      
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Build and push release Docker images
+      uses: docker/build-push-action@v6
+      with:
+        push: true
+        context: .
+        file: docker/app/Dockerfile
+        platforms: ${{ matrix.platform }}
+        #cache-from: type=gha,scope=linux-${{ matrix.arch }}
+        #cache-to: type=gha,scope=linux-${{ matrix.arch }},mode=max
+        cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/buildcache:linux-${{ matrix.arch }}
+        cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/buildcache:linux-${{ matrix.arch }},mode=max
+
+        sbom: true
+        provenance: true
+        build-args: |
+          VERSION=${{ steps.version.outputs.version }}
+          VCS_REF=${{ github.sha }}
+          VITE_API_URL=/api
+        tags: |
+          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}
+          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}
+          
+  merge:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Extract version from VERSION file
+      id: version
+      run: |
+        # Use provided version from workflow_dispatch or read from VERSION file
+        if [ -n "${{ inputs.version }}" ]; then
+          VERSION="${{ inputs.version }}"
+        else
+          VERSION=$(cat VERSION | tr -d '\n')
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+        # Extract major and minor versions for additional tags
+        IFS='.' read -r -a version_parts <<< "$VERSION"
+        MAJOR="${version_parts[0]}"
+        MINOR="${version_parts[1]}"
+        echo "major=$MAJOR" >> $GITHUB_OUTPUT
+        echo "minor=$MINOR" >> $GITHUB_OUTPUT
+        echo "Major: $MAJOR, Minor: $MINOR"
+        
+    - name: Extract tag name
+      id: tag
+      run: |
+        # Handle both tag push and manual workflow dispatch
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+        else
+          TAG_NAME="v${{ steps.version.outputs.version }}"
+        fi
+        echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "Tag: $TAG_NAME"
+      
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create and push multi-arch manifests
+      run: |
+        # Docker Hub manifests
+        docker buildx imagetools create \
+          -t styliteag/fio-analyzer:${{ steps.version.outputs.version }} \
+          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        
+        docker buildx imagetools create \
+          -t styliteag/fio-analyzer:latest \
+          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        
+        docker buildx imagetools create \
+          -t styliteag/fio-analyzer:${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }} \
+          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        
+        docker buildx imagetools create \
+          -t styliteag/fio-analyzer:${{ steps.version.outputs.major }} \
+          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        
+        # GHCR manifests
+        docker buildx imagetools create \
+          -t ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }} \
+          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        
+        docker buildx imagetools create \
+          -t ghcr.io/${{ github.repository }}/fio-analyzer:latest \
+          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        
+        docker buildx imagetools create \
+          -t ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }} \
+          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        
+        docker buildx imagetools create \
+          -t ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.major }} \
+          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+
+    - name: Create GitHub release
+      run: |
+        gh release create v${{ steps.version.outputs.version }} \
+          --title "Release v${{ steps.version.outputs.version }}" \
+          --notes "Release v${{ steps.version.outputs.version }}
+
+        Built from tag: ${{ steps.tag.outputs.tag }}
+
+        Docker Images:
+        - \`styliteag/fio-analyzer:${{ steps.version.outputs.version }}\`
+        - \`ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}\`" \
+          --latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
