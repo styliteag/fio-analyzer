@@ -167,6 +167,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             if (config.bandwidth && config.bandwidth > maxBandwidth) {
                 maxBandwidth = config.bandwidth;
             }
+            // Calculate responsiveness: 1000 ÷ latency = operations per millisecond
+            // Higher responsiveness values indicate better performance
             if (config.avg_latency && config.avg_latency > 0) {
                 const responsiveness = 1000 / config.avg_latency;
                 if (responsiveness > maxResponsiveness) {
@@ -369,7 +371,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 </h4>
                 <p className="text-sm theme-text-secondary mb-4">
                     Multi-dimensional performance visualization across block sizes and test patterns.
-                    Each cell shows three normalized metrics: IOPS, Bandwidth, and Responsiveness (1000/Latency).
+                    Each cell shows three normalized metrics: IOPS, Bandwidth, and Responsiveness.
+                </p>
+                <p className="text-xs theme-text-secondary mb-4">
+                    <strong>Responsiveness</strong> = 1000 ÷ Latency (ops/ms) • Higher values = Better performance
                 </p>
 
                 {/* Legend */}
@@ -487,13 +492,17 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                     onMouseLeave={() => setHoveredCell(null)}
                                                     style={{
                                                         minWidth: '120px',
-                                                        height: '70px',
+                                                        height: '80px',
                                                         backgroundColor: (cell.iops !== undefined && cell.iops !== null && cell.iops > 0) ? undefined : (actualTheme === 'dark' ? '#374151' : '#f3f4f6')
                                                     }}
                                                 >
                                                     {/* Always show bars if cell has any data (IOPS can be 0 but still show configuration exists) */}
                                                     {cell.iops !== undefined && cell.iops !== null ? (
                                                         <div className="space-y-1">
+                                                            {/* IOPS Number Display */}
+                                                            <div className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">
+                                                                IOPS: {cell.iops > 0 ? formatIOPS(cell.iops) : '0'}
+                                                            </div>
                                                             {/* IOPS Bar - Always show, even if 0 */}
                                                             <div className="flex items-center gap-1">
                                                                 <span className="text-xs text-blue-600 dark:text-blue-300 font-medium w-8">IOPS</span>
@@ -539,6 +548,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                             )}
 
                                                             {/* Latency Bar (1000/Latency for responsiveness) - Show if data exists */}
+                                                            {/* RESP = 1000 ÷ Latency (operations per millisecond) - Higher = Better performance */}
                                                             {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? (
                                                                 <div className="flex items-center gap-1">
                                                                     <span className="text-xs text-red-600 dark:text-red-300 font-medium w-8">RESP</span>
@@ -617,13 +627,16 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                 <div>IOPS: <span className="font-bold text-blue-600 dark:text-blue-400">{hoveredCell.cell.iops > 0 ? formatIOPS(hoveredCell.cell.iops) : 'N/A'}</span></div>
                                 <div>Normalized: <span className="font-medium">{hoveredCell.cell.normalizedIops.toFixed(1)}%</span></div>
                                 {hoveredCell.cell.avgLatency && (
-                                    <div>Avg Latency: <span className="font-medium">{hoveredCell.cell.avgLatency.toFixed(2)}ms</span></div>
+                                    <div>Avg Latency: <span className="font-medium">{(hoveredCell.cell.avgLatency * 1000).toFixed(0)}ns</span></div>
                                 )}
                                 {hoveredCell.cell.bandwidth && (
                                     <div>Bandwidth: <span className="font-medium">{hoveredCell.cell.bandwidth.toFixed(1)} MB/s</span></div>
                                 )}
+                                {hoveredCell.cell.avgLatency && hoveredCell.cell.avgLatency > 0 && (
+                                    <div>Responsiveness: <span className="font-medium">{(1000 / hoveredCell.cell.avgLatency).toFixed(1)} ops/ms</span></div>
+                                )}
                                 {hoveredCell.cell.p95Latency && (
-                                    <div>95th %ile: <span className="font-medium">{hoveredCell.cell.p95Latency.toFixed(2)}ms</span></div>
+                                    <div>95th %ile: <span className="font-medium">{(hoveredCell.cell.p95Latency * 1000).toFixed(0)}ns</span></div>
                                 )}
                             </div>
                         </div>
