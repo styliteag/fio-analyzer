@@ -25,14 +25,27 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     const { actualTheme } = useTheme();
     const [hoveredCell, setHoveredCell] = React.useState<{ cell: HeatmapCell; x: number; y: number } | null>(null);
 
-    // Debug input data
-    console.log('=== HEATMAP INPUT DEBUG ===');
+    // Debug input data - verify we're getting filtered data
+    console.log('=== HEATMAP INPUT VERIFICATION ===');
     console.log('Heatmap received drives count:', drives?.length || 0);
     if (drives && drives.length > 0) {
         console.log('Hostnames in received drives:', [...new Set(drives.map(d => d.hostname))]);
+        console.log('Drive models in received drives:', [...new Set(drives.map(d => d.drive_model))]);
         console.log('Total configurations across all drives:', drives.reduce((total, drive) => total + drive.configurations.length, 0));
+
+        // Log sample configurations to verify filtering
+        console.log('=== SAMPLE CONFIGURATIONS ===');
+        drives.slice(0, 2).forEach((drive, driveIndex) => {
+            console.log(`Drive ${driveIndex}: ${drive.hostname}-${drive.protocol}-${drive.drive_model}`);
+            drive.configurations.slice(0, 3).forEach((config, configIndex) => {
+                console.log(`  Config ${configIndex}: IOPS=${config.iops}, BW=${config.bandwidth}, Latency=${config.avg_latency}`);
+            });
+        });
+        console.log('=== END SAMPLE CONFIGURATIONS ===');
+    } else {
+        console.log('WARNING: No drives received by heatmap!');
     }
-    console.log('=== END HEATMAP INPUT DEBUG ===');
+    console.log('=== END HEATMAP INPUT VERIFICATION ===');
 
     // Debug logging
     React.useEffect(() => {
@@ -166,6 +179,24 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     console.log(`Visible Max IOPS: ${visibleMaxIOPS}`);
     console.log(`Visible Max Bandwidth: ${visibleMaxBandwidth}`);
     console.log(`Visible Max Responsiveness: ${visibleMaxResponsiveness}`);
+
+    // Verify calculation by checking the highest values found
+    console.log('=== VERIFICATION: Top values found ===');
+    let topIOPS = 0, topBandwidth = 0, topResponsiveness = 0;
+    drives.forEach(drive => {
+        drive.configurations.forEach(config => {
+            if (config.iops && config.iops > topIOPS) topIOPS = config.iops;
+            if (config.bandwidth && config.bandwidth > topBandwidth) topBandwidth = config.bandwidth;
+            if (config.avg_latency && config.avg_latency > 0) {
+                const resp = 1000 / config.avg_latency;
+                if (resp > topResponsiveness) topResponsiveness = resp;
+            }
+        });
+    });
+    console.log(`Verification - Top IOPS found: ${topIOPS} (should match visibleMaxIOPS: ${visibleMaxIOPS})`);
+    console.log(`Verification - Top Bandwidth found: ${topBandwidth} (should match visibleMaxBandwidth: ${visibleMaxBandwidth})`);
+    console.log(`Verification - Top Responsiveness found: ${topResponsiveness} (should match visibleMaxResponsiveness: ${visibleMaxResponsiveness})`);
+    console.log('=== END VERIFICATION ===');
     console.log('=== END VISIBLE DATA MAXIMUMS ===');
 
     console.log('=== NORMALIZATION STRATEGY ===');
