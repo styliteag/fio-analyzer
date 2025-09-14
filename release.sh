@@ -253,9 +253,9 @@ main() {
     echo "$new_version" > VERSION
     
     # Update Cargo.toml version
-    print_info "Updating Cargo.toml version to $new_version"
-    sed -i.bak "s/^version = \".*\"/version = \"$new_version\"/" backend/Cargo.toml
-    rm -f backend/Cargo.toml.bak
+    #print_info "Updating Cargo.toml version to $new_version"
+    #sed -i.bak "s/^version = \".*\"/version = \"$new_version\"/" backend/Cargo.toml
+    #rm -f backend/Cargo.toml.bak
 
     # Run build verification
     # This also updates Cargo.lock
