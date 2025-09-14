@@ -156,7 +156,7 @@ run_build_tests() {
     local original_dir=$(pwd)
     
     # Check if we're in the project root
-    if [ ! -f "frontend/package.json" ] || [ ! -f "backend/Cargo.toml" ]; then
+    if [ ! -f "frontend/package.json" ] ; then
         print_error "Not in project root. Please run this script from the repository root."
         exit 1
     fi
