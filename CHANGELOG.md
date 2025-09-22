@@ -8,7 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **Performance Graphs Visualization**: New interactive chart-based visualization option alongside Performance Heatmap
+  - IOPS Comparison Chart: Line chart comparing IOPS performance across block sizes and patterns
+  - Latency Analysis Chart: Multi-axis chart displaying average, P95, and P99 latency metrics
+  - Bandwidth Trends Chart: Area chart for bandwidth performance visualization with trend analysis
+  - Responsiveness Chart: Horizontal bar chart for system responsiveness comparison
+  - Comprehensive theme support (dark/light mode) with Chart.js integration
+  - Interactive filtering and metric selection controls
+  - Performance-optimized rendering for large datasets 
 
 ## [0.5.8] - 2025-09-14
 
