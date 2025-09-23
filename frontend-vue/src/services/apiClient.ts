@@ -9,20 +9,36 @@ export interface ApiResponse<T> {
 
 export interface TestRun {
   id: number
-  hostname: string
-  drive_type: string
-  test_type: string
   timestamp: string
-  iops_read: number
-  iops_write: number
-  latency_read_avg: number
-  latency_write_avg: number
-  latency_read_p95: number
-  latency_write_p95: number
-  latency_read_p99: number
-  latency_write_p99: number
-  bandwidth_read: number
-  bandwidth_write: number
+  drive_model?: string
+  drive_type?: string
+  test_name?: string
+  description?: string
+  block_size: string | number
+  read_write_pattern: string
+  queue_depth: number
+  duration?: number
+  fio_version?: string
+  job_runtime?: number
+  rwmixread?: number
+  total_ios_read?: number
+  total_ios_write?: number
+  usr_cpu?: number
+  sys_cpu?: number
+  hostname?: string
+  protocol?: string
+  output_file?: string
+  num_jobs?: number
+  direct?: number
+  test_size?: string
+  sync?: number
+  iodepth?: number
+  is_latest?: number
+  iops?: number | null
+  avg_latency?: number | null
+  bandwidth?: number | null
+  p95_latency?: number | null
+  p99_latency?: number | null
 }
 
 export interface FilterOptions {
@@ -39,11 +55,18 @@ export interface TimeSeriesData {
 }
 
 export interface TestRunFilters {
-  hostname?: string
-  drive_type?: string
-  test_type?: string
-  start_date?: string
-  end_date?: string
+  hostnames?: string[]
+  protocols?: string[]
+  drive_types?: string[]
+  drive_models?: string[]
+  patterns?: string[]
+  block_sizes?: (string | number)[]
+  syncs?: number[]
+  queue_depths?: number[]
+  directs?: number[]
+  num_jobs?: number[]
+  test_sizes?: string[]
+  durations?: number[]
 }
 
 class ApiClient {
@@ -97,19 +120,21 @@ class ApiClient {
   }
 
   // Test Runs API
-  async getTestRuns(filters?: TestRunFilters): Promise<TestRun[]> {
+  async getTestRuns(filters?: TestRunFilters): Promise<{ data: TestRun[]; total: number; limit: number; offset: number }> {
     const params = new URLSearchParams()
 
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
-        if (value) {
-          params.append(key, value)
+        if (Array.isArray(value)) {
+          value.forEach(item => params.append(key, item.toString()))
+        } else if (value !== undefined && value !== null) {
+          params.append(key, value.toString())
         }
       })
     }
 
     const endpoint = `/test-runs${params.toString() ? `?${params.toString()}` : ''}`
-    return this.request<TestRun[]>(endpoint)
+    return this.request<{ data: TestRun[]; total: number; limit: number; offset: number }>(endpoint)
   }
 
   // Filters API

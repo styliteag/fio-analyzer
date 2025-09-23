@@ -279,6 +279,11 @@ export interface PaginationEmits {
 // Vue 3 Composition API imports for type completion
 import type { Ref, ComputedRef } from 'vue'
 
+// Export visualization-specific types
+export * from './performance'
+export * from './filters'
+export * from './visualization'
+
 // Route Meta Interface for TypeScript router
 declare module 'vue-router' {
   interface RouteMeta {
