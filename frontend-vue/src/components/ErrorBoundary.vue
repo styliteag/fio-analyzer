@@ -188,8 +188,8 @@ onErrorCaptured((err) => {
 }
 
 .error-details-summary {
-  @apply text-sm font-medium theme-text-secondary cursor-pointer;
-  @apply hover:theme-text-primary transition-colors;
+  @apply text-sm font-medium text-gray-600 dark:text-gray-400 cursor-pointer;
+  @apply hover:text-gray-900 dark:hover:text-gray-100 transition-colors;
 }
 
 .error-details-content {
