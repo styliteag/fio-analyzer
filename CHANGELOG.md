@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Vue 3 migration scaffold under `frontend-vue/` with router and pages (parity work in progress)
+- API client honoring `VITE_API_URL` and proxy `/api`
+- Views wired: Home (info), Filters, Test Runs, Performance Data, Time Series, Upload, Admin Users
+- Shared components: export buttons, basic Chart.js line chart, Three.js 3D bar demo
+- Request cancellation and chart decimation defaults
 - **Performance Graphs Visualization**: New interactive chart-based visualization option alongside Performance Heatmap
   - IOPS Comparison Chart: Line chart comparing IOPS performance across block sizes and patterns
   - Latency Analysis Chart: Multi-axis chart displaying average, P95, and P99 latency metrics
