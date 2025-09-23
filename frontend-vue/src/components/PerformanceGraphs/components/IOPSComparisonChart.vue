@@ -10,13 +10,13 @@
         <button
           v-for="pattern in availablePatterns"
           :key="pattern"
-          @click="togglePattern(pattern)"
           :class="[
             'px-3 py-1 rounded-full text-sm transition-colors',
             selectedPatterns.includes(pattern)
               ? 'bg-blue-500 text-white'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
           ]"
+          @click="togglePattern(pattern)"
         >
           {{ pattern.replace('_', ' ').toUpperCase() }}
         </button>
@@ -65,7 +65,7 @@ const props = defineProps<Props>()
 
 const { actualTheme } = useTheme()
 const chartCanvas = ref<HTMLCanvasElement>()
-const chartInstance = ref<any>(null)
+const chartInstance = ref<ChartJS<'line'> | null>(null)
 const selectedPatterns = ref<string[]>(['random_read', 'random_write', 'sequential_read', 'sequential_write'])
 
 // Computed properties
@@ -165,7 +165,7 @@ const createChartOptions = () => {
         borderColor: actualTheme.value === 'light' ? '#D1D5DB' : '#4B5563',
         borderWidth: 1,
         callbacks: {
-          label: (context: any) => {
+          label: (context: { dataset: { label: string }; parsed: { y: number | null } }) => {
             const value = context.parsed.y
             return value !== null ? `${context.dataset.label}: ${value.toLocaleString()} IOPS` : `${context.dataset.label}: No data`
           }

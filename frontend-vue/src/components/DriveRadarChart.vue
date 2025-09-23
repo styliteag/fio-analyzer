@@ -24,13 +24,13 @@
         <button
           v-for="drive in availableDrives"
           :key="drive.hostname + '-' + drive.driveModel"
-          @click="toggleDrive(drive)"
           :class="[
             'px-3 py-1 rounded-full text-sm transition-colors',
             selectedDrives.some(d => d.hostname === drive.hostname && d.driveModel === drive.driveModel)
               ? 'bg-blue-500 text-white'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
           ]"
+          @click="toggleDrive(drive)"
         >
           {{ drive.hostname }} - {{ drive.driveModel }}
         </button>
@@ -93,7 +93,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Title, Tooltip, Legend } from 'chart.js'
-import { Radar } from 'chart.js'
 import { useTheme } from '@/contexts/ThemeContext'
 import { generateColorPalette } from '@/utils/chartProcessing'
 import type { DriveAnalysis } from '@/types/performance'
@@ -112,7 +111,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { actualTheme } = useTheme()
 const chartCanvas = ref<HTMLCanvasElement>()
-const chartInstance = ref<any>(null)
+const chartInstance = ref<ChartJS<'radar'> | null>(null)
 
 // State
 const selectedDrives = ref<DriveAnalysis[]>([])
@@ -259,7 +258,7 @@ const createChartOptions = () => {
         borderColor: actualTheme.value === 'light' ? '#D1D5DB' : '#4B5563',
         borderWidth: 1,
         callbacks: {
-          label: (context: any) => {
+          label: (context: { dataset: { label: string }; dataIndex: number; datasetIndex: number }) => {
             const originalValue = getOriginalValue(context)
             return `${context.dataset.label}: ${originalValue}`
           }
@@ -275,7 +274,7 @@ const createChartOptions = () => {
           font: {
             size: 11
           },
-          callback: (value: any) => `${value}%`
+          callback: (value: number | string) => `${value}%`
         },
         grid: {
           color: actualTheme.value === 'light' ? '#E5E7EB' : '#374151'
@@ -295,7 +294,7 @@ const createChartOptions = () => {
   }
 }
 
-const getOriginalValue = (context: any) => {
+const getOriginalValue = (context: { dataset: { label: string }; dataIndex: number; datasetIndex: number }) => {
   const datasetIndex = context.datasetIndex
   const dataIndex = context.dataIndex
   const drive = selectedDrives.value[datasetIndex]

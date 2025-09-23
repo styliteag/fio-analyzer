@@ -53,7 +53,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { actualTheme } = useTheme()
 const chartCanvas = ref<HTMLCanvasElement>()
-const chartInstance = ref<any>(null)
+const chartInstance = ref<ChartJS<'line'> | null>(null)
 
 // Computed properties
 const maxResponsiveness = computed(() => {
@@ -118,7 +118,7 @@ const createChartOptions = () => {
         borderColor: actualTheme.value === 'light' ? '#D1D5DB' : '#4B5563',
         borderWidth: 1,
         callbacks: {
-          label: (context: any) => {
+          label: (context: { dataset: { label: string }; parsed: { y: number | null } }) => {
             const value = context.parsed.y
             return value !== null ? `${context.dataset.label}: ${value.toFixed(2)} ops/ms` : `${context.dataset.label}: No data`
           }

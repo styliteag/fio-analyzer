@@ -115,7 +115,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Chart as ChartJS, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'
-import { Scatter } from 'chart.js'
 import { useTheme } from '@/contexts/ThemeContext'
 import { generateColorPalette } from '@/utils/chartProcessing'
 import type { PerformanceData } from '@/types/performance'
@@ -136,7 +135,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { actualTheme } = useTheme()
 const chartCanvas = ref<HTMLCanvasElement>()
-const chartInstance = ref<any>(null)
+const chartInstance = ref<ChartJS<'scatter'> | null>(null)
 
 // State
 const xAxisMetric = ref<'iops' | 'bandwidth' | 'avg_latency' | 'block_size' | 'queue_depth'>('iops')
@@ -352,7 +351,7 @@ const createChartOptions = () => {
         borderColor: actualTheme.value === 'light' ? '#D1D5DB' : '#4B5563',
         borderWidth: 1,
         callbacks: {
-          label: (context: any) => {
+          label: (context: { dataset: { label: string }; parsed: { x: number; y: number } }) => {
             return `${context.dataset.label}: (${context.parsed.x}, ${context.parsed.y})`
           }
         }

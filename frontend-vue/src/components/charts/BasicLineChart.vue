@@ -7,7 +7,7 @@
     :loading="loading"
     :error="error"
   >
-    <template #default="{ chartData, chartOptions }">
+    <template #default>
       <Line
         :data="chartData"
         :options="chartOptions"
@@ -50,32 +50,39 @@ ChartJS.register(
 )
 
 export interface LineChartProps {
-  timeSeriesData?: TimeSeriesData[]
-  title?: string
-  yAxisLabel?: string
-  xAxisLabel?: string
-  height?: number
-  width?: number
-  loading?: boolean
-  error?: string | null
-  showArea?: boolean
-  smooth?: boolean
-  chartId?: string
-  datasetIdKey?: string
-  plugins?: unknown[]
-  cssClasses?: string
-  styles?: Record<string, string>
+  timeSeriesData: TimeSeriesData[]
+  title: string
+  yAxisLabel: string
+  xAxisLabel: string
+  height: number
+  width: number
+  loading: boolean
+  error: string | null
+  showArea: boolean
+  smooth: boolean
+  chartId: string
+  datasetIdKey: string
+  plugins: unknown[]
+  cssClasses: string
+  styles: Record<string, string>
 }
 
 const props = withDefaults(defineProps<LineChartProps>(), {
+  timeSeriesData: () => [],
   title: 'Time Series Chart',
   yAxisLabel: 'Value',
   xAxisLabel: 'Time',
   height: 400,
+  width: 400,
+  loading: false,
+  error: null,
   showArea: false,
   smooth: true,
   chartId: 'line-chart',
-  datasetIdKey: 'label'
+  datasetIdKey: 'label',
+  plugins: () => [],
+  cssClasses: '',
+  styles: () => ({})
 })
 
 const chartData = computed((): ChartData => {

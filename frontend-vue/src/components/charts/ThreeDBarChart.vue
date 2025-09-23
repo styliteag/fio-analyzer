@@ -20,17 +20,21 @@ import BaseChart from './BaseChart.vue'
 import type { TestRun } from '@/types'
 
 export interface ThreeDBarChartProps {
-  testRuns?: TestRun[]
-  metric?: 'iops' | 'latency' | 'bandwidth'
-  height?: number
-  width?: number
-  loading?: boolean
-  error?: string | null
+  testRuns: TestRun[]
+  metric: 'iops' | 'latency' | 'bandwidth'
+  height: number
+  width: number
+  loading: boolean
+  error: string | null
 }
 
 const props = withDefaults(defineProps<ThreeDBarChartProps>(), {
+  testRuns: () => [],
   metric: 'iops',
-  height: 400
+  height: 400,
+  width: 400,
+  loading: false,
+  error: null
 })
 
 const chartContainer = ref<HTMLElement>()

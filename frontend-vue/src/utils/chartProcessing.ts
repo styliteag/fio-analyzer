@@ -4,7 +4,6 @@
  */
 
 import type { ChartData, ChartDataset } from 'chart.js'
-import type { PerformanceData } from '@/types/performance'
 import { normalizeValues, sortBlockSizes } from './dataTransform'
 
 /**
@@ -272,10 +271,6 @@ export function createHeatmapData(
   const patterns = [...new Set(rawData.map(d => d.pattern))].sort()
 
   // Normalize values for comparison
-  const iopsValues = rawData.map(d => d.iops).filter(v => v !== null) as number[]
-  const bandwidthValues = rawData.map(d => d.bandwidth).filter(v => v !== null) as number[]
-  const responsivenessValues = rawData.map(d => d.responsiveness).filter(v => v !== null) as number[]
-
   const normalizedIops = normalizeValues(rawData.map(d => d.iops))
   const normalizedBandwidth = normalizeValues(rawData.map(d => d.bandwidth))
   const normalizedResponsiveness = normalizeValues(rawData.map(d => d.responsiveness))
@@ -301,8 +296,8 @@ export function createHeatmapData(
 export function createChartOptions(
   title: string,
   theme: 'light' | 'dark' = 'light',
-  additionalOptions: any = {}
-): any {
+  additionalOptions: Record<string, unknown> = {}
+): Record<string, unknown> {
   const baseOptions = {
     responsive: true,
     maintainAspectRatio: false,

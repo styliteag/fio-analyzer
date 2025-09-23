@@ -46,7 +46,7 @@ vi.mock('@/components/charts/ThreeDBarChart.vue', () => ({
 import { ref } from 'vue'
 
 describe('Host Page Integration', () => {
-  let router: any
+  let router: ReturnType<typeof createRouter>
 
   beforeEach(() => {
     // Create router for testing
@@ -309,13 +309,6 @@ describe('Host Page Integration', () => {
 
     it('should support theme switching', async () => {
       // This test will fail initially since theme toggle doesn't exist yet
-      const wrapper = mount(Host, {
-        global: {
-          plugins: [router]
-        }
-      })
-
-      // Try to find theme toggle - should fail initially
       // This documents expected functionality
       expect(() => {
         // Implementation needed: Theme toggle component

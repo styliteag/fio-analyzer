@@ -153,19 +153,6 @@ describe('Test Runs API Contract', () => {
   describe('Data Structure Validation', () => {
     it('should validate required TestRun fields', () => {
       // This test will fail initially - implementation needed
-      const validTestRun = {
-        id: 1,
-        hostname: 'test-host-01',
-        block_size: '4K',
-        read_write_pattern: 'randread',
-        queue_depth: 32,
-        iops: 125000,
-        avg_latency: 0.256,
-        bandwidth: 488.28,
-        timestamp: '2025-12-23T10:00:00Z'
-      }
-
-      // Should validate the structure - implementation needed
       expect(() => {
         // Validation function not implemented yet
         throw new Error('Validation not implemented')
@@ -174,19 +161,6 @@ describe('Test Runs API Contract', () => {
 
     it('should handle nullable performance fields', () => {
       // This test will fail initially - implementation needed
-      const testRunWithNulls = {
-        id: 1,
-        hostname: 'test-host-01',
-        block_size: '4K',
-        read_write_pattern: 'randread',
-        queue_depth: 32,
-        iops: null,
-        avg_latency: null,
-        bandwidth: null,
-        timestamp: '2025-12-23T10:00:00Z'
-      }
-
-      // Should handle null values gracefully - implementation needed
       expect(() => {
         throw new Error('Null handling not implemented')
       }).toThrow()

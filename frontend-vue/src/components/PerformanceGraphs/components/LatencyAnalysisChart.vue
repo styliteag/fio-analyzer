@@ -47,7 +47,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { actualTheme } = useTheme()
 const chartCanvas = ref<HTMLCanvasElement>()
-const chartInstance = ref<any>(null)
+const chartInstance = ref<ChartJS<'line'> | null>(null)
 
 // Computed properties
 const minLatency = computed(() => {
@@ -112,7 +112,7 @@ const createChartOptions = () => {
         borderColor: actualTheme.value === 'light' ? '#D1D5DB' : '#4B5563',
         borderWidth: 1,
         callbacks: {
-          label: (context: any) => {
+          label: (context: { dataset: { label: string }; parsed: { y: number | null } }) => {
             const value = context.parsed.y
             return value !== null ? `${context.dataset.label}: ${(value * 1000).toFixed(2)}ns` : `${context.dataset.label}: No data`
           }
@@ -157,7 +157,7 @@ const createChartOptions = () => {
           font: {
             size: 12
           },
-          callback: (value: any) => `${value}ms`
+          callback: (value: number | string) => `${value}ms`
         },
         grid: {
           color: actualTheme.value === 'light' ? '#E5E7EB' : '#374151'

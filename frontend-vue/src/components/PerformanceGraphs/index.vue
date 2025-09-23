@@ -15,13 +15,13 @@
       <button
         v-for="chartType in chartTypes"
         :key="chartType.id"
-        @click="activeChart = chartType.id"
         :class="[
           'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
           activeChart === chartType.id
             ? 'bg-blue-600 text-white dark:bg-blue-700'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
         ]"
+        @click="activeChart = chartType.id"
       >
         {{ chartType.label }}
       </button>
@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useTheme } from '@/contexts/ThemeContext'
 import type { DriveAnalysis } from '@/types/performance'
 import IOPSComparisonChart from './components/IOPSComparisonChart.vue'

@@ -7,7 +7,7 @@
     :loading="loading"
     :error="error"
   >
-    <template #default="{ chartData, chartOptions }">
+    <template #default>
       <Radar
         :data="chartData"
         :options="chartOptions"
@@ -46,24 +46,31 @@ ChartJS.register(
 )
 
 export interface RadarChartProps {
-  testRuns?: TestRun[]
-  selectedMetrics?: string[]
-  height?: number
-  width?: number
-  loading?: boolean
-  error?: string | null
-  chartId?: string
-  datasetIdKey?: string
-  plugins?: unknown[]
-  cssClasses?: string
-  styles?: Record<string, string>
+  testRuns: TestRun[]
+  selectedMetrics: string[]
+  height: number
+  width: number
+  loading: boolean
+  error: string | null
+  chartId: string
+  datasetIdKey: string
+  plugins: unknown[]
+  cssClasses: string
+  styles: Record<string, string>
 }
 
 const props = withDefaults(defineProps<RadarChartProps>(), {
+  testRuns: () => [],
   selectedMetrics: () => ['iops_read', 'iops_write', 'latency_read_avg', 'latency_write_avg', 'bandwidth_read', 'bandwidth_write'],
   height: 400,
+  width: 400,
+  loading: false,
+  error: null,
   chartId: 'radar-chart',
-  datasetIdKey: 'label'
+  datasetIdKey: 'label',
+  plugins: () => [],
+  cssClasses: '',
+  styles: () => ({})
 })
 
 const chartData = computed((): ChartData => {

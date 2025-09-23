@@ -78,10 +78,10 @@
 - [x] T024 [P] ParallelCoordinatesChart component in frontend-vue/src/components/ParallelCoordinatesChart.vue
 
 ### Filtering System
-- [ ] T025 [P] HostFiltersSidebar component in frontend-vue/src/components/HostFiltersSidebar.vue
-- [ ] T026 [P] HostFilters component in frontend-vue/src/components/HostFilters.vue
-- [ ] T027 [P] HostVisualizationControls component in frontend-vue/src/components/HostVisualizationControls.vue
-- [ ] T028 [P] Filter composables in frontend-vue/src/composables/useFilters.ts
+- [x] T025 [P] HostFiltersSidebar component in frontend-vue/src/components/HostFiltersSidebar.vue
+- [x] T026 [P] HostFilters component in frontend-vue/src/components/HostFilters.vue
+- [x] T027 [P] HostVisualizationControls component in frontend-vue/src/components/HostVisualizationControls.vue
+- [x] T028 [P] Filter composables in frontend-vue/src/composables/useFilters.ts
 
 ### Theme System
 - [ ] T029 [P] ThemeToggle component in frontend-vue/src/components/ThemeToggle.vue

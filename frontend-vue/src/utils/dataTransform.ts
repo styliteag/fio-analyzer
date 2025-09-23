@@ -3,7 +3,7 @@
  * Functions to transform raw performance data into visualization-ready formats
  */
 
-import type { PerformanceData, TestConfiguration } from '@/types/performance'
+import type { PerformanceData } from '@/types/performance'
 import type { FilterState } from '@/types/filters'
 
 /**
@@ -59,7 +59,7 @@ export function transformToChartSeries(
   groupBy?: keyof PerformanceData
 ): Array<{
   name: string
-  data: Array<{ x: any; y: number | null }>
+  data: Array<{ x: string | number | null; y: number | null }>
 }> {
   if (!groupBy) {
     // Single series
@@ -73,7 +73,7 @@ export function transformToChartSeries(
   }
 
   // Grouped series
-  const groups = new Map<string, Array<{ x: any; y: number | null }>>()
+  const groups = new Map<string, Array<{ x: string | number | null; y: number | null }>>()
 
   data.forEach(item => {
     const groupKey = String(item[groupBy] || 'Unknown')

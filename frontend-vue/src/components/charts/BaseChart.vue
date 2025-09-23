@@ -31,16 +31,19 @@ import { computed, ref } from 'vue'
 import type { ChartData, ChartOptions } from '@/types'
 
 export interface BaseChartProps {
-  data?: ChartData
-  options?: ChartOptions
-  height?: number
-  width?: number
-  loading?: boolean
-  error?: string | null
+  data: ChartData
+  options: ChartOptions
+  height: number
+  width: number
+  loading: boolean
+  error: string | null
 }
 
 const props = withDefaults(defineProps<BaseChartProps>(), {
+  data: () => ({}),
+  options: () => ({}),
   height: 400,
+  width: 400,
   loading: false,
   error: null
 })

@@ -120,7 +120,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Chart as ChartJS, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js'
-import { Line } from 'chart.js'
 import { useTheme } from '@/contexts/ThemeContext'
 import { generateColorPalette } from '@/utils/chartProcessing'
 import type { PerformanceData } from '@/types/performance'
@@ -141,7 +140,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { actualTheme } = useTheme()
 const chartCanvas = ref<HTMLCanvasElement>()
-const chartInstance = ref<any>(null)
+const chartInstance = ref<ChartJS<'line'> | null>(null)
 
 // State
 const selectedDimensions = ref<string[]>(['iops', 'avg_latency', 'bandwidth', 'block_size', 'queue_depth'])
@@ -277,7 +276,7 @@ const createChartData = () => {
 
     // Create parallel coordinates data
     const data = groupData.map(item => {
-      const point: any = {}
+      const point: Record<string, number> = {}
       selectedDimensions.value.forEach((dimension, index) => {
         point[`x${index}`] = getDimensionValue(item, dimension) || 0
       })
@@ -303,7 +302,7 @@ const createChartData = () => {
 
 const createChartOptions = () => {
   // Create custom scales for parallel coordinates
-  const scales: any = {}
+  const scales: Record<string, unknown> = {}
 
   selectedDimensions.value.forEach((dimension, index) => {
     scales[`x${index}`] = {
@@ -324,7 +323,7 @@ const createChartOptions = () => {
         font: {
           size: 9
         },
-        callback: (value: any) => {
+        callback: (value: number | string) => {
           if (dimension.includes('latency')) {
             return `${Number(value).toFixed(1)}ms`
           } else if (dimension === 'iops') {
@@ -372,10 +371,10 @@ const createChartOptions = () => {
         borderColor: actualTheme.value === 'light' ? '#D1D5DB' : '#4B5563',
         borderWidth: 1,
         callbacks: {
-          title: (context: any) => {
-            return `Configuration ${context[0].dataIndex + 1}`
+          title: (context: unknown[]) => {
+            return `Configuration ${(context[0] as { dataIndex: number }).dataIndex + 1}`
           },
-          label: (context: any) => {
+          label: (context: { dataset: { label: string }; parsed: { y: number } }) => {
             const dimensionIndex = parseInt(context.dataset.label.split('x')[1])
             const dimension = selectedDimensions.value[dimensionIndex]
             const value = context.parsed.y
