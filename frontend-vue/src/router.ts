@@ -1,37 +1,66 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
-import { Api } from './services/api';
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { useAuth } from '@/composables/useAuth'
 
 const routes: RouteRecordRaw[] = [
-  { path: '/', component: () => import('./pages/Home.vue') },
-  { path: '/performance', component: () => import('./pages/Performance.vue') },
-  { path: '/compare', component: () => import('./pages/Compare.vue') },
-  { path: '/history', component: () => import('./pages/History.vue') },
-  { path: '/host', component: () => import('./pages/Host.vue') },
-  { path: '/filters', component: () => import('./pages/Filters.vue') },
-  { path: '/test-runs', component: () => import('./pages/TestRuns.vue') },
-  { path: '/upload', component: () => import('./pages/Upload.vue'), meta: { requiresAuth: true } },
-  { path: '/admin', component: () => import('./pages/Admin.vue'), meta: { requiresAdmin: true } },
-  { path: '/users', component: () => import('./pages/UserManager.vue'), meta: { requiresAdmin: true } },
-  { path: '/login', component: () => import('./pages/Login.vue') },
-];
+  {
+    path: '/',
+    redirect: '/test-runs',
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/test-runs',
+    component: () => import('./pages/TestRuns.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/host',
+    component: () => import('./pages/Host.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/filters',
+    component: () => import('./pages/Filters.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/user-manager',
+    component: () => import('./pages/UserManager.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/login',
+    component: () => import('./components/LoginForm.vue'),
+    meta: { requiresAuth: false }
+  },
+]
 
 export const router = createRouter({
   history: createWebHistory(),
   routes,
-});
+})
 
-router.beforeEach(async (to) => {
-  const meta = to.meta as Record<string, unknown>;
-  const requiresAdmin = meta?.requiresAdmin === true;
-  const requiresAuth = meta?.requiresAuth === true || requiresAdmin;
-  if (!requiresAuth) return true;
-  try {
-    const me = await Api.me();
-    if (requiresAdmin && me?.role !== 'admin') return { path: '/login' };
-    return true;
-  } catch {
-    return { path: '/login' };
+router.beforeEach((to) => {
+  const { isAuthenticated, hasPermission } = useAuth()
+  const meta = to.meta as Record<string, unknown>
+  const requiresAdmin = meta?.requiresAdmin === true
+  const requiresAuth = meta?.requiresAuth !== false // Default to requiring auth
+
+  // Allow access to login page without authentication
+  if (to.path === '/login') {
+    return true
   }
-});
+
+  // Check if route requires authentication
+  if (requiresAuth && !isAuthenticated.value) {
+    return { path: '/login' }
+  }
+
+  // Check if route requires admin privileges
+  if (requiresAdmin && !hasPermission('admin')) {
+    return { path: '/test-runs' } // Redirect to accessible page
+  }
+
+  return true
+})
 
 
