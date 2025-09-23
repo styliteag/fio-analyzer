@@ -1,0 +1,296 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "FIO Analyzer Vue Frontend Contracts",
+    "version": "1.0.0",
+    "description": "API contracts preserved from React frontend for Vue migration"
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Backend API server"
+    }
+  ],
+  "paths": {
+    "/test-runs": {
+      "get": {
+        "summary": "Get test runs with optional filtering",
+        "parameters": [
+          {
+            "name": "hostname",
+            "in": "query",
+            "schema": {"type": "string"},
+            "description": "Filter by hostname"
+          },
+          {
+            "name": "drive_type",
+            "in": "query",
+            "schema": {"type": "string"},
+            "description": "Filter by drive type"
+          },
+          {
+            "name": "test_type",
+            "in": "query",
+            "schema": {"type": "string"},
+            "description": "Filter by test type"
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {"type": "string", "format": "date-time"},
+            "description": "Filter start date"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {"type": "string", "format": "date-time"},
+            "description": "Filter end date"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of test runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/TestRun"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/filters": {
+      "get": {
+        "summary": "Get available filter options",
+        "responses": {
+          "200": {
+            "description": "Available filter values",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/FilterOptions"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-series/iops": {
+      "get": {
+        "summary": "Get IOPS time series data",
+        "parameters": [
+          {
+            "name": "hostname",
+            "in": "query",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "schema": {"type": "string", "enum": ["read", "write"]},
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Time series IOPS data",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/TimeSeriesData"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-series/latency": {
+      "get": {
+        "summary": "Get latency time series data",
+        "parameters": [
+          {
+            "name": "hostname",
+            "in": "query",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "schema": {"type": "string", "enum": ["read_avg", "write_avg", "read_p95", "write_p95", "read_p99", "write_p99"]},
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Time series latency data",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/TimeSeriesData"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/time-series/bandwidth": {
+      "get": {
+        "summary": "Get bandwidth time series data",
+        "parameters": [
+          {
+            "name": "hostname",
+            "in": "query",
+            "schema": {"type": "string"},
+            "required": true
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "schema": {"type": "string", "enum": ["read", "write"]},
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Time series bandwidth data",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/TimeSeriesData"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/import": {
+      "post": {
+        "summary": "Upload new FIO test results",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {"type": "string"},
+                    "imported_count": {"type": "number"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "User authentication",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {"type": "string"},
+                  "password": {"type": "string"}
+                },
+                "required": ["username", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {"type": "string"},
+                    "role": {"type": "string", "enum": ["admin", "uploader"]}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TestRun": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "number"},
+          "hostname": {"type": "string"},
+          "drive_type": {"type": "string"},
+          "test_type": {"type": "string"},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "iops_read": {"type": "number"},
+          "iops_write": {"type": "number"},
+          "latency_read_avg": {"type": "number"},
+          "latency_write_avg": {"type": "number"},
+          "latency_read_p95": {"type": "number"},
+          "latency_write_p95": {"type": "number"},
+          "latency_read_p99": {"type": "number"},
+          "latency_write_p99": {"type": "number"},
+          "bandwidth_read": {"type": "number"},
+          "bandwidth_write": {"type": "number"}
+        },
+        "required": ["id", "hostname", "drive_type", "test_type", "timestamp"]
+      },
+      "FilterOptions": {
+        "type": "object",
+        "properties": {
+          "hostnames": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "drive_types": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "test_types": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      },
+      "TimeSeriesData": {
+        "type": "object",
+        "properties": {
+          "timestamps": {
+            "type": "array",
+            "items": {"type": "string", "format": "date-time"}
+          },
+          "values": {
+            "type": "array",
+            "items": {"type": "number"}
+          },
+          "metric": {"type": "string"},
+          "hostname": {"type": "string"}
+        }
+      }
+    }
+  }
+}
