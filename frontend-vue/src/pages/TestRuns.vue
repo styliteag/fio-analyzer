@@ -2,7 +2,12 @@
   <main style="padding:16px">
     <h1>Test Runs</h1>
     <ul>
-      <li v-for="tr in testRuns" :key="tr.id">{{ tr.hostname }} — {{ tr.description }}</li>
+      <li
+        v-for="tr in testRuns"
+        :key="tr.id"
+      >
+        {{ tr.hostname }} — {{ tr.description }}
+      </li>
     </ul>
   </main>
 </template>

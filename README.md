@@ -105,7 +105,7 @@ chmod +x fio-analyzer-tests.sh
 
 For local development with separate frontend/backend:
 
-#### Frontend
+#### Frontend (React existing) / Vue migration
 
 1. **Navigate to the frontend directory**:
    ```bash
@@ -121,7 +121,27 @@ For local development with separate frontend/backend:
    ```bash
    npm run dev
    ```
-   The application will be available at `http://localhost:5173`.
+   The React app will be available at `http://localhost:5173`.
+
+#### Vue Frontend (parallel migration)
+
+```bash
+cd frontend-vue
+npm install
+npm run dev   # http://localhost:5174 (proxies /api → http://localhost:8000)
+```
+
+Build:
+```bash
+npm run build
+npm run preview
+```
+
+Lint/Type:
+```bash
+npm run lint
+npx tsc --noEmit
+```
 
 #### Backend
 

@@ -1,9 +1,12 @@
 <template>
-  <line :data="data" :options="options" />
+  <Line
+    :data="data"
+    :options="resolvedOptions"
+  />
 </template>
 
 <script setup lang="ts">
-import { Line as line } from 'vue-chartjs';
+import { Line } from 'vue-chartjs';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,28 +19,25 @@ import {
   Decimation,
 } from 'chart.js';
 
+import type { ChartData, ChartOptions } from 'chart.js';
+import { computed } from 'vue';
+
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Decimation);
 
-defineProps<{ data: any; options?: any }>();
+const props = defineProps<{ data: ChartData; options?: ChartOptions }>();
+const resolvedOptions = computed<ChartOptions>(() => (
+  props.options ?? {
+    parsing: false,
+    animation: false,
+    elements: { point: { radius: 0 } },
+    plugins: { decimation: { enabled: true, algorithm: 'lttb', samples: 1000 } },
+  }
+));
 
 </script>
 
 <script lang="ts">
-export default {
-  computed: {
-    options(): any {
-      // Provide sensible defaults for performance; allow caller override
-      return (
-        (this as any).$props.options || {
-          parsing: false,
-          animation: false,
-          elements: { point: { radius: 0 } },
-          plugins: { decimation: { enabled: true, algorithm: 'lttb', samples: 1000 } },
-        }
-      );
-    },
-  },
-};
+export default {};
 </script>
 
 

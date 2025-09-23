@@ -2,13 +2,34 @@
   <main style="padding:16px">
     <h1>Upload FIO JSON</h1>
     <form @submit.prevent="submit">
-      <input type="file" accept="application/json" @change="onFile" />
-      <input v-model="drive_model" placeholder="drive_model" />
-      <input v-model="drive_type" placeholder="drive_type" />
-      <input v-model="hostname" placeholder="hostname" />
-      <input v-model="protocol" placeholder="protocol" />
-      <input v-model="description" placeholder="description" />
-      <button :disabled="!file">Upload</button>
+      <input
+        type="file"
+        accept="application/json"
+        @change="onFile"
+      >
+      <input
+        v-model="drive_model"
+        placeholder="drive_model"
+      >
+      <input
+        v-model="drive_type"
+        placeholder="drive_type"
+      >
+      <input
+        v-model="hostname"
+        placeholder="hostname"
+      >
+      <input
+        v-model="protocol"
+        placeholder="protocol"
+      >
+      <input
+        v-model="description"
+        placeholder="description"
+      >
+      <button :disabled="!file">
+        Upload
+      </button>
     </form>
     <pre v-if="result">{{ result }}</pre>
   </main>
@@ -24,7 +45,8 @@ const drive_type = ref('');
 const hostname = ref('');
 const protocol = ref('');
 const description = ref('');
-const result = ref<any>(null);
+type UploadResult = { status: number; body: string } | { error: string } | null;
+const result = ref<UploadResult>(null);
 
 function onFile(e: Event) {
   const t = e.target as HTMLInputElement;
