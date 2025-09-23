@@ -1,0 +1,194 @@
+openapi: 3.0.1
+info:
+  title: Test Runs API Contract
+  description: Existing backend API used by frontend visualizations (READ-ONLY)
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: FIO Analyzer API
+
+paths:
+  /test-runs/:
+    get:
+      summary: Retrieve test runs with filtering
+      description: Get performance test results with advanced filtering for visualization
+      operationId: getTestRuns
+      parameters:
+        - name: hostnames
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by hostnames
+        - name: drive_models
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by drive models
+        - name: protocols
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by protocols
+        - name: block_sizes
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by block sizes
+        - name: read_write_patterns
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by read/write patterns
+        - name: queue_depths
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+          description: Filter by queue depths
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 1000
+          description: Maximum number of results
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TestRun'
+                  total:
+                    type: integer
+                    description: Total number of matching records
+                  limit:
+                    type: integer
+                    description: Applied limit
+                  offset:
+                    type: integer
+                    description: Applied offset
+        '401':
+          description: Authentication required
+        '500':
+          description: Internal server error
+
+components:
+  schemas:
+    TestRun:
+      type: object
+      required:
+        - id
+        - timestamp
+        - hostname
+      properties:
+        id:
+          type: integer
+          description: Unique test run identifier
+        timestamp:
+          type: string
+          format: date-time
+          description: When the test was executed
+        hostname:
+          type: string
+          description: Server hostname
+        drive_model:
+          type: string
+          nullable: true
+          description: Storage device model
+        drive_type:
+          type: string
+          nullable: true
+          description: Storage device type (SSD, HDD, NVMe)
+        test_name:
+          type: string
+          nullable: true
+          description: Test configuration name
+        block_size:
+          type: string
+          description: I/O block size (e.g., "4K", "64K")
+        read_write_pattern:
+          type: string
+          enum: [randread, randwrite, read, write]
+          description: I/O pattern type
+        queue_depth:
+          type: integer
+          description: I/O queue depth
+        num_jobs:
+          type: integer
+          nullable: true
+          description: Number of parallel jobs
+        iops:
+          type: number
+          format: float
+          nullable: true
+          description: I/O operations per second
+        avg_latency:
+          type: number
+          format: float
+          nullable: true
+          description: Average latency in microseconds
+        bandwidth:
+          type: number
+          format: float
+          nullable: true
+          description: Data transfer bandwidth in MB/s
+        p95_latency:
+          type: number
+          format: float
+          nullable: true
+          description: 95th percentile latency
+        p99_latency:
+          type: number
+          format: float
+          nullable: true
+          description: 99th percentile latency
+        protocol:
+          type: string
+          nullable: true
+          description: I/O protocol (tcp, rdma, etc.)
+        notes:
+          type: string
+          nullable: true
+          description: Additional test notes
+
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: HTTP Basic Authentication

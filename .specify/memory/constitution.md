@@ -1,13 +1,13 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 1.1.0
-- Modified principles: none (clarifications only)
-- Added sections: Architecture & Constraints (transition details)
+- Version change: 1.1.0 → 1.2.0
+- Modified principles: none
+- Added sections: Migration Status & Feature Parity Requirements
 - Removed sections: none
 - Templates requiring updates:
   ✅ .specify/templates/plan-template.md (version reference updated)
-  ✅ .specify/templates/spec-template.md (no changes required)
-  ✅ .specify/templates/tasks-template.md (no changes required)
+  ✅ .specify/templates/spec-template.md (no migration context needed)
+  ✅ .specify/templates/tasks-template.md (no migration task categories needed)
   ✅ .specify/templates/agent-file-template.md (no changes required)
 - Follow-up TODOs: none
 -->
@@ -71,6 +71,13 @@ a single-container production deployment with nginx proxying `/api` to the backe
 - API stability: Maintain RESTful paths documented in Swagger. Breaking changes
   require a migration note and version bump per Governance.
 
+### Migration Status & Feature Parity Requirements
+- **Current Vue Frontend State** (`frontend-vue/`): Basic authentication, navigation, and chart components (BasicLineChart, RadarChart, ThreeDBarChart). Partial implementation of PerformanceGraphs structure.
+- **Legacy React Frontend State** (`frontend/`): Complete feature set including advanced host analysis visualizations (PerformanceGraphs with 4 chart types, PerformanceFingerprintHeatmap, DriveRadarChart, PerformanceScatterPlot, ParallelCoordinatesChart, BoxPlotChart, FacetScatterGrid, Performance3DChart, StackedBarChart), comprehensive filtering, and theme system.
+- **Migration Goal**: Vue frontend MUST achieve feature parity with React frontend before React decommissioning. Focus on copying visualization features, filtering system, and theme support.
+- **Protected Components**: React frontend (`frontend/`) and backend (`backend/`) MUST NOT be modified during migration. All changes are Vue-frontend-only.
+- **Success Criteria**: Vue frontend supports all React visualization types, filtering capabilities, and user experience features with equivalent or improved performance.
+
 ## Workflow & Quality Gates
 
 - Branching and PRs: Follow Conventional Commits. Keep PRs small and scoped.
@@ -94,4 +101,4 @@ a single-container production deployment with nginx proxying `/api` to the backe
   MINOR for new principles/sections or materially expanded guidance, PATCH for
   clarifications.
 
-**Version**: 1.1.0 | **Ratified**: 2025-09-23 | **Last Amended**: 2025-09-23
+**Version**: 1.2.0 | **Ratified**: 2025-09-23 | **Last Amended**: 2025-12-23

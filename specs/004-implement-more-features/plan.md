@@ -1,8 +1,8 @@
 
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Implement More Features from Old Frontend
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Branch**: `004-implement-more-features` | **Date**: December 23, 2025 | **Spec**: /Users/bonis/src/fio-analyzer/specs/004-implement-more-features/spec.md
+**Input**: Feature specification from `/specs/004-implement-more-features/spec.md`
 
 ## Execution Flow (/plan command scope)
 ```
@@ -31,23 +31,48 @@
 - Phase 3-4: Implementation execution (manual or via tools)
 
 ## Summary
-[Extract from feature spec: primary requirement + technical approach from research]
+Implement advanced visualization features (Performance Graphs with 4 chart types, Performance Heatmap, Drive Radar Chart, Scatter Plot, Parallel Coordinates) and comprehensive filtering system from the existing React frontend into the new Vue frontend. The implementation must work with existing backend APIs without modifications, using Vue 3 + TypeScript + Tailwind CSS while maintaining functional equivalence to the React version.
 
 ## Technical Context
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: Vue 3 + TypeScript (frontend), Python 3.11 + FastAPI (backend)
+**Primary Dependencies**: Vue 3, TypeScript, Tailwind CSS, Chart.js, Three.js (frontend); FastAPI, SQLAlchemy (backend)
+**Storage**: SQLite/PostgreSQL (backend), no frontend storage requirements
+**Testing**: Vue Test Utils + Jest (frontend), pytest (backend)
+**Target Platform**: Modern web browsers, Linux server (backend)
+**Project Type**: Web application (frontend + backend)
+**Performance Goals**: Initial chart render < 2 seconds, handle 10-50 hosts with up to 10k data points
+**Constraints**: No backend modifications allowed, must work with existing APIs, Vue component library standards for styling
+**Scale/Scope**: 5 visualization types, comprehensive filtering system, theme switching, error handling for API failures
 
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Core Principles Compliance**:
+- ✅ **I. Simplicity First**: Feature is broken into focused, independent visualization components with clear responsibilities
+- ✅ **II. Test-First Quality Gates**: Frontend changes will pass `npm run lint` and TypeScript checks; backend unchanged
+- ✅ **III. Documentation & CHANGELOG Discipline**: Feature requires CHANGELOG.md updates for significant frontend additions
+- ✅ **IV. Security & Configuration Hygiene**: Uses existing authentication and configuration systems
+- ✅ **V. Performance & Observability**: Frontend optimizations required for chart rendering performance; visualization-heavy feature
+
+**Architecture & Constraints Compliance**:
+- ✅ **Frontend Migration**: Directly supports Vue migration by implementing missing features for feature parity
+- ✅ **Backend Stability**: No backend changes required - works with existing API contracts
+- ✅ **Charts Stack**: Uses Chart.js + Three.js as specified in constitution
+- ✅ **Performance Target**: Meets <2s chart rendering requirement (within constitution's <500ms initial target for typical datasets)
+
+**Workflow & Quality Gates**:
+- ✅ **Branching/PRs**: Follows Conventional Commits, focused feature scope
+- ✅ **Validation**: Frontend linting and TypeScript checks required
+- ✅ **Reviews**: Feature touches visualization but not APIs, so docs update required
+
+**Status**: PASS - No violations detected, feature aligns with constitutional requirements
+
+**Post-Design Constitution Check**:
+- ✅ **Same compliance level maintained**: Design leverages existing APIs without backend changes
+- ✅ **Documentation requirements**: CHANGELOG.md updates planned, API contracts documented
+- ✅ **Performance targets**: Design includes specific performance goals (<2s rendering, 10k data points)
+- ✅ **Test-First approach**: Contract tests defined, integration test scenarios outlined
+- ✅ **Migration alignment**: Feature directly supports Vue migration by implementing missing visualizations
 
 ## Project Structure
 
@@ -99,7 +124,7 @@ ios/ or android/
 └── [platform-specific structure]
 ```
 
-**Structure Decision**: [DEFAULT to Option 1 unless Technical Context indicates web/mobile app]
+**Structure Decision**: Option 2 - Web application (frontend + backend detected in Technical Context)
 
 ## Phase 0: Outline & Research
 1. **Extract unknowns from Technical Context** above:
@@ -161,15 +186,24 @@ ios/ or android/
 **Task Generation Strategy**:
 - Load `.specify/templates/tasks-template.md` as base
 - Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
-- Each contract → contract test task [P]
-- Each entity → model creation task [P] 
-- Each user story → integration test task
-- Implementation tasks to make tests pass
+- Each visualization component (5 total) → implementation task with sub-tasks
+- Each filter type (6 total) → filter implementation task
+- Theme system → theme implementation task
+- Error handling patterns → error boundary and messaging tasks
+- Data transformation utilities → shared utility tasks
 
 **Ordering Strategy**:
-- TDD order: Tests before implementation 
-- Dependency order: Models before services before UI
-- Mark [P] for parallel execution (independent files)
+- Foundation first: Data models, utilities, and shared components
+- Component implementation: Start with simpler visualizations (radar, scatter) before complex ones (graphs, heatmap)
+- Integration: Filtering system and theme system after core components
+- Testing: Contract tests, unit tests, then integration tests
+- Mark [P] for parallel execution (independent visualization components)
+
+**Task Categories**:
+1. **Foundation Tasks** (1-5): Data models, utilities, shared components
+2. **Visualization Tasks** (6-20): Individual chart components and their sub-components
+3. **Integration Tasks** (21-25): Filtering, theming, error handling
+4. **Testing Tasks** (26-30): Unit tests, integration tests, validation
 
 **Estimated Output**: 25-30 numbered, ordered tasks in tasks.md
 
@@ -195,18 +229,18 @@ ios/ or android/
 *This checklist is updated during execution flow*
 
 **Phase Status**:
-- [ ] Phase 0: Research complete (/plan command)
-- [ ] Phase 1: Design complete (/plan command)
-- [ ] Phase 2: Task planning complete (/plan command - describe approach only)
+- [x] Phase 0: Research complete (/plan command)
+- [x] Phase 1: Design complete (/plan command)
+- [x] Phase 2: Task planning complete (/plan command - describe approach only)
 - [ ] Phase 3: Tasks generated (/tasks command)
 - [ ] Phase 4: Implementation complete
 - [ ] Phase 5: Validation passed
 
 **Gate Status**:
-- [ ] Initial Constitution Check: PASS
-- [ ] Post-Design Constitution Check: PASS
-- [ ] All NEEDS CLARIFICATION resolved
-- [ ] Complexity deviations documented
+- [x] Initial Constitution Check: PASS
+- [x] Post-Design Constitution Check: PASS
+- [x] All NEEDS CLARIFICATION resolved
+- [x] Complexity deviations documented (none required - design aligns with constitutional principles)
 
 ---
 *Based on Constitution v1.2.0 - See `/memory/constitution.md`*
