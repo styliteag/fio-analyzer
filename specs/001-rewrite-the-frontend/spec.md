@@ -81,9 +81,11 @@ As an authenticated user (admin or uploader), I can access the application via a
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
-- **FR-001**: System MUST provide all current frontend features on Vue.js with parity to React implementation (pages: Home, Performance, Compare, History, Host, Upload, Admin, UserManager).
+- **FR-001**: System MUST provide all current frontend features on Vue.js with parity to React implementation (pages: Home, Performance, Compare, Time Series, Host, Upload, Admin, Users).
 - **FR-002**: System MUST support authentication flows (admin and uploader roles) and respect role-based access for all UI actions.
 - **FR-003**: System MUST implement all visualization features (charts, time-series, radar, 3D bar) with equivalent interactions: filtering, grouping, sorting, zooming, exporting (PNG/CSV), fullscreen, and series toggles.
+  - Radar: initial render ≤ 500ms on ≤ 5 datasets × ≤ 200 points; legend supports keyboard focus and Enter to toggle series; appropriate roles/labels for a11y.
+  - Fullscreen: toggle via button; ESC exits; zoom/pan state is preserved when entering/exiting.
 - **FR-004**: System MUST preserve API integration semantics, including `VITE_API_URL` behavior and endpoints documented in Swagger.
 - **FR-005**: System MUST maintain performance optimizations (request cancellation, memoization-equivalent patterns) to keep interactions smooth under typical data volumes.
 - **FR-006**: System MUST support uploading FIO JSON files with metadata collection and error handling.
@@ -91,18 +93,14 @@ As an authenticated user (admin or uploader), I can access the application via a
 - **FR-008**: System MUST include responsive design and accessibility equivalence.
 - **FR-009**: System MUST pass lint and type checks for the chosen Vue stack and integrate with existing build/deploy pipelines (including Docker/nginx paths).
 - **FR-010**: System MUST update documentation reflecting the new frontend while keeping API unchanged.
-- **FR-015**: Migration Directory Strategy: Create a new directory `frontend-vue/` for the Vue implementation to allow parallel development and zero downtime; decommission `frontend/` after full parity and switch-over. Rationale: enables side-by-side validation, simpler rollback, and minimizes risk.
+- **FR-015**: Implement the Vue app in `frontend-vue/` and decommission `frontend/` after full parity and switchover.
 - **FR-016**: Backend MUST NOT be modified by this migration; API contracts and endpoints remain unchanged.
 - **FR-017**: Charts stack: Use Chart.js with vue-chartjs for 2D charts and Three.js for 3D visualizations to achieve feature parity and performance.
 - **FR-018**: UX improvements beyond pixel parity are allowed but MUST be explicitly approved during review, with rationale and no loss of functionality.
  - **FR-019**: Performance: Initial chart render for typical datasets MUST be under 500ms.
- - **FR-020**: Directory: Implement the Vue app in `frontend-vue/`; decommission `frontend/` after full parity and switchover.
 
 *Ambiguities to clarify:*
-- **FR-011**: Use Vue 3 (Composition API) for the frontend implementation. (RESOLVED)
-- **FR-012**: Chart stack chosen: Chart.js + vue-chartjs (2D) and Three.js (3D). (RESOLVED)
-- **FR-013**: UX approach: broader improvements allowed with approval. (RESOLVED)
- - **FR-014**: Performance target: initial chart render < 500ms. (RESOLVED)
+<!-- None currently; tech constraints are documented as stakeholder-approved requirements (see FR-015, FR-017). -->
 
 ### Key Entities *(include if feature involves data)*
 - **Test Run**: Metadata and performance metrics used to render charts, filter, and edit.

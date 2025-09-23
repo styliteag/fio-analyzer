@@ -18,7 +18,14 @@
 - No backend changes; schemas as documented in Swagger.
 - Respect auth roles for all actions.
 
+## Chart Data Structures
+- **Radar Chart Data**: metrics array for 2-8 axes (IOPS, bandwidth, latency), up to 5 datasets
+- **3D Bar Chart Data**: x/y/z coordinates with color mapping for performance metrics
+- **Time Series Data**: timestamp + metric arrays with operation_type grouping
+- **Export Formats**: PNG (chart canvas), CSV (raw data), JSON (chart config)
+
 ## UI State (per view)
 - Filters: selected host, model, type, pattern, block size
 - Selections: chosen test run ids
-- Chart State: visible series, sort/group options, export format
+- Chart State: visible series, sort/group options, export format, fullscreen mode
+- Performance State: render timing, data loading status, request cancellation tokens

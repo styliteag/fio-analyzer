@@ -1,8 +1,8 @@
 <template>
-  <main style="padding:16px">
-    <h1>FIO Analyzer (Vue)</h1>
-    <p>API Base: {{ apiBase }}</p>
-    <div v-if="info">
+  <main class="grid-responsive app-main">
+    <h1 style="grid-column:1/-1">FIO Analyzer (Vue)</h1>
+    <p style="grid-column:1/-1">API Base: {{ apiBase }}</p>
+    <div v-if="info" style="grid-column:1/-1">
       <pre>{{ info }}</pre>
     </div>
   </main>

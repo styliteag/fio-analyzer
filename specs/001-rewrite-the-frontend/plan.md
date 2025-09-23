@@ -1,4 +1,3 @@
-
 # Implementation Plan: Rewrite Frontend to Vue.js
 
 **Branch**: `001-rewrite-the-frontend` | **Date**: 2025-09-23 | **Spec**: /Users/bonis/src/fio-analyzer/specs/001-rewrite-the-frontend/spec.md
@@ -26,23 +25,23 @@
 9. STOP - Ready for /tasks command
 ```
 
-**IMPORTANT**: The /plan command STOPS at step 7. Phases 2-4 are executed by other commands:
+**IMPORTANT**: The /plan command STOPS at step 9. Phases 2-4 are executed by other commands:
 - Phase 2: /tasks command creates tasks.md
 - Phase 3-4: Implementation execution (manual or via tools)
 
 ## Summary
-Rewrite the existing React frontend to a Vue 3 application with full feature parity. Maintain API contracts and keep the backend unchanged. Use Chart.js via vue-chartjs for 2D charts and Three.js for 3D. Allow broader UX improvements with explicit approval. Target <500ms initial chart render for typical datasets. Build the new app in `frontend-vue/` and decommission `frontend/` after parity.
+Rewrite the existing React frontend to a Vue 3 application with full feature parity. Maintain API contracts and keep the backend unchanged. Use Chart.js via vue-chartjs for 2D charts (including radar) and Three.js for 3D. Include fullscreen chart UX. Allow broader UX improvements with explicit approval. Target <500ms initial chart render for typical datasets. Build the new app in `frontend-vue/` and decommission `frontend/` after parity.
 
 ## Technical Context
-**Language/Version**: Vue 3 (Composition API), TypeScript; Node for tooling  
-**Primary Dependencies**: vue, vue-router, pinia (state) if needed; chart.js + vue-chartjs; three  
-**Storage**: N/A (frontend only)  
-**Testing**: ESLint + TypeScript checks; unit tests as applicable (vitest/jest TBD)  
-**Target Platform**: Web (nginx-served SPA via Docker)  
-**Project Type**: web (frontend + backend; backend untouched)  
-**Performance Goals**: Initial chart render < 500ms typical dataset; smooth interaction  
-**Constraints**: Backend API unchanged; `VITE_API_URL` build-time config; security/auth unchanged  
-**Scale/Scope**: All existing pages/features migrated; charts potentially heavy datasets
+**Language/Version**: Vue 3 (Composition API), TypeScript; Node for tooling
+**Primary Dependencies**: vue, vue-router, pinia (state management), chart.js, vue-chartjs, three
+**Storage**: N/A (frontend only)
+**Testing**: ESLint + TypeScript checks; unit tests (vitest/jest TBD)
+**Target Platform**: Web (nginx-served SPA via Docker)
+**Project Type**: web (frontend + backend; backend untouched)
+**Performance Goals**: Initial chart render < 500ms typical dataset; smooth interaction
+**Constraints**: Backend API unchanged; `VITE_API_URL` build-time config; security/auth unchanged
+**Scale/Scope**: All existing pages/features migrated; charts for potentially heavy datasets
 
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
@@ -70,9 +69,25 @@ specs/001-rewrite-the-frontend/
 ```
 # Web application (frontend + backend)
 backend/
+├── src/
+│   ├── models/
+│   ├── services/
+│   └── api/
+└── tests/
 
 frontend/           # existing React app (to be decommissioned after parity)
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
+
 frontend-vue/       # new Vue 3 app (migration target)
+├── src/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+└── tests/
 ```
 
 **Structure Decision**: Web application. New `frontend-vue/` alongside existing `frontend/` for safe migration.
@@ -82,14 +97,18 @@ frontend-vue/       # new Vue 3 app (migration target)
    - Chart.js + vue-chartjs integration nuances; Three.js scene management
    - Routing, state management approach (vue-router, pinia usage)
    - Build config with Vite and `VITE_API_URL` parity
+   - Performance optimization patterns for Vue 3 Composition API
 
 2. **Generate and dispatch research agents**:
    - Best practices for large datasets with Chart.js in Vue
    - Three.js integration patterns for dashboard components
    - Vue router structure mirroring current pages
+   - Radar chart implementation with Chart.js/vue-chartjs for optimal performance
 
 3. **Consolidate findings** in `research.md` using format:
-   - Decision, Rationale, Alternatives considered
+   - Decision: [what was chosen]
+   - Rationale: [why chosen]
+   - Alternatives considered: [what else evaluated]
 
 **Output**: research.md with all NEEDS CLARIFICATION resolved
 
@@ -99,19 +118,24 @@ frontend-vue/       # new Vue 3 app (migration target)
 1. **Extract entities from feature spec** → `data-model.md`:
    - Entities: Test Run, Performance Data Series, User (roles)
    - Map UI views to API endpoints; document props/state per view
+   - Chart data structures and transformations
 
 2. **Generate API contracts** from functional requirements:
    - No backend changes; list consumed endpoints for each view
    - Confirm request/response schemas used in UI
+   - Chart data contracts for radar, 3D, and time-series visualizations
 
 3. **Generate contract tests** from contracts:
    - N/A for backend; capture UI contract mapping and validation checklist
+   - Performance benchmarks for chart rendering
 
 4. **Extract test scenarios** from user stories:
    - Define quickstart steps to validate parity
+   - Include radar chart render validation and performance checks
 
 5. **Update agent file incrementally** (O(1) operation):
-   - Add new tech references to agent context if applicable
+   - Run `.specify/scripts/bash/update-agent-context.sh claude`
+   - Add Vue 3 + TypeScript tech references to agent context
 
 **Output**: data-model.md, /contracts/*, quickstart.md, agent-specific file (if updated)
 
@@ -119,22 +143,27 @@ frontend-vue/       # new Vue 3 app (migration target)
 *This section describes what the /tasks command will do - DO NOT execute during /plan*
 
 **Task Generation Strategy**:
-- Derive tasks from contracts and UI mapping
-- Pages first, shared components, charts (2D, 3D), routing, auth, uploads
+- Load `.specify/templates/tasks-template.md` as base
+- Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
+- Pages first: scaffold, routing, auth, data services
+- Charts implementation: 2D (including radar), 3D, interactions
+- UI components: filters, selectors, modals, responsive layouts
 
 **Ordering Strategy**:
-- Scaffold app → routing → auth → data services → pages → charts → polish
-- Maintain TDD-ish discipline with lint/type checks
+- TDD order: Tests before implementation
+- Dependency order: Models before services before UI
+- Mark [P] for parallel execution (independent files)
+- Prioritize radar chart implementation for FR-003 compliance
 
-**Estimated Output**: 25-30 numbered, ordered tasks in tasks.md
+**Estimated Output**: 30-35 numbered, ordered tasks in tasks.md
 
 **IMPORTANT**: This phase is executed by the /tasks command, NOT by /plan
 
 ## Phase 3+: Future Implementation
 *These phases are beyond the scope of the /plan command*
 
-**Phase 3**: Task execution (/tasks command creates tasks.md)  
-**Phase 4**: Implementation (execute tasks.md following constitutional principles)  
+**Phase 3**: Task execution (/tasks command creates tasks.md)
+**Phase 4**: Implementation (execute tasks.md following constitutional principles)
 **Phase 5**: Validation (run tests, execute quickstart.md, performance validation)
 
 ## Complexity Tracking
@@ -146,7 +175,7 @@ frontend-vue/       # new Vue 3 app (migration target)
 **Phase Status**:
 - [x] Phase 0: Research complete (/plan command)
 - [x] Phase 1: Design complete (/plan command)
-- [ ] Phase 2: Task planning complete (/plan command - describe approach only)
+- [x] Phase 2: Task planning complete (/plan command - describe approach only)
 - [ ] Phase 3: Tasks generated (/tasks command)
 - [ ] Phase 4: Implementation complete
 - [ ] Phase 5: Validation passed
@@ -158,4 +187,4 @@ frontend-vue/       # new Vue 3 app (migration target)
 - [ ] Complexity deviations documented
 
 ---
-*Based on Constitution v1.0.0 - See `/memory/constitution.md`*
+*Based on Constitution v1.1.0 - See `/memory/constitution.md`*

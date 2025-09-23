@@ -55,7 +55,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { getJson } from '../services/api';
+import { useRouter } from 'vue-router';
+import { Api } from '../services/api';
 
 type FiltersResponse = {
   drive_types?: string[];
@@ -71,7 +72,7 @@ const blockSize = ref('');
 
 onMounted(async () => {
   try {
-    filters.value = await getJson('/api/filters');
+    filters.value = await Api.filters();
   } catch (e) {
     filters.value = { error: String(e) };
   }
@@ -84,7 +85,13 @@ const summary = computed(() => {
 });
 
 function apply() {
-  // Placeholder: integrate with list pages via route/query in future steps
+  const router = useRouter();
+  const query: Record<string, string> = {};
+  if (driveType.value) query.drive_type = driveType.value;
+  if (driveModel.value) query.drive_model = driveModel.value;
+  if (pattern.value) query.pattern = pattern.value;
+  if (blockSize.value) query.block_size = blockSize.value;
+  router.push({ path: '/test-runs', query });
 }
 </script>
 

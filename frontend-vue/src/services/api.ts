@@ -41,6 +41,7 @@ type MeResp = { username: string; role: string };
 export const Api = {
   info: () => getJson<Record<string, unknown>>('/api/info'),
   me: () => getJson<MeResp>('/api/users/me'),
+  // Users
   createUser: async (username: string, password: string) => {
     const form = new FormData();
     form.append('username', username);
@@ -66,6 +67,46 @@ export const Api = {
       },
     });
   },
+  listUsers: () => getJson<Array<{ username: string; role?: string }>>('/api/users/'),
+
+  // Filters
+  filters: () => getJson<Record<string, unknown>>('/api/filters'),
+
+  // Test Runs
+  testRuns: (init?: RequestInit & { signal?: AbortSignal }) => getJson<Array<Record<string, unknown>>>('/api/test-runs/', init),
+  getTestRun: (id: number) => getJson<Record<string, unknown>>(`/api/test-runs/${id}`),
+  updateTestRun: (id: number, payload: FormData | URLSearchParams | Record<string, unknown>) => {
+    const body = payload instanceof FormData ? payload : payload instanceof URLSearchParams ? payload : JSON.stringify(payload);
+    const headers: Record<string, string> = basicAuthHeader ? { Authorization: basicAuthHeader } : {};
+    if (!(payload instanceof FormData)) headers['Content-Type'] = payload instanceof URLSearchParams ? 'application/x-www-form-urlencoded' : 'application/json';
+    return fetch(buildUrl(`/api/test-runs/${id}`), { method: 'PUT', headers, body: body as BodyInit });
+  },
+  deleteTestRun: (id: number) => fetch(buildUrl(`/api/test-runs/${id}`), { method: 'DELETE', headers: { ...(basicAuthHeader ? { Authorization: basicAuthHeader } : {}) } }),
+  bulkUpdateTestRuns: (body: BodyInit) => fetch(buildUrl('/api/test-runs/bulk'), { method: 'PUT', headers: { ...(basicAuthHeader ? { Authorization: basicAuthHeader } : {}) }, body }),
+
+  // Performance Data
+  performanceData: (params: { test_run_ids?: Array<number> | string }) => {
+    const query = new URLSearchParams();
+    if (params?.test_run_ids) query.set('test_run_ids', Array.isArray(params.test_run_ids) ? params.test_run_ids.join(',') : params.test_run_ids);
+    return getJson<Record<string, unknown>>(`/api/test-runs/performance-data${query.toString() ? `?${query.toString()}` : ''}`);
+  },
+
+  // Time Series
+  timeSeriesServers: () => getJson<Record<string, unknown>>('/api/time-series/servers'),
+  timeSeriesAll: () => getJson<Record<string, unknown>>('/api/time-series/all'),
+  timeSeriesLatest: () => getJson<Record<string, unknown>>('/api/time-series/latest'),
+  timeSeriesHistory: (params: Record<string, string>) => {
+    const qs = new URLSearchParams(params);
+    return getJson<Record<string, unknown>>(`/api/time-series/history${qs.toString() ? `?${qs.toString()}` : ''}`);
+  },
+  timeSeriesTrends: (params: Record<string, string>) => {
+    const qs = new URLSearchParams(params);
+    return getJson<Record<string, unknown>>(`/api/time-series/trends${qs.toString() ? `?${qs.toString()}` : ''}`);
+  },
+
+  // Imports
+  uploadImport: (form: FormData) => postForm('/api/import', form),
+  uploadImportBulk: () => postForm('/api/import/bulk', new FormData()),
 };
 
 

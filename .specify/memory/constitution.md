@@ -1,16 +1,15 @@
 <!--
 Sync Impact Report
-- Version change: N/A → 1.0.0
-- Modified principles: (new document)
-- Added sections: Core Principles; Architecture & Constraints; Workflow & Quality Gates; Governance
+- Version change: 1.0.0 → 1.1.0
+- Modified principles: none (clarifications only)
+- Added sections: Architecture & Constraints (transition details)
 - Removed sections: none
 - Templates requiring updates:
   ✅ .specify/templates/plan-template.md (version reference updated)
   ✅ .specify/templates/spec-template.md (no changes required)
   ✅ .specify/templates/tasks-template.md (no changes required)
   ✅ .specify/templates/agent-file-template.md (no changes required)
-- Follow-up TODOs:
-  - TODO(RATIFICATION_DATE): Original adoption date unknown; set when known.
+- Follow-up TODOs: none
 -->
 
 # FIO Analyzer Constitution
@@ -26,10 +25,10 @@ changes are easier to review, safer to ship, and align with the project's
 
 ### II. Test-First Quality Gates
 Critical functionality MUST be protected by tests. Frontend changes MUST pass
-`npm run lint` and `npx tsc --noEmit`. Backend changes MUST pass `make check`
-and `uv run pytest` where applicable. CI and reviewers MUST block merges that
-fail gates. Rationale: enforce correctness before integration and prevent
-regressions.
+`npm run lint` and `npx tsc --noEmit` (React) or `npm run lint` (Vue). Backend
+changes MUST pass `make check` and `uv run pytest` where applicable. CI and
+reviewers MUST block merges that fail gates. Rationale: enforce correctness
+before integration and prevent regressions.
 
 ### III. Documentation & CHANGELOG Discipline
 Significant changes MUST update `README.md` or relevant docs and append entries
@@ -51,11 +50,20 @@ the app is visualization-heavy and performance-sensitive.
 
 ## Architecture & Constraints
 
-This is a web application composed of a React + TypeScript + Vite frontend and
-a Python FastAPI backend with SQLite (or PostgreSQL) storage. Docker provides a
-single-container production deployment with nginx proxying `/api` to the
-backend.
+This is a web application composed of a frontend (in migration from React to Vue.js)
+and a Python FastAPI backend with SQLite (or PostgreSQL) storage. Docker provides
+a single-container production deployment with nginx proxying `/api` to the backend.
 
+### Frontend Migration Architecture
+- **Current State**: Dual frontend structure during migration
+  - `frontend/`: React + TypeScript + Vite (legacy, to be decommissioned)
+  - `frontend-vue/`: Vue 3 + TypeScript + Vite (migration target)
+- **Migration Requirements**: Vue frontend MUST achieve complete feature parity
+  before React frontend decommissioning. Backend API contracts MUST remain unchanged.
+- **Charts Stack**: Chart.js via vue-chartjs for 2D charts + Three.js for 3D visualizations
+- **Performance Target**: Initial chart render < 500ms for typical datasets
+
+### Configuration & Deployment
 - Frontend configuration: `VITE_API_URL` is a build-time variable; runtime
   changes require rebuilds. Dev uses relative `/api` via Vite proxy.
 - Backend conventions: Routers in `backend/routers/`, auth files in project
@@ -66,9 +74,9 @@ backend.
 ## Workflow & Quality Gates
 
 - Branching and PRs: Follow Conventional Commits. Keep PRs small and scoped.
-- Validation: Frontend `npm run lint` + `npx tsc --noEmit`; Backend `make check`
-  + `uv run pytest` when tests exist; docker compose builds must pass locally
-  for deployment docs.
+- Validation: Frontend `npm run lint` + `npx tsc --noEmit` (React) or
+  `npm run lint` (Vue); Backend `make check` + `uv run pytest` when tests exist;
+  docker compose builds must pass locally for deployment docs.
 - Reviews: Reviewers MUST reject changes violating Core Principles. Changes that
   touch APIs MUST include updated docs and, when applicable, contract tests.
 - Documentation: Update relevant docs alongside code; do not defer.
@@ -86,4 +94,4 @@ backend.
   MINOR for new principles/sections or materially expanded guidance, PATCH for
   clarifications.
 
-**Version**: 1.0.0 | **Ratified**: 2025-09-23 | **Last Amended**: 2025-09-23
+**Version**: 1.1.0 | **Ratified**: 2025-09-23 | **Last Amended**: 2025-09-23

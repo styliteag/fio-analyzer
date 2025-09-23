@@ -19,7 +19,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { getJson } from '../services/api';
+import { Api } from '../services/api';
 
 type TSResponse = Record<string, unknown>;
 const data = ref<TSResponse | { error: string } | null>(null);
@@ -27,7 +27,10 @@ const data = ref<TSResponse | { error: string } | null>(null);
 async function load(kind: 'servers'|'latest'|'history'|'trends') {
   data.value = null;
   try {
-    data.value = await getJson(`/api/time-series/${kind}`);
+    if (kind === 'servers') data.value = await Api.timeSeriesServers();
+    else if (kind === 'latest') data.value = await Api.timeSeriesLatest();
+    else if (kind === 'history') data.value = await Api.timeSeriesHistory({});
+    else if (kind === 'trends') data.value = await Api.timeSeriesTrends({});
   } catch (e) {
     data.value = { error: String(e) };
   }

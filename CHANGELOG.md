@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Views wired: Home (info), Filters, Test Runs, Performance Data, Time Series, Upload, Admin Users
 - Shared components: export buttons, basic Chart.js line chart, Three.js 3D bar demo
 - Request cancellation and chart decimation defaults
+- Vue services: completed API client coverage for users, test runs, performance data, time-series, and imports (T011)
+- Frontend-vue lint task added and verified clean (`npm run lint`) (T024a)
+- Charts parity achieved in Vue app: 2D Chart.js components and 3D Three.js bar chart (T020, T021)
+- Radar chart component and integration added; fullscreen chart UX with ESC exit (T020c, T020d)
 - **Performance Graphs Visualization**: New interactive chart-based visualization option alongside Performance Heatmap
   - IOPS Comparison Chart: Line chart comparing IOPS performance across block sizes and patterns
   - Latency Analysis Chart: Multi-axis chart displaying average, P95, and P99 latency metrics

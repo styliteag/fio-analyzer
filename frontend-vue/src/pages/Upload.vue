@@ -37,7 +37,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { API_BASE_URL } from '../services/api';
+import { Api } from '../services/api';
 
 const file = ref<File | null>(null);
 const drive_model = ref('');
@@ -62,9 +62,8 @@ async function submit() {
   form.append('hostname', hostname.value);
   form.append('protocol', protocol.value);
   form.append('description', description.value);
-  const url = (API_BASE_URL || '') + '/api/import';
   try {
-    const res = await fetch(url, { method: 'POST', body: form });
+    const res = await Api.uploadImport(form);
     const text = await res.text();
     result.value = { status: res.status, body: text };
   } catch (e) {

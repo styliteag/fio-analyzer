@@ -8,6 +8,7 @@
    - Navigate: Home, Performance, Compare, History, Host, Upload, Admin, UserManager
    - Filters and sorting operate correctly
    - Charts render and interact smoothly
+   - **PRIORITY**: Radar chart renders with proper legend controls
    - Export PNG/CSV works
    - 3D chart renders with expected controls
 4. Upload a FIO JSON file and confirm data appears in lists and charts.

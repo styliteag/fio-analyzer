@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { getJson, Api } from '../services/api';
+import { Api } from '../services/api';
 
 interface UserRow { username: string; role?: string }
 const users = ref<UserRow[]>([]);
@@ -42,7 +42,7 @@ const newPass = ref('');
 
 async function load() {
   try {
-    users.value = await getJson<UserRow[]>('/api/users/');
+    users.value = await Api.listUsers();
   } catch (e) {
     users.value = [];
   }

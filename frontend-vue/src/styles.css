@@ -10,6 +10,11 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,s
 .app-header{grid-area:header;display:flex;align-items:center;gap:12px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--bg)}
 .app-sidebar{grid-area:sidebar;border-right:1px solid var(--border);background:var(--bg-muted);padding:12px}
 .app-main{grid-area:main;padding:16px}
+.grid-responsive{display:grid;gap:12px}
+@media (min-width:480px){.grid-responsive{grid-template-columns:1fr}}
+@media (min-width:768px){.grid-responsive{grid-template-columns:1fr 1fr}}
+@media (min-width:1024px){.grid-responsive{grid-template-columns:1fr 1fr 1fr}}
+@media (min-width:1280px){.grid-responsive{grid-template-columns:repeat(4,1fr)}}
 .navbar a{text-decoration:none;color:var(--text);padding:6px 8px;border-radius:6px}
 .navbar a.router-link-active{background:var(--border)}
 .button{background:var(--accent);color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer}

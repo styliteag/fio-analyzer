@@ -41,8 +41,8 @@
 ### Phase 3.3: Core Implementation
 - [X] T009 Router: define routes for Home, Performance, Compare, History, Host, Upload, Admin, UserManager
 - [X] T010 Auth: login form and role handling (admin/uploader), token/basic auth parity with existing flows
-- [ ] T011 Services: API client honoring `VITE_API_URL`; endpoints per data-model.md
-- [ ] T012 Pages: Home/Info consuming `/api/info`
+- [X] T011 Services: API client honoring `VITE_API_URL`; endpoints per data-model.md
+- [X] T012 Pages: Home/Info consuming `/api/info`
 - [X] T013 Pages: Filters consuming `/api/filters`
 - [X] T014 Pages: Test Runs list consuming `/api/test-runs/`
 - [X] T015 Pages: Performance Data view consuming `/api/test-runs/performance-data`
@@ -52,18 +52,21 @@
 - [X] T018a Admin Users: Create user (POST /api/users/)
  - [X] T018b Admin Users: Update user (PUT /api/users/{username})
 - [X] T018c Admin Users: Delete user (DELETE /api/users/{username})
-- [ ] T019 Shared: filter components, selectors, pagination, export (PNG/CSV)
-- [ ] T020 Charts (2D): Chart.js components for metrics/time-series
-- [ ] T021 Charts (3D): Three.js component for 3D bar chart parity
+- [X] T019 Shared: filter components, selectors, pagination, export (PNG/CSV)
+- [X] T020 Charts (2D): Chart.js components for metrics/time-series
+- [X] T021 Charts (3D): Three.js component for 3D bar chart parity
  - [X] T020a Integrate BasicLineChart in Performance.vue (IOPS/time)
  - [X] T020b Integrate BasicLineChart for latency metrics (avg/p95/p99)
  - [X] T021a Integrate ThreeDBarChart in Compare or dedicated 3D page
+
+  - [X] T020c Charts (2D): Radar chart component and integration where applicable (Compare/Performance)
+  - [X] T020d Charts UX: Fullscreen toggle on chart canvases; ESC exits; preserve zoom state
 
 ### Phase 3.4: Integration
 - [X] T022 Performance optimizations: decimation/downsampling, memoization-equivalent patterns
 - [X] T023 Request cancellation for data fetches
 - [X] T024 Build: production build and Docker/nginx path checks
-- [ ] T024a Run ESLint on frontend-vue (`npm run lint`)
+- [X] T024a Run ESLint on frontend-vue (`npm run lint`)
  - [X] T024b Type-check frontend-vue (`npx tsc --noEmit`)
 
 ### Phase 3.5: Polish
@@ -94,11 +97,11 @@ Run in parallel:
 - Use `frontend-vue/` until parity, then decommission `frontend/`
 
 ### Phase 3.6: UI Parity Phase
-- [ ] U001 Base layout shell (header/sidebar/footer) matching React app structure
-- [ ] U002 Theming and dark mode parity (Tailwind or CSS vars)
-- [ ] U003 Rebuild selectors (hosts, templates, test runs) with keyboard a11y
-- [ ] U004 Recreate modals (edit/bulk edit) and forms with validation
-- [ ] U005 Chart interactions polish (legends, tooltips, zoom, export UX)
-- [ ] U006 Compare view parity (multi-run selection, layout, controls)
-- [ ] U007 Performance/Host pages parity (filters, grouping, sorting UX)
-- [ ] U008 Responsive layouts across pages (breakpoints as in React app)
+- [X] U001 Base layout shell (header/sidebar/footer) matching React app structure
+- [X] U002 Theming and dark mode parity (Tailwind or CSS vars)
+- [X] U003 Rebuild selectors (hosts, templates, test runs) with keyboard a11y
+- [X] U004 Recreate modals (edit/bulk edit) and forms with validation
+- [X] U005 Chart interactions polish: wheel+modifier zoom; legend series toggle keyboard accessible; tooltip density policy
+- [X] U006 Compare view parity (multi-run selection, layout, controls)
+- [X] U007 Performance/Host pages parity (filters, grouping, sorting UX)
+- [X] U008 Responsive layouts: define breakpoints at 1280/1024/768/480 and verify layout

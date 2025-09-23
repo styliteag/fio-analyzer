@@ -19,6 +19,12 @@
 - Chart.js 3D plugins: Limited capabilities for required 3D visuals.
 - In-place migration within `frontend/`: Higher risk, difficult rollback.
 
+## Priority Research: Radar Chart Implementation
+- **Decision**: Implement radar chart using Chart.js radar type with vue-chartjs
+- **Rationale**: Critical for FR-003 compliance; Chart.js radar provides sufficient control
+- **Performance**: Target <500ms render with ≤5 datasets × ≤200 points; use decimation for larger sets
+- **Accessibility**: Ensure keyboard navigation for legend toggles, proper ARIA labels
+
 ## Open Notes
 - Validate large dataset rendering strategies (downsampling, decimation).
 - Confirm router structure parity with current pages.
