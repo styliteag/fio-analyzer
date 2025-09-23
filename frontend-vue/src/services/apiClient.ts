@@ -117,21 +117,6 @@ class ApiClient {
     return this.request<FilterOptions>('/filters')
   }
 
-  // Time Series APIs
-  async getIOPSTimeSeries(hostname: string, metric: 'read' | 'write'): Promise<TimeSeriesData> {
-    return this.request<TimeSeriesData>(`/time-series/iops?hostname=${hostname}&metric=${metric}`)
-  }
-
-  async getLatencyTimeSeries(
-    hostname: string,
-    metric: 'read_avg' | 'write_avg' | 'read_p95' | 'write_p95' | 'read_p99' | 'write_p99'
-  ): Promise<TimeSeriesData> {
-    return this.request<TimeSeriesData>(`/time-series/latency?hostname=${hostname}&metric=${metric}`)
-  }
-
-  async getBandwidthTimeSeries(hostname: string, metric: 'read' | 'write'): Promise<TimeSeriesData> {
-    return this.request<TimeSeriesData>(`/time-series/bandwidth?hostname=${hostname}&metric=${metric}`)
-  }
 
   // File Upload API
   async uploadFile(file: File): Promise<{ message: string; imported_count: number }> {

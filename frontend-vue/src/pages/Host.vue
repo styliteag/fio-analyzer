@@ -120,7 +120,7 @@
             </div>
 
             <!-- Performance Comparison Chart -->
-            <div class="chart-container">
+            <div v-if="selectedChartType === 'comparison'" class="chart-container">
               <BasicLineChart
                 :time-series-data="comparisonData"
                 :height="400"
@@ -140,25 +140,25 @@
                 <thead class="bg-gray-50">
                   <tr>
                     <th class="table-header">Date</th>
-                    <th class="table-header">Test Type</th>
+                    <th class="table-header">Test Name</th>
                     <th class="table-header">Drive Type</th>
-                    <th class="table-header">Read IOPS</th>
-                    <th class="table-header">Write IOPS</th>
-                    <th class="table-header">Read Latency</th>
-                    <th class="table-header">Write Latency</th>
+                    <th class="table-header">IOPS</th>
                     <th class="table-header">Bandwidth</th>
+                    <th class="table-header">Avg Latency</th>
+                    <th class="table-header">95th % Latency</th>
+                    <th class="table-header">Pattern</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 bg-white">
-                  <tr v-for="testRun in recentTestRuns" :key="testRun.id" class="hover:bg-gray-50">
+                  <tr v-for="(testRun, index) in recentTestRuns" :key="`${testRun.id}-${index}`" class="hover:bg-gray-50">
                     <td class="table-cell">{{ formatDate(testRun.timestamp) }}</td>
-                    <td class="table-cell">{{ testRun.test_type }}</td>
+                    <td class="table-cell">{{ testRun.test_name }}</td>
                     <td class="table-cell">{{ testRun.drive_type }}</td>
-                    <td class="table-cell">{{ formatNumber(testRun.iops_read) }}</td>
-                    <td class="table-cell">{{ formatNumber(testRun.iops_write) }}</td>
-                    <td class="table-cell">{{ testRun.latency_read_avg.toFixed(2) }}ms</td>
-                    <td class="table-cell">{{ testRun.latency_write_avg.toFixed(2) }}ms</td>
-                    <td class="table-cell">{{ formatNumber(testRun.bandwidth_read + testRun.bandwidth_write) }} MB/s</td>
+                    <td class="table-cell">{{ formatNumber(testRun.iops) }}</td>
+                    <td class="table-cell">{{ formatNumber(testRun.bandwidth) }}</td>
+                    <td class="table-cell">{{ (testRun.avg_latency || 0).toFixed(2) }}ms</td>
+                    <td class="table-cell">{{ (testRun.p95_latency || 0).toFixed(2) }}ms</td>
+                    <td class="table-cell">{{ testRun.read_write_pattern || 'N/A' }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -186,7 +186,6 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTestRuns } from '@/composables/useTestRuns'
 import { useErrorHandler } from '@/composables/useErrorHandler'
-import { apiClient } from '@/services/apiClient'
 import RadarChart from '@/components/charts/RadarChart.vue'
 import BasicLineChart from '@/components/charts/BasicLineChart.vue'
 import ThreeDBarChart from '@/components/charts/ThreeDBarChart.vue'
@@ -200,19 +199,27 @@ const { handleApiError } = useErrorHandler()
 // State
 const selectedHostname = ref('')
 const selectedChartType = ref('radar')
+
+// Watch for chart type changes and ensure valid state
+watch(selectedChartType, (newType) => {
+  // Ensure we have valid time series data when switching to line chart
+  if (newType === 'line' && (!timeSeriesData.value || timeSeriesData.value.length === 0)) {
+    loadTimeSeriesData()
+  }
+})
 const chartOptions = ref({
   showArea: false,
   smooth: true,
   metric: 'iops' as 'iops' | 'latency' | 'bandwidth'
 })
 const timeSeriesData = ref<TimeSeriesData[]>([])
-const radarMetrics = ['iops_read', 'iops_write', 'latency_read_avg', 'latency_write_avg', 'bandwidth_read', 'bandwidth_write']
+const radarMetrics = ['iops', 'avg_latency', 'bandwidth', 'p95_latency']
 
 // Computed
 const uniqueHostnames = getUniqueHostnames
 
 const hostTestRuns = computed(() => {
-  if (!selectedHostname.value) return []
+  if (!selectedHostname.value || !testRuns.value) return []
   return testRuns.value.filter(run => run.hostname === selectedHostname.value)
 })
 
@@ -224,29 +231,38 @@ const recentTestRuns = computed(() => {
 })
 
 const avgIOPS = computed(() => {
-  if (hostTestRuns.value.length === 0) return 0
-  const total = hostTestRuns.value.reduce((sum, run) => sum + run.iops_read + run.iops_write, 0)
+  if (!hostTestRuns.value || hostTestRuns.value.length === 0) return 0
+  const total = hostTestRuns.value.reduce((sum, run) => {
+    return sum + (run.iops || 0)
+  }, 0)
   return Math.round(total / hostTestRuns.value.length)
 })
 
 const avgLatency = computed(() => {
-  if (hostTestRuns.value.length === 0) return 0
-  const total = hostTestRuns.value.reduce((sum, run) => sum + run.latency_read_avg + run.latency_write_avg, 0)
-  return total / (hostTestRuns.value.length * 2)
+  if (!hostTestRuns.value || hostTestRuns.value.length === 0) return 0
+  const total = hostTestRuns.value.reduce((sum, run) => {
+    return sum + (run.avg_latency || 0)
+  }, 0)
+  return total / hostTestRuns.value.length
 })
 
 const avgBandwidth = computed(() => {
-  if (hostTestRuns.value.length === 0) return 0
-  const total = hostTestRuns.value.reduce((sum, run) => sum + run.bandwidth_read + run.bandwidth_write, 0)
+  if (!hostTestRuns.value || hostTestRuns.value.length === 0) return 0
+  const total = hostTestRuns.value.reduce((sum, run) => {
+    return sum + (run.bandwidth || 0)
+  }, 0)
   return Math.round(total / hostTestRuns.value.length)
 })
 
 const comparisonData = computed((): TimeSeriesData[] => {
-  if (hostTestRuns.value.length === 0) return []
+  if (!hostTestRuns.value || hostTestRuns.value.length === 0) return []
 
   const timestamps = hostTestRuns.value.map(run => run.timestamp)
-  const iopsValues = hostTestRuns.value.map(run => run.iops_read + run.iops_write)
-  const latencyValues = hostTestRuns.value.map(run => Math.max(0, 100 - run.latency_read_avg))
+  const iopsValues = hostTestRuns.value.map(run => run.iops || 0)
+  const latencyValues = hostTestRuns.value.map(run => {
+    const latency = run.avg_latency || 0
+    return Math.max(0, 100 - latency)
+  })
 
   return [
     {
@@ -281,19 +297,55 @@ const refreshHostData = () => {
 }
 
 const loadTimeSeriesData = async () => {
-  if (!selectedHostname.value) return
+  if (!selectedHostname.value || !testRuns.value) return
 
   try {
-    const [iopsRead, iopsWrite, latencyRead, latencyWrite] = await Promise.all([
-      apiClient.getIOPSTimeSeries(selectedHostname.value, 'read'),
-      apiClient.getIOPSTimeSeries(selectedHostname.value, 'write'),
-      apiClient.getLatencyTimeSeries(selectedHostname.value, 'read_avg'),
-      apiClient.getLatencyTimeSeries(selectedHostname.value, 'write_avg')
-    ])
+    // Transform test runs data into time series format locally
+    const hostTestRuns = testRuns.value.filter(run => run.hostname === selectedHostname.value)
 
-    timeSeriesData.value = [iopsRead, iopsWrite, latencyRead, latencyWrite]
+    if (hostTestRuns.length === 0) {
+      timeSeriesData.value = []
+      return
+    }
+
+    // Sort by timestamp for proper time series ordering
+    const sortedRuns = hostTestRuns.slice().sort((a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+
+    // Create time series data from test runs (using aggregated metrics)
+    const iopsTotal: TimeSeriesData = {
+      timestamps: sortedRuns.map(run => run.timestamp),
+      values: sortedRuns.map(run => run.iops || 0),
+      metric: 'Total IOPS',
+      hostname: selectedHostname.value
+    }
+
+    const avgLatency: TimeSeriesData = {
+      timestamps: sortedRuns.map(run => run.timestamp),
+      values: sortedRuns.map(run => run.avg_latency || 0),
+      metric: 'Average Latency (ms)',
+      hostname: selectedHostname.value
+    }
+
+    const bandwidth: TimeSeriesData = {
+      timestamps: sortedRuns.map(run => run.timestamp),
+      values: sortedRuns.map(run => run.bandwidth || 0),
+      metric: 'Bandwidth (MB/s)',
+      hostname: selectedHostname.value
+    }
+
+    const p95Latency: TimeSeriesData = {
+      timestamps: sortedRuns.map(run => run.timestamp),
+      values: sortedRuns.map(run => run.p95_latency || 0),
+      metric: '95th Percentile Latency (ms)',
+      hostname: selectedHostname.value
+    }
+
+    timeSeriesData.value = [iopsTotal, avgLatency, bandwidth, p95Latency]
   } catch (err) {
     console.error('Error loading time series data:', err)
+    timeSeriesData.value = []
   }
 }
 
@@ -306,6 +358,7 @@ const onOptionsChange = (options: Partial<typeof chartOptions.value>) => {
 }
 
 const formatNumber = (num: number): string => {
+  if (typeof num !== 'number' || isNaN(num)) return '0'
   return num.toLocaleString()
 }
 

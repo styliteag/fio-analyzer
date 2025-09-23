@@ -136,7 +136,8 @@ const options = ref<ChartOptions>({
 const chartTemplates: ChartTemplate[] = [
   { id: 'radar', name: 'Radar', description: 'Multi-metric comparison' },
   { id: 'line', name: 'Line', description: 'Time series data' },
-  { id: 'bar3d', name: '3D Bars', description: 'Interactive 3D visualization' }
+  { id: 'bar3d', name: '3D Bars', description: 'Interactive 3D visualization' },
+  { id: 'comparison', name: 'Comparison', description: 'IOPS vs Latency comparison' }
 ]
 
 const selectTemplate = (templateId: string) => {

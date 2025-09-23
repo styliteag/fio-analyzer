@@ -6,21 +6,18 @@ export interface TestRun {
   id: number
   hostname: string
   drive_type: string
-  test_type: string
+  test_name: string
   timestamp: string
-  iops_read: number
-  iops_write: number
-  latency_read_avg: number
-  latency_write_avg: number
-  latency_read_p95: number
-  latency_write_p95: number
-  latency_read_p99: number
-  latency_write_p99: number
-  bandwidth_read: number
-  bandwidth_write: number
+  iops: number
+  avg_latency: number
+  bandwidth: number
+  p95_latency: number
+  p99_latency: number
   drive_model?: string
   read_write_pattern?: string
   block_size?: string
+  queue_depth?: number
+  protocol?: string
 }
 
 export interface FilterOptions {
