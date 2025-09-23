@@ -1,89 +1,89 @@
-# FIO Analyzer Project Constitution
-
 <!--
-Sync Impact Report:
-- Version: 1.0.0 (initial constitution)
-- Templates requiring updates: ✅ constitution created (no existing templates to sync)
-- Follow-up TODOs: None
-- Created: 2025-09-22 (initial ratification)
+Sync Impact Report
+- Version change: N/A → 1.0.0
+- Modified principles: (new document)
+- Added sections: Core Principles; Architecture & Constraints; Workflow & Quality Gates; Governance
+- Removed sections: none
+- Templates requiring updates:
+  ✅ .specify/templates/plan-template.md (version reference updated)
+  ✅ .specify/templates/spec-template.md (no changes required)
+  ✅ .specify/templates/tasks-template.md (no changes required)
+  ✅ .specify/templates/agent-file-template.md (no changes required)
+- Follow-up TODOs:
+  - TODO(RATIFICATION_DATE): Original adoption date unknown; set when known.
 -->
 
-**Project Name**: FIO Analyzer - Storage Performance Visualizer
-**Constitution Version**: 1.0.0
-**Ratification Date**: 2025-09-22
-**Last Amended Date**: 2025-09-22
-
-## Purpose and Scope
-
-FIO Analyzer is a comprehensive full-stack web application designed to analyze and visualize FIO (Flexible I/O Tester) benchmark results. This constitution establishes the foundational principles and governance framework for developing, maintaining, and operating this storage performance analysis platform.
+# FIO Analyzer Constitution
 
 ## Core Principles
 
-### Principle 1: Performance-First Development
-**Name**: Performance-First Development
-**Rule**: All code changes MUST be evaluated for performance impact on both frontend rendering and backend processing. Performance regressions are considered blocking issues that require immediate resolution.
+### I. Simplicity First
+All changes MUST minimize complexity and diff size while preserving clarity. Prefer
+small, focused edits that solve the problem without refactoring unrelated code.
+Names MUST be self-explanatory; avoid premature abstractions. Rationale: smaller
+changes are easier to review, safer to ship, and align with the project's
+"fewer lines of code" ethos.
 
-**Rationale**: Given that FIO Analyzer processes large datasets of storage performance metrics and renders complex interactive visualizations, maintaining optimal performance is critical for user experience and system scalability.
+### II. Test-First Quality Gates
+Critical functionality MUST be protected by tests. Frontend changes MUST pass
+`npm run lint` and `npx tsc --noEmit`. Backend changes MUST pass `make check`
+and `uv run pytest` where applicable. CI and reviewers MUST block merges that
+fail gates. Rationale: enforce correctness before integration and prevent
+regressions.
 
-### Principle 2: API-First Architecture
-**Name**: API-First Architecture
-**Rule**: All new features MUST be developed API-first, with comprehensive OpenAPI documentation generated automatically. API contracts MUST remain stable and backward-compatible.
+### III. Documentation & CHANGELOG Discipline
+Significant changes MUST update `README.md` or relevant docs and append entries
+under `[Unreleased]` in `CHANGELOG.md` prior to commit. API changes MUST update
+`docs/api/endpoints.json` via `scripts/generate_endpoints.py`. Rationale: keep
+users and maintainers aligned and ensure traceability.
 
-**Rationale**: The FastAPI backend serves multiple consumers including the React frontend, automated testing scripts, and potential third-party integrations. API-first development ensures consistency and maintainability.
+### IV. Security & Configuration Hygiene
+Secrets MUST NOT be committed. Use environment variables and documented config
+(`VITE_API_URL`, `.env`, Docker compose). Authentication roles (admin,
+uploader) MUST be respected in UI and API. Rationale: protect credentials and
+enforce least privilege.
 
-### Principle 3: Type Safety and Data Integrity
-**Name**: Type Safety and Data Integrity
-**Rule**: All TypeScript code MUST maintain strict type safety with zero 'any' types. All database operations MUST include proper validation using Pydantic models. Performance metrics data MUST be validated for accuracy and completeness.
+### V. Performance & Observability
+Frontend MUST optimize rendering (memoization, request cancellation) and keep
+bundle size lean. Backend MUST log meaningfully and avoid unnecessary queries.
+New features SHOULD include basic metrics/logs for troubleshooting. Rationale:
+the app is visualization-heavy and performance-sensitive.
 
-**Rationale**: Storage performance data is critical for infrastructure decisions. Type safety and validation prevent data corruption and ensure reliable analysis results.
+## Architecture & Constraints
 
-### Principle 4: Authentication and Security
-**Name**: Authentication and Security
-**Rule**: All API endpoints MUST require authentication. User credentials MUST be stored securely using bcrypt hashing. Role-based access control MUST be enforced between admin and upload-only users.
+This is a web application composed of a React + TypeScript + Vite frontend and
+a Python FastAPI backend with SQLite (or PostgreSQL) storage. Docker provides a
+single-container production deployment with nginx proxying `/api` to the
+backend.
 
-**Rationale**: Performance data often contains sensitive infrastructure information. Proper authentication prevents unauthorized access and maintains data confidentiality.
+- Frontend configuration: `VITE_API_URL` is a build-time variable; runtime
+  changes require rebuilds. Dev uses relative `/api` via Vite proxy.
+- Backend conventions: Routers in `backend/routers/`, auth files in project
+  root, DB path `backend/db/storage_performance.db`.
+- API stability: Maintain RESTful paths documented in Swagger. Breaking changes
+  require a migration note and version bump per Governance.
 
-### Principle 5: Test Coverage and Quality Assurance
-**Name**: Test Coverage and Quality Assurance
-**Rule**: All frontend code changes MUST pass ESLint validation and TypeScript compilation checks. All new features MUST include appropriate test coverage. Database migrations MUST be thoroughly tested.
+## Workflow & Quality Gates
 
-**Rationale**: The application handles critical performance data used for infrastructure decisions. Code quality and testing prevent bugs that could lead to incorrect performance analysis.
-
-### Principle 6: Documentation and Observability
-**Name**: Documentation and Observability
-**Rule**: All API changes MUST be documented in the auto-generated OpenAPI specification. All significant code changes MUST be documented in CHANGELOG.md. Performance metrics and system health MUST be observable through logging and monitoring.
-
-**Rationale**: Comprehensive documentation ensures maintainability and enables effective troubleshooting. Observability is essential for monitoring system health and performance.
-
-### Principle 7: Containerization and Deployment
-**Name**: Containerization and Deployment
-**Rule**: The application MUST be deployable as a single Docker container for production use. Development setup MUST support both containerized and native environments. All deployment configurations MUST be version-controlled.
-
-**Rationale**: Consistent deployment reduces operational complexity and ensures reproducible environments across development, testing, and production.
+- Branching and PRs: Follow Conventional Commits. Keep PRs small and scoped.
+- Validation: Frontend `npm run lint` + `npx tsc --noEmit`; Backend `make check`
+  + `uv run pytest` when tests exist; docker compose builds must pass locally
+  for deployment docs.
+- Reviews: Reviewers MUST reject changes violating Core Principles. Changes that
+  touch APIs MUST include updated docs and, when applicable, contract tests.
+- Documentation: Update relevant docs alongside code; do not defer.
 
 ## Governance
 
-### Amendment Process
-1. **Proposal**: Amendments may be proposed via pull request with detailed rationale
-2. **Review**: Changes require review by project maintainers
-3. **Approval**: Major amendments require consensus among active contributors
-4. **Documentation**: All amendments must update this constitution and increment version
+- Authority: This constitution supersedes other process docs where conflicts
+  exist. Exceptions require explicit rationale in PR description.
+- Amendments: Propose via PR modifying this document with a Sync Impact Report
+  at top. Determine version bump (MAJOR/MINOR/PATCH) based on semantic impact.
+  Record `Last Amended` date.
+- Compliance: All PR templates and reviewers MUST check compliance with
+  principles and gates. Non-compliant PRs MUST be revised or closed.
+- Versioning Policy: See version line below. MAJOR for removals/redefinitions,
+  MINOR for new principles/sections or materially expanded guidance, PATCH for
+  clarifications.
 
-### Version Management
-- **MAJOR**: Backward incompatible principle changes or removals
-- **MINOR**: New principles added or material expansions to existing principles
-- **PATCH**: Clarifications, wording improvements, or non-semantic refinements
-
-### Compliance Review
-- Constitution compliance MUST be reviewed during all pull requests
-- Principle violations MUST be addressed before code merge
-- Regular architecture reviews MUST assess ongoing alignment with constitutional principles
-
-### Enforcement
-- Pull request reviews MUST verify adherence to constitutional principles
-- Continuous integration MUST enforce technical principles (linting, type checking, testing)
-- Security principles MUST be validated through code review and testing
-
----
-
-*This constitution serves as the foundational governance document for the FIO Analyzer project, establishing principles that guide development decisions and ensure consistent, high-quality deliverables.*
+**Version**: 1.0.0 | **Ratified**: 2025-09-23 | **Last Amended**: 2025-09-23
