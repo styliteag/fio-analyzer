@@ -61,6 +61,7 @@ When creating this spec from a user prompt:
 - Q: UI parity vs improvements? → A: Allow broader UX improvements with approval
  - Q: Performance target for typical datasets? → A: < 500ms initial chart render
  - Q: Directory name for Vue app? → A: frontend-vue
+- Q: Which charting libraries should be used? → A: Chart.js (vue-chartjs) for 2D + Three.js for 3D
 
 ---
 
@@ -75,7 +76,7 @@ As an authenticated user (admin or uploader), I can access the application via a
 
 ### Edge Cases
 - Lost or slow network: The UI displays clear loading/cancellation states; API request cancellation prevents stale updates.
-- Large datasets: Charts render without freezing; pagination/virtualization preserves responsiveness.
+- Large datasets: Charts render without freezing; pagination/virtualization activates for datasets >1000 points to preserve responsiveness.
 - Auth errors: Invalid credentials display appropriate errors without browser auth popups.
 
 ## Requirements *(mandatory)*
@@ -87,7 +88,7 @@ As an authenticated user (admin or uploader), I can access the application via a
   - Radar: initial render ≤ 500ms on ≤ 5 datasets × ≤ 200 points; legend supports keyboard focus and Enter to toggle series; appropriate roles/labels for a11y.
   - Fullscreen: toggle via button; ESC exits; zoom/pan state is preserved when entering/exiting.
 - **FR-004**: System MUST preserve API integration semantics, including `VITE_API_URL` behavior and endpoints documented in Swagger.
-- **FR-005**: System MUST maintain performance optimizations (request cancellation, memoization-equivalent patterns) to keep interactions smooth under typical data volumes.
+- **FR-005**: System MUST maintain performance optimizations (request cancellation, memoization-equivalent patterns) to keep interactions smooth under typical data volumes (≤1000 data points per chart).
 - **FR-006**: System MUST support uploading FIO JSON files with metadata collection and error handling.
 - **FR-007**: System MUST provide admin functions: manage users, edit/bulk edit/delete test runs, and time-series ops where applicable.
 - **FR-008**: System MUST include responsive design and accessibility equivalence.
@@ -95,7 +96,7 @@ As an authenticated user (admin or uploader), I can access the application via a
 - **FR-010**: System MUST update documentation reflecting the new frontend while keeping API unchanged.
 - **FR-015**: Implement the Vue app in `frontend-vue/` and decommission `frontend/` after full parity and switchover.
 - **FR-016**: Backend MUST NOT be modified by this migration; API contracts and endpoints remain unchanged.
-- **FR-017**: Charts stack: Use Chart.js with vue-chartjs for 2D charts and Three.js for 3D visualizations to achieve feature parity and performance.
+- **FR-017**: System MUST implement 2D and 3D chart visualizations to achieve feature parity and performance targets with the current React implementation.
 - **FR-018**: UX improvements beyond pixel parity are allowed but MUST be explicitly approved during review, with rationale and no loss of functionality.
  - **FR-019**: Performance: Initial chart render for typical datasets MUST be under 500ms.
 
