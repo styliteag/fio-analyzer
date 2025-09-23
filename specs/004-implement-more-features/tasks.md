@@ -84,34 +84,34 @@
 - [x] T028 [P] Filter composables in frontend-vue/src/composables/useFilters.ts
 
 ### Theme System
-- [ ] T029 [P] ThemeToggle component in frontend-vue/src/components/ThemeToggle.vue
-- [ ] T030 [P] ThemeContext and provider in frontend-vue/src/contexts/ThemeContext.ts
-- [ ] T031 [P] Theme composables in frontend-vue/src/composables/useTheme.ts
+- [x] T029 [P] ThemeToggle component in frontend-vue/src/components/ThemeToggle.vue
+- [x] T030 [P] ThemeContext and provider in frontend-vue/src/contexts/ThemeContext.ts
+- [x] T031 [P] Theme composables in frontend-vue/src/composables/useTheme.ts
 
 ### Host Analysis Page
-- [ ] T032 Update Host page with visualization controls in frontend-vue/src/pages/Host.vue
-- [ ] T033 [P] HostSelector component in frontend-vue/src/components/HostSelector.vue
-- [ ] T034 [P] HostSummaryCards component in frontend-vue/src/components/HostSummaryCards.vue
-- [ ] T035 [P] HostOverview component in frontend-vue/src/components/HostOverview.vue
+- [x] T032 Update Host page with visualization controls in frontend-vue/src/pages/Host.vue
+- [x] T033 [P] HostSelector component in frontend-vue/src/components/HostSelector.vue
+- [x] T034 [P] HostSummaryCards component in frontend-vue/src/components/HostSummaryCards.vue
+- [x] T035 [P] HostOverview component in frontend-vue/src/components/HostOverview.vue
 
 ## Phase 3.4: Integration
-- [ ] T036 API service integration for host analysis in frontend-vue/src/services/api/hostAnalysis.ts
-- [ ] T037 Chart.js integration with Vue components using vue-chartjs
-- [ ] T038 Error boundary components for chart rendering failures
-- [ ] T039 Loading states and error handling for async operations
-- [ ] T040 Component communication and state synchronization
+- [x] T036 API service integration for host analysis in frontend-vue/src/services/api/hostAnalysis.ts
+- [x] T037 Chart.js integration with Vue components using vue-chartjs
+- [x] T038 Error boundary components for chart rendering failures
+- [x] T039 Loading states and error handling for async operations
+- [x] T040 Component communication and state synchronization
 
 ## Phase 3.5: Polish
-- [ ] T041 [P] Unit tests for data transformation utilities in frontend-vue/src/utils/__tests__/dataTransform.spec.ts
-- [ ] T042 [P] Unit tests for chart processing utilities in frontend-vue/src/utils/__tests__/chartProcessing.spec.ts
-- [ ] T043 [P] Unit tests for filter composables in frontend-vue/src/composables/__tests__/useFilters.spec.ts
-- [ ] T044 [P] Unit tests for theme composables in frontend-vue/src/composables/__tests__/useTheme.spec.ts
-- [ ] T045 Performance optimization for chart rendering (<2s target)
-- [ ] T046 Responsive design improvements for mobile/tablet
-- [ ] T047 Accessibility improvements (ARIA labels, keyboard navigation)
-- [ ] T048 Update component documentation and stories
-- [ ] T049 Execute quickstart validation scenarios
-- [ ] T050 Update CHANGELOG.md with new visualization features
+- [x] T041 [P] Unit tests for data transformation utilities in frontend-vue/src/utils/__tests__/dataTransform.spec.ts
+- [x] T042 [P] Unit tests for chart processing utilities in frontend-vue/src/utils/__tests__/chartProcessing.spec.ts
+- [x] T043 [P] Unit tests for filter composables in frontend-vue/src/composables/__tests__/useFilters.spec.ts
+- [x] T044 [P] Unit tests for theme composables in frontend-vue/src/composables/__tests__/useTheme.spec.ts
+- [x] T045 Performance optimization for chart rendering (<2s target)
+- [x] T046 Responsive design improvements for mobile/tablet
+- [x] T047 Accessibility improvements (ARIA labels, keyboard navigation)
+- [x] T048 Update component documentation and stories
+- [x] T049 Execute quickstart validation scenarios
+- [x] T050 Update CHANGELOG.md with new visualization features
 
 ## Dependencies
 - Tests (T005-T010) before implementation (T011-T041)

@@ -2,8 +2,8 @@
   <div class="host-visualization-controls">
     <!-- Visualization Type Selector -->
     <div class="viz-selector mb-4">
-      <h4 class="text-sm font-medium theme-text-primary mb-3">Visualization Type</h4>
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <h4 id="viz-type-heading" class="text-sm font-medium theme-text-primary mb-3">Visualization Type</h4>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-2" role="group" :aria-labelledby="'viz-type-heading'">
         <button
           v-for="vizType in visualizationTypes"
           :key="vizType.id"
@@ -11,7 +11,13 @@
             'viz-btn',
             activeVisualization === vizType.id ? 'active' : ''
           ]"
+          :aria-label="`Select ${vizType.label} visualization`"
+          :aria-pressed="activeVisualization === vizType.id"
+          role="button"
+          tabindex="0"
           @click="selectVisualization(vizType.id)"
+          @keydown.enter="selectVisualization(vizType.id)"
+          @keydown.space.prevent="selectVisualization(vizType.id)"
         >
           <component :is="vizType.icon" class="w-4 h-4 mb-1" />
           <span class="text-xs">{{ vizType.label }}</span>
