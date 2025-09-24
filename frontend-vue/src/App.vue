@@ -40,13 +40,15 @@
 
     <!-- Loading Overlay -->
     <div
-      v-if="isGlobalLoading"
+      v-if="isGlobalLoading || isInitializing"
       class="fixed inset-0 z-40 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center"
     >
       <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4">
         <div class="flex items-center">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span class="ml-3 text-gray-900 dark:text-white">Loading...</span>
+          <span class="ml-3 text-gray-900 dark:text-white">
+            {{ isInitializing ? 'Initializing...' : 'Loading...' }}
+          </span>
         </div>
       </div>
     </div>
@@ -71,7 +73,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useUiStore } from '@/stores/ui'
 
 const route = useRoute()
-const { isAuthenticated, initialize } = useAuth()
+const { isAuthenticated, initialize, isInitializing, authError } = useAuth()
 const { isDarkMode } = useTheme()
 const uiStore = useUiStore()
 
@@ -124,8 +126,13 @@ watch(successMessage, (newMessage) => {
 
 // Lifecycle
 onMounted(async () => {
-  // Initialize authentication state
-  await initialize()
+  try {
+    // Initialize authentication state
+    await initialize()
+  } catch (error) {
+    console.error('Failed to initialize authentication:', error)
+    // Don't show error to user as it might be expected (no stored auth)
+  }
 
   // Set initial theme based on system preference if not already set
   if (!localStorage.getItem('theme')) {
@@ -133,6 +140,13 @@ onMounted(async () => {
     if (prefersDark) {
       document.documentElement.classList.add('dark')
     }
+  }
+})
+
+// Watch for authentication errors
+watch(authError, (newError) => {
+  if (newError) {
+    errorMessage.value = newError
   }
 })
 </script>

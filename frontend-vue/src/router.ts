@@ -65,27 +65,41 @@ export const router = createRouter({
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 router.beforeEach(async (to, _from) => {
-  const { isAuthenticated, hasPermission, user, initialize } = useAuth()
+  const { isAuthenticated, hasPermission, user, initialize, isInitialized } = useAuth()
 
-  // Initialize auth state on first load
-  await initialize()
+  // Only initialize auth state if not already initialized
+  if (!isInitialized.value) {
+    console.log('🔄 Router: Initializing auth before navigation...')
+    await initialize()
+  }
 
   const meta = to.meta as Record<string, unknown>
   const requiresAdmin = meta?.requiresAdmin === true
   const requiresAuth = meta?.requiresAuth !== false // Default to requiring auth
 
+  console.log('🛣️ Router: Checking route access', {
+    path: to.path,
+    requiresAuth,
+    requiresAdmin,
+    isAuthenticated: isAuthenticated.value,
+    user: user.value?.username
+  })
+
   // If user is authenticated and trying to access login page, redirect to dashboard
   if (to.path === '/login' && isAuthenticated.value) {
+    console.log('🔄 Router: Redirecting authenticated user from login to dashboard')
     return { path: '/dashboard' }
   }
 
   // Allow access to login page and 404 page without authentication
   if (!requiresAuth || to.path === '/login') {
+    console.log('✅ Router: Allowing access to public route')
     return true
   }
 
   // Check if route requires authentication
   if (requiresAuth && !isAuthenticated.value) {
+    console.log('❌ Router: Authentication required, redirecting to login')
     // Store the attempted URL for redirect after login
     return {
       path: '/login',
@@ -95,7 +109,7 @@ router.beforeEach(async (to, _from) => {
 
   // Check if route requires admin privileges
   if (requiresAdmin && !hasPermission('admin')) {
-    console.warn(`Access denied to ${to.path}: User ${user.value?.username} does not have admin privileges`)
+    console.warn(`❌ Router: Access denied to ${to.path}: User ${user.value?.username} does not have admin privileges`)
 
     // Redirect non-admin users to dashboard instead of login
     if (user.value?.role === 'uploader') {
@@ -114,7 +128,7 @@ router.beforeEach(async (to, _from) => {
 
   // Check for upload permission on upload routes
   if (to.path === '/upload' && !hasPermission('upload')) {
-    console.warn(`Access denied to ${to.path}: User does not have upload privileges`)
+    console.warn(`❌ Router: Access denied to ${to.path}: User does not have upload privileges`)
     return {
       path: '/dashboard',
       query: {
@@ -124,6 +138,7 @@ router.beforeEach(async (to, _from) => {
     }
   }
 
+  console.log('✅ Router: Access granted')
   return true
 })
 
