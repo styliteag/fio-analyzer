@@ -415,11 +415,13 @@ const handleDeleteUser = (user: UserAccount) => {
   userToDelete.value = user
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const handleUserCreated = async (_newUser: UserAccount) => {
   showAddUserForm.value = false
   await refreshUsers()
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const handleUserUpdated = async (_updatedUser: UserAccount) => {
   editingUser.value = null
   await refreshUsers()

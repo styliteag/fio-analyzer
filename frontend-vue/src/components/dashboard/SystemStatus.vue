@@ -173,13 +173,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUiStore } from '@/stores/ui'
 import Button from '@/components/ui/Button.vue'
 import StatusIndicator from '@/components/ui/StatusIndicator.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ErrorMessage from '@/components/ui/ErrorMessage.vue'
 import { formatRelativeTime, formatDuration } from '@/utils/formatters'
-import { RefreshCw, AlertTriangle } from 'lucide-vue-next'
+import { RefreshCw as RefreshCwIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-vue-next'
 
 interface Service {
   name: string
@@ -203,7 +202,6 @@ interface SystemIssue {
   timestamp: Date
 }
 
-const uiStore = useUiStore()
 
 // Reactive state
 const services = ref<Service[]>([])

@@ -357,7 +357,7 @@ const configurationsCount = computed(() => {
 const paginatedTestHistory = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage
   const end = start + itemsPerPage
-  return filteredTestData.value
+  return [...filteredTestData.value]
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(start, end)
 })

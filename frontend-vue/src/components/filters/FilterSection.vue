@@ -94,7 +94,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Search } from 'lucide-vue-next'
+import { Search as SearchIcon } from 'lucide-vue-next'
 
 interface Props {
   title: string

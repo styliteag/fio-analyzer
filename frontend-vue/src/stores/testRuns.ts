@@ -124,7 +124,7 @@ export const useTestRunsStore = defineStore('testRuns', () => {
   }
 
   // Filtering and searching
-  function getFilteredData(filters?: Record<string, any>): TestRun[] {
+  function getFilteredData(filters?: Record<string, (string | number)[]>): TestRun[] {
     let filtered = [...state.value.data]
 
     if (!filters || Object.keys(filters).length === 0) {
@@ -138,7 +138,7 @@ export const useTestRunsStore = defineStore('testRuns', () => {
       const valueArray = Array.isArray(values) ? values : [values]
 
       filtered = filtered.filter(run => {
-        const runValue = (run as any)[key]
+        const runValue = (run as Record<string, unknown>)[key]
         if (runValue === undefined || runValue === null) return false
 
         // Handle different filter types

@@ -1,4 +1,4 @@
-import { apiClient, type ApiClientError } from './client'
+import { apiClient } from './client'
 import type { HealthCheckResponse } from '@/types'
 
 // Extended health check response types
@@ -36,7 +36,7 @@ interface ServiceHealth {
   message?: string
   last_check: string
   version?: string
-  details?: Record<string, any>
+  details?: Record<string, unknown>
 }
 
 interface SystemInfoResponse {
@@ -263,10 +263,10 @@ export class HealthApiService {
       }>
       responses: Record<string, {
         description: string
-        schema?: any
+        schema?: unknown
       }>
     }>
-    schemas: Record<string, any>
+    schemas: Record<string, unknown>
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/docs`)
@@ -289,7 +289,7 @@ export class HealthApiService {
       return {
         ...response,
         response_time_ms: endTime - startTime,
-      } as any
+      }
     } catch (error) {
       console.error('Failed to ping service:', error)
       return {

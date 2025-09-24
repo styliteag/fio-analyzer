@@ -13,7 +13,6 @@ import LoginForm from '@/components/LoginForm.vue'
 import Dashboard from '@/pages/Dashboard.vue'
 import HostAnalysis from '@/pages/HostAnalysis.vue'
 import { useAuth } from '@/composables/useAuth'
-import { useApi } from '@/composables/useApi'
 import { useFilters } from '@/composables/useFilters'
 import { useHostSelection } from '@/composables/useHostSelection'
 
@@ -108,8 +107,8 @@ const mockUser = {
 }
 
 describe('Integration Tests - Full User Scenarios', () => {
-  let router: any
-  let pinia: any
+  let router: ReturnType<typeof createRouter>
+  let pinia: ReturnType<typeof createPinia>
 
   beforeEach(() => {
     // Create fresh instances for each test
@@ -289,7 +288,7 @@ describe('Integration Tests - Full User Scenarios', () => {
       expect(result.length).toBeGreaterThan(0)
 
       // Verify all results match the filter criteria
-      result.forEach((testRun: any) => {
+      result.forEach((testRun: TestRun) => {
         expect(['server-01', 'server-02']).toContain(testRun.hostname)
         expect(testRun.drive_type).toBe('NVMe')
       })
@@ -499,7 +498,7 @@ describe('Integration Tests - Full User Scenarios', () => {
     })
 
     it('should update visualizations when filters change', async () => {
-      let passedData: any[] = []
+      let passedData: TestRun[] = []
 
       const wrapper = mount(Dashboard, {
         global: {

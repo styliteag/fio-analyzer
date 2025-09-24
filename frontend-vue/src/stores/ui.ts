@@ -21,7 +21,7 @@ export interface Notification {
 export interface ModalState {
   isOpen: boolean
   component: string | null
-  props: Record<string, any>
+  props: Record<string, unknown>
   options: {
     size?: 'sm' | 'md' | 'lg' | 'xl'
     closable?: boolean
@@ -166,7 +166,7 @@ export const useUiStore = defineStore('ui', () => {
   // Modal management
   function openModal(
     component: string,
-    props: Record<string, any> = {},
+    props: Record<string, unknown> = {},
     options: Partial<ModalState['options']> = {}
   ): void {
     state.value.modal = {
@@ -191,7 +191,7 @@ export const useUiStore = defineStore('ui', () => {
     }
   }
 
-  function updateModalProps(props: Record<string, any>): void {
+  function updateModalProps(props: Record<string, unknown>): void {
     state.value.modal.props = { ...state.value.modal.props, ...props }
   }
 

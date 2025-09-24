@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { PerformanceMetrics } from '@/types/performance'
 
 // Mock API client that will be replaced with actual implementation
 const mockGetPerformanceData = vi.fn()

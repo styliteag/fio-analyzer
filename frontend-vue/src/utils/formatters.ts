@@ -105,8 +105,7 @@ export function formatTimeOnly(
 
 // Relative time formatting
 export function formatRelativeTime(
-  date: Date | string | number,
-  options: DateFormatOptions = {}
+  date: Date | string | number
 ): string {
   const dateObj = new Date(date)
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { TestRun, ApiResponse } from '@/types'
+import type { TestRun } from '@/types'
 
 // Mock the useApi composable that will be implemented later
 const mockUseApi = vi.fn()

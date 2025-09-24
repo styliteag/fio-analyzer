@@ -56,7 +56,7 @@ export function normalizePerformanceData(
 // Filter test runs with OR/AND logic
 export function filterTestRuns(
   testRuns: TestRun[],
-  filters: Record<string, any>
+  filters: Record<string, unknown>
 ): TestRun[] {
   if (!filters || Object.keys(filters).length === 0) return testRuns
 
@@ -116,8 +116,8 @@ export function sortTestRuns(
 
   return [...testRuns].sort((a, b) => {
     for (const { field, direction } of criteria) {
-      const aValue = (a as any)[field]
-      const bValue = (b as any)[field]
+      const aValue = (a as Record<string, unknown>)[field]
+      const bValue = (b as Record<string, unknown>)[field]
 
       let comparison = 0
 
@@ -157,7 +157,7 @@ export function groupTestRunsBy(
 
   testRuns.forEach(run => {
     const keys = fields.map(field => {
-      const value = (run as any)[field]
+      const value = ((run as Record<string, unknown>)[field])
       return value !== undefined && value !== null ? String(value) : 'unknown'
     })
 
@@ -230,8 +230,8 @@ export function calculatePerformanceSummary(testRuns: TestRun[]): {
 export function extractUniqueValues(
   testRuns: TestRun[],
   fields: string[]
-): Record<string, any[]> {
-  const result: Record<string, Set<any>> = {}
+): Record<string, unknown[]> {
+  const result: Record<string, Set<unknown>> = {}
 
   // Initialize sets
   fields.forEach(field => {
@@ -241,7 +241,7 @@ export function extractUniqueValues(
   // Extract values
   testRuns.forEach(run => {
     fields.forEach(field => {
-      const value = (run as any)[field]
+      const value = ((run as Record<string, unknown>)[field])
       if (value !== undefined && value !== null) {
         result[field].add(value)
       }
@@ -249,7 +249,7 @@ export function extractUniqueValues(
   })
 
   // Convert sets to sorted arrays
-  const finalResult: Record<string, any[]> = {}
+  const finalResult: Record<string, unknown[]> = {}
   Object.entries(result).forEach(([field, values]) => {
     finalResult[field] = Array.from(values).sort((a, b) => {
       if (typeof a === 'number' && typeof b === 'number') {

@@ -125,8 +125,8 @@ interface Props {
   clearable?: boolean
   showCharacterCount?: boolean
   size?: InputSize
-  leftIcon?: any
-  rightIcon?: any
+  leftIcon?: typeof import('lucide-vue-next').LucideIcon
+  rightIcon?: typeof import('lucide-vue-next').LucideIcon
   maxlength?: number
   minlength?: number
   pattern?: string
@@ -145,6 +145,8 @@ const props = withDefaults(defineProps<Props>(), {
   clearable: false,
   showCharacterCount: false,
   size: 'md',
+  leftIcon: undefined,
+  rightIcon: undefined,
   maxlength: undefined,
   minlength: undefined,
   pattern: '',

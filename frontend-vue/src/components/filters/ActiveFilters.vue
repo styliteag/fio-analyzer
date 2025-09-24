@@ -69,7 +69,7 @@
 import { computed } from 'vue'
 import { useFiltersStore } from '@/stores/filters'
 import { useTestRunsStore } from '@/stores/testRuns'
-import { X, CheckCircle } from 'lucide-vue-next'
+import { X as XIcon, CheckCircle as CheckCircleIcon } from 'lucide-vue-next'
 
 interface FilterTag {
   id: string

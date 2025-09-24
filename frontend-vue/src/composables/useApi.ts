@@ -1,9 +1,8 @@
-import { ref, computed, reactive, readonly } from 'vue'
+import { computed, reactive, readonly } from 'vue'
 import type {
   TestRun,
   FilterOptions,
   UserAccount,
-  ApiResponse,
   HealthCheckResponse
 } from '@/types'
 import { apiClient, ApiClientError } from '@/services/api/client'
@@ -19,7 +18,7 @@ const CACHE_DURATION = {
 interface CacheEntry<T> {
   data: T
   timestamp: number
-  params?: Record<string, any>
+  params?: Record<string, string | number | boolean>
 }
 
 interface ApiState<T> {
@@ -30,10 +29,10 @@ interface ApiState<T> {
 }
 
 // Global cache store
-const cache = new Map<string, CacheEntry<any>>()
+const cache = new Map<string, CacheEntry<unknown>>()
 
 // Request deduplication - prevent multiple identical requests
-const pendingRequests = new Map<string, Promise<any>>()
+const pendingRequests = new Map<string, Promise<unknown>>()
 
 // Request cancellation - track active AbortControllers
 const activeRequests = new Map<string, AbortController>()
@@ -79,7 +78,7 @@ export function useApi() {
   )
 
   // Cache utilities
-  function getCacheKey(endpoint: string, params?: Record<string, any>): string {
+  function getCacheKey(endpoint: string, params?: Record<string, string | number | boolean>): string {
     const paramStr = params ? JSON.stringify(params) : ''
     return `${endpoint}:${paramStr}`
   }
@@ -97,7 +96,7 @@ export function useApi() {
     return entry.data
   }
 
-  function setCachedData<T>(key: string, data: T, params?: Record<string, any>): void {
+  function setCachedData<T>(key: string, data: T, params?: Record<string, string | number | boolean>): void {
     cache.set(key, {
       data,
       timestamp: Date.now(),
@@ -158,7 +157,8 @@ export function useApi() {
   }
 
   function cancelAllRequests(): void {
-    activeRequests.forEach((controller, key) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    activeRequests.forEach((controller, _key) => {
       controller.abort('All requests cancelled')
     })
     activeRequests.clear()
@@ -346,7 +346,7 @@ export function useApi() {
     }
   }
 
-  async function updateUser(username: string, updates: Record<string, any>): Promise<{ message: string }> {
+  async function updateUser(username: string, updates: Partial<Pick<UserAccount, 'username' | 'role' | 'permissions'>>): Promise<{ message: string }> {
     users.loading = true
     users.error = null
 
@@ -458,13 +458,13 @@ export function useApi() {
   }
 
   // Utility methods
-  function isCached(endpoint: string, params?: Record<string, any>): boolean {
+  function isCached(endpoint: string, params?: Record<string, string | number | boolean>): boolean {
     const cacheKey = getCacheKey(endpoint, params)
     const duration = CACHE_DURATION[endpoint as keyof typeof CACHE_DURATION] || 0
     return isCacheValid(cacheKey, duration)
   }
 
-  function getCacheAge(endpoint: string, params?: Record<string, any>): number | null {
+  function getCacheAge(endpoint: string, params?: Record<string, string | number | boolean>): number | null {
     const cacheKey = getCacheKey(endpoint, params)
     const entry = cache.get(cacheKey)
     return entry ? Date.now() - entry.timestamp : null
@@ -475,8 +475,8 @@ export function useApi() {
     endpoint: string,
     options: {
       method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
-      params?: Record<string, any>
-      body?: any
+      params?: Record<string, string | number | boolean>
+      body?: unknown
       headers?: Record<string, string>
       cancelKey?: string
     } = {}

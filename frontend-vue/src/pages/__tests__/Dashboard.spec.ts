@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 import Dashboard from '../Dashboard.vue'
-import type { TestRun, FilterOptions } from '@/types'
+import type { TestRun } from '@/types'
 
 // Mock composables
 const mockUseAuth = vi.fn()

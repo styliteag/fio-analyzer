@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 import HostAnalysis from '../HostAnalysis.vue'
-import type { TestRun, FilterOptions } from '@/types'
+import type { TestRun } from '@/types'
 
 // Mock composables
 const mockUseAuth = vi.fn()
@@ -88,7 +88,7 @@ describe('Integration Test: HostAnalysis Page - Host Selection Persistence', () 
     // Simulate navigation away and back (component remount)
     wrapper.unmount()
 
-    const wrapper2 = mount(HostAnalysis, {
+    mount(HostAnalysis, {
       global: {
         plugins: [createTestingPinia()],
         stubs: ['RouterLink', 'HostSelector', 'FilterSidebar', 'PerformanceHeatmap', 'VisualizationTabs'],
@@ -293,7 +293,7 @@ describe('Integration Test: HostAnalysis Page - Host Selection Persistence', () 
     vi.doMock('@/composables/useAuth', () => ({ useAuth: mockUseAuth }))
 
     // Simulate page access after logout
-    const wrapper = mount(HostAnalysis, {
+    mount(HostAnalysis, {
       global: {
         plugins: [createTestingPinia()],
         stubs: ['RouterLink', 'HostSelector', 'FilterSidebar', 'PerformanceHeatmap', 'VisualizationTabs'],

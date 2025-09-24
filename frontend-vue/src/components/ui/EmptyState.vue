@@ -38,9 +38,9 @@ import { Database } from 'lucide-vue-next'
 interface Props {
   title: string
   description: string
-  icon?: any
+  icon?: typeof import('lucide-vue-next').LucideIcon
   actionLabel?: string
-  actionIcon?: any
+  actionIcon?: typeof import('lucide-vue-next').LucideIcon
   actionHandler?: () => void
 }
 

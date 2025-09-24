@@ -96,7 +96,7 @@ export function validateLoginCredentials(credentials: unknown): credentials is L
 }
 
 // Filter state validation
-export function validateFilterState(filters: any): filters is FilterState {
+export function validateFilterState(filters: unknown): filters is FilterState {
   if (!filters || typeof filters !== 'object') return false
 
   const filterKeys = [
@@ -104,10 +104,11 @@ export function validateFilterState(filters: any): filters is FilterState {
     'selectedNumJobs', 'selectedProtocols', 'selectedHostDiskCombinations'
   ]
 
+  const filtersObj = filters as Record<string, unknown>
   for (const key of filterKeys) {
-    if (filters[key] !== undefined) {
-      if (!Array.isArray(filters[key])) return false
-      if (!filters[key].every((item: any) => typeof item === 'string' || typeof item === 'number')) return false
+    if (filtersObj[key] !== undefined) {
+      if (!Array.isArray(filtersObj[key])) return false
+      if (!(filtersObj[key] as unknown[]).every((item: unknown) => typeof item === 'string' || typeof item === 'number')) return false
     }
   }
 
@@ -116,8 +117,8 @@ export function validateFilterState(filters: any): filters is FilterState {
 
 // API response validation
 export function validateApiResponse<T>(
-  data: any,
-  validator: (item: any) => item is T
+  data: unknown,
+  validator: (item: unknown) => item is T
 ): data is T[] {
   if (!Array.isArray(data)) return false
   return data.every(validator)
@@ -129,7 +130,7 @@ export interface ValidationResult {
   errors: Record<string, string>
 }
 
-export function validateRequired(value: any, fieldName: string): ValidationResult {
+export function validateRequired(value: unknown, fieldName: string): ValidationResult {
   const isValid = value !== null && value !== undefined && String(value).trim() !== ''
 
   return {
@@ -166,7 +167,7 @@ export function validateEmail(value: string, fieldName: string): ValidationResul
   }
 }
 
-export function validateNumeric(value: any, fieldName: string): ValidationResult {
+export function validateNumeric(value: unknown, fieldName: string): ValidationResult {
   const num = Number(value)
   const isValid = !isNaN(num) && isFinite(num)
 
@@ -269,7 +270,7 @@ export function validateTestRunUpload(data: {
 }
 
 // Filter parameters validation
-export function validateFilterParams(params: Record<string, any>): ValidationResult {
+export function validateFilterParams(params: Record<string, unknown>): ValidationResult {
   const validations: ValidationResult[] = []
 
   // Validate limit
@@ -296,15 +297,15 @@ export function sanitizeString(input: string): string {
   return input.trim().replace(/[<>]/g, '')
 }
 
-export function sanitizeNumeric(input: any): number | null {
+export function sanitizeNumeric(input: unknown): number | null {
   const num = Number(input)
   return isNaN(num) ? null : num
 }
 
 // Deep validation for complex objects
-export function validateTestRuns(testRuns: any[]): { valid: TestRun[], invalid: any[] } {
+export function validateTestRuns(testRuns: unknown[]): { valid: TestRun[], invalid: unknown[] } {
   const valid: TestRun[] = []
-  const invalid: any[] = []
+  const invalid: unknown[] = []
 
   testRuns.forEach(item => {
     if (validateTestRun(item)) {

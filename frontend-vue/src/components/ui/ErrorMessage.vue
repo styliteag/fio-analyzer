@@ -154,6 +154,7 @@ const props = withDefaults(defineProps<Props>(), {
   retrying: false,
 })
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const emit = defineEmits<{
   retry: []
   dismiss: []

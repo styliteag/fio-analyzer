@@ -160,7 +160,7 @@ export class FiltersApiService {
   /**
    * Validate filter values against available options
    */
-  async validateFilters(filters: Record<string, any>): Promise<{
+  async validateFilters(filters: Record<string, (string | number)[]>): Promise<{
     valid: boolean
     invalidFields: string[]
     suggestions: Record<string, (string | number)[]>

@@ -1,5 +1,4 @@
 // HTTP client with error handling and authentication
-import type { ApiResponse, ApiError } from '@/types/api'
 
 // Global auth state
 let basicAuthCredentials: string | null = null
@@ -81,7 +80,7 @@ export async function apiRequest<T>(
     const requestId = response.headers.get('x-request-id') || undefined
 
     if (!response.ok) {
-      let errorData: any
+      let errorData: Record<string, unknown>
       try {
         errorData = await response.json()
       } catch {

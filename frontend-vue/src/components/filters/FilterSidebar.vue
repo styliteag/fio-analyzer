@@ -153,7 +153,7 @@ import { formatRelativeTime } from '@/utils/formatters'
 import FilterSection from './FilterSection.vue'
 import HostSelector from './HostSelector.vue'
 import ActiveFilters from './ActiveFilters.vue'
-import { RotateCcw, ChevronLeft, ChevronDown } from 'lucide-vue-next'
+import { RotateCcw as RotateCcwIcon, ChevronLeft as ChevronLeftIcon, ChevronDown as ChevronDownIcon } from 'lucide-vue-next'
 
 interface Props {
   collapsible?: boolean

@@ -164,6 +164,7 @@ import { ref, computed, reactive } from 'vue'
 import { useUiStore } from '@/stores/ui'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
+import type { UserAccount } from '@/types/auth'
 
 interface FormData {
   username: string
@@ -295,7 +296,7 @@ async function handleSubmit() {
 }
 
 const emit = defineEmits<{
-  'user-added': [user: any]
+  'user-added': [user: UserAccount]
   cancel: []
 }>()
 </script>

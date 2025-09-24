@@ -63,6 +63,7 @@ export const router = createRouter({
   routes,
 })
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 router.beforeEach(async (to, _from) => {
   const { isAuthenticated, hasPermission, user, initialize } = useAuth()
 
@@ -142,7 +143,7 @@ function preloadRoute(routeName: string): void {
     preloadTimeout = setTimeout(() => {
       if (typeof route.component === 'function') {
         try {
-          const componentOrPromise = (route.component as any)()
+          const componentOrPromise = (route.component as () => Promise<unknown>)()
           if (componentOrPromise && typeof componentOrPromise.then === 'function') {
             componentOrPromise
               .then(() => console.log(`Preloaded: ${routeName}`))

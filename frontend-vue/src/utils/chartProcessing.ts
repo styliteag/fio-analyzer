@@ -16,19 +16,18 @@ export function processHeatmapData(
   if (!testRuns || testRuns.length === 0) return []
 
   // Performance optimization: Sample large datasets
-  let processedRuns = testRuns
-  const maxCells = options.maxCells || PERFORMANCE_THRESHOLDS.CELL_LIMIT
   const sampleSize = options.sampleSize || PERFORMANCE_THRESHOLDS.AGGREGATION_SAMPLE
+  const processedRuns = testRuns.length > PERFORMANCE_THRESHOLDS.LARGE_DATASET
+    ? stratifiedSample(testRuns, sampleSize)
+    : testRuns
 
-  if (testRuns.length > PERFORMANCE_THRESHOLDS.LARGE_DATASET) {
-    // Use stratified sampling to maintain data distribution
-    processedRuns = stratifiedSample(testRuns, sampleSize)
-  }
+  // Use processedRuns for grouping instead of original testRuns
+  const runsToProcess = processedRuns
 
   // Group data by host and configuration (optimized)
   const groupedData = new Map<string, TestRun[]>()
 
-  testRuns.forEach(run => {
+  runsToProcess.forEach(run => {
     // Create a unique key for each host-pattern-blocksize combination
     const key = `${run.hostname}|${run.read_write_pattern}|${run.block_size}`
     if (!groupedData.has(key)) {
@@ -38,7 +37,7 @@ export function processHeatmapData(
   })
 
   // Calculate relative color scale
-  const colorScale = calculateRelativeColorScale(testRuns, metric)
+  const colorScale = calculateRelativeColorScale(runsToProcess, metric)
 
   // Convert to heatmap cells
   const cells: HeatmapCell[] = []
@@ -148,7 +147,7 @@ export function processLineChartData(
     const grouped = new Map<string, ChartDataPoint[]>()
 
     testRuns.forEach(run => {
-      const groupKey = (run as any)[groupBy] || 'unknown'
+      const groupKey = (run as Record<string, unknown>)[groupBy] as string || 'unknown'
       if (!grouped.has(groupKey)) {
         grouped.set(groupKey, [])
       }
@@ -254,7 +253,7 @@ export function aggregateMetrics(
   const result: Record<string, { avg: number; min: number; max: number; count: number }> = {}
 
   metrics.forEach(metric => {
-    const values = testRuns.map(run => (run as any)[metric]).filter(v => v !== undefined && v !== null && v > 0)
+    const values = testRuns.map(run => (run as Record<string, unknown>)[metric] as number).filter(v => v !== undefined && v !== null && v > 0)
 
     if (values.length === 0) {
       result[metric] = { avg: 0, min: 0, max: 0, count: 0 }
@@ -274,7 +273,7 @@ export function aggregateMetrics(
 // Filter data by selection
 export function filterDataBySelection(
   testRuns: TestRun[],
-  filters: Record<string, any>
+  filters: Record<string, unknown>
 ): TestRun[] {
   if (!filters || Object.keys(filters).length === 0) return testRuns
 
@@ -284,7 +283,7 @@ export function filterDataBySelection(
       if (!values || (Array.isArray(values) && values.length === 0)) continue
 
       const valueArray = Array.isArray(values) ? values : [values]
-      const runValue = (run as any)[category]
+      const runValue = (run as Record<string, unknown>)[category]
 
       if (runValue === undefined || runValue === null) return false
 
@@ -485,13 +484,13 @@ export function stratifiedSample<T extends TestRun>(data: T[], sampleSize: numbe
 }
 
 // Debounced chart update for performance
-export function createDebouncedChartProcessor(
-  processingFn: Function,
+export function createDebouncedChartProcessor<T extends unknown[], R>(
+  processingFn: (...args: T) => R,
   delay: number = 150
-): Function {
+): (...args: T) => Promise<R> {
   let timeoutId: NodeJS.Timeout | null = null
 
-  return (...args: any[]) => {
+  return (...args: T) => {
     if (timeoutId) {
       clearTimeout(timeoutId)
     }

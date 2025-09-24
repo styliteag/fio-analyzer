@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { TestRun, FilterOptions, PerformanceMetrics } from '@/types'
+import type { TestRun, PerformanceMetrics } from '@/types'
 
 // Mock the dataTransform utilities that will be implemented later
 const mockDataTransform = {
@@ -263,7 +263,7 @@ describe('Component Test: Data Transformation Utilities', () => {
       iops: 'not-a-number',
     }
 
-    mockDataTransform.validateTestRunData.mockImplementation((data: any) => {
+    mockDataTransform.validateTestRunData.mockImplementation((data: unknown) => {
       return (
         typeof data.id === 'number' &&
         typeof data.hostname === 'string' &&

@@ -229,7 +229,8 @@ export function useTheme() {
   })
 
   // Watch for theme mode changes
-  watch(themeMode, (newMode) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  watch(themeMode, (_newMode) => {
     const resolved = resolveTheme()
     applyTheme(resolved)
   })

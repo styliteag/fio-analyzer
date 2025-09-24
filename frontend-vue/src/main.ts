@@ -155,6 +155,7 @@ if (import.meta.env.DEV) {
     next()
   })
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   router.afterEach((to, _from) => {
     console.timeEnd(`Route: ${to.path}`)
   })

@@ -77,7 +77,7 @@ interface Props {
   title: string
   value: string | number
   unit?: string
-  icon?: any
+  icon?: typeof import('lucide-vue-next').LucideIcon
   trend?: 'up' | 'down' | 'stable'
   color?: 'blue' | 'green' | 'yellow' | 'red' | 'gray'
   subtitle?: string
@@ -86,6 +86,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   unit: '',
+  icon: undefined,
   trend: undefined,
   color: 'blue',
   subtitle: '',

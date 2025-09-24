@@ -1,12 +1,8 @@
 import { ref, reactive, computed, readonly } from 'vue'
 import type { TestRun, FilterOptions, FilterState } from '@/types'
 import {
-  defaultFilterState,
   isFilterActive,
   getActiveFilterCount,
-  resetFilterState,
-  mergeFilterStates,
-  matchesFilters,
   createHostDiskKey
 } from '@/types/filters'
 
@@ -61,6 +57,7 @@ export function useFilters() {
   }
 
   // Convert FilterState to internal state
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function fromFilterState(state: FilterState): void {
     active.block_sizes = state.selectedBlockSizes
     active.patterns = state.selectedPatterns
@@ -226,9 +223,10 @@ export function useFilters() {
       case 'durations':
         return activeValues.includes(testRun.duration)
 
-      case 'host_disk_combinations':
+      case 'host_disk_combinations': {
         const key = createHostDiskKey(testRun.hostname, testRun.protocol, testRun.drive_model)
         return activeValues.includes(key)
+      }
 
       default:
         return true

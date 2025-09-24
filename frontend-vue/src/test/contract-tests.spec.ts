@@ -5,7 +5,7 @@
  * Run against the actual backend to verify contract compliance.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { apiClient, setBasicAuth, clearAuth, ApiClientError } from '@/services/api/client'
 import type {
   TestRun,
@@ -22,7 +22,7 @@ const TEST_ADMIN_CREDENTIALS = {
 }
 
 // Test utilities
-const isValidTestRun = (obj: any): obj is TestRun => {
+const isValidTestRun = (obj: unknown): obj is TestRun => {
   return (
     typeof obj === 'object' &&
     typeof obj.id === 'number' &&
@@ -41,7 +41,7 @@ const isValidTestRun = (obj: any): obj is TestRun => {
   )
 }
 
-const isValidFilterOptions = (obj: any): obj is FilterOptions => {
+const isValidFilterOptions = (obj: unknown): obj is FilterOptions => {
   return (
     typeof obj === 'object' &&
     Array.isArray(obj.drive_models) &&
@@ -60,7 +60,7 @@ const isValidFilterOptions = (obj: any): obj is FilterOptions => {
   )
 }
 
-const isValidUserAccount = (obj: any): obj is UserAccount => {
+const isValidUserAccount = (obj: unknown): obj is UserAccount => {
   return (
     typeof obj === 'object' &&
     typeof obj.username === 'string' &&

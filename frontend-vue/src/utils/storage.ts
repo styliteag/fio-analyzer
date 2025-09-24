@@ -23,7 +23,7 @@ class StorageManager {
     return `${this.prefix}:${key}`
   }
 
-  private isExpired(item: StoredItem<any>): boolean {
+  private isExpired(item: StoredItem<unknown>): boolean {
     if (!item.ttl) return false
     return Date.now() - item.timestamp > item.ttl
   }
@@ -242,34 +242,34 @@ export const themeStorage = {
 
 // Auth storage
 export const authStorage = {
-  set: (data: { user: any; token: string }) => storage.set('auth', data, { ttl: 24 * 60 * 60 * 1000 }), // 24 hours
+  set: (data: { user: unknown; token: string }) => storage.set('auth', data, { ttl: 24 * 60 * 60 * 1000 }), // 24 hours
   get: () => storage.get('auth'),
   remove: () => storage.remove('auth'),
   isValid: () => {
-    const auth = storage.get('auth')
+    const auth = storage.get('auth') as { token?: string } | null
     return auth && auth.token
   },
 }
 
 // Filter storage
 export const filterStorage = {
-  set: (filters: any) => storage.set('filters', filters),
+  set: (filters: unknown) => storage.set('filters', filters),
   get: () => storage.get('filters', {}),
   remove: () => storage.remove('filters'),
 }
 
 // Host selection storage
 export const hostSelectionStorage = {
-  set: (selection: any) => storage.set('host-selection', selection),
+  set: (selection: unknown) => storage.set('host-selection', selection),
   get: () => storage.get('host-selection'),
   remove: () => storage.remove('host-selection'),
 }
 
 // User preferences storage
 export const preferencesStorage = {
-  set: (prefs: any) => storage.set('preferences', prefs),
+  set: (prefs: unknown) => storage.set('preferences', prefs),
   get: () => storage.get('preferences', {}),
-  update: (updates: any) => {
+  update: (updates: unknown) => {
     const current = preferencesStorage.get()
     const updated = { ...current, ...updates }
     preferencesStorage.set(updated)

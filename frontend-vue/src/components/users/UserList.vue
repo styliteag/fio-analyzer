@@ -279,7 +279,7 @@ import Modal from '@/components/ui/Modal.vue'
 import AddUserForm from './AddUserForm.vue'
 import EditUserModal from './EditUserModal.vue'
 import { formatRelativeTime } from '@/utils/formatters'
-import { RefreshCw, Plus, Edit, Trash, UserX, UserCheck } from 'lucide-vue-next'
+import { RefreshCw as RefreshCwIcon, Plus as PlusIcon, Edit as EditIcon, Trash as TrashIcon, UserX as UserXIcon, UserCheck as UserCheckIcon } from 'lucide-vue-next'
 
 interface User {
   username: string

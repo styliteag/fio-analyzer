@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
-import type { UserAccount, LoginCredentials, Permission } from '@/types/auth'
+import type { UserAccount, LoginCredentials } from '@/types/auth'
+import { clearAuth, setBasicAuth } from '@/services/api/client'
 
 // Auth state interface
 interface AuthState {
@@ -40,7 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
     return permissions.some(permission => {
       if (permission.resource !== resource) return false
       if (!action) return true // If no specific action required, having resource permission is enough
-      return permission.actions.includes(action as any)
+      return permission.actions.includes(action)
     })
   }
 
@@ -59,8 +60,6 @@ export const useAuthStore = defineStore('auth', () => {
     state.value.lastLoginAttempt = Date.now()
 
     try {
-      // Import the API client dynamically to avoid circular dependencies
-      const { apiClient } = await import('@/services/api/client')
 
       // For now, we'll simulate authentication since we don't have the actual auth endpoint
       // In a real implementation, this would call the auth API
@@ -116,7 +115,6 @@ export const useAuthStore = defineStore('auth', () => {
     state.value.error = null
 
     // Clear auth headers
-    const { clearAuth } = require('@/services/api/client')
     clearAuth()
 
     // Clear localStorage
@@ -156,7 +154,6 @@ export const useAuthStore = defineStore('auth', () => {
       state.value.isAuthenticated = true
 
       // Set auth headers
-      const { setBasicAuth } = require('@/services/api/client')
       const credentials = atob(data.token).split(':')
       setBasicAuth(credentials[0], credentials[1])
 

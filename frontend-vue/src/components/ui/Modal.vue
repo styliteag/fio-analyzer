@@ -167,6 +167,7 @@ const confirmButtonClasses = computed(() => {
   return variantClasses[props.confirmVariant] || variantClasses.primary
 })
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function open() {
   isOpen.value = true
 }
@@ -181,6 +182,7 @@ function confirm() {
   close()
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function cancel() {
   emit('cancel')
   close()

@@ -111,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RefreshCw, CheckCircle } from 'lucide-vue-next'
 import StatsCards from '@/components/dashboard/StatsCards.vue'
 import RecentActivity from '@/components/dashboard/RecentActivity.vue'

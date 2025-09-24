@@ -300,7 +300,7 @@ watch(availableHosts, (newHosts) => {
 }, { immediate: true })
 
 const hostData = computed(() => {
-  const grouped: Record<string, any[]> = {}
+  const grouped: Record<string, TestRun[]> = {}
 
   testRuns.value.forEach(run => {
     if (!grouped[run.hostname]) {
@@ -312,7 +312,7 @@ const hostData = computed(() => {
   return Object.entries(grouped).map(([host, runs]) => ({
     host,
     runs,
-    metrics: aggregateMetrics(runs, selectedMetrics.value as any),
+    metrics: aggregateMetrics(runs, selectedMetrics.value),
   }))
 })
 
@@ -436,7 +436,7 @@ function formatValue(value: number, metric: string): string {
 }
 
 function showTooltip(hostData: RadarData, event: MouseEvent) {
-  const metrics = selectedMetrics.value.map((metric, _index) => {
+  const metrics = selectedMetrics.value.map((metric) => {
     const hostInfo = hostData.value.find(h => h.host === hostData.host)
     const rawValue = hostInfo?.metrics[metric]?.avg || 0
 

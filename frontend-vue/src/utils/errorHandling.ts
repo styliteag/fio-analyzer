@@ -27,27 +27,28 @@ export function createError(
 }
 
 // Classify errors by type
-export function classifyError(error: any): ErrorCategory {
+export function classifyError(error: unknown): ErrorCategory {
   // Network errors
   if (!navigator.onLine) return 'network'
-  if (error?.code === 'NETWORK_ERROR' || error?.message?.includes('fetch')) return 'network'
+  const errorObj = error as Record<string, unknown>
+  if (errorObj?.code === 'NETWORK_ERROR' || (errorObj?.message as string)?.includes('fetch')) return 'network'
 
   // Authentication errors
-  if (error?.status === 401 || error?.response?.status === 401) return 'authentication'
-  if (error?.message?.includes('unauthorized')) return 'authentication'
+  if (errorObj?.status === 401 || (errorObj?.response as Record<string, unknown>)?.status === 401) return 'authentication'
+  if ((errorObj?.message as string)?.includes('unauthorized')) return 'authentication'
 
   // Validation errors
-  if (error?.status === 400 || error?.response?.status === 400) return 'validation'
-  if (error?.message?.includes('validation')) return 'validation'
+  if (errorObj?.status === 400 || (errorObj?.response as Record<string, unknown>)?.status === 400) return 'validation'
+  if ((errorObj?.message as string)?.includes('validation')) return 'validation'
 
   // Not found errors
-  if (error?.status === 404 || error?.response?.status === 404) return 'not_found'
+  if (errorObj?.status === 404 || (errorObj?.response as Record<string, unknown>)?.status === 404) return 'not_found'
 
   // Rate limit errors
-  if (error?.status === 429 || error?.response?.status === 429) return 'rate_limit'
+  if (errorObj?.status === 429 || (errorObj?.response as Record<string, unknown>)?.status === 429) return 'rate_limit'
 
   // Server errors
-  if (error?.status >= 500 || error?.response?.status >= 500) return 'server'
+  if ((errorObj?.status as number) >= 500 || ((errorObj?.response as Record<string, unknown>)?.status as number) >= 500) return 'server'
 
   // Default to unknown
   return 'unknown'
@@ -78,19 +79,20 @@ export function logError(error: AppError): void {
 }
 
 // Handle API errors with proper context
-export function handleApiError(error: any): AppError {
+export function handleApiError(error: unknown): AppError {
   const category = classifyError(error)
-  const message = error?.message || error?.response?.data?.error || 'An error occurred'
+  const errorObj = error as Record<string, unknown>
+  const message = (errorObj?.message as string) || ((errorObj?.response as Record<string, unknown>)?.data as Record<string, unknown>)?.error as string || 'An error occurred'
   const details = {
-    statusCode: error?.status || error?.response?.status,
-    statusText: error?.statusText || error?.response?.statusText,
-    data: error?.response?.data,
+    statusCode: errorObj?.status as number || (errorObj?.response as Record<string, unknown>)?.status as number,
+    statusText: errorObj?.statusText as string || (errorObj?.response as Record<string, unknown>)?.statusText as string,
+    data: (errorObj?.response as Record<string, unknown>)?.data,
   }
 
   const context = {
-    url: error?.config?.url,
-    method: error?.config?.method?.toUpperCase(),
-    payload: error?.config?.data,
+    url: (errorObj?.config as Record<string, unknown>)?.url as string,
+    method: ((errorObj?.config as Record<string, unknown>)?.method as string)?.toUpperCase(),
+    payload: (errorObj?.config as Record<string, unknown>)?.data,
   }
 
   return createError(category, message, details, context)
@@ -128,7 +130,7 @@ export function getErrorDetails(error: AppError): {
   url?: string
   method?: string
 } {
-  const details = error.details as any
+  const details = error.details as Record<string, unknown>
   const context = error.context
 
   return {
@@ -269,7 +271,7 @@ export function createRetryFunction<T>(
   baseDelay: number = 1000
 ): () => Promise<T> {
   return async (): Promise<T> => {
-    let lastError: any
+    let lastError: unknown
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {

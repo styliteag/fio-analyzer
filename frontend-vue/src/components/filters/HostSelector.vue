@@ -156,7 +156,7 @@
 import { ref, computed, watch } from 'vue'
 import { useTestRunsStore } from '@/stores/testRuns'
 import { formatIOPS } from '@/utils/formatters'
-import { X, ChevronDown, Search, Check } from 'lucide-vue-next'
+import { X as XIcon, ChevronDown as ChevronDownIcon, Search as SearchIcon, Check as CheckIcon } from 'lucide-vue-next'
 
 interface Props {
   modelValue: string[]

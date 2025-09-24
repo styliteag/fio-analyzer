@@ -67,7 +67,7 @@ export function useAuth() {
             last_login: new Date().toISOString()
           }
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // If /api/users/me doesn't exist, try a simple health check with auth
         try {
           await fetchWithErrorHandling('/health', { headers })

@@ -264,7 +264,7 @@ describe('Component Test: Chart Data Processing Utilities', () => {
     ]
 
     // Mock validation function
-    const validateChartData = vi.fn().mockImplementation((data: any[]) => {
+    const validateChartData = vi.fn().mockImplementation((data: unknown[]) => {
       return data.every(point =>
         typeof point.x === 'number' &&
         typeof point.y === 'number' &&

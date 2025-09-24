@@ -708,16 +708,18 @@ const applyQuickFilter = (filter: typeof quickFilters[0]) => {
       dateFilters.value.from = now.toISOString().split('T')[0]
       dateFilters.value.to = now.toISOString().split('T')[0]
       break
-    case 'week':
+    case 'week': {
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
       dateFilters.value.from = weekAgo.toISOString().split('T')[0]
       dateFilters.value.to = now.toISOString().split('T')[0]
       break
-    case 'month':
+    }
+    case 'month': {
       const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
       dateFilters.value.from = monthAgo.toISOString().split('T')[0]
       dateFilters.value.to = now.toISOString().split('T')[0]
       break
+    }
     case 'latest':
       // This would require backend support for latest-only filtering
       console.log('Latest only filter - would need backend support')

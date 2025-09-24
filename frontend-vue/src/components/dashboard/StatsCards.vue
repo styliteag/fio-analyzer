@@ -256,6 +256,7 @@ const stats = computed(() => {
 })
 
 // Trend calculation (simplified - in real app would compare with historical data)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function calculateTrend(metric: 'iops' | 'latency'): 'up' | 'down' | 'stable' {
   // For demo purposes, return random trends
   // In real implementation, compare with previous period

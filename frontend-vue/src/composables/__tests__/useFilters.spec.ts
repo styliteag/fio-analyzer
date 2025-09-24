@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { FilterOptions, FilterState } from '@/types/filters'
+import type { FilterOptions } from '@/types/filters'
 
 // Mock the useFilters composable that will be implemented later
 const mockUseFilters = vi.fn()

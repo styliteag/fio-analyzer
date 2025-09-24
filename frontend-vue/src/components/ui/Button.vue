@@ -77,7 +77,7 @@ interface Props {
   loading?: boolean
   loadingText?: string
   showLoadingSpinner?: boolean
-  icon?: any
+  icon?: typeof import('lucide-vue-next').LucideIcon
   iconPosition?: 'left' | 'right'
   label?: string
   block?: boolean
@@ -92,6 +92,7 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false,
   loadingText: '',
   showLoadingSpinner: true,
+  icon: undefined,
   iconPosition: 'left',
   label: '',
   block: false,
