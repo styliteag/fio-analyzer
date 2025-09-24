@@ -178,16 +178,6 @@ const isCollapsed = computed({
 })
 
 const showAdvanced = ref(false)
-const selectedHosts = ref<string[]>([])
-const selectedDriveTypes = ref<string[]>([])
-const selectedProtocols = ref<string[]>([])
-const selectedBlockSizes = ref<string[]>([])
-const selectedPatterns = ref<string[]>([])
-const selectedQueueDepths = ref<number[]>([])
-const selectedNumJobs = ref<number[]>([])
-const selectedSyncs = ref<number[]>([])
-const selectedDirects = ref<number[]>([])
-const selectedTestSizes = ref<string[]>([])
 
 // Computed properties
 const availableFilters = computed(() => filtersStore.state.available || {
@@ -209,19 +199,17 @@ const filteredResultsCount = computed(() => {
 
 const lastUpdated = computed(() => filtersStore.state.lastUpdated || new Date())
 
-// Watch for store changes and sync local state
-watch(() => filtersStore.appliedFilters, (newFilters) => {
-  selectedHosts.value = newFilters.selectedHostnames || []
-  selectedDriveTypes.value = newFilters.selectedDriveTypes || []
-  selectedProtocols.value = newFilters.selectedProtocols || []
-  selectedBlockSizes.value = newFilters.selectedBlockSizes || []
-  selectedPatterns.value = newFilters.selectedPatterns || []
-  selectedQueueDepths.value = newFilters.selectedQueueDepths || []
-  selectedNumJobs.value = newFilters.selectedNumJobs || []
-  selectedSyncs.value = newFilters.selectedSyncs || []
-  selectedDirects.value = newFilters.selectedDirects || []
-  selectedTestSizes.value = newFilters.selectedTestSizes || []
-}, { immediate: true })
+// Computed properties for selected values from store
+const selectedHosts = computed(() => filtersStore.state.active.hostnames || [])
+const selectedDriveTypes = computed(() => filtersStore.state.active.drive_types || [])
+const selectedProtocols = computed(() => filtersStore.state.active.protocols || [])
+const selectedBlockSizes = computed(() => filtersStore.state.active.block_sizes || [])
+const selectedPatterns = computed(() => filtersStore.state.active.patterns || [])
+const selectedQueueDepths = computed(() => filtersStore.state.active.queue_depths || [])
+const selectedNumJobs = computed(() => filtersStore.state.active.num_jobs || [])
+const selectedSyncs = computed(() => filtersStore.state.active.syncs || [])
+const selectedDirects = computed(() => filtersStore.state.active.directs || [])
+const selectedTestSizes = computed(() => filtersStore.state.active.test_sizes || [])
 
 // Methods
 function toggleCollapsed() {
@@ -230,70 +218,50 @@ function toggleCollapsed() {
 
 function resetFilters() {
   filtersStore.resetFilters()
-  selectedHosts.value = []
-  selectedDriveTypes.value = []
-  selectedProtocols.value = []
-  selectedBlockSizes.value = []
-  selectedPatterns.value = []
-  selectedQueueDepths.value = []
-  selectedNumJobs.value = []
-  selectedSyncs.value = []
-  selectedDirects.value = []
-  selectedTestSizes.value = []
 }
 
 // Filter update methods
 function updateHostsFilter(hosts: string[]) {
-  selectedHosts.value = hosts
   filtersStore.setFilter('hostnames', hosts)
 }
 
 function updateDriveTypesFilter(types: string[]) {
-  selectedDriveTypes.value = types
   filtersStore.setFilter('drive_types', types)
 }
 
 function updateProtocolsFilter(protocols: string[]) {
-  selectedProtocols.value = protocols
   filtersStore.setFilter('protocols', protocols)
 }
 
 function updateBlockSizesFilter(sizes: string[]) {
-  selectedBlockSizes.value = sizes
   filtersStore.setFilter('block_sizes', sizes)
 }
 
 function updatePatternsFilter(patterns: string[]) {
-  selectedPatterns.value = patterns
   filtersStore.setFilter('patterns', patterns)
 }
 
 function updateQueueDepthsFilter(depths: string[]) {
   const numericDepths = depths.map(d => parseInt(d)).filter(d => !isNaN(d))
-  selectedQueueDepths.value = numericDepths
   filtersStore.setFilter('queue_depths', numericDepths)
 }
 
 function updateNumJobsFilter(jobs: string[]) {
   const numericJobs = jobs.map(j => parseInt(j)).filter(j => !isNaN(j))
-  selectedNumJobs.value = numericJobs
   filtersStore.setFilter('num_jobs', numericJobs)
 }
 
 function updateSyncsFilter(syncs: string[]) {
   const numericSyncs = syncs.map(s => parseInt(s)).filter(s => !isNaN(s))
-  selectedSyncs.value = numericSyncs
   filtersStore.setFilter('syncs', numericSyncs)
 }
 
 function updateDirectsFilter(directs: string[]) {
   const numericDirects = directs.map(d => parseInt(d)).filter(d => !isNaN(d))
-  selectedDirects.value = numericDirects
   filtersStore.setFilter('directs', numericDirects)
 }
 
 function updateTestSizesFilter(sizes: string[]) {
-  selectedTestSizes.value = sizes
   filtersStore.setFilter('test_sizes', sizes)
 }
 </script>

@@ -26,8 +26,8 @@
               </button>
               <button
                 v-if="isRefreshing"
-                @click="cancelRequests"
                 class="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                @click="cancelRequests"
               >
                 <X class="w-4 h-4 mr-2" />
                 Cancel Requests
@@ -41,21 +41,8 @@
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="flex flex-col lg:flex-row gap-8">
-        <!-- Sidebar with Host Selection and Filters -->
+        <!-- Sidebar with Filters -->
         <div class="lg:w-80 space-y-6">
-          <!-- Host Selection Panel -->
-          <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white">Host Selection</h3>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Select hosts to compare performance metrics
-              </p>
-            </div>
-            <div class="p-6">
-              <HostSelector v-model="selectedHosts" />
-            </div>
-          </div>
-
           <!-- Filter Sidebar -->
           <FilterSidebar />
 
@@ -299,7 +286,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { RefreshCw, BarChart3, History, Users, Server, ChevronLeft, ChevronRight, X } from 'lucide-vue-next'
-import HostSelector from '@/components/filters/HostSelector.vue'
 import FilterSidebar from '@/components/filters/FilterSidebar.vue'
 import ActiveFilters from '@/components/filters/ActiveFilters.vue'
 import VisualizationTabs from '@/components/charts/VisualizationTabs.vue'
