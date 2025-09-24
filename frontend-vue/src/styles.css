@@ -11,7 +11,7 @@
   --border-primary: #e2e8f0;
   --accent: #3b82f6;
 }
-.dark { 
+html.dark { 
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
   --bg-tertiary: #334155;

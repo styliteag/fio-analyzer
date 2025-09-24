@@ -70,10 +70,12 @@ import { AlertCircle, CheckCircle, X } from 'lucide-vue-next'
 import Navigation from '@/components/Navigation.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useUiStore } from '@/stores/ui'
+import { useTheme } from '@/composables/useTheme'
 
 const route = useRoute()
 const { isAuthenticated, initialize, isInitializing, authError } = useAuth()
 const uiStore = useUiStore()
+const { getThemeInfo } = useTheme()
 
 // Computed properties
 const showNavigation = computed(() => {
@@ -127,6 +129,8 @@ onMounted(async () => {
   try {
     // Initialize authentication state
     await initialize()
+    // Ensure theme is initialized and applied on app mount
+    getThemeInfo()
   } catch (error) {
     console.error('Failed to initialize authentication:', error)
     // Don't show error to user as it might be expected (no stored auth)
@@ -155,13 +159,11 @@ html {
 
 #app {
   min-height: 100vh;
-  background-color: #f9fafb;
+  background-color: var(--bg-primary);
   transition: background-color 0.2s ease-in-out;
 }
 
-#app.dark {
-  background-color: #111827;
-}
+/* Background follows html.dark via CSS variables */
 
 .main-content {
   min-height: 100vh;

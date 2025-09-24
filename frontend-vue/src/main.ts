@@ -6,6 +6,19 @@ import { router } from './router'
 // Import global styles
 import './styles.css'
 
+// Early theme init: apply html.dark before mount to prevent flash
+try {
+  const stored = localStorage.getItem('fio-theme')
+  const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+  const mode = stored ? (JSON.parse(stored).mode as 'light' | 'dark' | 'system') : 'system'
+  const resolved = mode === 'system' ? (systemPrefersDark ? 'dark' : 'light') : mode
+  const root = document.documentElement
+  if (resolved === 'dark') root.classList.add('dark')
+  else root.classList.remove('dark')
+} catch (_) {
+  // noop
+}
+
 // Components are imported individually where needed
 
 // Create Vue app instance
