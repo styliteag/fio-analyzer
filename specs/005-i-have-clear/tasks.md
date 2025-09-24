@@ -128,20 +128,20 @@
 ## Phase 3.5: Pages and Routing
 
 ### Page Components
-- [ ] T078 Update LoginForm component with dark theme in frontend-vue/src/components/LoginForm.vue
-- [ ] T079 Dashboard page in frontend-vue/src/pages/Dashboard.vue
-- [ ] T080 Host Analysis page in frontend-vue/src/pages/HostAnalysis.vue
-- [ ] T081 Update UserManager page in frontend-vue/src/pages/UserManager.vue
-- [ ] T082 Test History page in frontend-vue/src/pages/TestHistory.vue
-- [ ] T083 Performance Analytics page in frontend-vue/src/pages/PerformanceAnalytics.vue
+- [X] T078 Update LoginForm component with dark theme in frontend-vue/src/components/LoginForm.vue
+- [X] T079 Dashboard page in frontend-vue/src/pages/Dashboard.vue
+- [X] T080 Host Analysis page in frontend-vue/src/pages/HostAnalysis.vue
+- [X] T081 Update UserManager page in frontend-vue/src/pages/UserManager.vue
+- [X] T082 Test History page in frontend-vue/src/pages/TestHistory.vue
+- [X] T083 Performance Analytics page in frontend-vue/src/pages/PerformanceAnalytics.vue
 
 ### Router Configuration
-- [ ] T084 Update router configuration in frontend-vue/src/router.ts with new routes
-- [ ] T085 Add route guards for authentication and authorization in frontend-vue/src/router.ts
+- [X] T084 Update router configuration in frontend-vue/src/router.ts with new routes
+- [X] T085 Add route guards for authentication and authorization in frontend-vue/src/router.ts
 
 ### Main App Updates
-- [ ] T086 Update App.vue with theme support and navigation integration
-- [ ] T087 Update main.ts with Pinia store initialization and global components
+- [X] T086 Update App.vue with theme support and navigation integration
+- [X] T087 Update main.ts with Pinia store initialization and global components
 
 ## Phase 3.6: Integration and Data Flow
 
