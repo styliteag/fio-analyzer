@@ -87,8 +87,11 @@ const activeFilterTags = computed((): FilterTag[] => {
   const tags: FilterTag[] = []
   let id = 0
 
-  Object.entries(filtersStore.active).forEach(([category, values]) => {
-    values.forEach(value => {
+  const active = (filtersStore as any).active ?? (filtersStore as any).state?.active ?? {}
+
+  Object.entries(active as Record<string, (string | number)[] | undefined>).forEach(([category, values]) => {
+    if (!Array.isArray(values)) return
+    values.forEach((value) => {
       tags.push({
         id: `filter-${id++}`,
         category: formatCategoryName(category),

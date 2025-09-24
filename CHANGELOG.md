@@ -92,6 +92,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Initializing theme in `frontend-vue/src/App.vue` on mount
   - Correcting CSS variables scope from `.dark` to `html.dark` in `frontend-vue/src/styles.css`
   - Switching `#app` background to use CSS variables so `html.dark` applies
+ - Filters sidebar interaction and summary stability:
+   - Made `selectedHosts` a writable computed in `FilterSidebar.vue` to support `v-model`
+   - Guarded against undefined when building tags in `ActiveFilters.vue`
 
 ## [0.5.8] - 2025-09-14
 

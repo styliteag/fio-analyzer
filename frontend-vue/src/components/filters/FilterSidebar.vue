@@ -200,7 +200,10 @@ const filteredResultsCount = computed(() => {
 const lastUpdated = computed(() => filtersStore.state.lastUpdated || new Date())
 
 // Computed properties for selected values from store
-const selectedHosts = computed(() => filtersStore.state.active.hostnames || [])
+const selectedHosts = computed<string[]>({
+  get: () => filtersStore.state.active.hostnames || [],
+  set: (value) => filtersStore.setFilter('hostnames', value)
+})
 const selectedDriveTypes = computed(() => filtersStore.state.active.drive_types || [])
 const selectedProtocols = computed(() => filtersStore.state.active.protocols || [])
 const selectedBlockSizes = computed(() => filtersStore.state.active.block_sizes || [])
