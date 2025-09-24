@@ -1,14 +1,13 @@
 <!--
 Sync Impact Report
-- Version change: 1.1.0 → 1.2.0
-- Modified principles: none
-- Added sections: Migration Status & Feature Parity Requirements
-- Removed sections: none
+- Version change: 1.2.0 → 1.3.0
+- Modified principles: Test-First Quality Gates (updated React→Vue frontend validation)
+- Added sections: none
+- Removed sections: Frontend Migration Architecture, Migration Status & Feature Parity Requirements
 - Templates requiring updates:
-  ✅ .specify/templates/plan-template.md (version reference updated)
-  ✅ .specify/templates/spec-template.md (no migration context needed)
-  ✅ .specify/templates/tasks-template.md (no migration task categories needed)
-  ✅ .specify/templates/agent-file-template.md (no changes required)
+  ✅ .specify/templates/plan-template.md (no changes required)
+  ✅ .specify/templates/spec-template.md (no changes required)
+  ✅ .specify/templates/tasks-template.md (no changes required)
 - Follow-up TODOs: none
 -->
 
@@ -25,10 +24,10 @@ changes are easier to review, safer to ship, and align with the project's
 
 ### II. Test-First Quality Gates
 Critical functionality MUST be protected by tests. Frontend changes MUST pass
-`npm run lint` and `npx tsc --noEmit` (React) or `npm run lint` (Vue). Backend
-changes MUST pass `make check` and `uv run pytest` where applicable. CI and
-reviewers MUST block merges that fail gates. Rationale: enforce correctness
-before integration and prevent regressions.
+`npm run lint` and `npx tsc --noEmit` (Vue.js frontend). Backend changes MUST
+pass `make check` and `uv run pytest` where applicable. CI and reviewers MUST
+block merges that fail gates. Rationale: enforce correctness before integration
+and prevent regressions.
 
 ### III. Documentation & CHANGELOG Discipline
 Significant changes MUST update `README.md` or relevant docs and append entries
@@ -50,16 +49,13 @@ the app is visualization-heavy and performance-sensitive.
 
 ## Architecture & Constraints
 
-This is a web application composed of a frontend (in migration from React to Vue.js)
-and a Python FastAPI backend with SQLite (or PostgreSQL) storage. Docker provides
-a single-container production deployment with nginx proxying `/api` to the backend.
+This is a web application composed of a Vue.js frontend and a Python FastAPI
+backend with SQLite (or PostgreSQL) storage. Docker provides a single-container
+production deployment with nginx proxying `/api` to the backend.
 
-### Frontend Migration Architecture
-- **Current State**: Dual frontend structure during migration
-  - `frontend/`: React + TypeScript + Vite (legacy, to be decommissioned)
-  - `frontend-vue/`: Vue 3 + TypeScript + Vite (migration target)
-- **Migration Requirements**: Vue frontend MUST achieve complete feature parity
-  before React frontend decommissioning. Backend API contracts MUST remain unchanged.
+### Frontend Architecture
+- **Current State**: Single frontend implementation
+  - `frontend-vue/`: Vue 3 + TypeScript + Vite (production frontend)
 - **Charts Stack**: Chart.js via vue-chartjs for 2D charts + Three.js for 3D visualizations
 - **Performance Target**: Initial chart render < 500ms for typical datasets
 
@@ -71,18 +67,11 @@ a single-container production deployment with nginx proxying `/api` to the backe
 - API stability: Maintain RESTful paths documented in Swagger. Breaking changes
   require a migration note and version bump per Governance.
 
-### Migration Status & Feature Parity Requirements
-- **Current Vue Frontend State** (`frontend-vue/`): Basic authentication, navigation, and chart components (BasicLineChart, RadarChart, ThreeDBarChart). Partial implementation of PerformanceGraphs structure.
-- **Legacy React Frontend State** (`frontend/`): Complete feature set including advanced host analysis visualizations (PerformanceGraphs with 4 chart types, PerformanceFingerprintHeatmap, DriveRadarChart, PerformanceScatterPlot, ParallelCoordinatesChart, BoxPlotChart, FacetScatterGrid, Performance3DChart, StackedBarChart), comprehensive filtering, and theme system.
-- **Migration Goal**: Vue frontend MUST achieve feature parity with React frontend before React decommissioning. Focus on copying visualization features, filtering system, and theme support.
-- **Protected Components**: React frontend (`frontend/`) and backend (`backend/`) MUST NOT be modified during migration. All changes are Vue-frontend-only.
-- **Success Criteria**: Vue frontend supports all React visualization types, filtering capabilities, and user experience features with equivalent or improved performance.
-
 ## Workflow & Quality Gates
 
 - Branching and PRs: Follow Conventional Commits. Keep PRs small and scoped.
-- Validation: Frontend `npm run lint` + `npx tsc --noEmit` (React) or
-  `npm run lint` (Vue); Backend `make check` + `uv run pytest` when tests exist;
+- Validation: Frontend `npm run lint` + `npx tsc --noEmit` (Vue.js); Backend
+  `make check` + `uv run pytest` when tests exist;
   docker compose builds must pass locally for deployment docs.
 - Reviews: Reviewers MUST reject changes violating Core Principles. Changes that
   touch APIs MUST include updated docs and, when applicable, contract tests.
@@ -101,4 +90,4 @@ a single-container production deployment with nginx proxying `/api` to the backe
   MINOR for new principles/sections or materially expanded guidance, PATCH for
   clarifications.
 
-**Version**: 1.2.0 | **Ratified**: 2025-09-23 | **Last Amended**: 2025-12-23
+**Version**: 1.3.0 | **Ratified**: 2025-09-23 | **Last Amended**: 2025-09-24

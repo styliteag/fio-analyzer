@@ -7,8 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Frontend Functionality Reduction**: Removed all non-essential functionality from Vue frontend, keeping only login and user management features
+  - Removed Test Runs page and all test run management functionality
+  - Removed Host Analysis page and host visualization components
+  - Removed Filters page and filtering system
+  - Removed all chart and visualization components (BasicLineChart, ChartErrorBoundary, PerformanceGraphs, etc.)
+  - Removed unused composables (useFilters, useTestRuns, usePerformanceOptimization, useErrorHandler, useTheme)
+  - Removed unused services and API endpoints for test runs, performance data, time series, and imports
+  - Cleaned up TypeScript types, removing chart, performance, and filter-related interfaces
+  - Updated navigation to show only User Management link for admin users
+
 ### Added
 - **Complete Visualization System**: Implemented 5 advanced visualization types from React frontend to Vue frontend:
+
+### Removed
+- **Old React Frontend**: Removed the legacy React frontend in `./frontend/` directory - only Vue.js frontend in `./frontend-vue/` is now available
   - Performance Graphs: IOPS Comparison, Latency Analysis, Bandwidth Trends, Responsiveness charts
   - Performance Fingerprint Heatmap: Multi-dimensional performance visualization
   - Drive Radar Chart: Comparative performance analysis across metrics

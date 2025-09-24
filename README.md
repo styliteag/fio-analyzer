@@ -105,25 +105,7 @@ chmod +x fio-analyzer-tests.sh
 
 For local development with separate frontend/backend:
 
-#### Frontend (React existing) / Vue migration
-
-1. **Navigate to the frontend directory**:
-   ```bash
-   cd frontend
-   ```
-
-2. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Start the Development Server**:
-   ```bash
-   npm run dev
-   ```
-   The React app will be available at `http://localhost:5173`.
-
-#### Vue Frontend (parallel migration)
+#### Vue Frontend
 
 ```bash
 cd frontend-vue
@@ -588,12 +570,12 @@ The application provides comprehensive performance analysis:
 
 ## Architecture
 
-### Frontend (React + TypeScript)
-- **App.tsx** - Main application orchestrating data flow
-- **TestRunSelector** - Multi-select dropdown for test runs
-- **TemplateSelector** - Chart template/visualization picker
-- **InteractiveChart** - Chart.js-powered data visualization
-- **Upload.tsx** - FIO file upload interface with metadata forms
+### Frontend (Vue.js + TypeScript)
+- **App.vue** - Main application orchestrating data flow
+- **TestRunMultiSelect.vue** - Multi-select dropdown for test runs
+- **ChartTemplateSelector.vue** - Chart template/visualization picker
+- **BasicLineChart.vue** - Chart.js-powered data visualization
+- **LoginForm.vue** - Authentication interface with form validation
 
 ### Backend (Python FastAPI)
 - **main.py** - FastAPI application with modular routers and database logic
@@ -621,7 +603,7 @@ latency_percentiles (id, test_run_id, operation_type, percentile, latency_ns)
 The application uses a consolidated single-container architecture:
 
 ### Container Structure
-- **Frontend**: React app served by nginx on port 80
+- **Frontend**: Vue.js app served by nginx on port 80
 - **Backend**: FastAPI API running internally on port 8000  
 - **Reverse Proxy**: nginx proxies `/api/*` requests to backend
 - **Static Files**: Testing script and config served by nginx

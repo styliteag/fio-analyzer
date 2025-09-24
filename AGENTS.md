@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - `backend/`: FastAPI app (`main.py`), API `routers/`, `auth/`, `database/`, `config/`, `utils/`; tooling (`Makefile`, `pyproject.toml`). Data persists under `backend/db/` and uploads in `backend/uploads/`.
-- `frontend/`: Vite + React + TypeScript (`src/`, `vite.config.ts`, `eslint.config.js`).
+- `frontend-vue/`: Vite + Vue.js + TypeScript (`src/`, `vite.config.ts`, `eslint.config.js`).
 - `docker/`: Multi‑stage image (`docker/app/Dockerfile`) and compose files.
 - `scripts/`: Utilities (`start-frontend-backend.sh`, `fio-analyzer-tests.sh`, `.env.example`).
 - `docs/`, `README.md`, `.pre-commit-config.yaml` for shared tooling.
@@ -21,7 +21,7 @@
 
 ## Coding Style & Naming Conventions
 - Python: formatted with Black (88 cols), isort (Black profile), flake8; modules/functions `snake_case`. Routers live in `backend/routers/*.py`.
-- TypeScript/React: ESLint (see `eslint.config.js`) and Prettier via pre-commit; components `PascalCase` (e.g., `HostSelector.tsx`), hooks `camelCase` (e.g., `useChartColors.ts`).
+- TypeScript/Vue.js: ESLint (see `eslint.config.js`) and Prettier via pre-commit; components `PascalCase` (e.g., `HostSelector.vue`), composables `camelCase` (e.g., `useChartColors.ts`).
 - Run `pre-commit install` once; commits should pass hooks.
 
 #### CHANGELOG Maintenance

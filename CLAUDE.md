@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a **Storage Performance Visualizer** - a full-stack web application that analyzes and visualizes FIO (Flexible I/O Tester) benchmark results. The application consists of:
 
-- **Frontend**: React + TypeScript + Vite application with interactive charts (in `frontend/` directory)
+- **Frontend**: Vue.js + TypeScript + Vite application with interactive charts (in `frontend-vue/` directory)
 - **Backend**: Python FastAPI server with SQLite database (in `backend/` directory) 
 - **Database**: SQLite with test runs and performance metrics tables
 - **Authentication**: Role-based access control with admin and upload-only users
@@ -26,8 +26,8 @@ The backend has been migrated from Node.js/Express to Python FastAPI for improve
 
 ### Development
 ```bash
-# Frontend development (in frontend/ directory)
-cd frontend
+# Frontend development (in frontend-vue/ directory)
+cd frontend-vue
 npm install                    # Install frontend dependencies  
 npm run dev                   # Start Vite dev server (http://localhost:5173)
 npm run build                 # Build frontend for production
@@ -69,7 +69,7 @@ This script will:
 - Create a Python virtual environment if needed
 - Install Python dependencies
 - Start FastAPI backend (http://localhost:8000)
-- Start React frontend (http://localhost:5173)
+- Start Vue.js frontend (http://localhost:5174)
 
 Alternative manual startup:
 ```bash
@@ -190,10 +190,8 @@ The following documentation files provide detailed information about various asp
 ### Migration Documentation
 - **[MIGRATION_SUMMARY.md](./docs/migration/MIGRATION_SUMMARY.md)** - Historical migration notes from Node.js to FastAPI
 
-### Frontend Documentation  
-- **[frontend/PERFORMANCE_OPTIMIZATIONS.md](./frontend/PERFORMANCE_OPTIMIZATIONS.md)** - Comprehensive guide to React performance optimizations, memoization strategies, and chart optimization techniques
-- **[frontend/ABORT_CONTROLLER_SUPPORT.md](./frontend/ABORT_CONTROLLER_SUPPORT.md)** - Documentation for request cancellation implementation with AbortController
-- **[frontend/src/PERFORMANCE_OPTIMIZATIONS.md](./frontend/src/PERFORMANCE_OPTIMIZATIONS.md)** - Additional performance optimization details and code examples
+### Frontend Documentation
+- **[frontend-vue/README.md](./frontend-vue/README.md)** - Vue.js frontend setup and development guide
 
 ### Recent Improvements (2024)
 - Refactored frontend with reusable components (MetricsCard, TestRunFormFields)

@@ -4,23 +4,8 @@ import { useAuth } from '@/composables/useAuth'
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/test-runs',
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/test-runs',
-    component: () => import('./pages/TestRuns.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/host',
-    component: () => import('./pages/Host.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/filters',
-    component: () => import('./pages/Filters.vue'),
-    meta: { requiresAuth: true }
+    redirect: '/user-manager',
+    meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
     path: '/user-manager',
@@ -57,7 +42,9 @@ router.beforeEach((to) => {
 
   // Check if route requires admin privileges
   if (requiresAdmin && !hasPermission('admin')) {
-    return { path: '/test-runs' } // Redirect to accessible page
+    // For now, redirect to login if user doesn't have admin access
+    // This could be changed to show a "access denied" page in the future
+    return { path: '/login' }
   }
 
   return true

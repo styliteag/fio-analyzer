@@ -131,7 +131,6 @@ export async function postForm<T>(path: string, body: FormData): Promise<T> {
 type MeResp = { username: string; role: string }
 
 export const Api = {
-  info: () => getJson<Record<string, unknown>>('/api/info'),
   me: () => getJson<MeResp>('/api/users/me'),
 
   // Users
@@ -141,49 +140,4 @@ export const Api = {
     putJson(`/api/users/${encodeURIComponent(username)}`, updates),
   deleteUser: (username: string) => deleteRequest(`/api/users/${encodeURIComponent(username)}`),
   listUsers: () => getJson<Array<{ username: string; role: string }>>('/api/users/'),
-
-  // Filters
-  filters: () => getJson<Record<string, unknown>>('/api/filters'),
-
-  // Test Runs
-  testRuns: (init?: RequestInit & { signal?: AbortSignal }) => getJson<Record<string, unknown>[]>('/api/test-runs', init),
-  getTestRun: (id: number) => getJson<Record<string, unknown>>(`/api/test-runs/${id}`),
-  updateTestRun: (id: number, payload: Record<string, unknown>) =>
-    putJson(`/api/test-runs/${id}`, payload),
-  deleteTestRun: (id: number) => deleteRequest(`/api/test-runs/${id}`),
-  bulkUpdateTestRuns: (body: Record<string, unknown>) =>
-    putJson('/api/test-runs/bulk', body),
-
-  // Performance Data
-  performanceData: (params: { test_run_ids?: Array<number> | string; metric_types?: string[] }) => {
-    const query = new URLSearchParams()
-    if (params?.test_run_ids) {
-      query.set(
-        'test_run_ids',
-        Array.isArray(params.test_run_ids) ? params.test_run_ids.join(',') : params.test_run_ids,
-      )
-    }
-    if (params?.metric_types?.length) {
-      query.set('metric_types', params.metric_types.join(','))
-    }
-    const suffix = query.toString()
-    return getJson<Record<string, unknown>>(`/api/test-runs/performance-data${suffix ? `?${suffix}` : ''}`)
-  },
-
-  // Time Series
-  timeSeriesServers: () => getJson<Record<string, unknown>>('/api/time-series/servers'),
-  timeSeriesAll: () => getJson<Record<string, unknown>>('/api/time-series/all'),
-  timeSeriesLatest: () => getJson<Record<string, unknown>>('/api/time-series/latest'),
-  timeSeriesHistory: (params: Record<string, string>) => {
-    const qs = new URLSearchParams(params)
-    return getJson<Record<string, unknown>>(`/api/time-series/history${qs.toString() ? `?${qs}` : ''}`)
-  },
-  timeSeriesTrends: (params: Record<string, string>) => {
-    const qs = new URLSearchParams(params)
-    return getJson<Record<string, unknown>>(`/api/time-series/trends${qs.toString() ? `?${qs}` : ''}`)
-  },
-
-  // Imports
-  uploadImport: (form: FormData) => postForm<Record<string, unknown>>('/api/import', form),
-  uploadImportBulk: () => postForm<Record<string, unknown>>('/api/import/bulk', new FormData()),
 }

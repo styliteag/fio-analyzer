@@ -127,11 +127,7 @@ const { user, logout, hasPermission } = useAuth()
 const mobileMenuOpen = ref(false)
 
 const navigation = computed(() => {
-  const baseNavigation = [
-    { name: 'Test Runs', href: '/test-runs' },
-    { name: 'Host Analysis', href: '/host' },
-    { name: 'Filters', href: '/filters' },
-  ]
+  const baseNavigation: Array<{ name: string; href: string }> = []
 
   // Add admin-only navigation items
   if (hasPermission('admin')) {
