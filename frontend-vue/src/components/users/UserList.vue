@@ -276,10 +276,17 @@ import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import StatusIndicator from '@/components/ui/StatusIndicator.vue'
 import Modal from '@/components/ui/Modal.vue'
-import AddUserForm from './AddUserForm.vue'
-import EditUserModal from './EditUserModal.vue'
 import { formatRelativeTime } from '@/utils/formatters'
 import { RefreshCw as RefreshCwIcon, Plus as PlusIcon, Edit as EditIcon, Trash as TrashIcon, UserX as UserXIcon, UserCheck as UserCheckIcon } from 'lucide-vue-next'
+import { defineAsyncComponent } from 'vue'
+
+// Lazy load modal components for better performance
+const AddUserForm = defineAsyncComponent(() =>
+  import('./AddUserForm.vue')
+)
+const EditUserModal = defineAsyncComponent(() =>
+  import('./EditUserModal.vue')
+)
 
 interface User {
   username: string

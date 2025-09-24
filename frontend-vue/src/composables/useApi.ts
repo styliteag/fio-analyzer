@@ -5,7 +5,7 @@ import type {
   UserAccount,
   HealthCheckResponse
 } from '@/types'
-import { apiClient, ApiClientError } from '@/services/api/client'
+import { apiClient, ApiClientError, createCancellableRequest, type CancellableRequest } from '@/services/api/client'
 
 // Cache configuration
 const CACHE_DURATION = {
@@ -499,35 +499,33 @@ export function useApi() {
         url += `?${searchParams.toString()}`
       }
 
-      const requestOptions: RequestInit = {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...headers,
-        },
-        signal: controller.signal,
+      // Use the new API client with cancellation support
+      let data: T
+      switch (method) {
+        case 'GET':
+          data = await apiClient.get<T>(url, controller)
+          break
+        case 'POST':
+          data = await apiClient.post<T>(url, body, controller)
+          break
+        case 'PUT':
+          data = await apiClient.put<T>(url, body, controller)
+          break
+        case 'DELETE':
+          data = await apiClient.delete<T>(url, controller)
+          break
+        default:
+          throw new Error(`Unsupported HTTP method: ${method}`)
       }
-
-      if (body && method !== 'GET') {
-        requestOptions.body = JSON.stringify(body)
-      }
-
-      const response = await fetch(url, requestOptions)
 
       // Clean up successful request
       cleanupRequest(cancelKey)
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
       return data
     } catch (error) {
       cleanupRequest(cancelKey)
 
-      // Don't throw AbortError - just return null for cancelled requests
-      if (error instanceof Error && error.name === 'AbortError') {
+      // Handle cancellation gracefully
+      if (error instanceof ApiClientError && error.isAborted) {
         console.log(`Request cancelled: ${cancelKey}`)
         return null
       }
@@ -564,6 +562,8 @@ export function useApi() {
     // Request cancellation
     cancelRequest,
     cancelAllRequests,
+    createCancellableRequest: <T>(requestFn: (abortController: AbortController) => Promise<T>): CancellableRequest => 
+      createCancellableRequest(requestFn),
 
     // Error handling
     getError,

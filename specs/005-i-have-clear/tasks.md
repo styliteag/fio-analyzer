@@ -158,9 +158,9 @@
 
 ### Performance Optimization
 - [X] T096 Fix missing UploadData component and router configuration
-- [ ] T097 [P] Implement component lazy loading for visualizations
-- [ ] T098 [P] Add request cancellation for API calls
-- [ ] T099 [P] Optimize bundle size with code splitting
+- [X] T097 [P] Implement component lazy loading for visualizations
+- [X] T098 [P] Add request cancellation for API calls
+- [X] T099 [P] Optimize bundle size with code splitting
 
 ### Testing and Quality Assurance
 - [ ] T100 [P] Run all contract tests against backend API

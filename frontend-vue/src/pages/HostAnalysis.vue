@@ -14,15 +14,25 @@
             <span v-if="selectedHostsCount > 0" class="text-sm text-gray-600 dark:text-gray-300">
               {{ selectedHostsCount }} {{ selectedHostsCount === 1 ? 'Host' : 'Hosts' }} Selected
             </span>
-            <button
-              :disabled="isRefreshing"
-              class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              @click="refreshAnalysis"
-            >
-              <RefreshCw v-if="isRefreshing" class="animate-spin w-4 h-4 mr-2" />
-              <RefreshCw v-else class="w-4 h-4 mr-2" />
-              {{ isRefreshing ? 'Refreshing...' : 'Refresh Analysis' }}
-            </button>
+            <div class="flex space-x-2">
+              <button
+                :disabled="isRefreshing"
+                class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                @click="refreshAnalysis"
+              >
+                <RefreshCw v-if="isRefreshing" class="animate-spin w-4 h-4 mr-2" />
+                <RefreshCw v-else class="w-4 h-4 mr-2" />
+                {{ isRefreshing ? 'Refreshing...' : 'Refresh Analysis' }}
+              </button>
+              <button
+                v-if="isRefreshing"
+                @click="cancelRequests"
+                class="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                <X class="w-4 h-4 mr-2" />
+                Cancel Requests
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -288,7 +298,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { RefreshCw, BarChart3, History, Users, Server, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { RefreshCw, BarChart3, History, Users, Server, ChevronLeft, ChevronRight, X } from 'lucide-vue-next'
 import HostSelector from '@/components/filters/HostSelector.vue'
 import FilterSidebar from '@/components/filters/FilterSidebar.vue'
 import ActiveFilters from '@/components/filters/ActiveFilters.vue'
@@ -299,7 +309,7 @@ import { useHostSelection } from '@/composables/useHostSelection'
 import type { TestRun } from '@/types/testRun'
 
 // Composables
-const { fetchWithErrorHandling } = useApi()
+const { fetchWithErrorHandling, cancelRequest, cancelAllRequests } = useApi()
 const { activeFilters, filterOptions, hasActiveFilters, clearAllFilters, filterTestRuns } = useFilters()
 const { selectedHosts, availableHosts, persistSelection } = useHostSelection()
 
@@ -460,12 +470,20 @@ const refreshAnalysis = async () => {
   }
 }
 
+const cancelRequests = () => {
+  // Cancel all active requests
+  cancelAllRequests()
+  isRefreshing.value = false
+  console.log('All requests cancelled by user')
+}
+
 const loadTestData = async () => {
   try {
     const response = await fetchWithErrorHandling('/api/test-runs/', {
       params: {
         limit: 10000 // Load more data for analysis
-      }
+      },
+      cancelKey: 'loadTestData'
     })
     if (response) {
       testData.value = response
@@ -494,7 +512,9 @@ onMounted(async () => {
 
   // Load filter options
   try {
-    const response = await fetchWithErrorHandling('/api/filters/')
+    const response = await fetchWithErrorHandling('/api/filters/', {
+      cancelKey: 'loadFilters'
+    })
     if (response) {
       filterOptions.value = response
     }

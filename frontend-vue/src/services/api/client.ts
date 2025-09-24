@@ -1,4 +1,4 @@
-// HTTP client with error handling and authentication
+// HTTP client with error handling, authentication, and request cancellation
 
 // Global auth state
 let basicAuthCredentials: string | null = null
@@ -25,19 +25,31 @@ export function getAuthHeaders(): Record<string, string> {
   return headers
 }
 
+// Request cancellation support
+export interface CancellableRequest {
+  promise: Promise<unknown>
+  abort: () => void
+  isAborted: boolean
+}
+
 // Enhanced error handling with user-friendly messages and console logging
 export class ApiClientError extends Error {
   constructor(
     public statusCode: number,
     message: string,
     public details?: unknown,
-    public requestId?: string
+    public requestId?: string,
+    public isAborted = false
   ) {
     super(message)
     this.name = 'ApiClientError'
   }
 
   getUserFriendlyMessage(): string {
+    if (this.isAborted) {
+      return 'Request was cancelled'
+    }
+    
     switch (this.statusCode) {
       case 401:
         return 'Please check your username and password'
@@ -57,7 +69,8 @@ export class ApiClientError extends Error {
 
 export async function apiRequest<T>(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  abortController?: AbortController
 ): Promise<T> {
   // For FormData, don't set Content-Type - let browser set it with boundary
   const isFormData = options.body instanceof FormData
@@ -71,6 +84,7 @@ export async function apiRequest<T>(
       ...defaultHeaders,
       ...options.headers,
     },
+    signal: abortController?.signal,
   }
 
   try {
@@ -117,6 +131,11 @@ export async function apiRequest<T>(
       throw error
     }
 
+    // Handle abort errors
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiClientError(0, 'Request was cancelled', error, undefined, true)
+    }
+
     // Network or other errors
     console.error('Network Error:', {
       url,
@@ -130,33 +149,59 @@ export async function apiRequest<T>(
 
 // Convenience methods
 export const apiClient = {
-  get<T>(url: string): Promise<T> {
-    return apiRequest<T>(url, { method: 'GET' })
+  get<T>(url: string, abortController?: AbortController): Promise<T> {
+    return apiRequest<T>(url, { method: 'GET' }, abortController)
   },
 
-  post<T>(url: string, data?: unknown): Promise<T> {
+  post<T>(url: string, data?: unknown, abortController?: AbortController): Promise<T> {
     return apiRequest<T>(url, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
-    })
+    }, abortController)
   },
 
-  put<T>(url: string, data?: unknown): Promise<T> {
+  put<T>(url: string, data?: unknown, abortController?: AbortController): Promise<T> {
     return apiRequest<T>(url, {
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
-    })
+    }, abortController)
   },
 
-  delete<T>(url: string): Promise<T> {
-    return apiRequest<T>(url, { method: 'DELETE' })
+  delete<T>(url: string, abortController?: AbortController): Promise<T> {
+    return apiRequest<T>(url, { method: 'DELETE' }, abortController)
   },
 
-  upload<T>(url: string, formData: FormData): Promise<T> {
+  upload<T>(url: string, formData: FormData, abortController?: AbortController): Promise<T> {
     // apiRequest will handle FormData headers automatically
     return apiRequest<T>(url, {
       method: 'POST',
       body: formData,
-    })
+    }, abortController)
   },
+}
+
+// Helper function to create cancellable requests
+export function createCancellableRequest<T>(
+  requestFn: (abortController: AbortController) => Promise<T>
+): CancellableRequest {
+  const abortController = new AbortController()
+  let isAborted = false
+
+  const promise = requestFn(abortController).catch((error) => {
+    if (error instanceof ApiClientError && error.isAborted) {
+      isAborted = true
+    }
+    throw error
+  })
+
+  return {
+    promise,
+    abort: () => {
+      abortController.abort()
+      isAborted = true
+    },
+    get isAborted() {
+      return isAborted || abortController.signal.aborted
+    }
+  }
 }

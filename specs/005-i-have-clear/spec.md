@@ -23,13 +23,16 @@ As a storage administrator, I need a comprehensive web dashboard that allows me 
 10. **Given** user selects visualization modes, **When** viewing heatmaps, **Then** they should see color-coded performance metrics across different configurations with detailed tooltips and legends
 
 ### Edge Cases
-- What happens when no test data exists in the database?
-- How does the system handle API connection failures or display in system status?
-- What occurs when filter combinations return zero results in the performance analysis?
-- How does the interface respond to very large datasets with 1000+ test runs in visualizations?
-- What happens when a user removes all selected hosts from the multi-host selector?
-- How does the system handle API endpoint errors (401 Unauthorized, 403 Forbidden, 500 Internal Server Error)?
-- What happens when API responses are malformed or contain unexpected data structures?
+- **No test data**: Display "No test data available" message in dashboard cards, show empty charts with "No data to display" placeholder, disable filter controls
+- **API connection failures**: Show "Connection Error" status in System Status panel, display "Unable to load data" message in affected components, log detailed error to console
+- **Zero filter results**: Display "No results match your filters" message, show "Try adjusting your filters" suggestion, maintain filter state for user adjustment
+- **Large datasets (1000+ test runs)**: Implement virtual scrolling for tables, use data sampling for initial chart rendering, provide "Load more" pagination controls
+- **No hosts selected**: Show "Select at least one host to view analysis" message, disable visualization tabs, highlight host selector with warning border
+- **API errors**: 
+  - 401 Unauthorized: Redirect to login page with "Session expired" message
+  - 403 Forbidden: Show "Access denied" message with "Contact administrator" suggestion
+  - 500 Internal Server Error: Show "Server error occurred" message with "Try again later" suggestion
+- **Malformed API responses**: Display "Data format error" message, log raw response to console, fall back to cached data if available
 
 ## Requirements *(mandatory)*
 
@@ -41,7 +44,7 @@ As a storage administrator, I need a comprehensive web dashboard that allows me 
 - **FR-003**: System MUST display user welcome message and logout functionality in the top right
 
 **Main Dashboard Overview**
-- **FR-004**: Dashboard MUST display statistics cards showing Total Test Runs count, Active Servers count, Average IOPS, Average Latency, Last Upload timestamp, and Total Hostnames with History ratio
+- **FR-004**: Dashboard MUST display statistics cards showing Total Test Runs count, Active Servers count (hosts with test runs in last 7 days), Average IOPS (arithmetic mean of all test runs), Average Latency (arithmetic mean of avg_latency in milliseconds), Last Upload timestamp, and Total Hostnames with History ratio
 - **FR-005**: Dashboard MUST show Recent Activity feed with timestamped test upload and analysis events
 - **FR-006**: Dashboard MUST display System Status panel with colored indicators for Backend API, Database, File Storage, and Authentication services
 - **FR-007**: Dashboard MUST provide Quick Links section with icons and descriptions for Performance Analytics, Test History, Upload Data, Admin Panel, Host Analysis, and API Documentation

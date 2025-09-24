@@ -90,6 +90,10 @@ interface PerformanceMetrics {
     value: number;
     unit: 'MB/s';
   };
+  responsiveness: {
+    value: number; // iops / avg_latency
+    unit: 'IOPS/ms';
+  };
   p95_latency?: {
     value: number;
     unit: 'ms';
@@ -143,7 +147,7 @@ interface VisualizationConfig {
 
 interface HeatmapConfig extends VisualizationConfig {
   scaling: 'relative' | 'absolute';
-  metrics: ('iops' | 'bandwidth' | 'responsiveness')[];
+  metrics: ('iops' | 'bandwidth' | 'responsiveness')[]; // responsiveness = iops / avg_latency
   cellSize: number;
   colorRange: [string, string]; // [min_color, max_color]
 }

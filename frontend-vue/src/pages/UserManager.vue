@@ -311,14 +311,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, defineAsyncComponent } from 'vue'
 import { UserPlus, RefreshCw, Users, Shield, Upload, Search, Clock, AlertTriangle } from 'lucide-vue-next'
 import UserList from '@/components/users/UserList.vue'
-import AddUserForm from '@/components/users/AddUserForm.vue'
-import EditUserModal from '@/components/users/EditUserModal.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useApi } from '@/composables/useApi'
 import type { UserAccount } from '@/types/auth'
+
+// Lazy load modal components for better performance
+const AddUserForm = defineAsyncComponent(() =>
+  import('@/components/users/AddUserForm.vue')
+)
+const EditUserModal = defineAsyncComponent(() =>
+  import('@/components/users/EditUserModal.vue')
+)
 
 // Composables
 const { user: currentUser } = useAuth()
