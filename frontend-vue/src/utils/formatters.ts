@@ -28,10 +28,10 @@ export function formatDate(
   const { locale = 'en-US', timeZone = 'UTC' } = options
 
   const formats = {
-    short: { dateStyle: 'short', timeStyle: 'short' },
-    medium: { dateStyle: 'medium', timeStyle: 'short' },
-    long: { dateStyle: 'long', timeStyle: 'medium' },
-    full: { dateStyle: 'full', timeStyle: 'medium' },
+    short: { dateStyle: 'short' as const, timeStyle: 'short' as const },
+    medium: { dateStyle: 'medium' as const, timeStyle: 'short' as const },
+    long: { dateStyle: 'long' as const, timeStyle: 'medium' as const },
+    full: { dateStyle: 'full' as const, timeStyle: 'medium' as const },
   }
 
   try {
@@ -59,9 +59,9 @@ export function formatDateOnly(
   const { locale = 'en-US', timeZone = 'UTC' } = options
 
   const formats = {
-    short: { dateStyle: 'short' },
-    medium: { dateStyle: 'medium' },
-    long: { dateStyle: 'long' },
+    short: { dateStyle: 'short' as const },
+    medium: { dateStyle: 'medium' as const },
+    long: { dateStyle: 'long' as const },
   }
 
   try {
@@ -88,9 +88,9 @@ export function formatTimeOnly(
   const { locale = 'en-US', timeZone = 'UTC' } = options
 
   const formats = {
-    short: { timeStyle: 'short' },
-    medium: { timeStyle: 'medium' },
-    long: { timeStyle: 'long' },
+    short: { timeStyle: 'short' as const },
+    medium: { timeStyle: 'medium' as const },
+    long: { timeStyle: 'long' as const },
   }
 
   try {

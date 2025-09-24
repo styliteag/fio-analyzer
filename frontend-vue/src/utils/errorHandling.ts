@@ -9,10 +9,6 @@ export function createError(
     url?: string
     method?: string
     payload?: unknown
-  },
-  action?: {
-    label: string
-    handler: () => void
   }
 ): AppError {
   return {
@@ -22,7 +18,6 @@ export function createError(
     details,
     timestamp: new Date().toISOString(),
     context,
-    action,
   }
 }
 
@@ -134,10 +129,10 @@ export function getErrorDetails(error: AppError): {
   const context = error.context
 
   return {
-    statusCode: details?.statusCode,
-    requestId: details?.requestId || context?.url?.match(/req-[a-zA-Z0-9]+/)?.[0],
-    field: details?.field,
-    issue: details?.issue,
+    statusCode: typeof details?.statusCode === 'number' ? details.statusCode : undefined,
+    requestId: typeof details?.requestId === 'string' ? details.requestId : context?.url?.match(/req-[a-zA-Z0-9]+/)?.[0],
+    field: typeof details?.field === 'string' ? details.field : undefined,
+    issue: typeof details?.issue === 'string' ? details.issue : undefined,
     url: context?.url,
     method: context?.method,
   }

@@ -485,7 +485,6 @@ export function useApi() {
       method = 'GET',
       params,
       body,
-      headers,
       cancelKey = `${method}:${endpoint}`
     } = options
 

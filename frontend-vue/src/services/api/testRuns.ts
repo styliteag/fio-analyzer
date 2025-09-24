@@ -267,10 +267,18 @@ export class TestRunsApiService {
         if (queryString) {
           url += `?${queryString}`
         }
-      }
+        }
 
       const response = await apiClient.get(url)
-      return response
+      return response as {
+        total: number
+        average_iops: number
+        average_latency: number
+        average_bandwidth: number
+        hostnames: string[]
+        drive_types: string[]
+        date_range: { start: string; end: string }
+      }
     } catch (error) {
       console.error('Failed to fetch test runs statistics:', error)
       throw error
@@ -336,7 +344,7 @@ export class TestRunsApiService {
 
       const url = `${this.baseUrl}/grouped?${params.toString()}`
       const response = await apiClient.get(url)
-      return response
+      return response as Record<string, TestRun[]>
     } catch (error) {
       console.error('Failed to fetch grouped test runs:', error)
       throw error

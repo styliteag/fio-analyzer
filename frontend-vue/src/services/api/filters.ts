@@ -242,7 +242,7 @@ export class FiltersApiService {
       )
 
       if (response && typeof response === 'object') {
-        return response as FilterOptions
+        return (response as unknown as FiltersResponse).data || (response as unknown as FilterOptions)
       }
 
       throw new ApiClientError(500, 'Invalid response format for refreshed filters')
@@ -315,7 +315,12 @@ export class FiltersApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/recent`)
-      return response
+      return response as {
+        hostnames: string[]
+        drive_types: string[]
+        block_sizes: string[]
+        patterns: string[]
+      }
     } catch (error) {
       console.error('Failed to get recent filters:', error)
       // Return empty defaults if endpoint doesn't exist
@@ -338,7 +343,11 @@ export class FiltersApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/combinations`)
-      return response
+      return response as {
+        hostname_drive_model: Array<{ hostname: string; drive_model: string; count: number }>
+        drive_model_block_size: Array<{ drive_model: string; block_size: string; count: number }>
+        hostname_protocol: Array<{ hostname: string; protocol: string; count: number }>
+      }
     } catch (error) {
       console.error('Failed to get valid combinations:', error)
       // Return empty defaults if endpoint doesn't exist

@@ -147,7 +147,7 @@ export function processLineChartData(
     const grouped = new Map<string, ChartDataPoint[]>()
 
     testRuns.forEach(run => {
-      const groupKey = (run as Record<string, unknown>)[groupBy] as string || 'unknown'
+      const groupKey = (run as unknown as Record<string, unknown>)[groupBy] as string || 'unknown'
       if (!grouped.has(groupKey)) {
         grouped.set(groupKey, [])
       }
@@ -253,7 +253,7 @@ export function aggregateMetrics(
   const result: Record<string, { avg: number; min: number; max: number; count: number }> = {}
 
   metrics.forEach(metric => {
-    const values = testRuns.map(run => (run as Record<string, unknown>)[metric] as number).filter(v => v !== undefined && v !== null && v > 0)
+    const values = testRuns.map(run => (run as unknown as Record<string, unknown>)[metric] as number).filter(v => v !== undefined && v !== null && v > 0)
 
     if (values.length === 0) {
       result[metric] = { avg: 0, min: 0, max: 0, count: 0 }
@@ -283,7 +283,7 @@ export function filterDataBySelection(
       if (!values || (Array.isArray(values) && values.length === 0)) continue
 
       const valueArray = Array.isArray(values) ? values : [values]
-      const runValue = (run as Record<string, unknown>)[category]
+      const runValue = (run as unknown as Record<string, unknown>)[category]
 
       if (runValue === undefined || runValue === null) return false
 
@@ -534,7 +534,9 @@ export function getCachedColor(value: number, scale: { min: number; max: number;
   // Limit cache size to prevent memory leaks
   if (colorCache.size > 1000) {
     const firstKey = colorCache.keys().next().value
-    colorCache.delete(firstKey)
+    if (firstKey !== undefined) {
+      colorCache.delete(firstKey)
+    }
   }
 
   colorCache.set(cacheKey, color)

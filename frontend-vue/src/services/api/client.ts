@@ -103,8 +103,8 @@ export async function apiRequest<T>(
 
       const error = new ApiClientError(
         response.status,
-        errorData.error || `HTTP ${response.status}`,
-        errorData.details,
+        (errorData as any).error || `HTTP ${response.status}`,
+        (errorData as any).details,
         requestId
       )
 

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, readonly } from 'vue'
+import { ref, computed } from 'vue'
 
 // Notification types
 export type NotificationType = 'success' | 'error' | 'warning' | 'info'
@@ -45,6 +45,9 @@ interface UiState {
   sidebarOpen: boolean
   theme: 'light' | 'dark' | 'system'
   lastActivity: number
+  errorMessage: string
+  successMessage: string
+  isGlobalLoading: boolean
 }
 
 export const useUiStore = defineStore('ui', () => {
@@ -66,6 +69,9 @@ export const useUiStore = defineStore('ui', () => {
     sidebarOpen: false,
     theme: 'system',
     lastActivity: Date.now(),
+    errorMessage: '',
+    successMessage: '',
+    isGlobalLoading: false,
   })
 
   // Computed properties
@@ -74,6 +80,9 @@ export const useUiStore = defineStore('ui', () => {
   const hasLoadingStates = computed(() => state.value.loadingStates.length > 0)
   const isLoading = computed(() => state.value.loadingStates.length > 0)
   const isModalOpen = computed(() => state.value.modal.isOpen)
+  const errorMessage = computed(() => state.value.errorMessage)
+  const successMessage = computed(() => state.value.successMessage)
+  const isGlobalLoading = computed(() => state.value.isGlobalLoading)
 
   const notificationsByType = computed(() => {
     const grouped: Record<NotificationType, Notification[]> = {
@@ -257,6 +266,19 @@ export const useUiStore = defineStore('ui', () => {
     state.value.lastActivity = Date.now()
   }
 
+  // Message management
+  function setErrorMessage(message: string): void {
+    state.value.errorMessage = message
+  }
+
+  function setSuccessMessage(message: string): void {
+    state.value.successMessage = message
+  }
+
+  function setGlobalLoading(loading: boolean): void {
+    state.value.isGlobalLoading = loading
+  }
+
   // Global error handler
   function handleGlobalError(error: Error, context?: string): void {
     console.error('Global error:', error, context)
@@ -307,6 +329,9 @@ export const useUiStore = defineStore('ui', () => {
     isLoading,
     isModalOpen,
     notificationsByType,
+    errorMessage,
+    successMessage,
+    isGlobalLoading,
 
     // Notification methods
     addNotification,
@@ -335,6 +360,9 @@ export const useUiStore = defineStore('ui', () => {
     setSidebarOpen,
     setTheme,
     updateActivity,
+    setErrorMessage,
+    setSuccessMessage,
+    setGlobalLoading,
 
     // Error handling
     handleGlobalError,

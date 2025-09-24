@@ -146,7 +146,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useFiltersStore } from '@/stores/filters'
 import { useTestRunsStore } from '@/stores/testRuns'
 import { formatRelativeTime } from '@/utils/formatters'

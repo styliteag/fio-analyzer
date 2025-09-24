@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, readonly } from 'vue'
+import { ref, computed } from 'vue'
 import type { FilterOptions, FilterState } from '@/types/filters'
 
 // Filters state interface

@@ -1,4 +1,4 @@
-import { reactive, computed, readonly } from 'vue'
+import { reactive, computed } from 'vue'
 import type { TestRun } from '@/types'
 
 // Local storage key for host selection persistence

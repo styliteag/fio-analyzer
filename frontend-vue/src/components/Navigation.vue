@@ -260,6 +260,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import { useTheme } from '@/composables/useTheme'
 import { useUiStore } from '@/stores/ui'
 
 // Icons
@@ -275,6 +276,7 @@ import {
 
 const route = useRoute()
 const { user, logout, hasPermission } = useAuth()
+const { themeMode, toggleTheme: toggleThemeMode } = useTheme()
 const uiStore = useUiStore()
 
 // Reactive state
@@ -291,7 +293,7 @@ const userInitials = computed(() => {
 const notificationCount = computed(() => 0) // TODO: Connect to actual notifications
 
 const themeIcon = computed(() => {
-  switch (uiStore.state.theme) {
+  switch (themeMode.value) {
     case 'light':
       return Sun
     case 'dark':
@@ -380,10 +382,7 @@ function toggleNotifications() {
 }
 
 function toggleTheme() {
-  const themes = ['light', 'dark', 'system'] as const
-  const currentIndex = themes.indexOf(uiStore.state.theme)
-  const nextIndex = (currentIndex + 1) % themes.length
-  uiStore.setTheme(themes[nextIndex])
+  toggleThemeMode()
 }
 
 function closeMobileMenu() {

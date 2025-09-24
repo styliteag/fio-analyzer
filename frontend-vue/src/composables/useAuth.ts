@@ -1,4 +1,4 @@
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { setBasicAuth, clearAuth } from '@/services/api/client'
@@ -144,7 +144,10 @@ export function useAuth() {
   }
 
   // Computed properties
-  const isAuthenticated = computed(() => authState.value.isAuthenticated)
+  const isAuthenticated = computed(() => {
+    console.log('🔍 isAuthenticated computed:', authState.value.isAuthenticated, 'user:', authState.value.user?.username)
+    return authState.value.isAuthenticated
+  })
   const user = computed(() => authState.value.user)
   const userRole = computed(() => authState.value.user?.role ?? null)
 
@@ -205,12 +208,18 @@ export function useAuth() {
         expires_at: new Date(Date.now() + SESSION_DURATION).toISOString(),
         lastActivity: now
       }
+      
+      console.log('🔄 Auth state updated:', {
+        isAuthenticated: authState.value.isAuthenticated,
+        user: authState.value.user?.username,
+        timestamp: now
+      })
 
       // Save to storage with enhanced error handling
       const authData: StoredAuthData = {
         credentials: encodedCredentials,
         user: userData,
-        expires_at: authState.value.expires_at,
+        expires_at: authState.value.expires_at || '',
         lastActivity: now,
         version: AUTH_VERSION
       }
@@ -381,7 +390,7 @@ export function useAuth() {
       const authData = loadAuthFromStorage()
       if (authData) {
         authData.expires_at = newExpiresAt
-        authData.lastActivity = authState.value.lastActivity
+        authData.lastActivity = authState.value.lastActivity || ''
         saveAuthToStorage(authData)
       }
     } catch (error) {

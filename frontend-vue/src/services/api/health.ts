@@ -241,7 +241,15 @@ export class HealthApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/metrics`)
-      return response
+      return response as {
+        uptime_seconds: number
+        total_requests: number
+        active_connections: number
+        memory_usage_mb: number
+        cpu_usage_percent: number
+        average_response_time_ms: number
+        requests_per_second: number
+      }
     } catch (error) {
       console.error('Failed to fetch performance metrics:', error)
       throw error
@@ -270,7 +278,23 @@ export class HealthApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/docs`)
-      return response
+      return response as {
+        endpoints: Record<string, {
+          method: string
+          description: string
+          parameters?: {
+            name: string
+            type: string
+            required: boolean
+            description: string
+          }[]
+          responses: Record<string, {
+            description: string
+            schema?: unknown
+          }>
+        }>
+        schemas: Record<string, unknown>
+      }
     } catch (error) {
       console.error('Failed to fetch API documentation:', error)
       throw error
@@ -280,7 +304,7 @@ export class HealthApiService {
   /**
    * Ping the service for basic connectivity
    */
-  async ping(): Promise<{ pong: boolean; timestamp: string }> {
+  async ping(): Promise<{ pong: boolean; timestamp: string; response_time_ms: number }> {
     try {
       const startTime = Date.now()
       const response = await apiClient.get<{ pong: boolean; timestamp: string }>(`${this.baseUrl}/ping`)
@@ -295,6 +319,7 @@ export class HealthApiService {
       return {
         pong: false,
         timestamp: new Date().toISOString(),
+        response_time_ms: 0,
       }
     }
   }
@@ -313,7 +338,15 @@ export class HealthApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/logs?lines=${lines}`)
-      return response
+      return response as {
+        logs: Array<{
+          timestamp: string
+          level: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL'
+          message: string
+          module?: string
+        }>
+        total_lines: number
+      }
     } catch (error) {
       console.error('Failed to fetch service logs:', error)
       throw error
@@ -330,7 +363,11 @@ export class HealthApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/connectivity`)
-      return response
+      return response as {
+        internet_access: boolean
+        dns_resolution: boolean
+        external_services: Record<string, boolean>
+      }
     } catch (error) {
       console.error('Failed to test external connectivity:', error)
       throw error
@@ -351,7 +388,15 @@ export class HealthApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/config`)
-      return response
+      return response as {
+        environment: string
+        debug_mode: boolean
+        database_configured: boolean
+        storage_configured: boolean
+        authentication_configured: boolean
+        features_enabled: string[]
+        warnings: string[]
+      }
     } catch (error) {
       console.error('Failed to fetch configuration status:', error)
       throw error
@@ -371,7 +416,14 @@ export class HealthApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/versions`)
-      return response
+      return response as {
+        python: string
+        fastapi: string
+        uvicorn: string
+        sqlalchemy?: string
+        databases?: string[]
+        external_services?: Record<string, string>
+      }
     } catch (error) {
       console.error('Failed to fetch dependency versions:', error)
       throw error
@@ -384,7 +436,7 @@ export class HealthApiService {
   async triggerGarbageCollection(): Promise<{ message: string; collected: number }> {
     try {
       const response = await apiClient.post(`${this.baseUrl}/gc`, {})
-      return response
+      return response as { message: string; collected: number }
     } catch (error) {
       console.error('Failed to trigger garbage collection:', error)
       throw error
@@ -404,7 +456,14 @@ export class HealthApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/cache`)
-      return response
+      return response as {
+        enabled: boolean
+        total_entries: number
+        total_size_bytes: number
+        hit_rate_percent: number
+        miss_rate_percent: number
+        eviction_count: number
+      }
     } catch (error) {
       console.error('Failed to fetch cache statistics:', error)
       // Return default values if cache stats not available

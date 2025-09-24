@@ -28,8 +28,8 @@ export function normalizePerformanceData(
 
     if (values.length > 0) {
       ranges[metric] = {
-        min: Math.min(...values),
-        max: Math.max(...values),
+        min: Math.min(...values.filter(v => v !== undefined) as number[]),
+        max: Math.max(...values.filter(v => v !== undefined) as number[]),
       }
     }
   })
@@ -116,8 +116,8 @@ export function sortTestRuns(
 
   return [...testRuns].sort((a, b) => {
     for (const { field, direction } of criteria) {
-      const aValue = (a as Record<string, unknown>)[field]
-      const bValue = (b as Record<string, unknown>)[field]
+      const aValue = (a as unknown as Record<string, unknown>)[field]
+      const bValue = (b as unknown as Record<string, unknown>)[field]
 
       let comparison = 0
 
@@ -157,7 +157,7 @@ export function groupTestRunsBy(
 
   testRuns.forEach(run => {
     const keys = fields.map(field => {
-      const value = ((run as Record<string, unknown>)[field])
+      const value = ((run as unknown as Record<string, unknown>)[field])
       return value !== undefined && value !== null ? String(value) : 'unknown'
     })
 
@@ -241,7 +241,7 @@ export function extractUniqueValues(
   // Extract values
   testRuns.forEach(run => {
     fields.forEach(field => {
-      const value = ((run as Record<string, unknown>)[field])
+      const value = ((run as unknown as Record<string, unknown>)[field])
       if (value !== undefined && value !== null) {
         result[field].add(value)
       }
@@ -310,19 +310,19 @@ export function testRunsToFilterOptions(testRuns: TestRun[]): FilterOptions {
   ])
 
   return {
-    drive_models: unique.drive_models,
+    drive_models: unique.drive_models as string[],
     host_disk_combinations: createHostDiskCombinations(testRuns),
-    block_sizes: unique.block_sizes,
-    patterns: unique.patterns,
-    syncs: unique.syncs,
-    queue_depths: unique.queue_depths,
-    directs: unique.directs,
-    num_jobs: unique.num_jobs,
-    test_sizes: unique.test_sizes,
-    durations: unique.durations,
-    hostnames: unique.hostnames,
-    protocols: unique.protocols,
-    drive_types: unique.drive_types,
+    block_sizes: unique.block_sizes as string[],
+    patterns: unique.patterns as string[],
+    syncs: unique.syncs as number[],
+    queue_depths: unique.queue_depths as number[],
+    directs: unique.directs as number[],
+    num_jobs: unique.num_jobs as number[],
+    test_sizes: unique.test_sizes as string[],
+    durations: unique.durations as number[],
+    hostnames: unique.hostnames as string[],
+    protocols: unique.protocols as string[],
+    drive_types: unique.drive_types as string[],
   }
 }
 

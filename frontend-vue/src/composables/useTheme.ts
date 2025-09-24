@@ -97,8 +97,12 @@ export function useTheme() {
       root.style.setProperty(property, value)
     })
 
-    // Update data-theme attribute for Tailwind CSS
-    root.setAttribute('data-theme', theme)
+    // Update dark class for Tailwind CSS
+    if (theme === 'dark') {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
 
     // Update resolved theme
     resolvedTheme.value = theme
@@ -245,6 +249,7 @@ export function useTheme() {
     isDark,
     isLight,
     isSystem,
+    isDarkMode: isDark, // Alias for compatibility
 
     // Theme control methods
     setThemeMode,

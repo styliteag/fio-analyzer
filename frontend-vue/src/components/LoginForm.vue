@@ -63,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 
@@ -89,6 +89,16 @@ const handleSubmit = async () => {
 
   try {
     const userData = await login(credentials.value)
+
+    // Wait for authentication state to be updated and verified
+    await nextTick()
+    
+    // Double-check that we're authenticated before navigating
+    const { isAuthenticated } = useAuth()
+    if (!isAuthenticated.value) {
+      console.warn('⚠️ Authentication state not updated, waiting...')
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
 
     // Get redirect path from query parameter or default to dashboard
     const redirectPath = router.currentRoute.value.query.redirect as string || '/dashboard'

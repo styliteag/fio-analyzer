@@ -13,17 +13,17 @@ export interface StoredItem<T> {
 }
 
 class StorageManager {
-  private prefix: string
+  protected prefix: string
 
   constructor(prefix = 'fio') {
     this.prefix = prefix
   }
 
-  private getKey(key: string): string {
+  protected getKey(key: string): string {
     return `${this.prefix}:${key}`
   }
 
-  private isExpired(item: StoredItem<unknown>): boolean {
+  protected isExpired(item: StoredItem<unknown>): boolean {
     if (!item.ttl) return false
     return Date.now() - item.timestamp > item.ttl
   }
@@ -172,7 +172,7 @@ export class SessionStorageManager extends StorageManager {
       const serialized = JSON.stringify(item)
       const storageKey = this.getKey(key)
 
-      sessionStorage.setItem(storageKey, serialized)
+      window.sessionStorage.setItem(storageKey, serialized)
       return true
     } catch (error) {
       console.warn('Failed to save to sessionStorage:', error)
@@ -183,7 +183,7 @@ export class SessionStorageManager extends StorageManager {
   get<T>(key: string, defaultValue?: T): T | null {
     try {
       const storageKey = this.getKey(key)
-      const stored = sessionStorage.getItem(storageKey)
+      const stored = window.sessionStorage.getItem(storageKey)
 
       if (!stored) return defaultValue || null
 
@@ -204,7 +204,7 @@ export class SessionStorageManager extends StorageManager {
   remove(key: string): boolean {
     try {
       const storageKey = this.getKey(key)
-      sessionStorage.removeItem(storageKey)
+      window.sessionStorage.removeItem(storageKey)
       return true
     } catch (error) {
       console.warn('Failed to remove from sessionStorage:', error)
@@ -217,7 +217,7 @@ export class SessionStorageManager extends StorageManager {
       const keys = Object.keys(sessionStorage)
       keys.forEach(key => {
         if (key.startsWith(`${this.prefix}:`)) {
-          sessionStorage.removeItem(key)
+          window.sessionStorage.removeItem(key)
         }
       })
       return true
@@ -270,8 +270,8 @@ export const preferencesStorage = {
   set: (prefs: unknown) => storage.set('preferences', prefs),
   get: () => storage.get('preferences', {}),
   update: (updates: unknown) => {
-    const current = preferencesStorage.get()
-    const updated = { ...current, ...updates }
+    const current = preferencesStorage.get() || {}
+    const updated = { ...(current as Record<string, unknown>), ...(updates as Record<string, unknown>) }
     preferencesStorage.set(updated)
     return updated
   },

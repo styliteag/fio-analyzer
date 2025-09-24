@@ -1,5 +1,5 @@
 <template>
-  <div id="app" :class="{ 'dark': isDarkMode }">
+  <div id="app">
     <!-- Error Toast -->
     <div
       v-if="errorMessage"
@@ -69,12 +69,10 @@ import { useRoute } from 'vue-router'
 import { AlertCircle, CheckCircle, X } from 'lucide-vue-next'
 import Navigation from '@/components/Navigation.vue'
 import { useAuth } from '@/composables/useAuth'
-import { useTheme } from '@/composables/useTheme'
 import { useUiStore } from '@/stores/ui'
 
 const route = useRoute()
 const { isAuthenticated, initialize, isInitializing, authError } = useAuth()
-const { isDarkMode } = useTheme()
 const uiStore = useUiStore()
 
 // Computed properties
@@ -132,14 +130,6 @@ onMounted(async () => {
   } catch (error) {
     console.error('Failed to initialize authentication:', error)
     // Don't show error to user as it might be expected (no stored auth)
-  }
-
-  // Set initial theme based on system preference if not already set
-  if (!localStorage.getItem('theme')) {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    if (prefersDark) {
-      document.documentElement.classList.add('dark')
-    }
   }
 })
 

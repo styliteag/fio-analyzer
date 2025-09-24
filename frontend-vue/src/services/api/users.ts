@@ -169,7 +169,13 @@ export class UsersApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/statistics`)
-      return response
+      return response as {
+        total_users: number
+        admin_count: number
+        uploader_count: number
+        active_users_last_30_days: number
+        recently_created_users: number
+      }
     } catch (error) {
       console.error('Failed to fetch user statistics:', error)
       throw error
@@ -226,7 +232,12 @@ export class UsersApiService {
   }> {
     try {
       const response = await apiClient.post(`${this.baseUrl}/bulk`, { users })
-      return response
+      return response as {
+        message: string
+        created: number
+        failed: number
+        errors: Array<{ username: string; error: string }>
+      }
     } catch (error) {
       console.error('Failed to bulk create users:', error)
       throw error
@@ -244,7 +255,12 @@ export class UsersApiService {
   }> {
     try {
       const response = await apiClient.put(`${this.baseUrl}/bulk/roles`, { updates })
-      return response
+      return response as {
+        message: string
+        updated: number
+        failed: number
+        errors: Array<{ username: string; error: string }>
+      }
     } catch (error) {
       console.error('Failed to bulk update user roles:', error)
       throw error
@@ -267,7 +283,13 @@ export class UsersApiService {
       params.append('limit', limit.toString())
 
       const response = await apiClient.get(`${this.baseUrl}/activity?${params.toString()}`)
-      return response
+      return response as Array<{
+        username: string
+        action: string
+        timestamp: string
+        ip_address?: string
+        user_agent?: string
+      }>
     } catch (error) {
       console.error('Failed to fetch user activity:', error)
       throw error
@@ -304,7 +326,15 @@ export class UsersApiService {
   }> {
     try {
       const response = await apiClient.get(`${this.baseUrl}/permissions`)
-      return response
+      return response as {
+        roles: Array<{
+          role: string
+          permissions: Array<{
+            resource: string
+            actions: string[]
+          }>
+        }>
+      }
     } catch (error) {
       console.error('Failed to fetch permissions matrix:', error)
       throw error
@@ -340,7 +370,12 @@ export class UsersApiService {
       params.append('limit', limit.toString())
 
       const response = await apiClient.get(`${this.baseUrl}/${username}/login-history?${params.toString()}`)
-      return response
+      return response as Array<{
+        timestamp: string
+        ip_address: string
+        user_agent: string
+        success: boolean
+      }>
     } catch (error) {
       console.error(`Failed to fetch login history for user ${username}:`, error)
       throw error

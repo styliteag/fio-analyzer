@@ -100,10 +100,19 @@ router.beforeEach(async (to, _from) => {
   // Check if route requires authentication
   if (requiresAuth && !isAuthenticated.value) {
     console.log('❌ Router: Authentication required, redirecting to login')
-    // Store the attempted URL for redirect after login
-    return {
-      path: '/login',
-      query: { redirect: to.fullPath !== '/' ? to.fullPath : undefined }
+    // Add a small delay to allow auth state to propagate
+    await new Promise(resolve => setTimeout(resolve, 10))
+    
+    // Check again after delay
+    if (!isAuthenticated.value) {
+      console.log('❌ Router: Still not authenticated after delay, redirecting to login')
+      // Store the attempted URL for redirect after login
+      return {
+        path: '/login',
+        query: { redirect: to.fullPath !== '/' ? to.fullPath : undefined }
+      }
+    } else {
+      console.log('✅ Router: Authentication state updated, allowing access')
     }
   }
 
