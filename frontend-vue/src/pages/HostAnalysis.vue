@@ -52,20 +52,20 @@
               </p>
             </div>
             <div class="p-6">
-              <HostSelector v-model="selectedHosts" :available-hosts="availableHosts" />
+              <HostSelector v-model="selectedHosts" />
             </div>
           </div>
 
           <!-- Filter Sidebar -->
-          <FilterSidebar v-model="activeFilters" :filter-options="filterOptions" />
+          <FilterSidebar />
 
           <!-- Active Filters Summary -->
-          <div v-if="hasActiveFilters" class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+          <div v-if="filtersStore.hasActiveFilters" class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <h3 class="text-lg font-medium text-gray-900 dark:text-white">Active Filters</h3>
             </div>
             <div class="p-6">
-              <ActiveFilters v-model="activeFilters" @clear="clearAllFilters" />
+              <ActiveFilters />
             </div>
           </div>
 
@@ -304,14 +304,17 @@ import FilterSidebar from '@/components/filters/FilterSidebar.vue'
 import ActiveFilters from '@/components/filters/ActiveFilters.vue'
 import VisualizationTabs from '@/components/charts/VisualizationTabs.vue'
 import { useApi } from '@/composables/useApi'
-import { useFilters } from '@/composables/useFilters'
 import { useHostSelection } from '@/composables/useHostSelection'
+import { useFiltersStore } from '@/stores/filters'
+import { useTestRunsStore } from '@/stores/testRuns'
 import type { TestRun } from '@/types/testRun'
+import type { FilterOptions } from '@/types/filters'
 
 // Composables
-const { fetchWithErrorHandling, cancelRequest, cancelAllRequests } = useApi()
-const { activeFilters, filterOptions, hasActiveFilters, clearAllFilters, filterTestRuns } = useFilters()
-const { selectedHosts, availableHosts, persistSelection } = useHostSelection()
+const { fetchWithErrorHandling, cancelAllRequests } = useApi()
+const { selectedHosts } = useHostSelection()
+const filtersStore = useFiltersStore()
+const testRunsStore = useTestRunsStore()
 
 // Component state
 const isRefreshing = ref(false)
@@ -320,12 +323,12 @@ const testData = ref<TestRun[]>([])
 const currentPage = ref(1)
 const itemsPerPage = 25
 
-// Analysis tabs configuration
-const analysisTabs = [
+// Analysis tabs configuration - using computed for dynamic counts
+const analysisTabs = computed(() => [
   { id: 'analytics', name: 'Performance Analytics', icon: BarChart3, count: null },
-  { id: 'history', name: 'Test History', icon: History, count: computed(() => filteredTestData.value.length) },
+  { id: 'history', name: 'Test History', icon: History, count: filteredTestData.value.length },
   { id: 'comparison', name: 'Advanced Host Comparison', icon: Users, count: selectedHosts.value.length }
-]
+])
 
 // Computed properties
 const selectedHostsCount = computed(() => selectedHosts.value.length)
@@ -338,8 +341,61 @@ const filteredTestData = computed(() => {
     data = data.filter(test => selectedHosts.value.includes(test.hostname))
   }
 
-  // Apply active filters using the useFilters composable
-  data = filterTestRuns(data)
+  // Apply active filters using the store
+  if (filtersStore.hasActiveFilters) {
+    data = data.filter(testRun => {
+      // Check each active filter category
+      for (const category of filtersStore.activeCategories) {
+        const activeValues = filtersStore.state.active[category]
+        if (!activeValues || activeValues.length === 0) continue
+
+        let categoryMatches = false
+        switch (category) {
+          case 'block_sizes':
+            categoryMatches = activeValues.includes(testRun.block_size)
+            break
+          case 'patterns':
+            categoryMatches = activeValues.includes(testRun.read_write_pattern)
+            break
+          case 'queue_depths':
+            categoryMatches = activeValues.includes(testRun.queue_depth)
+            break
+          case 'num_jobs':
+            categoryMatches = activeValues.includes(testRun.num_jobs)
+            break
+          case 'protocols':
+            categoryMatches = activeValues.includes(testRun.protocol)
+            break
+          case 'hostnames':
+            categoryMatches = activeValues.includes(testRun.hostname)
+            break
+          case 'drive_types':
+            categoryMatches = activeValues.includes(testRun.drive_type)
+            break
+          case 'drive_models':
+            categoryMatches = activeValues.includes(testRun.drive_model)
+            break
+          case 'syncs':
+            categoryMatches = activeValues.includes(testRun.sync)
+            break
+          case 'directs':
+            categoryMatches = activeValues.includes(testRun.direct)
+            break
+          case 'test_sizes':
+            categoryMatches = activeValues.includes(testRun.test_size)
+            break
+          case 'durations':
+            categoryMatches = activeValues.includes(testRun.duration)
+            break
+        }
+        
+        if (!categoryMatches) {
+          return false
+        }
+      }
+      return true
+    })
+  }
 
   return data
 })
@@ -485,24 +541,28 @@ const loadTestData = async () => {
       },
       cancelKey: 'loadTestData'
     })
-    if (response) {
+    if (response && Array.isArray(response)) {
       testData.value = response
+      testRunsStore.setData(response) // Populate the store so HostSelector can access it
+    } else {
+      testData.value = []
+      testRunsStore.setData([])
     }
   } catch (error) {
     console.error('Failed to load test data:', error)
     testData.value = []
+    testRunsStore.setData([])
   }
 }
 
-// Watch for host selection changes and persist them
-watch(selectedHosts, (newHosts) => {
-  persistSelection(newHosts)
+// Watch for host selection changes and reset pagination
+watch(selectedHosts, () => {
   // Reset pagination when hosts change
   currentPage.value = 1
-}, { deep: true })
+})
 
 // Watch for filter changes and reset pagination
-watch(activeFilters, () => {
+watch(() => filtersStore.state.active, () => {
   currentPage.value = 1
 }, { deep: true })
 
@@ -515,8 +575,8 @@ onMounted(async () => {
     const response = await fetchWithErrorHandling('/api/filters/', {
       cancelKey: 'loadFilters'
     })
-    if (response) {
-      filterOptions.value = response
+    if (response && typeof response === 'object' && response !== null) {
+      filtersStore.setAvailableFilters(response as FilterOptions)
     }
   } catch (error) {
     console.error('Failed to load filter options:', error)

@@ -173,15 +173,9 @@ function preloadRoute(routeName: string): void {
 }
 
 function preloadCriticalRoutes(): void {
-  // Preload dashboard for authenticated users
-  const { isAuthenticated } = useAuth()
-  if (isAuthenticated.value) {
-    preloadRoute('Dashboard')
-  }
-
-  // Preload common navigation targets based on user behavior
-  const commonRoutes = ['HostAnalysis', 'TestHistory']
-  commonRoutes.forEach(route => {
+  // Simple preloading without composables - preload critical routes
+  const criticalRoutes = ['Dashboard', 'HostAnalysis', 'TestHistory']
+  criticalRoutes.forEach(route => {
     setTimeout(() => preloadRoute(route), Math.random() * 2000 + 1000)
   })
 }

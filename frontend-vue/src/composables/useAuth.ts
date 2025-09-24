@@ -285,16 +285,16 @@ export function useAuth() {
       setBasicAuth(username, password)
       console.log('🔑 Global auth credentials set')
 
-      // TEMPORARILY DISABLE SESSION VALIDATION FOR TESTING
-      console.log('🔍 Skipping session validation for now (testing)')
-      // const isValid = await validateSession()
-      // if (!isValid) {
-      //   console.warn('❌ Stored auth session is no longer valid - clearing auth state')
-      //   clearAuthState()
-      //   isInitialized.value = true
-      //   return
-      // }
-      console.log('🔍 Session validation skipped')
+      // Validate the session
+      console.log('🔍 Validating session...')
+      const isValid = await validateSession()
+      if (!isValid) {
+        console.warn('❌ Stored auth session is no longer valid - clearing auth state')
+        clearAuthState()
+        isInitialized.value = true
+        return
+      }
+      console.log('🔍 Session validation passed')
 
       console.log('✅ Authentication restored successfully')
       updateLastActivity()

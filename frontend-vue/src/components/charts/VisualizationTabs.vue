@@ -94,7 +94,7 @@
           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600"
           @click="exportCurrentTab"
         >
-          <DownloadIcon class="w-4 h-4 mr-2" />
+          <Download class="w-4 h-4 mr-2" />
           Export {{ activeTabName }}
         </button>
 
@@ -102,7 +102,7 @@
           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600"
           @click="toggleFullscreen"
         >
-          <MaximizeIcon class="w-4 h-4 mr-2" />
+          <Maximize2 class="w-4 h-4 mr-2" />
           Fullscreen
         </button>
       </div>
@@ -128,23 +128,17 @@ import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 
 // Lazy load visualization components for better performance
-const PerformanceHeatmap = defineAsyncComponent(() =>
-  import('./PerformanceHeatmap.vue').then(m => ({ default: m.default }))
-)
-const PerformanceGraphs = defineAsyncComponent(() =>
-  import('./PerformanceGraphs.vue').then(m => ({ default: m.default }))
-)
-const ScatterPlot = defineAsyncComponent(() =>
-  import('./ScatterPlot.vue').then(m => ({ default: m.default }))
-)
-const RadarChart = defineAsyncComponent(() =>
-  import('./RadarChart.vue').then(m => ({ default: m.default }))
-)
+const PerformanceHeatmap = defineAsyncComponent(() => import('./PerformanceHeatmap.vue'))
+const PerformanceGraphs = defineAsyncComponent(() => import('./PerformanceGraphs.vue'))
+const ScatterPlot = defineAsyncComponent(() => import('./ScatterPlot.vue'))
+const RadarChart = defineAsyncComponent(() => import('./RadarChart.vue'))
 import {
   BarChart3,
   TrendingUp,
   ScatterChart,
-  Radar
+  Radar,
+  Download,
+  Maximize2
 } from 'lucide-vue-next'
 
 interface Tab {

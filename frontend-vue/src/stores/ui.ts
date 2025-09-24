@@ -297,8 +297,8 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   return {
-    // Reactive state (readonly)
-    state: readonly(state),
+    // Reactive state
+    state,
 
     // Computed properties
     hasNotifications,

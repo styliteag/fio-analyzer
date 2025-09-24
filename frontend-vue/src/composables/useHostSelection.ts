@@ -227,10 +227,10 @@ export function useHostSelection() {
   loadFromStorage()
 
   return {
-    // Reactive state (readonly)
-    selected: readonly(computed(() => state.selected)),
-    available: readonly(computed(() => state.available)),
-    persisted: readonly(computed(() => state.persisted)),
+    // Reactive state
+    selectedHosts: computed(() => state.selected),
+    availableHosts: computed(() => state.available),
+    persisted: computed(() => state.persisted),
 
     // Computed properties
     hasSelection,

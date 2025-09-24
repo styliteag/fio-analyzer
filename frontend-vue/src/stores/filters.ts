@@ -300,8 +300,8 @@ export const useFiltersStore = defineStore('filters', () => {
   loadFromStorage()
 
   return {
-    // Reactive state (readonly)
-    state: readonly(state),
+    // Reactive state
+    state,
 
     // Computed properties
     hasActiveFilters,

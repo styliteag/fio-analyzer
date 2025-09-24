@@ -81,7 +81,7 @@
         class="w-full"
         style="height: 400px;"
       >
-        <LineChart
+        <Line
           :data="lineChartData"
           :options="lineChartOptions"
           class="w-full h-full"
@@ -94,7 +94,7 @@
         class="w-full"
         style="height: 400px;"
       >
-        <BarChart
+        <Bar
           :data="barChartData"
           :options="barChartOptions"
           class="w-full h-full"
@@ -107,7 +107,7 @@
         class="w-full"
         style="height: 400px;"
       >
-        <ScatterChart
+        <Scatter
           :data="scatterChartData"
           :options="scatterChartOptions"
           class="w-full h-full"
@@ -120,7 +120,7 @@
         class="w-full"
         style="height: 400px;"
       >
-        <RadarChart
+        <Radar
           :data="radarChartData"
           :options="radarChartOptions"
           class="w-full h-full"
@@ -133,7 +133,7 @@
         class="flex items-center justify-center py-12"
       >
         <div class="text-center">
-          <BarChart3Icon class="mx-auto h-12 w-12 text-gray-400" />
+          <BarChart3 class="mx-auto h-12 w-12 text-gray-400" />
           <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">
             No data available
           </h3>
@@ -177,27 +177,33 @@ import { ref, computed, watch } from 'vue'
 import { useTestRunsStore } from '@/stores/testRuns'
 import { processLineChartData, processScatterData, aggregateMetrics } from '@/utils/chartProcessing'
 import { formatIOPS, formatLatency, formatBandwidth } from '@/utils/formatters'
+import { BarChart3 } from 'lucide-vue-next'
+import { Line, Bar, Scatter, Radar } from 'vue-chartjs'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  RadialLinearScale,
+} from 'chart.js'
 
-// Mock chart components - in real implementation, these would be from Chart.js or similar
-const LineChart = {
-  props: ['data', 'options'],
-  template: '<div class="w-full h-full bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center text-gray-500">Line Chart Placeholder</div>'
-}
-
-const BarChart = {
-  props: ['data', 'options'],
-  template: '<div class="w-full h-full bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center text-gray-500">Bar Chart Placeholder</div>'
-}
-
-const ScatterChart = {
-  props: ['data', 'options'],
-  template: '<div class="w-full h-full bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center text-gray-500">Scatter Chart Placeholder</div>'
-}
-
-const RadarChart = {
-  props: ['data', 'options'],
-  template: '<div class="w-full h-full bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center text-gray-500">Radar Chart Placeholder</div>'
-}
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  RadialLinearScale
+)
 
 interface TestRun {
   id: number
