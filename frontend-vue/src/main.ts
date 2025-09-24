@@ -1,9 +1,13 @@
 import { createApp } from 'vue';
+import { createPinia } from 'pinia';
 import App from './App.vue';
 import { router } from './router';
 import './styles.css';
 
-const app = createApp(App).use(router);
+const app = createApp(App);
+const pinia = createPinia();
+
+app.use(pinia).use(router);
 
 // Enable Vue DevTools in development
 if (import.meta.env.DEV) {

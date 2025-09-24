@@ -59,71 +59,71 @@
 
 ### Composables and Business Logic
 - [X] T032 Authentication composable (useAuth) in frontend-vue/src/composables/useAuth.ts
-- [ ] T033 API client composable (useApi) in frontend-vue/src/composables/useApi.ts
-- [ ] T034 Filters composable (useFilters) in frontend-vue/src/composables/useFilters.ts
-- [ ] T035 Theme composable (useTheme) in frontend-vue/src/composables/useTheme.ts
-- [ ] T036 Host selection composable (useHostSelection) in frontend-vue/src/composables/useHostSelection.ts
+- [X] T033 API client composable (useApi) in frontend-vue/src/composables/useApi.ts
+- [X] T034 Filters composable (useFilters) in frontend-vue/src/composables/useFilters.ts
+- [X] T035 Theme composable (useTheme) in frontend-vue/src/composables/useTheme.ts
+- [X] T036 Host selection composable (useHostSelection) in frontend-vue/src/composables/useHostSelection.ts
 
 ### State Management with Pinia
-- [ ] T037 [P] Auth store in frontend-vue/src/stores/auth.ts
-- [ ] T038 [P] Test runs store in frontend-vue/src/stores/testRuns.ts
-- [ ] T039 [P] Filters store in frontend-vue/src/stores/filters.ts
-- [ ] T040 [P] UI state store in frontend-vue/src/stores/ui.ts
+- [X] T037 [P] Auth store in frontend-vue/src/stores/auth.ts
+- [X] T038 [P] Test runs store in frontend-vue/src/stores/testRuns.ts
+- [X] T039 [P] Filters store in frontend-vue/src/stores/filters.ts
+- [X] T040 [P] UI state store in frontend-vue/src/stores/ui.ts
 
 ### Utility Functions [P] - All Parallel
-- [ ] T041 [P] Chart data processing utilities in frontend-vue/src/utils/chartProcessing.ts
-- [ ] T042 [P] Data transformation utilities in frontend-vue/src/utils/dataTransform.ts
-- [ ] T043 [P] Error handling utilities in frontend-vue/src/utils/errorHandling.ts
-- [ ] T044 [P] Validation utilities in frontend-vue/src/utils/validation.ts
-- [ ] T045 [P] Local storage utilities in frontend-vue/src/utils/storage.ts
-- [ ] T046 [P] Date/time formatting utilities in frontend-vue/src/utils/formatters.ts
+- [X] T041 [P] Chart data processing utilities in frontend-vue/src/utils/chartProcessing.ts
+- [X] T042 [P] Data transformation utilities in frontend-vue/src/utils/dataTransform.ts
+- [X] T043 [P] Error handling utilities in frontend-vue/src/utils/errorHandling.ts
+- [X] T044 [P] Validation utilities in frontend-vue/src/utils/validation.ts
+- [X] T045 [P] Local storage utilities in frontend-vue/src/utils/storage.ts
+- [X] T046 [P] Date/time formatting utilities in frontend-vue/src/utils/formatters.ts
 
 ### API Service Layer
-- [ ] T047 HTTP client with error handling in frontend-vue/src/services/api/client.ts
-- [ ] T048 Test runs API service in frontend-vue/src/services/api/testRuns.ts
-- [ ] T049 Filters API service in frontend-vue/src/services/api/filters.ts
-- [ ] T050 User management API service in frontend-vue/src/services/api/users.ts
-- [ ] T051 Health check API service in frontend-vue/src/services/api/health.ts
+- [X] T047 HTTP client with error handling in frontend-vue/src/services/api/client.ts
+- [X] T048 Test runs API service in frontend-vue/src/services/api/testRuns.ts
+- [X] T049 Filters API service in frontend-vue/src/services/api/filters.ts
+- [X] T050 User management API service in frontend-vue/src/services/api/users.ts
+- [X] T051 Health check API service in frontend-vue/src/services/api/health.ts
 
 ## Phase 3.4: UI Components
 
 ### Basic Components [P] - All Parallel
-- [ ] T052 [P] MetricCard component in frontend-vue/src/components/ui/MetricCard.vue
-- [ ] T053 [P] StatusIndicator component in frontend-vue/src/components/ui/StatusIndicator.vue
-- [ ] T054 [P] LoadingSpinner component in frontend-vue/src/components/ui/LoadingSpinner.vue
-- [ ] T055 [P] ErrorMessage component in frontend-vue/src/components/ui/ErrorMessage.vue
-- [ ] T056 [P] Button component in frontend-vue/src/components/ui/Button.vue
-- [ ] T057 [P] Input component in frontend-vue/src/components/ui/Input.vue
-- [ ] T058 [P] Modal component in frontend-vue/src/components/ui/Modal.vue
+- [X] T052 [P] MetricCard component in frontend-vue/src/components/ui/MetricCard.vue
+- [X] T053 [P] StatusIndicator component in frontend-vue/src/components/ui/StatusIndicator.vue
+- [X] T054 [P] LoadingSpinner component in frontend-vue/src/components/ui/LoadingSpinner.vue
+- [X] T055 [P] ErrorMessage component in frontend-vue/src/components/ui/ErrorMessage.vue
+- [X] T056 [P] Button component in frontend-vue/src/components/ui/Button.vue
+- [X] T057 [P] Input component in frontend-vue/src/components/ui/Input.vue
+- [X] T058 [P] Modal component in frontend-vue/src/components/ui/Modal.vue
 
 ### Navigation Components
-- [ ] T059 Navigation bar component in frontend-vue/src/components/Navigation.vue (update existing)
-- [ ] T060 Sidebar navigation component in frontend-vue/src/components/Sidebar.vue
+- [X] T059 Navigation bar component in frontend-vue/src/components/Navigation.vue (update existing)
+- [X] T060 Sidebar navigation component in frontend-vue/src/components/Sidebar.vue
 
 ### Dashboard Components
-- [ ] T061 Statistics cards section in frontend-vue/src/components/dashboard/StatsCards.vue
-- [ ] T062 Recent activity feed in frontend-vue/src/components/dashboard/RecentActivity.vue
-- [ ] T063 System status panel in frontend-vue/src/components/dashboard/SystemStatus.vue
-- [ ] T064 Quick links section in frontend-vue/src/components/dashboard/QuickLinks.vue
+- [X] T061 Statistics cards section in frontend-vue/src/components/dashboard/StatsCards.vue
+- [X] T062 Recent activity feed in frontend-vue/src/components/dashboard/RecentActivity.vue
+- [X] T063 System status panel in frontend-vue/src/components/dashboard/SystemStatus.vue
+- [X] T064 Quick links section in frontend-vue/src/components/dashboard/QuickLinks.vue
 
 ### Filter Components
-- [ ] T065 Filter sidebar container in frontend-vue/src/components/filters/FilterSidebar.vue
-- [ ] T066 Filter section component in frontend-vue/src/components/filters/FilterSection.vue
-- [ ] T067 Host selector with tags in frontend-vue/src/components/filters/HostSelector.vue
-- [ ] T068 Active filters summary in frontend-vue/src/components/filters/ActiveFilters.vue
+- [X] T065 Filter sidebar container in frontend-vue/src/components/filters/FilterSidebar.vue
+- [X] T066 Filter section component in frontend-vue/src/components/filters/FilterSection.vue
+- [X] T067 Host selector with tags in frontend-vue/src/components/filters/HostSelector.vue
+- [X] T068 Active filters summary in frontend-vue/src/components/filters/ActiveFilters.vue
 
 ### Visualization Components
-- [ ] T069 Chart container component in frontend-vue/src/components/charts/ChartContainer.vue
-- [ ] T070 Performance heatmap component in frontend-vue/src/components/charts/PerformanceHeatmap.vue
-- [ ] T071 Performance graphs component in frontend-vue/src/components/charts/PerformanceGraphs.vue
-- [ ] T072 IOPS vs Latency scatter plot in frontend-vue/src/components/charts/ScatterPlot.vue
-- [ ] T073 Radar comparison chart in frontend-vue/src/components/charts/RadarChart.vue
-- [ ] T074 Visualization tabs container in frontend-vue/src/components/charts/VisualizationTabs.vue
+- [X] T069 Chart container component in frontend-vue/src/components/charts/ChartContainer.vue
+- [X] T070 Performance heatmap component in frontend-vue/src/components/charts/PerformanceHeatmap.vue
+- [X] T071 Performance graphs component in frontend-vue/src/components/charts/PerformanceGraphs.vue
+- [X] T072 IOPS vs Latency scatter plot in frontend-vue/src/components/charts/ScatterPlot.vue
+- [X] T073 Radar comparison chart in frontend-vue/src/components/charts/RadarChart.vue
+- [X] T074 Visualization tabs container in frontend-vue/src/components/charts/VisualizationTabs.vue
 
 ### User Management Components
-- [ ] T075 User list component in frontend-vue/src/components/users/UserList.vue
-- [ ] T076 Add user form component in frontend-vue/src/components/users/AddUserForm.vue
-- [ ] T077 Edit user modal component in frontend-vue/src/components/users/EditUserModal.vue
+- [X] T075 User list component in frontend-vue/src/components/users/UserList.vue
+- [X] T076 Add user form component in frontend-vue/src/components/users/AddUserForm.vue
+- [X] T077 Edit user modal component in frontend-vue/src/components/users/EditUserModal.vue
 
 ## Phase 3.5: Pages and Routing
 
