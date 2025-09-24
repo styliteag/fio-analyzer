@@ -32,6 +32,47 @@ export interface ChartDisplayOptions {
   colorScheme: 'default' | 'accessible' | 'colorblind'
 }
 
+// Data model VisualizationConfig interface for API contracts
+export interface DataModelVisualizationConfig {
+  mode: 'absolute' | 'normalized'
+  colorScheme: 'default' | 'accessible' | 'high-contrast'
+  showLegend: boolean
+  showTooltips: boolean
+  performanceZones: {
+    high_performance: {
+      color: string
+      threshold: { iops: number; latency: number }
+    }
+    balanced: {
+      color: string
+      threshold: { iops: number; latency: number }
+    }
+    high_latency: {
+      color: string
+      threshold: { iops: number; latency: number }
+    }
+    low_performance: {
+      color: string
+      threshold: { iops: number; latency: number }
+    }
+  }
+}
+
+export interface DataModelHeatmapConfig extends DataModelVisualizationConfig {
+  scaling: 'relative' | 'absolute'
+  metrics: ('iops' | 'bandwidth' | 'responsiveness')[]
+  cellSize: number
+  colorRange: [string, string] // [min_color, max_color]
+}
+
+export interface DataModelChartConfig extends DataModelVisualizationConfig {
+  type: 'line' | 'bar' | 'scatter' | 'radar' | 'parallel'
+  xAxis: string
+  yAxis: string
+  groupBy?: string
+  aggregation?: 'avg' | 'max' | 'min' | 'sum'
+}
+
 export interface PerformanceGraphsConfig extends VisualizationConfig {
   activeChart: 'iops-comparison' | 'latency-analysis' | 'bandwidth-trends' | 'responsiveness'
   showSeriesToggle: boolean

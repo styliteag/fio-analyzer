@@ -3,6 +3,30 @@
  * Based on data-model.md specifications
  */
 
+// Performance metrics with appropriate units and statistical summaries
+export interface PerformanceMetrics {
+  iops: {
+    value: number
+    unit: 'IOPS'
+  }
+  avg_latency: {
+    value: number
+    unit: 'ms'
+  }
+  bandwidth: {
+    value: number
+    unit: 'MB/s'
+  }
+  p95_latency?: {
+    value: number
+    unit: 'ms'
+  }
+  p99_latency?: {
+    value: number
+    unit: 'ms'
+  }
+}
+
 export interface PerformanceData {
   iops: number | null | undefined
   avg_latency: number | null | undefined

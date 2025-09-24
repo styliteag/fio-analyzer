@@ -3,6 +3,23 @@
  * Based on data-model.md specifications
  */
 
+// Filter options available from API
+export interface FilterOptions {
+  drive_models: string[]
+  host_disk_combinations: string[] // "hostname - protocol - drive_model"
+  block_sizes: string[]
+  patterns: string[] // read_write_pattern values
+  syncs: number[] // 0, 1
+  queue_depths: number[]
+  directs: number[] // 0, 1
+  num_jobs: number[]
+  test_sizes: string[]
+  durations: number[] // seconds
+  hostnames: string[]
+  protocols: string[]
+  drive_types: string[]
+}
+
 export interface FilterState {
   selectedBlockSizes: string[]
   selectedPatterns: string[]
