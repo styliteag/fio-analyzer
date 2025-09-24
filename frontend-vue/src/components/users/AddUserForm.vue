@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="handleSubmit" class="space-y-6">
+  <form class="space-y-6" @submit.prevent="handleSubmit">
     <!-- Username -->
     <div>
       <Input
@@ -141,8 +141,8 @@
     <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
       <Button
         variant="outline"
-        @click="$emit('cancel')"
         :disabled="loading"
+        @click="$emit('cancel')"
       >
         Cancel
       </Button>

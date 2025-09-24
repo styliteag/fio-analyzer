@@ -6,11 +6,11 @@
         <button
           v-for="tab in tabs"
           :key="tab.id"
-          @click="activeTab = tab.id"
           class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors"
           :class="activeTab === tab.id
             ? 'border-blue-500 text-blue-600 dark:text-blue-400'
             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'"
+          @click="activeTab = tab.id"
         >
           <component :is="tab.icon" class="w-4 h-4 inline mr-2" />
           {{ tab.name }}
@@ -22,40 +22,68 @@
     <div class="min-h-[600px]">
       <!-- Performance Heatmap Tab -->
       <div v-if="activeTab === 'heatmap'">
-        <PerformanceHeatmap
-          :data="chartData"
-          title="Performance Heatmap"
-          subtitle="IOPS performance across different configurations"
-        />
+        <Suspense>
+          <PerformanceHeatmap
+            :data="chartData"
+            title="Performance Heatmap"
+            subtitle="IOPS performance across different configurations"
+          />
+          <template #fallback>
+            <div class="flex items-center justify-center py-12">
+              <LoadingSpinner message="Loading heatmap..." size="md" />
+            </div>
+          </template>
+        </Suspense>
       </div>
 
       <!-- Performance Graphs Tab -->
       <div v-if="activeTab === 'graphs'">
-        <PerformanceGraphs
-          :data="chartData"
-          title="Performance Analysis"
-          subtitle="Interactive charts for performance metrics"
-        />
+        <Suspense>
+          <PerformanceGraphs
+            :data="chartData"
+            title="Performance Analysis"
+            subtitle="Interactive charts for performance metrics"
+          />
+          <template #fallback>
+            <div class="flex items-center justify-center py-12">
+              <LoadingSpinner message="Loading graphs..." size="md" />
+            </div>
+          </template>
+        </Suspense>
       </div>
 
       <!-- Scatter Plot Tab -->
       <div v-if="activeTab === 'scatter'">
-        <ScatterPlot
-          :data="chartData"
-          :show-trend-line="true"
-          :show-legend="true"
-          title="Performance Scatter Plot"
-          subtitle="IOPS vs Latency analysis with performance zones"
-        />
+        <Suspense>
+          <ScatterPlot
+            :data="chartData"
+            :show-trend-line="true"
+            :show-legend="true"
+            title="Performance Scatter Plot"
+            subtitle="IOPS vs Latency analysis with performance zones"
+          />
+          <template #fallback>
+            <div class="flex items-center justify-center py-12">
+              <LoadingSpinner message="Loading scatter plot..." size="md" />
+            </div>
+          </template>
+        </Suspense>
       </div>
 
       <!-- Radar Chart Tab -->
       <div v-if="activeTab === 'radar'">
-        <RadarChart
-          :data="chartData"
-          title="Host Comparison Radar"
-          subtitle="Multi-dimensional performance comparison across hosts"
-        />
+        <Suspense>
+          <RadarChart
+            :data="chartData"
+            title="Host Comparison Radar"
+            subtitle="Multi-dimensional performance comparison across hosts"
+          />
+          <template #fallback>
+            <div class="flex items-center justify-center py-12">
+              <LoadingSpinner message="Loading radar chart..." size="md" />
+            </div>
+          </template>
+        </Suspense>
       </div>
     </div>
 
@@ -63,16 +91,16 @@
     <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
       <div class="flex items-center space-x-4">
         <button
-          @click="exportCurrentTab"
           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600"
+          @click="exportCurrentTab"
         >
           <DownloadIcon class="w-4 h-4 mr-2" />
           Export {{ activeTabName }}
         </button>
 
         <button
-          @click="toggleFullscreen"
           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600"
+          @click="toggleFullscreen"
         >
           <MaximizeIcon class="w-4 h-4 mr-2" />
           Fullscreen
@@ -96,29 +124,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import PerformanceHeatmap from './PerformanceHeatmap.vue'
-import PerformanceGraphs from './PerformanceGraphs.vue'
-import ScatterPlot from './ScatterPlot.vue'
-import RadarChart from './RadarChart.vue'
+import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
+
+// Lazy load visualization components for better performance
+const PerformanceHeatmap = defineAsyncComponent(() =>
+  import('./PerformanceHeatmap.vue').then(m => ({ default: m.default }))
+)
+const PerformanceGraphs = defineAsyncComponent(() =>
+  import('./PerformanceGraphs.vue').then(m => ({ default: m.default }))
+)
+const ScatterPlot = defineAsyncComponent(() =>
+  import('./ScatterPlot.vue').then(m => ({ default: m.default }))
+)
+const RadarChart = defineAsyncComponent(() =>
+  import('./RadarChart.vue').then(m => ({ default: m.default }))
+)
 import {
   BarChart3,
   TrendingUp,
   ScatterChart,
-  Radar,
-  Download,
-  Maximize
+  Radar
 } from 'lucide-vue-next'
 
 interface Tab {
   id: string
   name: string
-  icon: any
+  icon: typeof BarChart3
   description: string
 }
 
+interface TestRunData {
+  id: number
+  hostname: string
+  drive_model: string
+  block_size: string
+  read_write_pattern: string
+  iops: number
+  bandwidth: number
+  avg_latency: number
+  p95_latency?: number
+  p99_latency?: number
+}
+
 const props = defineProps<{
-  data?: any[]
+  data?: TestRunData[]
   initialTab?: string
 }>()
 

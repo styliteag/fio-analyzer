@@ -60,10 +60,16 @@ export async function apiRequest<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
+  // For FormData, don't set Content-Type - let browser set it with boundary
+  const isFormData = options.body instanceof FormData
+  const defaultHeaders = isFormData ?
+    (basicAuthCredentials ? { Authorization: basicAuthCredentials } : {}) :
+    getAuthHeaders()
+
   const config: RequestInit = {
     ...options,
     headers: {
-      ...getAuthHeaders(),
+      ...defaultHeaders,
       ...options.headers,
     },
   }
@@ -148,14 +154,10 @@ export const apiClient = {
   },
 
   upload<T>(url: string, formData: FormData): Promise<T> {
+    // apiRequest will handle FormData headers automatically
     return apiRequest<T>(url, {
       method: 'POST',
       body: formData,
-      headers: {
-        // Don't set Content-Type for FormData, let browser set it with boundary
-        ...getAuthHeaders(),
-        'Content-Type': undefined as any,
-      },
     })
   },
 }

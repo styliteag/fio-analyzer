@@ -1,8 +1,10 @@
 import type { TestRun, UserAccount, LoginCredentials, FilterState } from '@/types'
 
 // TestRun validation
-export function validateTestRun(testRun: any): testRun is TestRun {
+export function validateTestRun(testRun: unknown): testRun is TestRun {
   if (!testRun || typeof testRun !== 'object') return false
+
+  const data = testRun as Record<string, unknown>
 
   // Required fields validation
   const requiredFields = [
@@ -12,62 +14,65 @@ export function validateTestRun(testRun: any): testRun is TestRun {
   ]
 
   for (const field of requiredFields) {
-    if (!(field in testRun) || testRun[field] === null || testRun[field] === undefined) {
+    if (!(field in data) || data[field] === null || data[field] === undefined) {
       return false
     }
   }
 
   // Type validation
-  if (typeof testRun.id !== 'number' || testRun.id <= 0) return false
-  if (typeof testRun.timestamp !== 'string') return false
-  if (typeof testRun.hostname !== 'string' || testRun.hostname.trim() === '') return false
-  if (typeof testRun.drive_model !== 'string' || testRun.drive_model.trim() === '') return false
-  if (typeof testRun.drive_type !== 'string' || testRun.drive_type.trim() === '') return false
-  if (typeof testRun.test_name !== 'string' || testRun.test_name.trim() === '') return false
-  if (typeof testRun.block_size !== 'string' || testRun.block_size.trim() === '') return false
-  if (typeof testRun.read_write_pattern !== 'string' || testRun.read_write_pattern.trim() === '') return false
-  if (typeof testRun.queue_depth !== 'number' || testRun.queue_depth <= 0) return false
-  if (typeof testRun.duration !== 'number' || testRun.duration <= 0) return false
-  if (typeof testRun.iops !== 'number' || testRun.iops < 0) return false
-  if (typeof testRun.avg_latency !== 'number' || testRun.avg_latency < 0) return false
-  if (typeof testRun.bandwidth !== 'number' || testRun.bandwidth < 0) return false
+  if (typeof data.id !== 'number' || data.id <= 0) return false
+  if (typeof data.timestamp !== 'string') return false
+  if (typeof data.hostname !== 'string' || data.hostname.trim() === '') return false
+  if (typeof data.drive_model !== 'string' || data.drive_model.trim() === '') return false
+  if (typeof data.drive_type !== 'string' || data.drive_type.trim() === '') return false
+  if (typeof data.test_name !== 'string' || data.test_name.trim() === '') return false
+  if (typeof data.block_size !== 'string' || data.block_size.trim() === '') return false
+  if (typeof data.read_write_pattern !== 'string' || data.read_write_pattern.trim() === '') return false
+  if (typeof data.queue_depth !== 'number' || data.queue_depth <= 0) return false
+  if (typeof data.duration !== 'number' || data.duration <= 0) return false
+  if (typeof data.iops !== 'number' || data.iops < 0) return false
+  if (typeof data.avg_latency !== 'number' || data.avg_latency < 0) return false
+  if (typeof data.bandwidth !== 'number' || data.bandwidth < 0) return false
 
   // Value range validation
   const validBlockSizes = ['1K', '2K', '4K', '8K', '16K', '32K', '64K', '128K', '1M', '2M', '4M']
-  if (!validBlockSizes.includes(testRun.block_size)) return false
+  if (!validBlockSizes.includes(data.block_size as string)) return false
 
   const validPatterns = ['randread', 'randwrite', 'read', 'write', 'rw', 'randrw']
-  if (!validPatterns.includes(testRun.read_write_pattern)) return false
+  if (!validPatterns.includes(data.read_write_pattern as string)) return false
 
   const validDriveTypes = ['NVMe', 'SATA', 'SAS', 'SCSI']
-  if (!validDriveTypes.includes(testRun.drive_type)) return false
+  if (!validDriveTypes.includes(data.drive_type as string)) return false
 
   const validProtocols = ['Local', 'iSCSI', 'NFS', 'SMB', 'Fiber Channel']
-  if (testRun.protocol && !validProtocols.includes(testRun.protocol)) return false
+  if (data.protocol && typeof data.protocol === 'string' && !validProtocols.includes(data.protocol)) return false
 
   return true
 }
 
 // User account validation
-export function validateUserAccount(user: any): user is UserAccount {
+export function validateUserAccount(user: unknown): user is UserAccount {
   if (!user || typeof user !== 'object') return false
 
+  const data = user as Record<string, unknown>
+
   // Required fields
-  if (typeof user.username !== 'string' || user.username.trim() === '') return false
-  if (!['admin', 'uploader'].includes(user.role)) return false
+  if (typeof data.username !== 'string' || data.username.trim() === '') return false
+  if (!['admin', 'uploader'].includes(data.role as string)) return false
 
   // Optional fields
-  if (user.permissions && !Array.isArray(user.permissions)) return false
-  if (user.created_at && typeof user.created_at !== 'string') return false
-  if (user.last_login && typeof user.last_login !== 'string') return false
+  if (data.permissions && !Array.isArray(data.permissions)) return false
+  if (data.created_at && typeof data.created_at !== 'string') return false
+  if (data.last_login && typeof data.last_login !== 'string') return false
 
   // Validate permissions structure
-  if (user.permissions) {
-    for (const permission of user.permissions) {
+  if (data.permissions) {
+    for (const permission of data.permissions as unknown[]) {
       if (!permission || typeof permission !== 'object') return false
-      if (typeof permission.resource !== 'string') return false
-      if (!Array.isArray(permission.actions)) return false
-      if (!permission.actions.every((action: any) => typeof action === 'string')) return false
+      const perm = permission as Record<string, unknown>
+      if (typeof perm.resource !== 'string') return false
+      if (!Array.isArray(perm.actions)) return false
+      if (!perm.actions.every((action: unknown) => typeof action === 'string')) return false
     }
   }
 
@@ -75,15 +80,17 @@ export function validateUserAccount(user: any): user is UserAccount {
 }
 
 // Login credentials validation
-export function validateLoginCredentials(credentials: any): credentials is LoginCredentials {
+export function validateLoginCredentials(credentials: unknown): credentials is LoginCredentials {
   if (!credentials || typeof credentials !== 'object') return false
 
-  if (typeof credentials.username !== 'string' || credentials.username.trim() === '') return false
-  if (typeof credentials.password !== 'string' || credentials.password.trim() === '') return false
+  const data = credentials as Record<string, unknown>
+
+  if (typeof data.username !== 'string' || data.username.trim() === '') return false
+  if (typeof data.password !== 'string' || data.password.trim() === '') return false
 
   // Basic length validation
-  if (credentials.username.length < 3) return false
-  if (credentials.password.length < 6) return false
+  if ((data.username as string).length < 3) return false
+  if ((data.password as string).length < 6) return false
 
   return true
 }

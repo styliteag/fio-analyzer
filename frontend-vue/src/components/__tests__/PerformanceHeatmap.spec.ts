@@ -377,7 +377,7 @@ describe('Integration Test: PerformanceHeatmap Component - Visualization Renderi
 
     const startTime = performance.now()
 
-    const wrapper = mount(PerformanceHeatmap, {
+    mount(PerformanceHeatmap, {
       global: {
         plugins: [createTestingPinia()],
       },

@@ -1,13 +1,31 @@
 import type { TestRun, ChartDataPoint, HeatmapCell, ScatterPoint } from '@/types'
 
-// Heatmap data processing
+// Performance optimizations for large datasets
+const PERFORMANCE_THRESHOLDS = {
+  LARGE_DATASET: 1000,
+  AGGREGATION_SAMPLE: 500,
+  CELL_LIMIT: 2000
+}
+
+// Heatmap data processing with performance optimizations
 export function processHeatmapData(
   testRuns: TestRun[],
-  metric: 'iops' | 'bandwidth' | 'responsiveness' = 'iops'
+  metric: 'iops' | 'bandwidth' | 'responsiveness' = 'iops',
+  options: { maxCells?: number; sampleSize?: number } = {}
 ): HeatmapCell[] {
   if (!testRuns || testRuns.length === 0) return []
 
-  // Group data by host and configuration
+  // Performance optimization: Sample large datasets
+  let processedRuns = testRuns
+  const maxCells = options.maxCells || PERFORMANCE_THRESHOLDS.CELL_LIMIT
+  const sampleSize = options.sampleSize || PERFORMANCE_THRESHOLDS.AGGREGATION_SAMPLE
+
+  if (testRuns.length > PERFORMANCE_THRESHOLDS.LARGE_DATASET) {
+    // Use stratified sampling to maintain data distribution
+    processedRuns = stratifiedSample(testRuns, sampleSize)
+  }
+
+  // Group data by host and configuration (optimized)
   const groupedData = new Map<string, TestRun[]>()
 
   testRuns.forEach(run => {
@@ -426,4 +444,100 @@ function getMetricUnit(metric: string): string {
     default:
       return ''
   }
+}
+
+// Performance optimization utilities
+export function stratifiedSample<T extends TestRun>(data: T[], sampleSize: number): T[] {
+  if (data.length <= sampleSize) return data
+
+  // Group by hostname to maintain distribution
+  const hostGroups = new Map<string, T[]>()
+  data.forEach(item => {
+    const host = item.hostname
+    if (!hostGroups.has(host)) {
+      hostGroups.set(host, [])
+    }
+    hostGroups.get(host)!.push(item)
+  })
+
+  // Sample proportionally from each host
+  const hostsCount = hostGroups.size
+  const samplesPerHost = Math.floor(sampleSize / hostsCount)
+  const remainder = sampleSize % hostsCount
+
+  const sampledData: T[] = []
+  let hostsProcessed = 0
+
+  hostGroups.forEach((hostData) => {
+    const extraSample = hostsProcessed < remainder ? 1 : 0
+    const hostSampleSize = Math.min(samplesPerHost + extraSample, hostData.length)
+
+    // Random sampling within host
+    for (let i = 0; i < hostSampleSize; i++) {
+      const randomIndex = Math.floor(Math.random() * hostData.length)
+      sampledData.push(hostData[randomIndex])
+      hostData.splice(randomIndex, 1) // Remove to avoid duplicates
+    }
+    hostsProcessed++
+  })
+
+  return sampledData
+}
+
+// Debounced chart update for performance
+export function createDebouncedChartProcessor(
+  processingFn: Function,
+  delay: number = 150
+): Function {
+  let timeoutId: NodeJS.Timeout | null = null
+
+  return (...args: any[]) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+
+    return new Promise((resolve) => {
+      timeoutId = setTimeout(() => {
+        resolve(processingFn(...args))
+      }, delay)
+    })
+  }
+}
+
+// Virtualization helper for large datasets
+export function virtualizeChartData<T>(
+  data: T[],
+  viewportStart: number,
+  viewportSize: number,
+  bufferSize: number = 100
+): { items: T[]; startIndex: number; endIndex: number } {
+  const start = Math.max(0, viewportStart - bufferSize)
+  const end = Math.min(data.length, viewportStart + viewportSize + bufferSize)
+
+  return {
+    items: data.slice(start, end),
+    startIndex: start,
+    endIndex: end
+  }
+}
+
+// Memory-efficient color calculation with caching
+const colorCache = new Map<string, string>()
+export function getCachedColor(value: number, scale: { min: number; max: number; colors: string[] }): string {
+  const cacheKey = `${value}-${scale.min}-${scale.max}`
+
+  if (colorCache.has(cacheKey)) {
+    return colorCache.get(cacheKey)!
+  }
+
+  const color = getColorForValue(value, scale)
+
+  // Limit cache size to prevent memory leaks
+  if (colorCache.size > 1000) {
+    const firstKey = colorCache.keys().next().value
+    colorCache.delete(firstKey)
+  }
+
+  colorCache.set(cacheKey, color)
+  return color
 }

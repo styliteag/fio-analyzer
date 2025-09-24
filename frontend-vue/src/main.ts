@@ -6,12 +6,7 @@ import { router } from './router'
 // Import global styles
 import './styles.css'
 
-// Import global components
-import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
-import ErrorMessage from '@/components/ui/ErrorMessage.vue'
-import Button from '@/components/ui/Button.vue'
-import Modal from '@/components/ui/Modal.vue'
-import MetricCard from '@/components/ui/MetricCard.vue'
+// Components are imported individually where needed
 
 // Create Vue app instance
 const app = createApp(App)
@@ -40,12 +35,8 @@ if (import.meta.env.DEV) {
   })
 }
 
-// Register global components
-app.component('LoadingSpinner', LoadingSpinner)
-app.component('ErrorMessage', ErrorMessage)
-app.component('Button', Button)
-app.component('Modal', Modal)
-app.component('MetricCard', MetricCard)
+// Note: Global components removed to avoid HTML element name conflicts
+// Components should be imported individually where needed
 
 // Global error handler
 app.config.errorHandler = (err, instance, info) => {
@@ -78,10 +69,8 @@ if (import.meta.env.DEV) {
 app.use(pinia)
 app.use(router)
 
-// Enable Vue DevTools in development
+// Add development debugging helpers
 if (import.meta.env.DEV) {
-  app.config.devtools = true
-
   // Add global properties for debugging
   app.config.globalProperties.$log = console.log
   app.config.globalProperties.$store = pinia
@@ -161,12 +150,12 @@ window.addEventListener('error', (event) => {
 // Performance monitoring in development
 if (import.meta.env.DEV) {
   // Monitor route changes for performance
-  router.beforeEach((to, from, next) => {
+  router.beforeEach((to, _from, next) => {
     console.time(`Route: ${to.path}`)
     next()
   })
 
-  router.afterEach((to, from) => {
+  router.afterEach((to, _from) => {
     console.timeEnd(`Route: ${to.path}`)
   })
 

@@ -15,9 +15,9 @@
               {{ analysisPoints }} data points analyzed
             </div>
             <button
-              @click="refreshAnalytics"
               :disabled="isRefreshing"
               class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="refreshAnalytics"
             >
               <RefreshCw v-if="isRefreshing" class="animate-spin w-4 h-4 mr-2" />
               <RefreshCw v-else class="w-4 h-4 mr-2" />
@@ -103,8 +103,8 @@
                 </label>
                 <select
                   v-model="analysisConfig.timeRange"
-                  @change="updateAnalysis"
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  @change="updateAnalysis"
                 >
                   <option value="1h">Last Hour</option>
                   <option value="24h">Last 24 Hours</option>
@@ -121,8 +121,8 @@
                 </label>
                 <select
                   v-model="analysisConfig.primaryMetric"
-                  @change="updateAnalysis"
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  @change="updateAnalysis"
                 >
                   <option value="iops">IOPS</option>
                   <option value="latency">Latency</option>
@@ -138,8 +138,8 @@
                 </label>
                 <select
                   v-model="analysisConfig.aggregation"
-                  @change="updateAnalysis"
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  @change="updateAnalysis"
                 >
                   <option value="average">Average</option>
                   <option value="median">Median</option>
@@ -156,8 +156,8 @@
                 </label>
                 <select
                   v-model="analysisConfig.groupBy"
-                  @change="updateAnalysis"
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  @change="updateAnalysis"
                 >
                   <option value="hostname">Host</option>
                   <option value="drive_type">Drive Type</option>
@@ -233,11 +233,13 @@
                         'text-gray-400'
                       }`"
                     />
-                    <span :class="`text-sm font-medium ${
-                      trend.direction === 'up' ? 'text-green-600 dark:text-green-400' :
-                      trend.direction === 'down' ? 'text-red-600 dark:text-red-400' :
-                      'text-gray-500 dark:text-gray-400'
-                    }`">
+                    <span
+                      :class="`text-sm font-medium ${
+                        trend.direction === 'up' ? 'text-green-600 dark:text-green-400' :
+                        trend.direction === 'down' ? 'text-red-600 dark:text-red-400' :
+                        'text-gray-500 dark:text-gray-400'
+                      }`"
+                    >
                       {{ trend.change }}
                     </span>
                   </div>
@@ -272,22 +274,22 @@
               </div>
               <div class="px-6 py-4 space-y-3">
                 <button
-                  @click="generateReport"
                   class="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  @click="generateReport"
                 >
                   <FileText class="w-4 h-4 mr-2" />
                   Generate Report
                 </button>
                 <button
-                  @click="exportAnalytics"
                   class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  @click="exportAnalytics"
                 >
                   <Download class="w-4 h-4 mr-2" />
                   Export Data
                 </button>
                 <button
-                  @click="scheduleAnalysis"
                   class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  @click="scheduleAnalysis"
                 >
                   <Clock class="w-4 h-4 mr-2" />
                   Schedule Analysis
@@ -308,8 +310,8 @@
                 </p>
               </div>
               <button
-                @click="showAdvancedAnalytics = !showAdvancedAnalytics"
                 class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                @click="showAdvancedAnalytics = !showAdvancedAnalytics"
               >
                 <ChevronDown v-if="showAdvancedAnalytics" class="w-5 h-5" />
                 <ChevronRight v-else class="w-5 h-5" />

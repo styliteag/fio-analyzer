@@ -109,6 +109,8 @@ const props = withDefaults(defineProps<Props>(), {
   type: 'spinner',
   size: 'md',
   color: 'blue',
+  message: '',
+  progress: undefined,
   layered: false,
   center: false,
   inline: false,

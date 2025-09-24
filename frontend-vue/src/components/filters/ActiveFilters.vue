@@ -19,9 +19,9 @@
             <span class="font-medium">{{ filter.category }}:</span>
             <span class="ml-1">{{ filter.value }}</span>
             <button
-              @click="removeFilter(filter.category, filter.value)"
               class="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-blue-200 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               aria-label="Remove filter"
+              @click="removeFilter(filter.category, filter.value)"
             >
               <XIcon class="w-3 h-3" />
             </button>
@@ -38,16 +38,16 @@
       <!-- Actions -->
       <div class="ml-4 flex flex-col space-y-2">
         <button
-          @click="clearAllFilters"
           class="inline-flex items-center px-3 py-1.5 border border-blue-300 rounded-md text-xs font-medium text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-800 dark:border-blue-600 dark:text-blue-200 dark:hover:bg-blue-700"
+          @click="clearAllFilters"
         >
           Clear All
         </button>
 
         <button
           v-if="!filtersApplied"
-          @click="applyFilters"
           class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          @click="applyFilters"
         >
           Apply Filters
         </button>

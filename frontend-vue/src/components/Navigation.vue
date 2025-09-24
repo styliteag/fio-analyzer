@@ -11,7 +11,7 @@
             <div class="flex-shrink-0">
               <!-- Logo placeholder - replace with actual logo -->
               <svg class="h-8 w-8 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
             </div>
             <div class="hidden sm:block">
@@ -37,9 +37,9 @@
 
           <!-- Theme toggle -->
           <button
-            @click="toggleTheme"
             class="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
             aria-label="Toggle theme"
+            @click="toggleTheme"
           >
             <component :is="themeIcon" class="w-5 h-5" />
           </button>
@@ -48,9 +48,9 @@
         <!-- Mobile menu button -->
         <div class="md:hidden flex items-center">
           <button
-            @click="toggleMobileMenu"
             class="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
             aria-label="Open main menu"
+            @click="toggleMobileMenu"
           >
             <svg
               class="h-6 w-6"
@@ -80,9 +80,9 @@
         <div class="hidden md:flex items-center space-x-4">
           <!-- Notifications -->
           <button
-            @click="toggleNotifications"
             class="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors relative"
             aria-label="View notifications"
+            @click="toggleNotifications"
           >
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5-5V7a3 3 0 00-6 0v5l-5 5h5m0 0v1a3 3 0 006 0v-1m-6 0h6" />
@@ -98,9 +98,9 @@
           <!-- User dropdown -->
           <div class="relative">
             <button
-              @click="toggleUserMenu"
               class="flex items-center space-x-2 p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 transition-colors"
               aria-label="User menu"
+              @click="toggleUserMenu"
             >
               <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                 <span class="text-white text-sm font-medium">
@@ -158,9 +158,9 @@
                   </router-link>
 
                   <button
-                    @click="handleLogout"
                     class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                     role="menuitem"
+                    @click="handleLogout"
                   >
                     Sign out
                   </button>
@@ -236,8 +236,8 @@
               </router-link>
 
               <button
-                @click="handleLogout"
                 class="mobile-nav-link w-full text-left"
+                @click="handleLogout"
               >
                 Sign out
               </button>
@@ -258,9 +258,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
-import { useTheme } from '@/composables/useTheme'
 import { useUI } from '@/stores/ui'
 
 // Icons
@@ -271,13 +270,11 @@ import {
   Settings,
   Sun,
   Moon,
-  Monitor
+  ComputerDesktopIcon as Monitor
 } from 'lucide-vue-next'
 
-const router = useRouter()
 const route = useRoute()
 const { user, logout, hasPermission } = useAuth()
-const { isDarkMode, toggleTheme: switchTheme } = useTheme()
 const uiStore = useUI()
 
 // Reactive state
@@ -294,7 +291,16 @@ const userInitials = computed(() => {
 const notificationCount = computed(() => 0) // TODO: Connect to actual notifications
 
 const themeIcon = computed(() => {
-  return isDarkMode.value ? Sun : Moon
+  switch (uiStore.state.theme) {
+    case 'light':
+      return Sun
+    case 'dark':
+      return Moon
+    case 'system':
+      return Monitor
+    default:
+      return Monitor
+  }
 })
 
 // Navigation items
@@ -327,8 +333,17 @@ const navigationItems = computed(() => [
   },
 ].filter(item => item.show !== false))
 
+interface NavItem {
+  name: string
+  href: string
+  icon: typeof Home
+  requiresAuth?: boolean
+  requiresAdmin?: boolean
+  show?: boolean
+}
+
 // Methods
-function navLinkClasses(item: any) {
+function navLinkClasses(item: NavItem) {
   const isActive = route.path === item.href
   const baseClasses = 'flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors'
 
@@ -339,7 +354,7 @@ function navLinkClasses(item: any) {
   return `${baseClasses} text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700`
 }
 
-function mobileNavLinkClasses(item: any) {
+function mobileNavLinkClasses(item: NavItem) {
   const isActive = route.path === item.href
   const baseClasses = 'flex items-center px-3 py-2 rounded-md text-base font-medium'
 
@@ -361,11 +376,14 @@ function toggleUserMenu() {
 
 function toggleNotifications() {
   // TODO: Implement notification panel
-  uiStore.setSuccessMessage('Notification system coming soon!')
+  uiStore.showSuccess('Notifications', 'Notification system coming soon!')
 }
 
 function toggleTheme() {
-  switchTheme()
+  const themes = ['light', 'dark', 'system'] as const
+  const currentIndex = themes.indexOf(uiStore.state.theme)
+  const nextIndex = (currentIndex + 1) % themes.length
+  uiStore.setTheme(themes[nextIndex])
 }
 
 function closeMobileMenu() {

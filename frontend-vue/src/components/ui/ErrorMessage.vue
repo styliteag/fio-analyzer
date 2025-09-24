@@ -69,9 +69,9 @@
           class="mt-3"
         >
           <button
-            @click="$emit('retry')"
             class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
             :class="retryButtonClasses"
+            @click="$emit('retry')"
           >
             <svg
               v-if="retrying"
@@ -104,9 +104,9 @@
         class="ml-auto pl-3 flex-shrink-0"
       >
         <button
-          @click="$emit('dismiss')"
           class="inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2"
           :class="dismissButtonClasses"
+          @click="$emit('dismiss')"
         >
           <span class="sr-only">Dismiss</span>
           <svg
@@ -145,6 +145,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  title: '',
+  details: '',
   severity: 'medium',
   retryable: false,
   dismissible: false,

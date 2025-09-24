@@ -195,15 +195,15 @@ import { useAuthStore } from '@/stores/auth'
 import { formatRelativeTime } from '@/utils/formatters'
 import Button from '@/components/ui/Button.vue'
 import {
-  Upload,
-  BarChart3,
-  Server,
-  Users,
-  BookOpen,
-  Settings,
-  ChevronRight,
-  ExternalLink,
-  CheckCircle
+  Upload as UploadIcon,
+  BarChart3 as BarChart3Icon,
+  Server as ServerIcon,
+  Users as UsersIcon,
+  BookOpen as BookOpenIcon,
+  Settings as SettingsIcon,
+  ChevronRight as ChevronRightIcon,
+  ExternalLink as ExternalLinkIcon,
+  CheckCircle as CheckCircleIcon
 } from 'lucide-vue-next'
 
 interface RecentUpload {

@@ -8,8 +8,8 @@
       <Button
         variant="ghost"
         size="sm"
-        @click="refresh"
         :loading="loading"
+        @click="refresh"
       >
         <RefreshCwIcon class="w-4 h-4" />
       </Button>
@@ -102,8 +102,8 @@
       <Button
         variant="outline"
         size="sm"
-        @click="loadMore"
         :loading="loadingMore"
+        @click="loadMore"
       >
         Load more activity
       </Button>
@@ -132,9 +132,7 @@ import {
   RefreshCw,
   Activity as ActivityIcon,
   Upload,
-  Play,
   CheckCircle,
-  XCircle,
   Server as ServerIcon,
   BarChart3
 } from 'lucide-vue-next'
@@ -147,7 +145,7 @@ interface Activity {
   timestamp: Date
   status: 'success' | 'error' | 'info' | 'warning'
   statusText: string
-  icon: any
+  icon: typeof RefreshCw
   iconBg: string
   iconColor: string
   metadata?: {
@@ -286,9 +284,9 @@ async function loadActivities() {
       hasMore.value = generatedActivities.value.length > props.limit
       currentOffset.value = props.limit
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Failed to load recent activity:', err)
-    error.value = err.message || 'Failed to load recent activity'
+    error.value = err instanceof Error ? err.message : 'Failed to load recent activity'
   } finally {
     loading.value = false
   }

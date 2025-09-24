@@ -15,8 +15,8 @@
         <Button
           variant="outline"
           size="sm"
-          @click="refreshUsers"
           :loading="loading"
+          @click="refreshUsers"
         >
           <RefreshCwIcon class="w-4 h-4 mr-2" />
           Refresh
@@ -161,17 +161,17 @@
               <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <div class="flex items-center justify-end space-x-2">
                   <button
-                    @click="editUser(user)"
                     class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                    @click="editUser(user)"
                   >
                     <EditIcon class="w-4 h-4" />
                   </button>
 
                   <button
                     v-if="canManageUsers && user.username !== currentUser?.username"
-                    @click="toggleUserStatus(user)"
                     class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
                     :title="user.isActive ? 'Deactivate user' : 'Activate user'"
+                    @click="toggleUserStatus(user)"
                   >
                     <component
                       :is="user.isActive ? UserXIcon : UserCheckIcon"
@@ -181,8 +181,8 @@
 
                   <button
                     v-if="canManageUsers && user.username !== currentUser?.username"
-                    @click="deleteUser(user)"
                     class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                    @click="deleteUser(user)"
                   >
                     <TrashIcon class="w-4 h-4" />
                   </button>
@@ -219,9 +219,9 @@
 
       <div class="flex items-center space-x-2">
         <button
-          @click="currentPage = Math.max(1, currentPage - 1)"
           :disabled="currentPage === 1"
           class="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+          @click="currentPage = Math.max(1, currentPage - 1)"
         >
           Previous
         </button>
@@ -231,9 +231,9 @@
         </span>
 
         <button
-          @click="currentPage = Math.min(totalPages, currentPage + 1)"
           :disabled="currentPage === totalPages"
           class="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
+          @click="currentPage = Math.min(totalPages, currentPage + 1)"
         >
           Next
         </button>
@@ -279,15 +279,7 @@ import Modal from '@/components/ui/Modal.vue'
 import AddUserForm from './AddUserForm.vue'
 import EditUserModal from './EditUserModal.vue'
 import { formatRelativeTime } from '@/utils/formatters'
-import {
-  RefreshCw,
-  Plus,
-  Edit,
-  Trash,
-  UserX,
-  UserCheck,
-  Users
-} from 'lucide-vue-next'
+import { RefreshCw, Plus, Edit, Trash, UserX, UserCheck } from 'lucide-vue-next'
 
 interface User {
   username: string

@@ -12,9 +12,9 @@
           </div>
           <div class="flex items-center space-x-3">
             <button
-              @click="refreshData"
               :disabled="isRefreshing"
               class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="refreshData"
             >
               <svg
                 v-if="isRefreshing"
@@ -100,8 +100,8 @@
           You have successfully logged in to the FIO Analyzer dashboard.
         </p>
         <button
-          @click="hideWelcomeMessage"
           class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          @click="hideWelcomeMessage"
         >
           Get Started
         </button>
@@ -132,12 +132,6 @@ const lastUpdated = ref('')
 const uptime = ref('')
 
 // Computed properties
-const welcomeMessage = computed(() => {
-  if (currentUser.value) {
-    return `Welcome back, ${currentUser.value.username}!`
-  }
-  return 'Welcome to FIO Analyzer!'
-})
 
 // Methods
 const refreshData = async () => {

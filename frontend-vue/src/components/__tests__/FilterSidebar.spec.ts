@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 import FilterSidebar from '../filters/FilterSidebar.vue'
-import type { FilterOptions, FilterState } from '@/types'
+import type { FilterOptions } from '@/types'
 
 // Mock composables
 const mockUseFilters = vi.fn()
@@ -32,11 +32,6 @@ describe('Integration Test: FilterSidebar Component - Filtering System', () => {
       drive_types: ['NVMe', 'SATA'],
     }
 
-    const mockFilterState: FilterState = {
-      active: {},
-      available: mockFilterOptions,
-      applied: false,
-    }
 
     const mockFiltersComposable = {
       active: { value: {} },

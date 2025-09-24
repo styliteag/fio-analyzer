@@ -8,18 +8,18 @@
 
       <div class="flex items-center space-x-2">
         <button
-          @click="resetFilters"
           class="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
           :title="'Reset all filters'"
+          @click="resetFilters"
         >
           <RotateCcwIcon class="w-4 h-4" />
         </button>
 
         <button
           v-if="collapsible"
-          @click="toggleCollapsed"
           class="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
           :title="isCollapsed ? 'Expand filters' : 'Collapse filters'"
+          @click="toggleCollapsed"
         >
           <ChevronLeftIcon class="w-4 h-4" :class="{ 'rotate-180': isCollapsed }" />
         </button>
@@ -37,7 +37,7 @@
       <!-- Host selector -->
       <HostSelector
         v-model="selectedHosts"
-        @update:modelValue="updateHostsFilter"
+        @update:model-value="updateHostsFilter"
       />
 
       <!-- Other filter sections -->
@@ -94,8 +94,8 @@
       <!-- Advanced filters toggle -->
       <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
         <button
-          @click="showAdvanced = !showAdvanced"
           class="flex items-center justify-between w-full text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+          @click="showAdvanced = !showAdvanced"
         >
           <span class="font-medium">Advanced Filters</span>
           <ChevronDownIcon class="w-4 h-4" :class="{ 'rotate-180': showAdvanced }" />

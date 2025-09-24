@@ -81,6 +81,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  subtitle: '',
+  message: '',
   showStatus: true,
   pulsing: false,
   size: 'md',

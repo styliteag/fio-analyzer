@@ -238,6 +238,19 @@ import { useTestRunsStore } from '@/stores/testRuns'
 import { processScatterData } from '@/utils/chartProcessing'
 import { formatIOPS, formatLatency, formatBandwidth } from '@/utils/formatters'
 
+interface ScatterPointData {
+  id: number
+  hostname: string
+  drive_model: string
+  block_size: string
+  read_write_pattern: string
+  iops: number
+  bandwidth: number
+  avg_latency: number
+  p95_latency?: number
+  p99_latency?: number
+}
+
 interface ScatterPoint {
   id: string
   x: number
@@ -245,7 +258,7 @@ interface ScatterPoint {
   size: number
   color: string
   stroke: string
-  data: any
+  data: ScatterPointData
 }
 
 interface Tooltip {
@@ -253,11 +266,11 @@ interface Tooltip {
   x: number
   y: number
   title: string
-  data: any
+  data: ScatterPointData
 }
 
 const props = defineProps<{
-  data?: any[]
+  data?: ScatterPoint[]
   showTrendLine?: boolean
   showLegend?: boolean
 }>()
@@ -376,7 +389,7 @@ const legendItems = computed(() => {
   const items = []
 
   switch (colorBy.value) {
-    case 'performance':
+    case 'performance': {
       items.push(
         { label: 'High Performance', color: '#10b981' },
         { label: 'Balanced', color: '#f59e0b' },
@@ -384,7 +397,8 @@ const legendItems = computed(() => {
         { label: 'Low Performance', color: '#6b7280' }
       )
       break
-    case 'hostname':
+    }
+    case 'hostname': {
       // Generate colors for unique hostnames
       const hostnames = [...new Set(testRuns.value.map(r => r.hostname))]
       hostnames.forEach((host, index) => {
@@ -394,6 +408,7 @@ const legendItems = computed(() => {
         })
       })
       break
+    }
     // Add cases for other colorBy options...
   }
 
@@ -420,24 +435,25 @@ const yAxisLabel = computed(() => {
 })
 
 // Methods
-function getPointColor(point: any, index: number): string {
+function getPointColor(point: ScatterPointData): string {
   switch (colorBy.value) {
     case 'performance':
       return point.zone === 'high_performance' ? '#10b981' :
              point.zone === 'balanced' ? '#f59e0b' :
              point.zone === 'high_latency' ? '#ef4444' : '#6b7280'
-    case 'hostname':
+    case 'hostname': {
       const hostnames = [...new Set(testRuns.value.map(r => r.hostname))]
-      const hostIndex = hostnames.indexOf(point.metadata?.hostname)
+      const hostIndex = hostnames.indexOf(point.hostname)
       return `hsl(${hostIndex * 360 / hostnames.length}, 70%, 50%)`
+    }
     case 'drive_type':
-      return point.metadata?.drive_type === 'NVMe' ? '#3b82f6' :
-             point.metadata?.drive_type === 'SATA' ? '#10b981' :
-             point.metadata?.drive_type === 'SAS' ? '#f59e0b' : '#6b7280'
+      return point.drive_type === 'NVMe' ? '#3b82f6' :
+             point.drive_type === 'SATA' ? '#10b981' :
+             point.drive_type === 'SAS' ? '#f59e0b' : '#6b7280'
     case 'block_size':
-      return point.metadata?.block_size === '4K' ? '#ef4444' :
-             point.metadata?.block_size === '8K' ? '#f59e0b' :
-             point.metadata?.block_size === '16K' ? '#10b981' : '#6b7280'
+      return point.block_size === '4K' ? '#ef4444' :
+             point.block_size === '8K' ? '#f59e0b' :
+             point.block_size === '16K' ? '#10b981' : '#6b7280'
     default:
       return '#3b82f6'
   }

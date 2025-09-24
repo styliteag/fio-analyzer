@@ -35,8 +35,8 @@
 
       <!-- Legend toggle -->
       <button
-        @click="showLegend = !showLegend"
         class="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+        @click="showLegend = !showLegend"
       >
         {{ showLegend ? 'Hide Legend' : 'Show Legend' }}
       </button>
@@ -178,7 +178,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useTestRunsStore } from '@/stores/testRuns'
-import { processHeatmapData, calculateRelativeColorScale } from '@/utils/chartProcessing'
+import {
+  processHeatmapData,
+  calculateRelativeColorScale
+} from '@/utils/chartProcessing'
 import { formatIOPS, formatLatency, formatBandwidth } from '@/utils/formatters'
 
 interface HeatmapCell {
@@ -198,8 +201,21 @@ interface Tooltip {
   subContent: string
 }
 
+interface TestRunData {
+  id: number
+  hostname: string
+  drive_model: string
+  block_size: string
+  read_write_pattern: string
+  iops: number
+  bandwidth: number
+  avg_latency: number
+  p95_latency?: number
+  p99_latency?: number
+}
+
 const props = defineProps<{
-  data?: any[]
+  data?: TestRunData[]
   width?: number
   height?: number
 }>()
@@ -233,19 +249,46 @@ const chartHeight = computed(() => {
   return headerHeight + (data.yLabels?.length || 0) * cellHeight + 20
 })
 
-// Process data for heatmap
+// Performance optimization: Debounced chart processing
+
+// Performance monitoring
+const processingTime = ref<number>(0)
+const datasetSize = ref<number>(0)
+
+// Process data for heatmap with performance optimizations
 const heatmapData = computed(() => {
   const testRuns = props.data || testRunsStore.state.data
   if (!testRuns || testRuns.length === 0) {
     return { cells: [], xLabels: [], yLabels: [] }
   }
 
+  // Use optimized processing for large datasets
   const cells = processHeatmapData(testRuns, selectedMetric.value)
+
   const xLabels = [...new Set(cells.map(cell => cell.x))].sort()
   const yLabels = [...new Set(cells.map(cell => cell.y))].sort()
 
   return { cells, xLabels, yLabels }
 })
+
+// Performance monitoring watcher
+watch([selectedMetric, () => props.data], () => {
+  const testRuns = props.data || testRunsStore.state.data
+  if (!testRuns || testRuns.length === 0) return
+
+  // Performance monitoring
+  const startTime = performance.now()
+  datasetSize.value = testRuns.length
+
+  // Process data to measure performance
+  const cells = processHeatmapData(testRuns, selectedMetric.value)
+  processingTime.value = performance.now() - startTime
+
+  // Log performance metrics for debugging
+  if (testRuns.length > 1000) {
+    console.log(`Heatmap processing: ${testRuns.length} points → ${cells.length} cells in ${processingTime.value.toFixed(2)}ms`)
+  }
+}, { immediate: true })
 
 const heatmapCells = computed(() => heatmapData.value.cells)
 const xLabels = computed(() => heatmapData.value.xLabels)

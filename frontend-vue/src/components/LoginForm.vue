@@ -98,9 +98,9 @@ const handleSubmit = async () => {
 
     // Show success message
     console.log(`Welcome back, ${userData.username}!`)
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Login error:', err)
-    error.value = err.message || 'Invalid username or password'
+    error.value = err instanceof Error ? err.message : 'Invalid username or password'
   } finally {
     loading.value = false
   }

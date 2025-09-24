@@ -1,5 +1,5 @@
 // Legacy API service for backward compatibility with existing useAuth
-import { apiClient, setBasicAuth as setAuth, clearAuth as clearAuthClient } from './api/client'
+import { setBasicAuth as setAuth, clearAuth as clearAuthClient } from './api/client'
 import type { UserAccount } from '@/types/auth'
 
 // Re-export auth functions for backward compatibility

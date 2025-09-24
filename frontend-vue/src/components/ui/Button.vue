@@ -29,8 +29,8 @@
 
     <!-- Left icon -->
     <component
-      v-if="icon && iconPosition === 'left'"
       :is="icon"
+      v-if="icon && iconPosition === 'left'"
       class="w-4 h-4 mr-2"
       :class="{ 'mr-0': !hasContent }"
     />
@@ -47,8 +47,8 @@
 
     <!-- Right icon -->
     <component
-      v-if="icon && iconPosition === 'right'"
       :is="icon"
+      v-if="icon && iconPosition === 'right'"
       class="w-4 h-4 ml-2"
       :class="{ 'ml-0': !hasContent }"
     />
@@ -90,8 +90,10 @@ const props = withDefaults(defineProps<Props>(), {
   size: 'md',
   disabled: false,
   loading: false,
+  loadingText: '',
   showLoadingSpinner: true,
   iconPosition: 'left',
+  label: '',
   block: false,
   rounded: false,
 })

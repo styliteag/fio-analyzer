@@ -8,8 +8,8 @@
       <Button
         variant="ghost"
         size="sm"
-        @click="refresh"
         :loading="loading"
+        @click="refresh"
       >
         <RefreshCwIcon class="w-4 h-4" />
       </Button>

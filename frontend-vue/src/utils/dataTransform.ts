@@ -36,7 +36,7 @@ export function normalizePerformanceData(
 
   // Normalize data
   return data.map(item => {
-    const normalized: any = {}
+    const normalized: Record<string, number> = {}
 
     metrics.forEach(metric => {
       const value = item[metric]
@@ -76,7 +76,7 @@ export function filterTestRuns(
 }
 
 // Check if a test run matches a specific filter category (OR logic within category)
-function matchesFilterCategory(run: TestRun, category: string, values: any[]): boolean {
+function matchesFilterCategory(run: TestRun, category: string, values: (string | number)[]): boolean {
   switch (category) {
     case 'hostnames':
       return values.includes(run.hostname)
@@ -263,8 +263,10 @@ export function extractUniqueValues(
 }
 
 // Validate test run data integrity
-export function validateTestRunData(testRun: any): testRun is TestRun {
+export function validateTestRunData(testRun: unknown): testRun is TestRun {
   if (!testRun || typeof testRun !== 'object') return false
+
+  const data = testRun as Record<string, unknown>
 
   // Required fields
   const requiredFields = [
@@ -274,31 +276,25 @@ export function validateTestRunData(testRun: any): testRun is TestRun {
   ]
 
   for (const field of requiredFields) {
-    if (!(field in testRun)) return false
+    if (!(field in data) || data[field] === null || data[field] === undefined) return false
   }
 
   // Type validation
-  if (typeof testRun.id !== 'number') return false
-  if (typeof testRun.timestamp !== 'string') return false
-  if (typeof testRun.hostname !== 'string') return false
-  if (typeof testRun.drive_model !== 'string') return false
-  if (typeof testRun.drive_type !== 'string') return false
-  if (typeof testRun.test_name !== 'string') return false
-  if (typeof testRun.block_size !== 'string') return false
-  if (typeof testRun.read_write_pattern !== 'string') return false
-  if (typeof testRun.queue_depth !== 'number') return false
-  if (typeof testRun.duration !== 'number') return false
-  if (typeof testRun.iops !== 'number') return false
-  if (typeof testRun.avg_latency !== 'number') return false
-  if (typeof testRun.bandwidth !== 'number') return false
+  if (typeof data.id !== 'number' || data.id <= 0) return false
+  if (typeof data.timestamp !== 'string') return false
+  if (typeof data.hostname !== 'string' || data.hostname.trim() === '') return false
+  if (typeof data.drive_model !== 'string' || data.drive_model.trim() === '') return false
+  if (typeof data.drive_type !== 'string' || data.drive_type.trim() === '') return false
+  if (typeof data.test_name !== 'string' || data.test_name.trim() === '') return false
+  if (typeof data.block_size !== 'string' || data.block_size.trim() === '') return false
+  if (typeof data.read_write_pattern !== 'string' || data.read_write_pattern.trim() === '') return false
+  if (typeof data.queue_depth !== 'number' || data.queue_depth <= 0) return false
+  if (typeof data.duration !== 'number' || data.duration <= 0) return false
+  if (typeof data.iops !== 'number' || data.iops < 0) return false
+  if (typeof data.avg_latency !== 'number' || data.avg_latency < 0) return false
+  if (typeof data.bandwidth !== 'number' || data.bandwidth < 0) return false
 
-  // Value validation
-  if (testRun.id <= 0) return false
-  if (testRun.iops < 0) return false
-  if (testRun.avg_latency < 0) return false
-  if (testRun.bandwidth < 0) return false
-  if (testRun.queue_depth <= 0) return false
-  if (testRun.duration <= 0) return false
+  // Additional value validation already done above
 
   return true
 }

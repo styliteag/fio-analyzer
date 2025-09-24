@@ -6,7 +6,7 @@ import type {
   ApiResponse,
   HealthCheckResponse
 } from '@/types'
-import { apiClient, type ApiClientError } from '@/services/api/client'
+import { apiClient, ApiClientError } from '@/services/api/client'
 
 // Cache configuration
 const CACHE_DURATION = {
@@ -34,6 +34,9 @@ const cache = new Map<string, CacheEntry<any>>()
 
 // Request deduplication - prevent multiple identical requests
 const pendingRequests = new Map<string, Promise<any>>()
+
+// Request cancellation - track active AbortControllers
+const activeRequests = new Map<string, AbortController>()
 
 export function useApi() {
   // Reactive state for different API endpoints
@@ -124,6 +127,44 @@ export function useApi() {
     })
   }
 
+  // Request cancellation
+  function createAbortController(key: string): AbortController {
+    // Cancel any existing request with the same key
+    const existingController = activeRequests.get(key)
+    if (existingController) {
+      existingController.abort('Superseded by new request')
+    }
+
+    // Create new controller
+    const controller = new AbortController()
+    activeRequests.set(key, controller)
+
+    return controller
+  }
+
+  function cleanupRequest(key: string): void {
+    activeRequests.delete(key)
+    pendingRequests.delete(key)
+  }
+
+  function cancelRequest(key: string): boolean {
+    const controller = activeRequests.get(key)
+    if (controller) {
+      controller.abort('Request cancelled by user')
+      cleanupRequest(key)
+      return true
+    }
+    return false
+  }
+
+  function cancelAllRequests(): void {
+    activeRequests.forEach((controller, key) => {
+      controller.abort('All requests cancelled')
+    })
+    activeRequests.clear()
+    pendingRequests.clear()
+  }
+
   // Error handling
   function getError(): ApiClientError | null {
     return testRuns.error || filters.error || users.error || health.error
@@ -163,10 +204,13 @@ export function useApi() {
     testRuns.error = null
 
     try {
-      const request = apiClient.get<TestRun[]>('/api/test-runs/', {
-        method: 'GET',
-        ...(params && { searchParams: new URLSearchParams(params as Record<string, string>) }),
-      })
+      let url = '/api/test-runs/'
+      if (params && Object.keys(params).length > 0) {
+        const searchParams = new URLSearchParams(params as Record<string, string>)
+        url += `?${searchParams.toString()}`
+      }
+
+      const request = apiClient.get<TestRun[]>(url)
 
       setPendingRequest(cacheKey, request)
 
@@ -426,6 +470,73 @@ export function useApi() {
     return entry ? Date.now() - entry.timestamp : null
   }
 
+  // Generic fetch function with cancellation support
+  async function fetchWithErrorHandling<T>(
+    endpoint: string,
+    options: {
+      method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+      params?: Record<string, any>
+      body?: any
+      headers?: Record<string, string>
+      cancelKey?: string
+    } = {}
+  ): Promise<T | null> {
+    const {
+      method = 'GET',
+      params,
+      body,
+      headers,
+      cancelKey = `${method}:${endpoint}`
+    } = options
+
+    try {
+      // Create abort controller for cancellation
+      const controller = createAbortController(cancelKey)
+
+      let url = endpoint
+      if (params && method === 'GET') {
+        const searchParams = new URLSearchParams(params as Record<string, string>)
+        url += `?${searchParams.toString()}`
+      }
+
+      const requestOptions: RequestInit = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        signal: controller.signal,
+      }
+
+      if (body && method !== 'GET') {
+        requestOptions.body = JSON.stringify(body)
+      }
+
+      const response = await fetch(url, requestOptions)
+
+      // Clean up successful request
+      cleanupRequest(cancelKey)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      return data
+    } catch (error) {
+      cleanupRequest(cancelKey)
+
+      // Don't throw AbortError - just return null for cancelled requests
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log(`Request cancelled: ${cancelKey}`)
+        return null
+      }
+
+      console.error(`API Error (${endpoint}):`, error)
+      throw error
+    }
+  }
+
   return {
     // Reactive state (readonly to prevent external mutations)
     testRuns: readonly(testRuns),
@@ -446,6 +557,13 @@ export function useApi() {
     deleteUser,
     fetchHealth,
     uploadData,
+
+    // Generic fetch with cancellation support
+    fetchWithErrorHandling,
+
+    // Request cancellation
+    cancelRequest,
+    cancelAllRequests,
 
     // Error handling
     getError,

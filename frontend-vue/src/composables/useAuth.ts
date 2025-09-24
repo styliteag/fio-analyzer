@@ -54,7 +54,7 @@ export function useAuth() {
         // Try to get user info from backend (if available)
         const response = await fetchWithErrorHandling('/api/users/me', { headers })
         if (response) {
-          userData = response
+          userData = response as UserAccount
         } else {
           // Fallback: create user data from credentials for basic auth
           userData = {

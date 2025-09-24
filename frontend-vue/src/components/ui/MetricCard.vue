@@ -85,7 +85,10 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  unit: '',
+  trend: undefined,
   color: 'blue',
+  subtitle: '',
   compact: false,
 })
 

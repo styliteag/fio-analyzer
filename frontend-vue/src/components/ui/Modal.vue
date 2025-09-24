@@ -48,9 +48,9 @@
 
                 <button
                   v-if="closable"
-                  @click="close"
                   class="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                   aria-label="Close modal"
+                  @click="close"
                 >
                   <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -73,16 +73,16 @@
                 <slot name="footer">
                   <div v-if="showDefaultActions" class="flex space-x-3">
                     <button
-                      @click="close"
                       class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                      @click="close"
                     >
                       {{ cancelText }}
                     </button>
 
                     <button
-                      @click="confirm"
                       class="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                       :class="confirmButtonClasses"
+                      @click="confirm"
                     >
                       {{ confirmText }}
                     </button>
@@ -116,6 +116,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  title: '',
+  content: '',
   size: 'md',
   closable: true,
   backdropClosable: true,

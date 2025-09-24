@@ -15,16 +15,16 @@
               ({{ users.length }}) {{ users.length === 1 ? 'User' : 'Users' }}
             </span>
             <button
-              @click="showAddUserForm = true"
               class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              @click="showAddUserForm = true"
             >
               <UserPlus class="w-4 h-4 mr-2" />
               Add User
             </button>
             <button
-              @click="refreshUsers"
               :disabled="isRefreshing"
               class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="refreshUsers"
             >
               <RefreshCw v-if="isRefreshing" class="animate-spin w-4 h-4 mr-2" />
               <RefreshCw v-else class="w-4 h-4 mr-2" />
@@ -259,9 +259,9 @@
           <h3 class="text-lg font-medium text-gray-900 dark:text-white">Add New User</h3>
         </div>
         <AddUserForm
+          :loading="isCreatingUser"
           @user-created="handleUserCreated"
           @cancel="showAddUserForm = false"
-          :loading="isCreatingUser"
         />
       </div>
     </div>
@@ -270,9 +270,9 @@
     <EditUserModal
       v-if="editingUser"
       :user="editingUser"
+      :loading="isUpdatingUser"
       @user-updated="handleUserUpdated"
       @cancel="editingUser = null"
-      :loading="isUpdatingUser"
     />
 
     <!-- Delete Confirmation Modal -->
@@ -291,15 +291,15 @@
           </p>
           <div class="flex justify-end space-x-3">
             <button
-              @click="userToDelete = null"
               class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              @click="userToDelete = null"
             >
               Cancel
             </button>
             <button
-              @click="confirmDeleteUser"
               :disabled="isDeletingUser"
               class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="confirmDeleteUser"
             >
               {{ isDeletingUser ? 'Deleting...' : 'Delete' }}
             </button>
@@ -415,12 +415,12 @@ const handleDeleteUser = (user: UserAccount) => {
   userToDelete.value = user
 }
 
-const handleUserCreated = async (newUser: UserAccount) => {
+const handleUserCreated = async (_newUser: UserAccount) => {
   showAddUserForm.value = false
   await refreshUsers()
 }
 
-const handleUserUpdated = async (updatedUser: UserAccount) => {
+const handleUserUpdated = async (_updatedUser: UserAccount) => {
   editingUser.value = null
   await refreshUsers()
 }

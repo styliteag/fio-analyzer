@@ -11,8 +11,8 @@
           <span class="text-sm">{{ errorMessage }}</span>
         </div>
         <button
-          @click="errorMessage = ''"
           class="ml-3 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+          @click="errorMessage = ''"
         >
           <X class="w-4 h-4" />
         </button>
@@ -30,8 +30,8 @@
           <span class="text-sm">{{ successMessage }}</span>
         </div>
         <button
-          @click="successMessage = ''"
           class="ml-3 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200"
+          @click="successMessage = ''"
         >
           <X class="w-4 h-4" />
         </button>

@@ -11,13 +11,13 @@
             </p>
           </div>
           <div class="flex items-center space-x-3">
-            <span class="text-sm text-gray-600 dark:text-gray-300" v-if="selectedHostsCount > 0">
+            <span v-if="selectedHostsCount > 0" class="text-sm text-gray-600 dark:text-gray-300">
               {{ selectedHostsCount }} {{ selectedHostsCount === 1 ? 'Host' : 'Hosts' }} Selected
             </span>
             <button
-              @click="refreshAnalysis"
               :disabled="isRefreshing"
               class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="refreshAnalysis"
             >
               <RefreshCw v-if="isRefreshing" class="animate-spin w-4 h-4 mr-2" />
               <RefreshCw v-else class="w-4 h-4 mr-2" />
@@ -92,13 +92,13 @@
                 <button
                   v-for="tab in analysisTabs"
                   :key="tab.id"
-                  @click="activeTab = tab.id"
                   :class="[
                     'py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap',
                     activeTab === tab.id
                       ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                       : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   ]"
+                  @click="activeTab = tab.id"
                 >
                   <component :is="tab.icon" class="w-5 h-5 inline mr-2" />
                   {{ tab.name }}
@@ -185,16 +185,16 @@
                 <div v-if="filteredTestData.length > itemsPerPage" class="bg-white dark:bg-gray-800 px-6 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700">
                   <div class="flex-1 flex justify-between sm:hidden">
                     <button
-                      @click="currentPage--"
                       :disabled="currentPage === 1"
                       class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      @click="currentPage--"
                     >
                       Previous
                     </button>
                     <button
-                      @click="currentPage++"
                       :disabled="currentPage === totalPages"
                       class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      @click="currentPage++"
                     >
                       Next
                     </button>
@@ -208,29 +208,29 @@
                     <div>
                       <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                         <button
-                          @click="currentPage--"
                           :disabled="currentPage === 1"
                           class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          @click="currentPage--"
                         >
                           <ChevronLeft class="h-5 w-5" />
                         </button>
                         <button
                           v-for="page in visiblePages"
                           :key="page"
-                          @click="currentPage = page"
                           :class="[
                             'relative inline-flex items-center px-4 py-2 border text-sm font-medium',
                             page === currentPage
                               ? 'z-10 bg-blue-50 dark:bg-blue-900 border-blue-500 text-blue-600 dark:text-blue-400'
                               : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600'
                           ]"
+                          @click="currentPage = page"
                         >
                           {{ page }}
                         </button>
                         <button
-                          @click="currentPage++"
                           :disabled="currentPage === totalPages"
                           class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          @click="currentPage++"
                         >
                           <ChevronRight class="h-5 w-5" />
                         </button>
@@ -296,7 +296,7 @@ import VisualizationTabs from '@/components/charts/VisualizationTabs.vue'
 import { useApi } from '@/composables/useApi'
 import { useFilters } from '@/composables/useFilters'
 import { useHostSelection } from '@/composables/useHostSelection'
-import type { TestRun, FilterOptions } from '@/types/testRun'
+import type { TestRun } from '@/types/testRun'
 
 // Composables
 const { fetchWithErrorHandling } = useApi()

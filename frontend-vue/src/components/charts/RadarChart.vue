@@ -90,15 +90,15 @@
         <!-- Data polygons -->
         <g class="data-polygons">
           <polygon
-            v-for="(hostData, index) in radarData"
-            :key="hostData.host"
-            :points="getPolygonPoints(hostData.values)"
+            v-for="(radarHostData, index) in radarData"
+            :key="radarHostData.host"
+            :points="getPolygonPoints(radarHostData.values)"
             :fill="getHostColor(index)"
             :stroke="getHostColor(index)"
             stroke-width="2"
             opacity="0.3"
             class="hover:opacity-0.6 transition-opacity cursor-pointer"
-            @mouseover="showTooltip(hostData, $event)"
+            @mouseover="showTooltip(radarHostData, $event)"
             @mouseout="hideTooltip"
           />
         </g>
@@ -106,9 +106,9 @@
         <!-- Data lines -->
         <g class="data-lines">
           <polyline
-            v-for="(hostData, index) in radarData"
-            :key="`line-${hostData.host}`"
-            :points="getPolygonPoints(hostData.values)"
+            v-for="(lineHostData, index) in radarData"
+            :key="`line-${lineHostData.host}`"
+            :points="getPolygonPoints(lineHostData.values)"
             :stroke="getHostColor(index)"
             stroke-width="2"
             fill="none"
@@ -186,8 +186,8 @@
         </div>
         <div class="space-y-1">
           <div
-            v-for="(hostData, index) in radarData"
-            :key="hostData.host"
+            v-for="(legendHostData, index) in radarData"
+            :key="legendHostData.host"
             class="flex items-center space-x-2"
           >
             <div
@@ -195,7 +195,7 @@
               :style="{ backgroundColor: getHostColor(index) }"
             />
             <span class="text-xs text-gray-700 dark:text-gray-300">
-              {{ hostData.host }}
+              {{ legendHostData.host }}
             </span>
           </div>
         </div>
@@ -243,8 +243,18 @@ interface Tooltip {
   metrics: Array<{ key: string; label: string; value: number }>
 }
 
+interface RadarChartData {
+  host: string
+  values: number[]
+}
+
+interface RadarPoint {
+  host: string
+  metricIndex: number
+}
+
 const props = defineProps<{
-  data?: any[]
+  data?: RadarChartData[]
 }>()
 
 const testRunsStore = useTestRunsStore()
@@ -426,7 +436,7 @@ function formatValue(value: number, metric: string): string {
 }
 
 function showTooltip(hostData: RadarData, event: MouseEvent) {
-  const metrics = selectedMetrics.value.map((metric, index) => {
+  const metrics = selectedMetrics.value.map((metric, _index) => {
     const hostInfo = hostData.value.find(h => h.host === hostData.host)
     const rawValue = hostInfo?.metrics[metric]?.avg || 0
 
@@ -446,7 +456,7 @@ function showTooltip(hostData: RadarData, event: MouseEvent) {
   }
 }
 
-function showPointTooltip(point: any, event: MouseEvent) {
+function showPointTooltip(point: RadarPoint, event: MouseEvent) {
   const hostInfo = hostData.value.find(h => h.host === point.host)
   const metric = selectedMetrics.value[point.metricIndex]
   const rawValue = hostInfo?.metrics[metric]?.avg || 0

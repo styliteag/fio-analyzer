@@ -8,8 +8,8 @@
 
       <button
         v-if="selected.length > 0"
-        @click="clearSelection"
         class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        @click="clearSelection"
       >
         Clear
       </button>
@@ -43,8 +43,8 @@
           :value="option"
           :checked="isSelected(option)"
           type="checkbox"
-          @change="toggleOption(option)"
           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:bg-gray-700 dark:border-gray-600"
+          @change="toggleOption(option)"
         />
         <label
           :for="`${title}-${option}`"
@@ -68,15 +68,15 @@
       class="flex space-x-2 pt-2 border-t border-gray-200 dark:border-gray-700"
     >
       <button
-        @click="selectAll"
         class="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+        @click="selectAll"
       >
         Select all
       </button>
       <span class="text-xs text-gray-400">•</span>
       <button
-        @click="clearSelection"
         class="text-xs text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+        @click="clearSelection"
       >
         Clear all
       </button>

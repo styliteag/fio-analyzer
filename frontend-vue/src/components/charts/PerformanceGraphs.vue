@@ -177,7 +177,6 @@ import { ref, computed, watch } from 'vue'
 import { useTestRunsStore } from '@/stores/testRuns'
 import { processLineChartData, processScatterData, aggregateMetrics } from '@/utils/chartProcessing'
 import { formatIOPS, formatLatency, formatBandwidth } from '@/utils/formatters'
-import { BarChart3 } from 'lucide-vue-next'
 
 // Mock chart components - in real implementation, these would be from Chart.js or similar
 const LineChart = {
@@ -200,8 +199,21 @@ const RadarChart = {
   template: '<div class="w-full h-full bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center text-gray-500">Radar Chart Placeholder</div>'
 }
 
+interface TestRun {
+  id: number
+  hostname: string
+  drive_model: string
+  block_size: string
+  read_write_pattern: string
+  iops: number
+  bandwidth: number
+  avg_latency: number
+  p95_latency?: number
+  p99_latency?: number
+}
+
 const props = defineProps<{
-  data?: any[]
+  data?: TestRun[]
 }>()
 
 const testRunsStore = useTestRunsStore()
@@ -365,9 +377,9 @@ const radarChartOptions = computed(() => ({
 }))
 
 // Methods
-function processRadarData(testRuns: any[]) {
+function processRadarData(testRuns: TestRun[]) {
   // Group by hostname and aggregate metrics
-  const hostGroups: Record<string, any[]> = {}
+  const hostGroups: Record<string, TestRun[]> = {}
   testRuns.forEach(run => {
     if (!hostGroups[run.hostname]) {
       hostGroups[run.hostname] = []

@@ -59,10 +59,10 @@
       >
         <button
           v-if="clearable && modelValue && !disabled && !readonly"
-          @click="clearInput"
           class="pr-3 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 focus:outline-none"
           type="button"
           aria-label="Clear input"
+          @click="clearInput"
         >
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -135,12 +135,20 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   type: 'text',
-  size: 'md',
+  label: '',
+  placeholder: '',
+  helperText: '',
+  error: '',
   disabled: false,
   readonly: false,
   required: false,
   clearable: false,
   showCharacterCount: false,
+  size: 'md',
+  maxlength: undefined,
+  minlength: undefined,
+  pattern: '',
+  autocomplete: '',
 })
 
 const emit = defineEmits<{

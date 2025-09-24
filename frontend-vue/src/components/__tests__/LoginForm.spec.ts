@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 import LoginForm from '../LoginForm.vue'
-import type { LoginCredentials } from '@/types/auth'
 
 // Mock the useAuth composable
 const mockUseAuth = vi.fn()

@@ -39,9 +39,9 @@
         <!-- Export button -->
         <button
           v-if="allowExport"
-          @click="exportChart"
           class="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
           :title="'Export chart'"
+          @click="exportChart"
         >
           <DownloadIcon class="w-4 h-4" />
         </button>
@@ -49,9 +49,9 @@
         <!-- Fullscreen button -->
         <button
           v-if="allowFullscreen"
-          @click="toggleFullscreen"
           class="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
           :title="isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+          @click="toggleFullscreen"
         >
           <MaximizeIcon
             v-if="!isFullscreen"
@@ -65,10 +65,10 @@
 
         <!-- Refresh button -->
         <button
-          @click="refreshData"
           class="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
           :title="'Refresh data'"
           :disabled="loading"
+          @click="refreshData"
         >
           <RefreshCwIcon class="w-4 h-4" :class="{ 'animate-spin': loading }" />
         </button>
@@ -147,12 +147,12 @@ import { ref, computed, watch } from 'vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ErrorMessage from '@/components/ui/ErrorMessage.vue'
 import {
-  ChevronDown,
-  Download,
-  Maximize,
-  Minimize,
-  RefreshCw,
-  BarChart3
+  ChevronDown as ChevronDownIcon,
+  Download as DownloadIcon,
+  Maximize as MaximizeIcon,
+  Minimize as MinimizeIcon,
+  RefreshCw as RefreshCwIcon,
+  BarChart3 as BarChart3Icon
 } from 'lucide-vue-next'
 
 type ChartType = 'line' | 'bar' | 'scatter' | 'heatmap' | 'radar' | 'pie'
@@ -160,6 +160,10 @@ type ChartType = 'line' | 'bar' | 'scatter' | 'heatmap' | 'radar' | 'pie'
 interface ChartTypeOption {
   value: ChartType
   label: string
+}
+
+interface ChartDataItem {
+  [key: string]: unknown
 }
 
 interface Props {
@@ -171,11 +175,12 @@ interface Props {
   allowFullscreen?: boolean
   loading?: boolean
   error?: string
-  chartData?: any[]
+  chartData?: ChartDataItem[]
   height?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  subtitle: '',
   chartType: 'line',
   availableChartTypes: () => [
     { value: 'line', label: 'Line Chart' },
@@ -185,6 +190,8 @@ const props = withDefaults(defineProps<Props>(), {
   allowExport: true,
   allowFullscreen: true,
   loading: false,
+  error: '',
+  chartData: () => [],
   height: '400px',
 })
 

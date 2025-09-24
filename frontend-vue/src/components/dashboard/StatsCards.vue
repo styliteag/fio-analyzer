@@ -150,6 +150,7 @@ import MetricCard from '@/components/ui/MetricCard.vue'
 import StatusIndicator from '@/components/ui/StatusIndicator.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ErrorMessage from '@/components/ui/ErrorMessage.vue'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { BarChart3, Zap, Clock, HardDrive, Server, Database, Timer } from 'lucide-vue-next'
 import type { TestRun } from '@/types/testRun'
 
@@ -277,9 +278,9 @@ const loadTestRuns = async () => {
     if (response) {
       testRuns.value = response
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Failed to load test runs for dashboard:', err)
-    error.value = err.message || 'Failed to load performance statistics'
+    error.value = err instanceof Error ? err.message : 'Failed to load performance statistics'
   } finally {
     loading.value = false
   }

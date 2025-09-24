@@ -139,8 +139,8 @@ export function useTheme() {
   }
 
   // Listen for system theme changes
-  function setupSystemThemeListener(): void {
-    if (typeof window === 'undefined') return
+  function setupSystemThemeListener(): () => void {
+    if (typeof window === 'undefined') return () => {}
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
 

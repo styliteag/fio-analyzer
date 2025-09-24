@@ -7,8 +7,8 @@
 
       <button
         v-if="selectedHosts.length > 0"
-        @click="clearAll"
         class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        @click="clearAll"
       >
         Clear all
       </button>
@@ -23,9 +23,9 @@
       >
         {{ formatHost(host) }}
         <button
-          @click="removeHost(host)"
           class="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           aria-label="Remove host"
+          @click="removeHost(host)"
         >
           <XIcon class="w-3 h-3" />
         </button>
@@ -45,8 +45,8 @@
       <button
         v-for="preset in hostPresets"
         :key="preset.name"
-        @click="applyPreset(preset.hosts)"
         class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-600"
+        @click="applyPreset(preset.hosts)"
       >
         {{ preset.name }}
         <span class="ml-1 text-gray-500 dark:text-gray-400">
@@ -58,8 +58,8 @@
     <!-- Host selection dropdown -->
     <div class="relative">
       <button
-        @click="toggleDropdown"
         class="relative w-full bg-white border border-gray-300 rounded-md pl-3 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+        @click="toggleDropdown"
       >
         <span class="block truncate">
           {{ selectedHosts.length > 0 ? `${selectedHosts.length} host${selectedHosts.length > 1 ? 's' : ''} selected` : 'Select hosts...' }}
@@ -104,9 +104,9 @@
             <div
               v-for="host in filteredHosts"
               :key="host"
-              @click="toggleHost(host)"
               class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 dark:hover:bg-gray-600"
               :class="{ 'bg-blue-50 dark:bg-blue-900': isSelected(host) }"
+              @click="toggleHost(host)"
             >
               <div class="flex items-center">
                 <span class="block font-normal truncate">
