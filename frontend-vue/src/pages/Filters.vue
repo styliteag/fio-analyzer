@@ -49,7 +49,7 @@
           <div class="filter-category">
             <div class="bg-white rounded-lg border border-gray-200 p-6">
               <h3 class="text-lg font-semibold text-gray-900 mb-4">Hardware Configuration</h3>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Host</label>
                   <select
@@ -86,6 +86,19 @@
                     <option value="">All Drive Models</option>
                     <option v-for="driveModel in availableOptions.drive_models" :key="driveModel" :value="driveModel">
                       {{ driveModel }}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Protocol</label>
+                  <select
+                    v-model="selectedFilters.protocol"
+                    class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    @change="onFilterChange"
+                  >
+                    <option value="">All Protocols</option>
+                    <option v-for="protocol in availableOptions.protocols" :key="protocol" :value="protocol">
+                      {{ protocol }}
                     </option>
                   </select>
                 </div>
@@ -276,65 +289,99 @@ import { useRouter, useRoute } from 'vue-router'
 import { useTestRuns } from '@/composables/useTestRuns'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { apiClient } from '@/services/apiClient'
-import type { TestRunFilters, FilterOptions } from '@/types'
+import type { TestRun, TestRunFilters, FilterOptions } from '@/types'
+
+interface SelectedFilters {
+  hostname: string
+  drive_type: string
+  drive_model: string
+  test_type: string
+  read_write_pattern: string
+  block_size: string | number | ''
+  protocol: string
+}
+
+interface RangeFilters {
+  iops: { min: number | null; max: number | null }
+  latency: { min: number | null; max: number | null }
+}
+
+interface FilterPreset {
+  name: string
+  selected: SelectedFilters
+  performanceRanges: RangeFilters
+  dateRange: { from: string; to: string }
+}
+
+interface ExtendedFilterOptions extends FilterOptions {
+  test_types: string[]
+  read_write_patterns: string[]
+}
 
 const router = useRouter()
 const route = useRoute()
-const { testRuns, loading, error, fetchTestRuns, getUniqueHostnames, getUniqueDriveTypes, getUniqueTestTypes } = useTestRuns()
+const { testRuns, loading, error, fetchTestRuns, getUniqueTestTypes } = useTestRuns()
 const { handleApiError } = useErrorHandler()
 
-// State
-const availableOptions = ref<FilterOptions>({
-  hostnames: [],
-  drive_types: [],
-  drive_models: [],
-  test_types: [],
-  read_write_patterns: [],
-  block_sizes: []
-})
-
-const selectedFilters = ref<TestRunFilters>({
+const defaultSelected: SelectedFilters = {
   hostname: '',
   drive_type: '',
   drive_model: '',
   test_type: '',
   read_write_pattern: '',
-  block_size: ''
+  block_size: '',
+  protocol: '',
+}
+
+const createDefaultRanges = (): RangeFilters => ({
+  iops: { min: null, max: null },
+  latency: { min: null, max: null },
 })
 
-const performanceRanges = ref({
-  iops: { min: null as number | null, max: null as number | null },
-  latency: { min: null as number | null, max: null as number | null }
+const availableOptions = ref<ExtendedFilterOptions>({
+  hostnames: [],
+  drive_types: [],
+  drive_models: [],
+  patterns: [],
+  block_sizes: [],
+  syncs: [],
+  queue_depths: [],
+  directs: [],
+  num_jobs: [],
+  test_sizes: [],
+  durations: [],
+  host_disk_combinations: [],
+  protocols: [],
+  test_types: [],
+  read_write_patterns: [],
 })
 
-const dateRange = ref({
-  from: '',
-  to: ''
-})
-
-const filterPresets = ref<Array<{ name: string; filters: TestRunFilters }>>([])
+const selectedFilters = ref<SelectedFilters>({ ...defaultSelected })
+const performanceRanges = ref<RangeFilters>(createDefaultRanges())
+const dateRange = ref({ from: '', to: '' })
+const filterPresets = ref<FilterPreset[]>([])
 const matchingResults = ref(0)
 
-// Computed
 const summary = computed(() => {
-  const activeFilters = []
+  const activeFilters: string[] = []
 
   if (selectedFilters.value.hostname) activeFilters.push(`Host: ${selectedFilters.value.hostname}`)
   if (selectedFilters.value.drive_type) activeFilters.push(`Drive: ${selectedFilters.value.drive_type}`)
   if (selectedFilters.value.drive_model) activeFilters.push(`Model: ${selectedFilters.value.drive_model}`)
+  if (selectedFilters.value.protocol) activeFilters.push(`Protocol: ${selectedFilters.value.protocol}`)
   if (selectedFilters.value.test_type) activeFilters.push(`Test: ${selectedFilters.value.test_type}`)
   if (selectedFilters.value.read_write_pattern) activeFilters.push(`Pattern: ${selectedFilters.value.read_write_pattern}`)
   if (selectedFilters.value.block_size) activeFilters.push(`Block: ${selectedFilters.value.block_size}`)
 
-  if (performanceRanges.value.iops.min || performanceRanges.value.iops.max) {
-    const min = performanceRanges.value.iops.min || '0'
-    const max = performanceRanges.value.iops.max || '∞'
+  if (performanceRanges.value.iops.min !== null || performanceRanges.value.iops.max !== null) {
+    const min = performanceRanges.value.iops.min ?? '0'
+    const max = performanceRanges.value.iops.max ?? '∞'
     activeFilters.push(`IOPS: ${min}-${max}`)
   }
 
-  if (performanceRanges.value.latency.min || performanceRanges.value.latency.max) {
-    const min = performanceRanges.value.latency.min || '0'
-    const max = performanceRanges.value.latency.max || '∞'
+  if (performanceRanges.value.latency.min !== null || performanceRanges.value.latency.max !== null) {
+    const min = performanceRanges.value.latency.min ?? '0'
+    const max = performanceRanges.value.latency.max ?? '∞'
     activeFilters.push(`Latency: ${min}-${max}ms`)
   }
 
@@ -347,54 +394,74 @@ const summary = computed(() => {
   return activeFilters.length > 0 ? activeFilters.join(', ') : 'No active filters'
 })
 
-// Methods
 const loadFilterOptions = async () => {
   try {
-    // Load initial data to get available options
     await fetchTestRuns()
 
-    // Extract unique values from test runs
-    availableOptions.value = {
-      hostnames: getUniqueHostnames.value,
-      drive_types: getUniqueDriveTypes.value,
-      test_types: getUniqueTestTypes.value,
-      drive_models: [...new Set(testRuns.value.map(run => run.drive_model).filter(Boolean))],
-      read_write_patterns: [...new Set(testRuns.value.map(run => run.read_write_pattern).filter(Boolean))],
-      block_sizes: [...new Set(testRuns.value.map(run => run.block_size).filter(Boolean))]
-    }
-
-    // Load filter options from API
     const filterOptions = await apiClient.getFilterOptions()
-    if (filterOptions.drive_models) availableOptions.value.drive_models = filterOptions.drive_models
-    if (filterOptions.read_write_patterns) availableOptions.value.read_write_patterns = filterOptions.read_write_patterns
-    if (filterOptions.block_sizes) availableOptions.value.block_sizes = filterOptions.block_sizes
+    const derivedTestTypes = getUniqueTestTypes.value
+    const derivedDriveModels = [...new Set(testRuns.value.map((run: TestRun) => run.drive_model).filter(Boolean))] as string[]
+    const derivedPatterns = [...new Set(testRuns.value.map((run: TestRun) => run.read_write_pattern).filter(Boolean))] as string[]
+    const derivedBlockSizes = [...new Set(testRuns.value.map((run: TestRun) => run.block_size).filter(Boolean))] as (string | number)[]
 
+    const patterns = filterOptions.patterns.length ? filterOptions.patterns : derivedPatterns
+    const blockSizes = filterOptions.block_sizes.length ? filterOptions.block_sizes : derivedBlockSizes
+
+    const driveModels = filterOptions.drive_models.length ? filterOptions.drive_models : derivedDriveModels
+
+    availableOptions.value = {
+      ...filterOptions,
+      drive_models: driveModels,
+      test_types: derivedTestTypes,
+      read_write_patterns: patterns,
+      block_sizes: blockSizes,
+    }
+    availableOptions.value.patterns = patterns
   } catch (err) {
     handleApiError(err)
-  }
-}
-
-const updateMatchingResults = async () => {
-  try {
-    const filters = buildActiveFilters()
-    const results = await fetchTestRuns(filters)
-    matchingResults.value = results?.length || 0
-  } catch (err) {
-    matchingResults.value = 0
   }
 }
 
 const buildActiveFilters = (): TestRunFilters => {
   const filters: TestRunFilters = {}
 
-  if (selectedFilters.value.hostname) filters.hostname = selectedFilters.value.hostname
-  if (selectedFilters.value.drive_type) filters.drive_type = selectedFilters.value.drive_type
-  if (selectedFilters.value.drive_model) filters.drive_model = selectedFilters.value.drive_model
-  if (selectedFilters.value.test_type) filters.test_type = selectedFilters.value.test_type
-  if (selectedFilters.value.read_write_pattern) filters.read_write_pattern = selectedFilters.value.read_write_pattern
-  if (selectedFilters.value.block_size) filters.block_size = selectedFilters.value.block_size
+  if (selectedFilters.value.hostname) filters.hostnames = [selectedFilters.value.hostname]
+  if (selectedFilters.value.drive_type) filters.drive_types = [selectedFilters.value.drive_type]
+  if (selectedFilters.value.drive_model) filters.drive_models = [selectedFilters.value.drive_model]
+  if (selectedFilters.value.protocol) filters.protocols = [selectedFilters.value.protocol]
+  if (selectedFilters.value.block_size) filters.block_sizes = [selectedFilters.value.block_size]
+
+  const patternSelections = new Set<string>()
+  if (selectedFilters.value.test_type) patternSelections.add(selectedFilters.value.test_type)
+  if (selectedFilters.value.read_write_pattern) patternSelections.add(selectedFilters.value.read_write_pattern)
+  if (patternSelections.size > 0) {
+    filters.patterns = Array.from(patternSelections)
+  }
 
   return filters
+}
+
+const buildQueryFromFilters = (filters: TestRunFilters): Record<string, string> => {
+  const query: Record<string, string> = {}
+
+  if (filters.hostnames?.length) query.hostnames = filters.hostnames.join(',')
+  if (filters.drive_types?.length) query.drive_types = filters.drive_types.join(',')
+  if (filters.drive_models?.length) query.drive_models = filters.drive_models.join(',')
+  if (filters.protocols?.length) query.protocols = filters.protocols.join(',')
+  if (filters.patterns?.length) query.patterns = filters.patterns.join(',')
+  if (filters.block_sizes?.length) query.block_sizes = filters.block_sizes.map(String).join(',')
+
+  return query
+}
+
+const updateMatchingResults = async () => {
+  try {
+    const filters = buildActiveFilters()
+    const results = await fetchTestRuns(filters)
+    matchingResults.value = results.length
+  } catch (err) {
+    matchingResults.value = 0
+  }
 }
 
 const onFilterChange = () => {
@@ -409,20 +476,14 @@ const onDateRangeChange = () => {
   updateMatchingResults()
 }
 
-const clearAllFilters = () => {
-  selectedFilters.value = {
-    hostname: '',
-    drive_type: '',
-    drive_model: '',
-    test_type: '',
-    read_write_pattern: '',
-    block_size: ''
-  }
-  performanceRanges.value = {
-    iops: { min: null, max: null },
-    latency: { min: null, max: null }
-  }
+const resetFiltersState = () => {
+  selectedFilters.value = { ...defaultSelected }
+  performanceRanges.value = createDefaultRanges()
   dateRange.value = { from: '', to: '' }
+}
+
+const clearAllFilters = () => {
+  resetFiltersState()
   updateMatchingResults()
 }
 
@@ -430,18 +491,25 @@ const resetToDefaults = () => {
   clearAllFilters()
 }
 
+const applyNavigation = (filters: TestRunFilters) => {
+  const query = buildQueryFromFilters(filters)
+
+  if (performanceRanges.value.iops.min !== null) query.iops_min = String(performanceRanges.value.iops.min)
+  if (performanceRanges.value.iops.max !== null) query.iops_max = String(performanceRanges.value.iops.max)
+  if (performanceRanges.value.latency.min !== null) query.latency_min = String(performanceRanges.value.latency.min)
+  if (performanceRanges.value.latency.max !== null) query.latency_max = String(performanceRanges.value.latency.max)
+
+  if (dateRange.value.from) query.date_from = dateRange.value.from
+  if (dateRange.value.to) query.date_to = dateRange.value.to
+
+  router.push({ path: '/test-runs', query })
+}
+
 const previewResults = async () => {
   try {
     const filters = buildActiveFilters()
     await fetchTestRuns(filters)
-
-    // Navigate to test runs page with filters applied
-    const query: Record<string, string> = {}
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) query[key] = String(value)
-    })
-
-    router.push({ path: '/test-runs', query })
+    applyNavigation(filters)
   } catch (err) {
     handleApiError(err)
   }
@@ -451,24 +519,7 @@ const applyFilters = async () => {
   try {
     const filters = buildActiveFilters()
     await fetchTestRuns(filters)
-
-    // Navigate to test runs page with filters applied
-    const query: Record<string, string> = {}
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) query[key] = String(value)
-    })
-
-    // Add performance ranges to query if set
-    if (performanceRanges.value.iops.min) query.iops_min = String(performanceRanges.value.iops.min)
-    if (performanceRanges.value.iops.max) query.iops_max = String(performanceRanges.value.iops.max)
-    if (performanceRanges.value.latency.min) query.latency_min = String(performanceRanges.value.latency.min)
-    if (performanceRanges.value.latency.max) query.latency_max = String(performanceRanges.value.latency.max)
-
-    // Add date range to query if set
-    if (dateRange.value.from) query.date_from = dateRange.value.from
-    if (dateRange.value.to) query.date_to = dateRange.value.to
-
-    router.push({ path: '/test-runs', query })
+    applyNavigation(filters)
   } catch (err) {
     handleApiError(err)
   }
@@ -478,64 +529,92 @@ const saveFilterPreset = () => {
   const presetName = prompt('Enter a name for this filter preset:')
   if (!presetName) return
 
-  const preset = {
+  const preset: FilterPreset = {
     name: presetName,
-    filters: {
-      ...selectedFilters.value,
-      performanceRanges: { ...performanceRanges.value },
-      dateRange: { ...dateRange.value }
-    }
+    selected: { ...selectedFilters.value },
+    performanceRanges: { ...performanceRanges.value },
+    dateRange: { ...dateRange.value },
   }
 
   filterPresets.value.push(preset)
-
-  // Save to localStorage
   localStorage.setItem('filterPresets', JSON.stringify(filterPresets.value))
 }
 
-const loadFilterPreset = (preset: { name: string; filters: TestRunFilters }) => {
-  selectedFilters.value = { ...preset.filters }
-  if (preset.filters.performanceRanges) {
-    performanceRanges.value = { ...preset.filters.performanceRanges }
-  }
-  if (preset.filters.dateRange) {
-    dateRange.value = { ...preset.filters.dateRange }
-  }
+const loadFilterPreset = (preset: FilterPreset) => {
+  selectedFilters.value = { ...preset.selected }
+  performanceRanges.value = { ...preset.performanceRanges }
+  dateRange.value = { ...preset.dateRange }
   updateMatchingResults()
 }
 
 const loadSavedPresets = () => {
   const saved = localStorage.getItem('filterPresets')
-  if (saved) {
-    try {
-      filterPresets.value = JSON.parse(saved)
-    } catch (err) {
-      console.error('Error loading filter presets:', err)
+  if (!saved) return
+
+  try {
+    const parsed = JSON.parse(saved) as FilterPreset[]
+    if (Array.isArray(parsed)) {
+      filterPresets.value = parsed.map((preset) => ({
+        name: preset.name,
+        selected: { ...defaultSelected, ...preset.selected },
+        performanceRanges: preset.performanceRanges ?? createDefaultRanges(),
+        dateRange: preset.dateRange ?? { from: '', to: '' },
+      }))
     }
+  } catch (err) {
+    console.error('Error loading filter presets:', err)
   }
 }
 
-const initializeFromQuery = () => {
-  // Initialize filters from URL query parameters
-  if (route.query.hostname) selectedFilters.value.hostname = String(route.query.hostname)
-  if (route.query.drive_type) selectedFilters.value.drive_type = String(route.query.drive_type)
-  if (route.query.drive_model) selectedFilters.value.drive_model = String(route.query.drive_model)
-  if (route.query.test_type) selectedFilters.value.test_type = String(route.query.test_type)
-  if (route.query.read_write_pattern) selectedFilters.value.read_write_pattern = String(route.query.read_write_pattern)
-  if (route.query.block_size) selectedFilters.value.block_size = String(route.query.block_size)
-
-  // Initialize performance ranges from query
-  if (route.query.iops_min) performanceRanges.value.iops.min = Number(route.query.iops_min)
-  if (route.query.iops_max) performanceRanges.value.iops.max = Number(route.query.iops_max)
-  if (route.query.latency_min) performanceRanges.value.latency.min = Number(route.query.latency_min)
-  if (route.query.latency_max) performanceRanges.value.latency.max = Number(route.query.latency_max)
-
-  // Initialize date range from query
-  if (route.query.date_from) dateRange.value.from = String(route.query.date_from)
-  if (route.query.date_to) dateRange.value.to = String(route.query.date_to)
+const parseQueryValue = (value: string | string[] | undefined): string | undefined => {
+  if (Array.isArray(value)) return value[0]
+  return value
 }
 
-// Lifecycle
+const parseQueryList = (value: string | string[] | undefined): string[] => {
+  const raw = Array.isArray(value) ? value : value ? [value] : []
+  return raw
+    .flatMap((entry) => String(entry).split(','))
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+const initializeFromQuery = () => {
+  const hostnames = parseQueryList(route.query.hostnames || route.query.hostname)
+  selectedFilters.value.hostname = hostnames[0] || ''
+
+  const driveTypes = parseQueryList(route.query.drive_types || route.query.drive_type)
+  selectedFilters.value.drive_type = driveTypes[0] || ''
+
+  const driveModels = parseQueryList(route.query.drive_models || route.query.drive_model)
+  selectedFilters.value.drive_model = driveModels[0] || ''
+
+  const protocols = parseQueryList(route.query.protocols || route.query.protocol)
+  selectedFilters.value.protocol = protocols[0] || ''
+
+  const patterns = parseQueryList(route.query.patterns || route.query.read_write_pattern)
+  selectedFilters.value.read_write_pattern = patterns[0] || ''
+  selectedFilters.value.test_type = patterns.length > 1 ? patterns[1] : selectedFilters.value.read_write_pattern
+
+  const blockSizes = parseQueryList(route.query.block_sizes || route.query.block_size)
+  selectedFilters.value.block_size = blockSizes[0] || ''
+
+  const iopsMin = parseQueryValue(route.query.iops_min)
+  const iopsMax = parseQueryValue(route.query.iops_max)
+  performanceRanges.value.iops.min = iopsMin ? Number(iopsMin) : null
+  performanceRanges.value.iops.max = iopsMax ? Number(iopsMax) : null
+
+  const latencyMin = parseQueryValue(route.query.latency_min)
+  const latencyMax = parseQueryValue(route.query.latency_max)
+  performanceRanges.value.latency.min = latencyMin ? Number(latencyMin) : null
+  performanceRanges.value.latency.max = latencyMax ? Number(latencyMax) : null
+
+  const dateFrom = parseQueryValue(route.query.date_from)
+  const dateTo = parseQueryValue(route.query.date_to)
+  dateRange.value.from = dateFrom || ''
+  dateRange.value.to = dateTo || ''
+}
+
 onMounted(async () => {
   await loadFilterOptions()
   loadSavedPresets()
@@ -543,11 +622,14 @@ onMounted(async () => {
   updateMatchingResults()
 })
 
-// Watch for query parameter changes
-watch(() => route.query, () => {
-  initializeFromQuery()
-  updateMatchingResults()
-}, { deep: true })
+watch(
+  () => route.query,
+  () => {
+    initializeFromQuery()
+    updateMatchingResults()
+  },
+  { deep: true },
+)
 </script>
 
 <style scoped>

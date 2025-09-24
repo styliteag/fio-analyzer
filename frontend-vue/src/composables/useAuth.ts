@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { Api, setBasicAuth, clearAuth } from '@/services/api'
 
 interface UserSession {
   username: string
@@ -25,23 +26,11 @@ export function useAuth() {
       const credentialsString = `${credentials.username}:${credentials.password}`
       const encodedCredentials = btoa(credentialsString)
 
-      // Get user info from /api/users/me endpoint (requires auth)
-      const userResponse = await fetch('/api/users/me', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${encodedCredentials}`,
-          'Content-Type': 'application/json',
-        },
-      })
+      // Persist credentials so API helpers can reuse them during verification
+      setBasicAuth(credentials.username, credentials.password)
 
-      if (!userResponse.ok) {
-        if (userResponse.status === 401) {
-          throw new Error('Invalid username or password')
-        }
-        throw new Error('Authentication failed')
-      }
-
-      const userData = await userResponse.json()
+      // Verify credentials via API
+      const userData = await Api.me()
 
       user.value = {
         username: userData.username,
@@ -57,6 +46,7 @@ export function useAuth() {
         role: userData.role
       }))
     } catch (error) {
+      clearAuth()
       console.error('Login error:', error)
       throw error
     }
@@ -65,6 +55,7 @@ export function useAuth() {
   const logout = (): void => {
     user.value = null
     localStorage.removeItem('fio-auth')
+    clearAuth()
   }
 
   const initializeAuth = (): void => {

@@ -25,7 +25,7 @@
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Drive Type</label>
             <select
-              v-model="filters.drive_type"
+              v-model="filters.driveType"
               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               @change="applyFilters"
             >
@@ -36,15 +36,15 @@
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Test Type</label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Test Name</label>
             <select
-              v-model="filters.test_type"
+              v-model="filters.pattern"
               class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               @change="applyFilters"
             >
-              <option value="">All Test Types</option>
-              <option v-for="testType in uniqueTestTypes" :key="testType" :value="testType">
-                {{ testType }}
+              <option value="">All Tests</option>
+              <option v-for="testName in uniqueTestNames" :key="testName" :value="testName">
+                {{ testName }}
               </option>
             </select>
           </div>
@@ -99,25 +99,25 @@
               <tr>
                 <th class="table-header">Host</th>
                 <th class="table-header">Drive Type</th>
-                <th class="table-header">Test Type</th>
+                <th class="table-header">Test Name</th>
+                <th class="table-header">Pattern</th>
                 <th class="table-header">Date</th>
-                <th class="table-header">Read IOPS</th>
-                <th class="table-header">Write IOPS</th>
-                <th class="table-header">Read Latency</th>
-                <th class="table-header">Write Latency</th>
+                <th class="table-header">IOPS</th>
+                <th class="table-header">Avg Latency</th>
+                <th class="table-header">Bandwidth (MB/s)</th>
                 <th class="table-header">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
               <tr v-for="testRun in pagedTestRuns" :key="testRun.id" class="hover:bg-gray-50">
-                <td class="table-cell font-medium text-gray-900">{{ testRun.hostname }}</td>
-                <td class="table-cell">{{ testRun.drive_type }}</td>
-                <td class="table-cell">{{ testRun.test_type }}</td>
+                <td class="table-cell font-medium text-gray-900">{{ testRun.hostname ?? 'Unknown' }}</td>
+                <td class="table-cell">{{ testRun.drive_type ?? '—' }}</td>
+                <td class="table-cell">{{ testRun.test_name ?? '—' }}</td>
+                <td class="table-cell">{{ testRun.read_write_pattern ?? '—' }}</td>
                 <td class="table-cell">{{ formatDate(testRun.timestamp) }}</td>
-                <td class="table-cell">{{ formatNumber(testRun.iops_read) }}</td>
-                <td class="table-cell">{{ formatNumber(testRun.iops_write) }}</td>
-                <td class="table-cell">{{ testRun.latency_read_avg.toFixed(2) }}ms</td>
-                <td class="table-cell">{{ testRun.latency_write_avg.toFixed(2) }}ms</td>
+                <td class="table-cell">{{ formatNumber(testRun.iops) }}</td>
+                <td class="table-cell">{{ formatLatency(testRun.avg_latency) }}</td>
+                <td class="table-cell">{{ formatNumber(testRun.bandwidth) }}</td>
                 <td class="table-cell">
                   <button
                     class="text-blue-600 hover:text-blue-900 text-sm font-medium"
@@ -154,7 +154,16 @@ import PaginationControls from '@/components/PaginationControls.vue'
 import type { TestRun, TestRunFilters } from '@/types'
 
 const router = useRouter()
-const { testRuns, loading, error, fetchTestRuns, getUniqueHostnames, getUniqueDriveTypes, getUniqueTestTypes } = useTestRuns()
+const {
+  testRuns,
+  loading,
+  error,
+  fetchTestRuns,
+  fetchFilterOptions,
+  getUniqueHostnames,
+  getUniqueDriveTypes,
+  getUniqueTestTypes,
+} = useTestRuns()
 const { handleApiError } = useErrorHandler()
 
 // Pagination
@@ -162,16 +171,16 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 
 // Filters
-const filters = ref<TestRunFilters>({
+const filters = ref({
   hostname: '',
-  drive_type: '',
-  test_type: '',
+  driveType: '',
+  pattern: '',
 })
 
 // Computed properties
 const uniqueHostnames = getUniqueHostnames
 const uniqueDriveTypes = getUniqueDriveTypes
-const uniqueTestTypes = getUniqueTestTypes
+const uniqueTestNames = getUniqueTestTypes
 
 const pagedTestRuns = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
@@ -184,9 +193,9 @@ const applyFilters = async () => {
   currentPage.value = 1
   const activeFilters: TestRunFilters = {}
 
-  if (filters.value.hostname) activeFilters.hostname = filters.value.hostname
-  if (filters.value.drive_type) activeFilters.drive_type = filters.value.drive_type
-  if (filters.value.test_type) activeFilters.test_type = filters.value.test_type
+  if (filters.value.hostname) activeFilters.hostnames = [filters.value.hostname]
+  if (filters.value.driveType) activeFilters.drive_types = [filters.value.driveType]
+  if (filters.value.pattern) activeFilters.patterns = [filters.value.pattern]
 
   try {
     await fetchTestRuns(activeFilters)
@@ -198,15 +207,15 @@ const applyFilters = async () => {
 const clearFilters = () => {
   filters.value = {
     hostname: '',
-    drive_type: '',
-    test_type: '',
+    driveType: '',
+    pattern: '',
   }
   applyFilters()
 }
 
 const refreshData = async () => {
   try {
-    await fetchTestRuns()
+    await Promise.all([fetchTestRuns(), fetchFilterOptions()])
   } catch (err) {
     handleApiError(err)
   }
@@ -216,11 +225,20 @@ const formatDate = (dateString: string): string => {
   return new Date(dateString).toLocaleDateString()
 }
 
-const formatNumber = (num: number): string => {
-  return num.toLocaleString()
+const formatNumber = (num: number | null | undefined): string => {
+  if (num === null || num === undefined) return '—'
+  return Number.isFinite(num) ? num.toLocaleString() : '—'
+}
+
+const formatLatency = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '—'
+  }
+  return `${value.toFixed(2)} ms`
 }
 
 const viewDetails = (testRun: TestRun) => {
+  if (!testRun.hostname) return
   router.push(`/host?hostname=${encodeURIComponent(testRun.hostname)}`)
 }
 
@@ -230,7 +248,7 @@ onMounted(() => {
 })
 
 // Reset page when filters change
-watch(() => [filters.value.hostname, filters.value.drive_type, filters.value.test_type], () => {
+watch(() => [filters.value.hostname, filters.value.driveType, filters.value.pattern], () => {
   currentPage.value = 1
 })
 </script>
@@ -269,5 +287,4 @@ watch(() => [filters.value.hostname, filters.value.drive_type, filters.value.tes
   @apply px-6 py-4 whitespace-nowrap text-sm text-gray-500;
 }
 </style>
-
 

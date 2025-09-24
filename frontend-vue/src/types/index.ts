@@ -1,50 +1,12 @@
 // TypeScript interfaces for FIO Analyzer Vue Frontend
-// Based on data-model.md specifications
-
-// Core data types (matching apiClient definitions)
-export interface TestRun {
-  id: number
-  hostname: string
-  drive_type: string
-  test_name: string
-  timestamp: string
-  iops: number
-  avg_latency: number
-  bandwidth: number
-  p95_latency: number
-  p99_latency: number
-  drive_model?: string
-  read_write_pattern?: string
-  block_size?: string
-  queue_depth?: number
-  protocol?: string
-}
-
-export interface FilterOptions {
-  hostnames: string[]
-  drive_types: string[]
-  drive_models: string[]
-  test_types: string[]
-  read_write_patterns: string[]
-  block_sizes: string[]
-}
+// Re-export shared API contracts so components stay in sync with backend responses
+export type { TestRun, FilterOptions, TestRunFilters } from '@/services/apiClient'
 
 export interface TimeSeriesData {
   timestamps: string[]
   values: number[]
   metric: string
   hostname: string
-}
-
-export interface TestRunFilters {
-  hostname?: string
-  drive_type?: string
-  drive_model?: string
-  test_type?: string
-  read_write_pattern?: string
-  block_size?: string
-  start_date?: string
-  end_date?: string
 }
 
 // User and Authentication Types
@@ -180,7 +142,7 @@ export interface UseTestRunsReturn {
   filterOptions: Ref<FilterOptions>
   loading: Ref<boolean>
   error: Ref<string | null>
-  fetchTestRuns: (filters?: TestRunFilters) => Promise<void>
+  fetchTestRuns: (filters?: TestRunFilters) => Promise<TestRun[]>
   fetchFilterOptions: () => Promise<void>
   refreshData: () => Promise<void>
   getTestRunById: (id: number) => TestRun | undefined
@@ -220,26 +182,26 @@ export interface UseErrorHandlerReturn {
 // Performance Metrics Interface
 export interface PerformanceMetrics {
   iops: {
-    read: number
-    write: number
-    total: number
+    read: number | null
+    write: number | null
+    total: number | null
   }
   latency: {
     read: {
-      avg: number
-      p95: number
-      p99: number
+      avg: number | null
+      p95: number | null
+      p99: number | null
     }
     write: {
-      avg: number
-      p95: number
-      p99: number
+      avg: number | null
+      p95: number | null
+      p99: number | null
     }
   }
   bandwidth: {
-    read: number
-    write: number
-    total: number
+    read: number | null
+    write: number | null
+    total: number | null
   }
 }
 

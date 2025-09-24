@@ -1,39 +1,36 @@
-// API Client for FIO Analyzer Vue Frontend
-// Preserves same API contracts as React frontend
+// API client shared across Vue pages/composables. Mirrors the backend contract
+// exposed by the existing FastAPI service so we stay aligned with the React app.
 
-export interface ApiResponse<T> {
-  data?: T
-  error?: string
-  message?: string
-}
+const API_BASE_URL = (import.meta as unknown as { env?: { VITE_API_URL?: string } })?.env?.VITE_API_URL || ''
+const AUTH_STORAGE_KEY = 'fio-auth'
 
 export interface TestRun {
   id: number
   timestamp: string
-  drive_model?: string
-  drive_type?: string
-  test_name?: string
-  description?: string
+  drive_model: string | null
+  drive_type: string | null
+  test_name: string | null
+  description?: string | null
   block_size: string | number
-  read_write_pattern: string
+  read_write_pattern: string | null
   queue_depth: number
-  duration?: number
-  fio_version?: string
-  job_runtime?: number
-  rwmixread?: number
-  total_ios_read?: number
-  total_ios_write?: number
-  usr_cpu?: number
-  sys_cpu?: number
-  hostname?: string
-  protocol?: string
-  output_file?: string
-  num_jobs?: number
-  direct?: number
-  test_size?: string
-  sync?: number
-  iodepth?: number
-  is_latest?: number
+  duration: number | null
+  fio_version?: string | null
+  job_runtime?: number | null
+  rwmixread?: number | null
+  total_ios_read?: number | null
+  total_ios_write?: number | null
+  usr_cpu?: number | null
+  sys_cpu?: number | null
+  hostname?: string | null
+  protocol?: string | null
+  output_file?: string | null
+  num_jobs?: number | null
+  direct?: number | null
+  test_size?: string | null
+  sync?: number | null
+  iodepth?: number | null
+  is_latest?: number | null
   iops?: number | null
   avg_latency?: number | null
   bandwidth?: number | null
@@ -42,16 +39,19 @@ export interface TestRun {
 }
 
 export interface FilterOptions {
+  drive_models: string[]
+  host_disk_combinations: string[]
+  block_sizes: Array<string | number>
+  patterns: string[]
+  syncs: number[]
+  queue_depths: number[]
+  directs: number[]
+  num_jobs: number[]
+  test_sizes: string[]
+  durations: number[]
   hostnames: string[]
+  protocols: string[]
   drive_types: string[]
-  test_types: string[]
-}
-
-export interface TimeSeriesData {
-  timestamps: string[]
-  values: number[]
-  metric: string
-  hostname: string
 }
 
 export interface TestRunFilters {
@@ -60,7 +60,7 @@ export interface TestRunFilters {
   drive_types?: string[]
   drive_models?: string[]
   patterns?: string[]
-  block_sizes?: (string | number)[]
+  block_sizes?: Array<string | number>
   syncs?: number[]
   queue_depths?: number[]
   directs?: number[]
@@ -69,98 +69,167 @@ export interface TestRunFilters {
   durations?: number[]
 }
 
-class ApiClient {
-  private baseUrl = '/api'
+interface ApiErrorResponse {
+  detail?: string
+  error?: string
+  message?: string
+}
 
-  private getAuthHeaders(): Record<string, string> {
-    const storedAuth = localStorage.getItem('fio-auth')
-    if (storedAuth) {
-      try {
-        const { credentials } = JSON.parse(storedAuth)
-        return {
-          'Authorization': `Basic ${credentials}`,
-        }
-      } catch {
-        // If parsing fails, remove invalid auth data
-        localStorage.removeItem('fio-auth')
-      }
-    }
-    return {}
+function buildUrl(endpoint: string): string {
+  if (!API_BASE_URL) {
+    return endpoint
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`
+  if (API_BASE_URL.endsWith('/') && endpoint.startsWith('/')) {
+    return `${API_BASE_URL}${endpoint.slice(1)}`
+  }
 
-    const config: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...this.getAuthHeaders(),
-        ...options.headers,
-      },
-      ...options,
+  if (!API_BASE_URL.endsWith('/') && !endpoint.startsWith('/')) {
+    return `${API_BASE_URL}/${endpoint}`
+  }
+
+  return `${API_BASE_URL}${endpoint}`
+}
+
+function readStoredCredentials(): string | null {
+  const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
+  if (!storedAuth) return null
+
+  try {
+    const parsed = JSON.parse(storedAuth) as { credentials?: string }
+    return parsed.credentials ?? null
+  } catch {
+    localStorage.removeItem(AUTH_STORAGE_KEY)
+    return null
+  }
+}
+
+class ApiClient {
+  private getAuthHeaders(): Record<string, string> {
+    const credentials = readStoredCredentials()
+    if (!credentials) return {}
+    return { Authorization: `Basic ${credentials}` }
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = buildUrl(endpoint)
+    const headers = new Headers(options.headers ?? {})
+
+    if (!headers.has('Accept')) {
+      headers.set('Accept', 'application/json')
     }
 
-    // Handle 401 responses by clearing auth and reloading
-    const response = await fetch(url, config)
+    // Only set content-type for non-FormData payloads
+    const isFormData = options.body instanceof FormData
+    if (!isFormData && options.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json')
+    }
+
+    Object.entries(this.getAuthHeaders()).forEach(([key, value]) => {
+      if (!headers.has(key)) {
+        headers.set(key, value)
+      }
+    })
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    })
 
     if (response.status === 401) {
-      localStorage.removeItem('fio-auth')
-      window.location.reload()
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
       throw new Error('Authentication required')
     }
 
+    const contentType = response.headers.get('content-type') ?? ''
+
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`)
+      let message = response.statusText
+
+      if (contentType.includes('application/json')) {
+        const payload = (await response.json().catch(() => ({}))) as ApiErrorResponse
+        message = payload.detail || payload.error || payload.message || message
+      }
+
+      throw new Error(`API Error ${response.status}: ${message}`)
     }
 
-    return response.json()
+    if (response.status === 204 || !contentType.includes('application/json')) {
+      return undefined as T
+    }
+
+    return response.json() as Promise<T>
   }
 
-  // Test Runs API
-  async getTestRuns(filters?: TestRunFilters): Promise<{ data: TestRun[]; total: number; limit: number; offset: number }> {
+  async getTestRuns(filters?: TestRunFilters): Promise<TestRun[]> {
     const params = new URLSearchParams()
 
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
+        if (!value || (Array.isArray(value) && value.length === 0)) {
+          return
+        }
+
         if (Array.isArray(value)) {
-          value.forEach(item => params.append(key, item.toString()))
-        } else if (value !== undefined && value !== null) {
-          params.append(key, value.toString())
+          params.set(key, value.map((item) => item.toString()).join(','))
+        } else {
+          params.set(key, value.toString())
         }
       })
     }
 
-    const endpoint = `/test-runs${params.toString() ? `?${params.toString()}` : ''}`
-    return this.request<{ data: TestRun[]; total: number; limit: number; offset: number }>(endpoint)
+    const query = params.toString()
+    const endpoint = `/api/test-runs${query ? `?${query}` : ''}`
+    const data = await this.request<TestRun[]>(endpoint)
+
+    return data.map((run) => ({
+      ...run,
+      block_size: typeof run.block_size === 'number' ? run.block_size.toString() : run.block_size,
+    }))
   }
 
-  // Filters API
   async getFilterOptions(): Promise<FilterOptions> {
-    return this.request<FilterOptions>('/filters')
+    return this.request<FilterOptions>('/api/filters')
   }
 
-
-  // File Upload API
   async uploadFile(file: File): Promise<{ message: string; imported_count: number }> {
     const formData = new FormData()
     formData.append('file', file)
 
-    return this.request<{ message: string; imported_count: number }>('/import', {
+    const response = await fetch(buildUrl('/api/import'), {
       method: 'POST',
       body: formData,
-      headers: {
-        // Don't set Content-Type for FormData, let browser set it with boundary
-      },
+      headers: this.getAuthHeaders(),
     })
+
+    if (response.status === 401) {
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+      throw new Error('Authentication required')
+    }
+
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type') ?? ''
+      let message = response.statusText
+
+      if (contentType.includes('application/json')) {
+        const payload = (await response.json().catch(() => ({}))) as ApiErrorResponse
+        message = payload.detail || payload.error || payload.message || message
+      }
+
+      throw new Error(`Upload failed: ${message}`)
+    }
+
+    return response.json() as Promise<{ message: string; imported_count: number }>
   }
 
-
-  // Health Check
   async healthCheck(): Promise<{ status: string }> {
-    return this.request<{ status: string }>('/health')
+    return this.request<{ status: string }>('/api/health')
   }
 }
 

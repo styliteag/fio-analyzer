@@ -31,7 +31,7 @@
         Upload
       </button>
     </form>
-    <pre v-if="result">{{ result }}</pre>
+    <pre v-if="result">{{ JSON.stringify(result, null, 2) }}</pre>
   </main>
 </template>
 
@@ -45,7 +45,7 @@ const drive_type = ref('');
 const hostname = ref('');
 const protocol = ref('');
 const description = ref('');
-type UploadResult = { status: number; body: string } | { error: string } | null;
+type UploadResult = Record<string, unknown> | { error: string } | null;
 const result = ref<UploadResult>(null);
 
 function onFile(e: Event) {
@@ -64,12 +64,9 @@ async function submit() {
   form.append('description', description.value);
   try {
     const res = await Api.uploadImport(form);
-    const text = await res.text();
-    result.value = { status: res.status, body: text };
+    result.value = res;
   } catch (e) {
     result.value = { error: String(e) };
   }
 }
 </script>
-
-

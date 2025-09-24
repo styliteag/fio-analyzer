@@ -61,7 +61,7 @@ export interface RadarChartProps {
 
 const props = withDefaults(defineProps<RadarChartProps>(), {
   testRuns: () => [],
-  selectedMetrics: () => ['iops_read', 'iops_write', 'latency_read_avg', 'latency_write_avg', 'bandwidth_read', 'bandwidth_write'],
+  selectedMetrics: () => ['iops', 'avg_latency', 'bandwidth', 'p95_latency', 'p99_latency'],
   height: 400,
   width: 400,
   loading: false,
@@ -78,17 +78,12 @@ const chartData = computed((): ChartData => {
     return { labels: [], datasets: [] }
   }
 
-  const metricLabels = {
-    iops_read: 'Read IOPS',
-    iops_write: 'Write IOPS',
-    latency_read_avg: 'Read Latency (ms)',
-    latency_write_avg: 'Write Latency (ms)',
-    latency_read_p95: 'Read P95 Latency (ms)',
-    latency_write_p95: 'Write P95 Latency (ms)',
-    latency_read_p99: 'Read P99 Latency (ms)',
-    latency_write_p99: 'Write P99 Latency (ms)',
-    bandwidth_read: 'Read Bandwidth (MB/s)',
-    bandwidth_write: 'Write Bandwidth (MB/s)'
+  const metricLabels: Record<string, string> = {
+    iops: 'IOPS',
+    avg_latency: 'Avg Latency (ms)',
+    bandwidth: 'Bandwidth (MB/s)',
+    p95_latency: 'P95 Latency (ms)',
+    p99_latency: 'P99 Latency (ms)'
   }
 
   const labels = props.selectedMetrics.map(metric => metricLabels[metric as keyof typeof metricLabels] || metric)
@@ -113,14 +108,13 @@ const chartData = computed((): ChartData => {
 
   const datasets = props.testRuns.map((testRun, index) => {
     const data = props.selectedMetrics.map(metric => {
-      const value = testRun[metric as keyof TestRun] as number
+      const value = (testRun[metric as keyof TestRun] as number | null | undefined) ?? 0
 
-      // Normalize latency values (invert for radar - lower is better)
       if (metric.includes('latency')) {
         return Math.max(0, 100 - Math.min(100, value))
       }
 
-      return value || 0
+      return value
     })
 
     return {
@@ -158,15 +152,14 @@ const chartOptions = computed((): ChartOptions => ({
         label: function(context: unknown) {
           const datasetLabel = context.dataset.label || ''
           const metricName = context.label
-          const value = context.raw
+          const value = context.raw as number
 
-          // Show original values for latency metrics
           if (metricName.includes('Latency')) {
             const originalValue = 100 - value
             return `${datasetLabel}: ${originalValue.toFixed(2)} ms`
           }
 
-          return `${datasetLabel}: ${value.toLocaleString()}`
+          return `${datasetLabel}: ${Number.isFinite(value) ? value.toLocaleString() : '—'}`
         }
       }
     }

@@ -109,58 +109,39 @@ const createBars = () => {
     const x = (index % 5) * 3 - 6 // Position bars in a grid
     const z = Math.floor(index / 5) * 3 - 6
 
-    let readValue = 0
-    let writeValue = 0
+    let metricValue = 0
 
-    // Get values based on selected metric
     switch (props.metric) {
       case 'iops':
-        readValue = testRun.iops_read / 1000 // Scale down for visualization
-        writeValue = testRun.iops_write / 1000
+        metricValue = (testRun.iops ?? 0) / 1000 // Scale down for visualization
         break
       case 'latency':
-        readValue = Math.max(0, 50 - testRun.latency_read_avg) / 10 // Invert and scale
-        writeValue = Math.max(0, 50 - testRun.latency_write_avg) / 10
+        metricValue = Math.max(0, 50 - (testRun.avg_latency ?? 0)) / 10 // Invert and scale
         break
       case 'bandwidth':
-        readValue = testRun.bandwidth_read / 100 // Scale down
-        writeValue = testRun.bandwidth_write / 100
+        metricValue = (testRun.bandwidth ?? 0) / 100
         break
     }
 
-    // Create read bar
-    const readGeometry = new THREE.BoxGeometry(0.8, Math.max(0.1, readValue), 0.8)
-    const readMaterial = new THREE.MeshLambertMaterial({ color: colors[index % colors.length] })
-    const readBar = new THREE.Mesh(readGeometry, readMaterial)
-    readBar.position.set(x - 0.5, readValue / 2, z)
-    readBar.castShadow = true
-    readBar.receiveShadow = true
-    readBar.userData = {
+    const barHeight = Math.max(0.1, metricValue)
+    const barGeometry = new THREE.BoxGeometry(0.9, barHeight, 0.9)
+    const barMaterial = new THREE.MeshLambertMaterial({ color: colors[index % colors.length] })
+    const bar = new THREE.Mesh(barGeometry, barMaterial)
+    bar.position.set(x, barHeight / 2, z)
+    bar.castShadow = true
+    bar.receiveShadow = true
+    bar.userData = {
       isBar: true,
       hostname: testRun.hostname,
-      metric: `Read ${props.metric}`,
-      value: props.metric === 'iops' ? testRun.iops_read :
-             props.metric === 'latency' ? testRun.latency_read_avg :
-             testRun.bandwidth_read
+      metric: props.metric,
+      value:
+        props.metric === 'iops'
+          ? testRun.iops ?? 0
+          : props.metric === 'latency'
+            ? testRun.avg_latency ?? 0
+            : testRun.bandwidth ?? 0,
     }
-    scene.add(readBar)
-
-    // Create write bar
-    const writeGeometry = new THREE.BoxGeometry(0.8, Math.max(0.1, writeValue), 0.8)
-    const writeMaterial = new THREE.MeshLambertMaterial({ color: colors[index % colors.length], opacity: 0.7, transparent: true })
-    const writeBar = new THREE.Mesh(writeGeometry, writeMaterial)
-    writeBar.position.set(x + 0.5, writeValue / 2, z)
-    writeBar.castShadow = true
-    writeBar.receiveShadow = true
-    writeBar.userData = {
-      isBar: true,
-      hostname: testRun.hostname,
-      metric: `Write ${props.metric}`,
-      value: props.metric === 'iops' ? testRun.iops_write :
-             props.metric === 'latency' ? testRun.latency_write_avg :
-             testRun.bandwidth_write
-    }
-    scene.add(writeBar)
+    scene.add(bar)
 
     // Add label
     const canvas = document.createElement('canvas')

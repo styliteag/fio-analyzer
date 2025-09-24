@@ -1,94 +1,173 @@
-export const API_BASE_URL = (import.meta as unknown as { env?: { VITE_API_URL?: string } })?.env?.VITE_API_URL || '';
+export const API_BASE_URL = (import.meta as unknown as { env?: { VITE_API_URL?: string } })?.env?.VITE_API_URL || ''
 
-let basicAuthHeader: string | null = null;
-export function setBasicAuth(username: string, password: string) {
-  const token = btoa(`${username}:${password}`);
-  basicAuthHeader = `Basic ${token}`;
+const AUTH_STORAGE_KEY = 'fio-auth'
+
+type AuthPayload = { credentials?: string; username?: string; role?: string | null }
+
+export function setBasicAuth(username: string, password: string, role: string | null = null) {
+  const token = btoa(`${username}:${password}`)
+  const payload: AuthPayload = { credentials: token, username, role }
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(payload))
 }
+
 export function clearAuth() {
-  basicAuthHeader = null;
+  localStorage.removeItem(AUTH_STORAGE_KEY)
+}
+
+function readStoredAuth(): AuthPayload | null {
+  const raw = localStorage.getItem(AUTH_STORAGE_KEY)
+  if (!raw) return null
+
+  try {
+    return JSON.parse(raw) as AuthPayload
+  } catch {
+    localStorage.removeItem(AUTH_STORAGE_KEY)
+    return null
+  }
 }
 
 function buildUrl(path: string): string {
-  if (!API_BASE_URL) return path; // relative in dev
-  if (API_BASE_URL.endsWith('/')) return API_BASE_URL + path.replace(/^\//, '');
-  return API_BASE_URL + (path.startsWith('/') ? path : `/${path}`);
+  if (!API_BASE_URL) return path
+  if (API_BASE_URL.endsWith('/') && path.startsWith('/')) {
+    return `${API_BASE_URL}${path.slice(1)}`
+  }
+  if (!API_BASE_URL.endsWith('/') && !path.startsWith('/')) {
+    return `${API_BASE_URL}/${path}`
+  }
+  return `${API_BASE_URL}${path}`
+}
+
+function buildHeaders(init?: HeadersInit, contentType?: string): Headers {
+  const headers = new Headers(init ?? {})
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json')
+  }
+  if (contentType && !headers.has('Content-Type')) {
+    headers.set('Content-Type', contentType)
+  }
+
+  const auth = readStoredAuth()
+  if (auth?.credentials && !headers.has('Authorization')) {
+    headers.set('Authorization', `Basic ${auth.credentials}`)
+  }
+
+  return headers
+}
+
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (response.status === 401) {
+    clearAuth()
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login'
+    }
+    throw new Error('Authentication required')
+  }
+
+  const contentType = response.headers.get('content-type') ?? ''
+
+  if (!response.ok) {
+    let message = response.statusText
+    if (contentType.includes('application/json')) {
+      const body = (await response.json().catch(() => ({}))) as { detail?: string; error?: string; message?: string }
+      message = body.detail || body.error || body.message || message
+    }
+    throw new Error(`API Error ${response.status}: ${message}`)
+  }
+
+  if (!contentType.includes('application/json') || response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json() as Promise<T>
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(buildUrl(path), {
+    ...init,
+    headers: buildHeaders(init.headers as HeadersInit | undefined),
+  })
+  return handleResponse<T>(response)
+}
+
+async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(buildUrl(path), {
+    ...init,
+    headers: buildHeaders(init.headers as HeadersInit | undefined, 'application/json'),
+  })
+  return handleResponse<T>(response)
 }
 
 export async function getJson<T>(path: string, init?: RequestInit & { signal?: AbortSignal }): Promise<T> {
-  const res = await fetch(buildUrl(path), {
-    headers: {
-      'Accept': 'application/json',
-      ...(basicAuthHeader ? { Authorization: basicAuthHeader } : {}),
-    },
-    ...init,
-  });
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
-  return res.json() as Promise<T>;
+  return request<T>(path, init)
 }
 
-export async function postForm(path: string, body: FormData): Promise<Response> {
-  return fetch(buildUrl(path), {
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  return requestJson<T>(path, {
     method: 'POST',
-    headers: {
-      ...(basicAuthHeader ? { Authorization: basicAuthHeader } : {}),
-    },
-    body,
-  });
+    body: JSON.stringify(body),
+  })
 }
 
-type MeResp = { username: string; role: string };
+export async function putJson<T>(path: string, body: unknown): Promise<T> {
+  return requestJson<T>(path, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteRequest<T>(path: string): Promise<T> {
+  return request<T>(path, { method: 'DELETE' })
+}
+
+export async function postForm<T>(path: string, body: FormData): Promise<T> {
+  const response = await fetch(buildUrl(path), {
+    method: 'POST',
+    body,
+    headers: buildHeaders(undefined),
+  })
+  return handleResponse<T>(response)
+}
+
+type MeResp = { username: string; role: string }
+
 export const Api = {
   info: () => getJson<Record<string, unknown>>('/api/info'),
   me: () => getJson<MeResp>('/api/users/me'),
+
   // Users
-  createUser: async (username: string, password: string) => {
-    const form = new FormData();
-    form.append('username', username);
-    form.append('password', password);
-    return postForm('/api/users/', form);
-  },
-  updateUser: async (username: string, password: string) => {
-    const form = new FormData();
-    form.append('password', password);
-    return fetch(buildUrl(`/api/users/${encodeURIComponent(username)}`), {
-      method: 'PUT',
-      headers: {
-        ...(basicAuthHeader ? { Authorization: basicAuthHeader } : {}),
-      },
-      body: form,
-    });
-  },
-  deleteUser: async (username: string) => {
-    return fetch(buildUrl(`/api/users/${encodeURIComponent(username)}`), {
-      method: 'DELETE',
-      headers: {
-        ...(basicAuthHeader ? { Authorization: basicAuthHeader } : {}),
-      },
-    });
-  },
-  listUsers: () => getJson<Array<{ username: string; role?: string }>>('/api/users/'),
+  createUser: (username: string, password: string, role: 'admin' | 'uploader' = 'admin') =>
+    postJson('/api/users/', { username, password, role }),
+  updateUser: (username: string, updates: { password?: string; role?: 'admin' | 'uploader' }) =>
+    putJson(`/api/users/${encodeURIComponent(username)}`, updates),
+  deleteUser: (username: string) => deleteRequest(`/api/users/${encodeURIComponent(username)}`),
+  listUsers: () => getJson<Array<{ username: string; role: string }>>('/api/users/'),
 
   // Filters
   filters: () => getJson<Record<string, unknown>>('/api/filters'),
 
   // Test Runs
-  testRuns: (init?: RequestInit & { signal?: AbortSignal }) => getJson<Array<Record<string, unknown>>>('/api/test-runs/', init),
+  testRuns: (init?: RequestInit & { signal?: AbortSignal }) => getJson<Record<string, unknown>[]>('/api/test-runs', init),
   getTestRun: (id: number) => getJson<Record<string, unknown>>(`/api/test-runs/${id}`),
-  updateTestRun: (id: number, payload: FormData | URLSearchParams | Record<string, unknown>) => {
-    const body = payload instanceof FormData ? payload : payload instanceof URLSearchParams ? payload : JSON.stringify(payload);
-    const headers: Record<string, string> = basicAuthHeader ? { Authorization: basicAuthHeader } : {};
-    if (!(payload instanceof FormData)) headers['Content-Type'] = payload instanceof URLSearchParams ? 'application/x-www-form-urlencoded' : 'application/json';
-    return fetch(buildUrl(`/api/test-runs/${id}`), { method: 'PUT', headers, body: body as BodyInit });
-  },
-  deleteTestRun: (id: number) => fetch(buildUrl(`/api/test-runs/${id}`), { method: 'DELETE', headers: { ...(basicAuthHeader ? { Authorization: basicAuthHeader } : {}) } }),
-  bulkUpdateTestRuns: (body: BodyInit) => fetch(buildUrl('/api/test-runs/bulk'), { method: 'PUT', headers: { ...(basicAuthHeader ? { Authorization: basicAuthHeader } : {}) }, body }),
+  updateTestRun: (id: number, payload: Record<string, unknown>) =>
+    putJson(`/api/test-runs/${id}`, payload),
+  deleteTestRun: (id: number) => deleteRequest(`/api/test-runs/${id}`),
+  bulkUpdateTestRuns: (body: Record<string, unknown>) =>
+    putJson('/api/test-runs/bulk', body),
 
   // Performance Data
-  performanceData: (params: { test_run_ids?: Array<number> | string }) => {
-    const query = new URLSearchParams();
-    if (params?.test_run_ids) query.set('test_run_ids', Array.isArray(params.test_run_ids) ? params.test_run_ids.join(',') : params.test_run_ids);
-    return getJson<Record<string, unknown>>(`/api/test-runs/performance-data${query.toString() ? `?${query.toString()}` : ''}`);
+  performanceData: (params: { test_run_ids?: Array<number> | string; metric_types?: string[] }) => {
+    const query = new URLSearchParams()
+    if (params?.test_run_ids) {
+      query.set(
+        'test_run_ids',
+        Array.isArray(params.test_run_ids) ? params.test_run_ids.join(',') : params.test_run_ids,
+      )
+    }
+    if (params?.metric_types?.length) {
+      query.set('metric_types', params.metric_types.join(','))
+    }
+    const suffix = query.toString()
+    return getJson<Record<string, unknown>>(`/api/test-runs/performance-data${suffix ? `?${suffix}` : ''}`)
   },
 
   // Time Series
@@ -96,17 +175,15 @@ export const Api = {
   timeSeriesAll: () => getJson<Record<string, unknown>>('/api/time-series/all'),
   timeSeriesLatest: () => getJson<Record<string, unknown>>('/api/time-series/latest'),
   timeSeriesHistory: (params: Record<string, string>) => {
-    const qs = new URLSearchParams(params);
-    return getJson<Record<string, unknown>>(`/api/time-series/history${qs.toString() ? `?${qs.toString()}` : ''}`);
+    const qs = new URLSearchParams(params)
+    return getJson<Record<string, unknown>>(`/api/time-series/history${qs.toString() ? `?${qs}` : ''}`)
   },
   timeSeriesTrends: (params: Record<string, string>) => {
-    const qs = new URLSearchParams(params);
-    return getJson<Record<string, unknown>>(`/api/time-series/trends${qs.toString() ? `?${qs.toString()}` : ''}`);
+    const qs = new URLSearchParams(params)
+    return getJson<Record<string, unknown>>(`/api/time-series/trends${qs.toString() ? `?${qs}` : ''}`)
   },
 
   // Imports
-  uploadImport: (form: FormData) => postForm('/api/import', form),
-  uploadImportBulk: () => postForm('/api/import/bulk', new FormData()),
-};
-
-
+  uploadImport: (form: FormData) => postForm<Record<string, unknown>>('/api/import', form),
+  uploadImportBulk: () => postForm<Record<string, unknown>>('/api/import/bulk', new FormData()),
+}

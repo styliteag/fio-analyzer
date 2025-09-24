@@ -64,11 +64,10 @@ async function remove(username: string) {
 async function promptUpdate(username: string) {
   const pass = window.prompt(`Set new password for ${username}`) || '';
   if (!pass) return;
-  await Api.updateUser(username, pass);
+  await Api.updateUser(username, { password: pass });
   await load();
 }
 
 onMounted(load);
 </script>
-
 
