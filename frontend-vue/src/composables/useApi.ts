@@ -93,7 +93,7 @@ export function useApi() {
       return null
     }
 
-    return entry.data
+    return entry.data as T
   }
 
   function setCachedData<T>(key: string, data: T, params?: Record<string, string | number | boolean>): void {
@@ -114,7 +114,7 @@ export function useApi() {
 
   // Request deduplication
   function getPendingRequest<T>(key: string): Promise<T> | null {
-    return pendingRequests.get(key) || null
+    return (pendingRequests.get(key) as Promise<T>) || null
   }
 
   function setPendingRequest<T>(key: string, promise: Promise<T>): void {

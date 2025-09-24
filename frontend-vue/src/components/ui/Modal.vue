@@ -240,7 +240,9 @@ watch(isOpen, (newValue) => {
     })
 
     // Store reference for cleanup
-    modalRef.value?._focusedElement = focusedElement
+    if (modalRef.value) {
+      modalRef.value._focusedElement = focusedElement
+    }
   } else {
     // Restore focus
     const focusedElement = modalRef.value?._focusedElement as HTMLElement

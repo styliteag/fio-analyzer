@@ -260,7 +260,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
-import { useUI } from '@/stores/ui'
+import { useUiStore } from '@/stores/ui'
 
 // Icons
 import {
@@ -270,12 +270,12 @@ import {
   Settings,
   Sun,
   Moon,
-  ComputerDesktopIcon as Monitor
+  Computer as Monitor
 } from 'lucide-vue-next'
 
 const route = useRoute()
 const { user, logout, hasPermission } = useAuth()
-const uiStore = useUI()
+const uiStore = useUiStore()
 
 // Reactive state
 const isMobileMenuOpen = ref(false)

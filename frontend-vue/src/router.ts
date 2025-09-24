@@ -46,7 +46,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/upload',
     name: 'Upload',
-    component: () => import(/* webpackChunkName: "upload" */ './components/UploadData.vue'),
+    component: () => import(/* webpackChunkName: "upload" */ './pages/UploadData.vue'),
     meta: { requiresAuth: true, preload: false }
   },
   // Catch-all route for 404 handling

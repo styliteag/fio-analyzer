@@ -33,7 +33,7 @@ export const useAuthStore = defineStore('auth', () => {
   const canUploadData = computed(() => isAdmin.value || isUploader.value)
 
   // Permission checking
-  function hasPermission(resource: string, action?: string): boolean {
+  function hasPermission(resource: string, action?: 'read' | 'write' | 'delete'): boolean {
     if (!state.value.user) return false
     if (isAdmin.value) return true // Admins have all permissions
 

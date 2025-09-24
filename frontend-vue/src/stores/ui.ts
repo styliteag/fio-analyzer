@@ -275,7 +275,7 @@ export const useUiStore = defineStore('ui', () => {
     shiftKey = false,
     altKey = false,
     handler: () => void
-  ): void {
+  ): () => void {
     const eventHandler = (event: KeyboardEvent) => {
       if (
         event.key === key &&

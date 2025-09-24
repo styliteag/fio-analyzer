@@ -15,14 +15,9 @@ export class FiltersApiService {
    */
   async getFilters(): Promise<FilterOptions> {
     try {
-      const response = await apiClient.get<FiltersResponse>(this.baseUrl)
+      const response = await apiClient.get<FilterOptions>(this.baseUrl)
 
-      if (response.data) {
-        return response.data
-      }
-
-      // Handle case where response is directly the FilterOptions object
-      if (typeof response === 'object' && !Array.isArray(response)) {
+      if (response && typeof response === 'object') {
         return response as FilterOptions
       }
 
@@ -177,8 +172,8 @@ export class FiltersApiService {
         const availableValues = availableFilters[category as keyof FilterOptions]
 
         if (availableValues) {
-          const availableSet = new Set(availableValues)
-          const invalidValues = valueArray.filter(val => !availableSet.has(val as never))
+          const availableSet = new Set(availableValues.map(String))
+          const invalidValues = valueArray.filter(val => !availableSet.has(String(val)))
 
           if (invalidValues.length > 0) {
             invalidFields.push(category)
@@ -246,11 +241,7 @@ export class FiltersApiService {
         `${this.baseUrl}?t=${Date.now()}`
       )
 
-      if (response.data) {
-        return response.data
-      }
-
-      if (typeof response === 'object' && !Array.isArray(response)) {
+      if (response && typeof response === 'object') {
         return response as FilterOptions
       }
 

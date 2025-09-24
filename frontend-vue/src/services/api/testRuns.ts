@@ -1,4 +1,4 @@
-import { apiClient, type ApiClientError } from './client'
+import { apiClient, ApiClientError } from './client'
 import type { TestRun } from '@/types'
 
 // API response types

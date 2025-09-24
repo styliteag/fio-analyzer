@@ -68,12 +68,12 @@ import { AlertCircle, CheckCircle, X } from 'lucide-vue-next'
 import Navigation from '@/components/Navigation.vue'
 import { useAuth } from '@/composables/useAuth'
 import { useTheme } from '@/composables/useTheme'
-import { useUI } from '@/stores/ui'
+import { useUiStore } from '@/stores/ui'
 
 const route = useRoute()
 const { isAuthenticated, initialize } = useAuth()
 const { isDarkMode } = useTheme()
-const uiStore = useUI()
+const uiStore = useUiStore()
 
 // Computed properties
 const showNavigation = computed(() => {

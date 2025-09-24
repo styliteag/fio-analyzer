@@ -6,9 +6,11 @@ export * from './auth'
 export * from './performance'
 export * from './visualization'
 export * from './components'
+export * from './errors'
 
 // Vue 3 Composition API imports for type completion
 import type { ComputedRef } from 'vue'
+import type { UserAccount, LoginCredentials } from './auth'
 
 // Vue Composable Return Types
 export interface UseAuthReturn {
