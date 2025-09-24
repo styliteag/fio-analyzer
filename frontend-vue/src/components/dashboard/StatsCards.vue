@@ -129,10 +129,8 @@
       v-if="loading"
       class="col-span-full flex justify-center py-12"
     >
-      <LoadingSpinner
-        message="Loading statistics..."
-        size="lg"
-      />
+      <LoadingSpinner />
+      <span class="ml-3 text-gray-600 dark:text-gray-400">Loading statistics...</span>
     </div>
 
     <!-- Error state -->
@@ -140,53 +138,74 @@
       v-else-if="error"
       class="col-span-full"
     >
-      <ErrorMessage
-        :message="error"
-        severity="medium"
-        retryable
-        @retry="retry"
-      />
+      <ErrorMessage :message="error" @retry="retry" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useTestRunsStore } from '@/stores/testRuns'
+import { ref, computed, onMounted } from 'vue'
+import { useApi } from '@/composables/useApi'
 import MetricCard from '@/components/ui/MetricCard.vue'
 import StatusIndicator from '@/components/ui/StatusIndicator.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ErrorMessage from '@/components/ui/ErrorMessage.vue'
-import { formatIOPS, formatLatency, formatDuration } from '@/utils/formatters'
 import { BarChart3, Zap, Clock, HardDrive, Server, Database, Timer } from 'lucide-vue-next'
-
-interface Props {
-  loading?: boolean
-  error?: string
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  loading: false,
-})
+import type { TestRun } from '@/types/testRun'
 
 const emit = defineEmits<{
   retry: []
 }>()
 
-const testRunsStore = useTestRunsStore()
+const { fetchWithErrorHandling } = useApi()
+
+// Component state
+const testRuns = ref<TestRun[]>([])
+const loading = ref(false)
+const error = ref('')
+
+// Utility functions
+const formatIOPS = (value: number): string => {
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(1)}M IOPS`
+  } else if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}K IOPS`
+  } else {
+    return `${Math.round(value)} IOPS`
+  }
+}
+
+const formatLatency = (value: number): string => {
+  return `${value.toFixed(3)}ms`
+}
+
+const formatDuration = (milliseconds: number): string => {
+  const seconds = Math.floor(milliseconds / 1000)
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remainingSeconds = seconds % 60
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`
+  } else if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`
+  } else {
+    return `${remainingSeconds}s`
+  }
+}
 
 // Computed stats
 const stats = computed(() => {
-  const runs = testRunsStore.state.data
+  const runs = testRuns.value
   if (!runs || runs.length === 0) {
     return {
       totalRuns: 0,
-      avgIops: 0,
+      avgIops: '0 IOPS',
       maxIops: 0,
-      avgLatency: 0,
+      avgLatency: '0ms',
       minLatency: 0,
       p95Latency: 0,
-      avgBandwidth: 0,
+      avgBandwidth: '0 MB/s',
       uniqueHosts: 0,
       uniqueDriveTypes: 0,
       totalDataProcessed: '0 GB',
@@ -216,14 +235,18 @@ const stats = computed(() => {
   const totalDurationSeconds = runs.reduce((sum, r) => sum + r.duration, 0)
   const totalTestDuration = formatDuration(totalDurationSeconds * 1000)
 
+  const avgIopsValue = iopsValues.length > 0 ? iopsValues.reduce((a, b) => a + b, 0) / iopsValues.length : 0
+  const avgLatencyValue = latencyValues.length > 0 ? latencyValues.reduce((a, b) => a + b, 0) / latencyValues.length : 0
+  const avgBandwidthValue = bandwidthValues.length > 0 ? bandwidthValues.reduce((a, b) => a + b, 0) / bandwidthValues.length : 0
+
   return {
     totalRuns: runs.length,
-    avgIops: iopsValues.length > 0 ? Math.round(iopsValues.reduce((a, b) => a + b, 0) / iopsValues.length) : 0,
+    avgIops: formatIOPS(avgIopsValue),
     maxIops: iopsValues.length > 0 ? Math.max(...iopsValues) : 0,
-    avgLatency: latencyValues.length > 0 ? latencyValues.reduce((a, b) => a + b, 0) / latencyValues.length : 0,
+    avgLatency: formatLatency(avgLatencyValue),
     minLatency: latencyValues.length > 0 ? Math.min(...latencyValues) : 0,
     p95Latency,
-    avgBandwidth: bandwidthValues.length > 0 ? Math.round(bandwidthValues.reduce((a, b) => a + b, 0) / bandwidthValues.length) : 0,
+    avgBandwidth: `${Math.round(avgBandwidthValue)} MB/s`,
     uniqueHosts,
     uniqueDriveTypes,
     totalDataProcessed: `${totalDataProcessedGB.toFixed(1)} GB`,
@@ -239,16 +262,44 @@ function calculateTrend(metric: 'iops' | 'latency'): 'up' | 'down' | 'stable' {
   return trends[Math.floor(Math.random() * trends.length)]
 }
 
-function retry() {
+// Data loading methods
+const loadTestRuns = async () => {
+  loading.value = true
+  error.value = ''
+
+  try {
+    const response = await fetchWithErrorHandling('/api/test-runs/', {
+      params: {
+        limit: 1000 // Get enough data for meaningful statistics
+      }
+    })
+
+    if (response) {
+      testRuns.value = response
+    }
+  } catch (err: any) {
+    console.error('Failed to load test runs for dashboard:', err)
+    error.value = err.message || 'Failed to load performance statistics'
+  } finally {
+    loading.value = false
+  }
+}
+
+const retry = async () => {
+  await loadTestRuns()
   emit('retry')
 }
 
-// Load data on mount if not already loaded
-onMounted(() => {
-  if (testRunsStore.state.data.length === 0 && !testRunsStore.state.isLoading) {
-    // This would typically trigger a data fetch
-    // For now, we'll rely on parent component to handle data loading
-  }
+// Load data on mount
+onMounted(async () => {
+  await loadTestRuns()
+})
+
+// Expose methods for parent components
+defineExpose({
+  refresh: loadTestRuns,
+  loading: computed(() => loading.value),
+  error: computed(() => error.value)
 })
 </script>
 

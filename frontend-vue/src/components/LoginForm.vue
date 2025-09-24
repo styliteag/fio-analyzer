@@ -88,10 +88,19 @@ const handleSubmit = async () => {
   error.value = ''
 
   try {
-    await login(credentials.value)
-    router.push('/')
-  } catch (err) {
-    error.value = 'Invalid username or password'
+    const userData = await login(credentials.value)
+
+    // Get redirect path from query parameter or default to dashboard
+    const redirectPath = router.currentRoute.value.query.redirect as string || '/dashboard'
+
+    // Navigate to the intended page
+    await router.push(redirectPath)
+
+    // Show success message
+    console.log(`Welcome back, ${userData.username}!`)
+  } catch (err: any) {
+    console.error('Login error:', err)
+    error.value = err.message || 'Invalid username or password'
   } finally {
     loading.value = false
   }

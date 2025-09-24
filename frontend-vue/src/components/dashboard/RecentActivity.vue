@@ -122,13 +122,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useTestRunsStore } from '@/stores/testRuns'
-import { useUiStore } from '@/stores/ui'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useApi } from '@/composables/useApi'
 import Button from '@/components/ui/Button.vue'
 import StatusIndicator from '@/components/ui/StatusIndicator.vue'
 import ErrorMessage from '@/components/ui/ErrorMessage.vue'
-import { formatRelativeTime, formatIOPS, formatDuration } from '@/utils/formatters'
+import type { TestRun } from '@/types/testRun'
 import {
   RefreshCw,
   Activity as ActivityIcon,
@@ -136,7 +135,7 @@ import {
   Play,
   CheckCircle,
   XCircle,
-  Server,
+  Server as ServerIcon,
   BarChart3
 } from 'lucide-vue-next'
 
@@ -167,10 +166,10 @@ const props = withDefaults(defineProps<Props>(), {
   limit: 10,
 })
 
-const testRunsStore = useTestRunsStore()
-const uiStore = useUiStore()
+const { fetchWithErrorHandling } = useApi()
 
 // Reactive state
+const testRuns = ref<TestRun[]>([])
 const activities = ref<Activity[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -180,7 +179,7 @@ const currentOffset = ref(0)
 
 // Generate activities from test runs data
 const generatedActivities = computed(() => {
-  const runs = testRunsStore.state.data
+  const runs = testRuns.value
   if (!runs || runs.length === 0) return []
 
   return runs.slice(0, props.limit).map((run, index) => {
@@ -268,20 +267,29 @@ const generatedActivities = computed(() => {
 })
 
 // Methods
-function loadActivities() {
+async function loadActivities() {
   loading.value = true
   error.value = null
 
   try {
-    // Simulate API delay
-    setTimeout(() => {
+    const response = await fetchWithErrorHandling('/api/test-runs/', {
+      params: {
+        limit: props.limit * 3, // Get more data to generate varied activities
+        order_by: 'timestamp',
+        order: 'desc'
+      }
+    })
+
+    if (response) {
+      testRuns.value = response
       activities.value = generatedActivities.value.slice(0, props.limit)
       hasMore.value = generatedActivities.value.length > props.limit
       currentOffset.value = props.limit
-      loading.value = false
-    }, 500)
-  } catch (err) {
-    error.value = 'Failed to load recent activity'
+    }
+  } catch (err: any) {
+    console.error('Failed to load recent activity:', err)
+    error.value = err.message || 'Failed to load recent activity'
+  } finally {
     loading.value = false
   }
 }
@@ -303,22 +311,68 @@ function loadMore() {
   }, 500)
 }
 
-function refresh() {
+async function refresh() {
   currentOffset.value = 0
-  loadActivities()
+  await loadActivities()
 }
 
 // Load activities on mount
-onMounted(() => {
-  loadActivities()
+onMounted(async () => {
+  await loadActivities()
 })
 
 // Watch for data changes
-watch(() => testRunsStore.state.data.length, () => {
-  if (testRunsStore.state.data.length > 0) {
-    loadActivities()
+watch(() => testRuns.value.length, () => {
+  if (testRuns.value.length > 0) {
+    // Update activities when new test runs are loaded
+    activities.value = generatedActivities.value.slice(0, currentOffset.value)
+    hasMore.value = generatedActivities.value.length > currentOffset.value
   }
 })
+
+// Utility functions
+function formatRelativeTime(date: Date): string {
+  const now = new Date()
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+
+  if (diffInSeconds < 60) {
+    return 'just now'
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60)
+    return `${minutes}m ago`
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600)
+    return `${hours}h ago`
+  } else {
+    const days = Math.floor(diffInSeconds / 86400)
+    return `${days}d ago`
+  }
+}
+
+function formatIOPS(value: number): string {
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(1)}M IOPS`
+  } else if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}K IOPS`
+  } else {
+    return `${Math.round(value)} IOPS`
+  }
+}
+
+function formatDuration(milliseconds: number): string {
+  const seconds = Math.floor(milliseconds / 1000)
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remainingSeconds = seconds % 60
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`
+  } else if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`
+  } else {
+    return `${remainingSeconds}s`
+  }
+}
 </script>
 
 <style scoped>

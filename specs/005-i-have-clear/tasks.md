@@ -145,14 +145,14 @@
 
 ## Phase 3.6: Integration and Data Flow
 
-- [ ] T088 Integrate auth composable with login form and navigation
-- [ ] T089 Connect dashboard components to test runs API
-- [ ] T090 Implement filter logic with OR within categories, AND between categories
-- [ ] T091 Connect visualizations to filtered data with relative color scaling
-- [ ] T092 Implement host selection persistence across pages
-- [ ] T093 Connect user management interface to backend APIs
-- [ ] T094 Add error handling with user-friendly messages and console logging
-- [ ] T095 Implement empty state handling for charts and tables
+- [X] T088 Integrate auth composable with login form and navigation
+- [X] T089 Connect dashboard components to test runs API
+- [X] T090 Implement filter logic with OR within categories, AND between categories
+- [X] T091 Connect visualizations to filtered data with relative color scaling
+- [X] T092 Implement host selection persistence across pages
+- [X] T093 Connect user management interface to backend APIs
+- [X] T094 Add error handling with user-friendly messages and console logging
+- [X] T095 Implement empty state handling for charts and tables
 
 ## Phase 3.7: Polish and Performance
 

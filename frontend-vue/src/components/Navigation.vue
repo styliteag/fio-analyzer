@@ -139,17 +139,17 @@
 
                   <!-- Menu items -->
                   <router-link
-                    to="/profile"
+                    to="/upload"
                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                     role="menuitem"
                     @click="closeUserMenu"
                   >
-                    Profile Settings
+                    Upload Data
                   </router-link>
 
                   <router-link
                     v-if="canManageUsers"
-                    to="/users"
+                    to="/user-manager"
                     class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                     role="menuitem"
                     @click="closeUserMenu"
@@ -219,16 +219,16 @@
 
             <div class="mt-3 space-y-1">
               <router-link
-                to="/profile"
+                to="/upload"
                 class="mobile-nav-link"
                 @click="closeMobileMenu"
               >
-                Profile Settings
+                Upload Data
               </router-link>
 
               <router-link
                 v-if="canManageUsers"
-                to="/users"
+                to="/user-manager"
                 class="mobile-nav-link"
                 @click="closeMobileMenu"
               >
@@ -259,76 +259,73 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
+import { useAuth } from '@/composables/useAuth'
+import { useTheme } from '@/composables/useTheme'
+import { useUI } from '@/stores/ui'
 
 // Icons
 import {
-  HomeIcon,
-  ChartBarIcon,
-  UsersIcon,
-  CogIcon,
-  SunIcon,
-  MoonIcon,
-  ComputerDesktopIcon
+  Home,
+  BarChart3,
+  Users,
+  Settings,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
-const authStore = useAuthStore()
-const uiStore = useUiStore()
+const { user, logout, hasPermission } = useAuth()
+const { isDarkMode, toggleTheme: switchTheme } = useTheme()
+const uiStore = useUI()
 
 // Reactive state
 const isMobileMenuOpen = ref(false)
 const isUserMenuOpen = ref(false)
 
 // Computed properties
-const user = computed(() => authStore.user)
-const canManageUsers = computed(() => authStore.canManageUsers)
+const canManageUsers = computed(() => hasPermission('admin'))
 const userInitials = computed(() => {
   const username = user.value?.username || 'U'
   return username.charAt(0).toUpperCase()
 })
 
-const notificationCount = computed(() => uiStore.notifications.length)
+const notificationCount = computed(() => 0) // TODO: Connect to actual notifications
 
-const currentTheme = computed(() => uiStore.state.theme)
 const themeIcon = computed(() => {
-  switch (currentTheme.value) {
-    case 'light':
-      return SunIcon
-    case 'dark':
-      return MoonIcon
-    default:
-      return ComputerDesktopIcon
-  }
+  return isDarkMode.value ? Sun : Moon
 })
 
 // Navigation items
-const navigationItems = [
+const navigationItems = computed(() => [
   {
     name: 'Dashboard',
-    href: '/',
-    icon: HomeIcon,
+    href: '/dashboard',
+    icon: Home,
   },
   {
-    name: 'Analysis',
-    href: '/analysis',
-    icon: ChartBarIcon,
+    name: 'Host Analysis',
+    href: '/host-analysis',
+    icon: BarChart3,
+  },
+  {
+    name: 'Test History',
+    href: '/test-history',
+    icon: Settings, // Using Settings temporarily, should be History icon
+  },
+  {
+    name: 'Analytics',
+    href: '/performance-analytics',
+    icon: BarChart3,
   },
   {
     name: 'Users',
-    href: '/users',
-    icon: UsersIcon,
-    requiresAuth: true,
-    requiresAdmin: true,
+    href: '/user-manager',
+    icon: Users,
+    show: canManageUsers.value,
   },
-  {
-    name: 'Settings',
-    href: '/settings',
-    icon: CogIcon,
-  },
-]
+].filter(item => item.show !== false))
 
 // Methods
 function navLinkClasses(item: any) {
@@ -364,14 +361,11 @@ function toggleUserMenu() {
 
 function toggleNotifications() {
   // TODO: Implement notification panel
-  uiStore.showInfo('Notifications', 'Notification system coming soon!')
+  uiStore.setSuccessMessage('Notification system coming soon!')
 }
 
 function toggleTheme() {
-  const themes = ['light', 'dark', 'system'] as const
-  const currentIndex = themes.indexOf(currentTheme.value)
-  const nextIndex = (currentIndex + 1) % themes.length
-  uiStore.setTheme(themes[nextIndex])
+  switchTheme()
 }
 
 function closeMobileMenu() {
@@ -389,11 +383,12 @@ function closeAllMenus() {
 
 async function handleLogout() {
   try {
-    await authStore.logout()
+    await logout()
     closeAllMenus()
-    router.push('/login')
+    // Navigation will be handled by the logout function itself
   } catch (error) {
-    uiStore.showError('Logout Failed', 'Unable to log out. Please try again.')
+    console.error('Logout error:', error)
+    uiStore.setErrorMessage('Unable to log out. Please try again.')
   }
 }
 

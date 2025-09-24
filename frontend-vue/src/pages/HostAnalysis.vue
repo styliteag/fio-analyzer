@@ -300,7 +300,7 @@ import type { TestRun, FilterOptions } from '@/types/testRun'
 
 // Composables
 const { fetchWithErrorHandling } = useApi()
-const { activeFilters, filterOptions, hasActiveFilters, clearAllFilters } = useFilters()
+const { activeFilters, filterOptions, hasActiveFilters, clearAllFilters, filterTestRuns } = useFilters()
 const { selectedHosts, availableHosts, persistSelection } = useHostSelection()
 
 // Component state
@@ -323,13 +323,14 @@ const selectedHostsCount = computed(() => selectedHosts.value.length)
 const filteredTestData = computed(() => {
   let data = testData.value
 
-  // Filter by selected hosts
+  // Filter by selected hosts first
   if (selectedHosts.value.length > 0) {
     data = data.filter(test => selectedHosts.value.includes(test.hostname))
   }
 
-  // Apply active filters
-  // This would be implemented based on the filter logic
+  // Apply active filters using the useFilters composable
+  data = filterTestRuns(data)
+
   return data
 })
 
