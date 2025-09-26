@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Redesigned Performance Analytics Graphs Tab**: Complete overhaul of the Graphs tab with user-focused host comparison views
+  - **Performance Rankings**: Bar chart showing Host-Protocol-Disk combination rankings by IOPS, bandwidth, or latency metrics
+  - **Performance Distribution**: Histogram showing how Host-Protocol-Disk combinations are distributed across performance ranges
+  - **Host-Protocol-Disk Comparison**: Direct side-by-side comparison of two selected Host-Protocol-Disk combinations with percentage differences
+  - **Configuration Impact**: Line charts showing how different block sizes and I/O patterns affect each Host-Protocol-Disk combination's performance
+  - **Workload Analysis**: Specialized views for read vs write performance analysis with workload recommendations per combination
+  - **Host-Protocol-Disk Filter**: Filter dropdown to focus on specific Host-Protocol-Disk combinations (e.g., "redshark - local - poolRED01")
+  - Replaced confusing technical chart controls with intuitive view selectors and metric choosers
+  - Added actionable insights and recommendations for each Host-Protocol-Disk combination based on their performance characteristics
+  - Now treats each Host-Protocol-Disk combination as a separate entity, matching the behavior of the Filters panel
+
+### Added
 - **Complete Test Suite Implementation**: Implemented comprehensive TDD test suite for Vue.js frontend rebuild
   - Component Tests: Filter logic, data fetching, chart processing, data transformation, error handling tests
   - Integration Tests: Authentication flow, dashboard overview, host selection persistence, filtering system, visualization rendering, user management interface tests
@@ -95,6 +107,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Filters sidebar interaction and summary stability:
    - Made `selectedHosts` a writable computed in `FilterSidebar.vue` to support `v-model`
    - Guarded against undefined when building tags in `ActiveFilters.vue`
+ - Performance Graphs:
+   - Implemented grouping into multiple datasets for line/bar when `Group by` selected
+   - Sorted x-axis labels numerically/lexicographically for correct sequence
+   - Added distinct color palette per dataset for better differentiation
 
 ## [0.5.8] - 2025-09-14
 
