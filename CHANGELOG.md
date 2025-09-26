@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.5.9] - 2025-09-26
+
+### Added
 - **Performance Graphs Visualization**: New interactive chart-based visualization option alongside Performance Heatmap
   - IOPS Comparison Chart: Line chart comparing IOPS performance across block sizes and patterns
   - Latency Analysis Chart: Multi-axis chart displaying average, P95, and P99 latency metrics
