@@ -123,7 +123,7 @@ const Host: React.FC = () => {
                                 onHostsChange={handleHostsChangeWithReset}
                                 availableHosts={availableHosts}
                                 loadingHosts={loadingHosts}
-                                loading={loading}
+                                loading={loadingHosts}
                                 onRefresh={refreshData}
                             />
                         </Card>
