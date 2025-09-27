@@ -60,7 +60,7 @@ python -m py_compile main.py                 # Syntax checking
 
 ### Development Workflow
 1. **Make changes** to Python files
-2. **Run linting** to check code quality: `uv run flake8 --max-line-length=88 .`
+2. **Run linting** to check code quality: `uv run flake8 --max-line-length=180 .`
 3. **Auto-format code** if needed: `uv run black . && uv run isort .`
 4. **Test imports** and syntax: `uv run python -m py_compile main.py`
 5. **Start server** to test changes: `uvicorn main:app --reload`

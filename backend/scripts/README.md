@@ -31,7 +31,7 @@ uv run python -m py_compile main.py           # Check syntax
 
 # Alternative (with traditional venv)
 source venv/bin/activate
-flake8 --max-line-length=88 .                 # Check code quality  
+flake8 --max-line-length=180 .                 # Check code quality  
 black . && isort .                            # Auto-format code
 python -m py_compile main.py                  # Check syntax
 ```

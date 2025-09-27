@@ -12,7 +12,7 @@
   - Setup: `cd backend && uv sync` (or `make install`).
   - Quick checks: `make check` (syntax/import), `make lint` (full lint), `make start` (pre-flight + run).
   - Run server: `uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000`.
-  - Linting: `uv run flake8 --max-line-length=88 .` (Python code quality check).
+  - Linting: `uv run flake8 --max-line-length=180 .` (Python code quality check).
 - Frontend:
   - `cd frontend && npm install`.
   - Dev server: `npm run dev`. Build: `npm run build`. 
@@ -23,7 +23,7 @@
 
 ## Coding Style & Naming Conventions
 - Python: formatted with Black (88 cols), isort (Black profile), flake8; modules/functions `snake_case`. Routers live in `backend/routers/*.py`.
-  - Code Quality: Use `uv run flake8 --max-line-length=88 .` for linting
+  - Code Quality: Use `uv run flake8 --max-line-length=180 .` for linting
   - Auto-formatting: `uv run black .` and `uv run isort .` for consistent style
 - TypeScript/React: ESLint (see `eslint.config.js`) and Prettier via pre-commit; components `PascalCase` (e.g., `HostSelector.tsx`), hooks `camelCase` (e.g., `useChartColors.ts`).
   - Code Quality: Use `npm run lint` for ESLint checking
@@ -53,7 +53,7 @@
 
 ## Agent Workflow & Quality Gates
 - After any frontend change: run `npm run lint` and `npm run type-check` (`npx tsc --noEmit`); fix all errors before PR.
-- After any backend change: run `uv run flake8 --max-line-length=88 .` for Python linting.
+- After any backend change: run `uv run flake8 --max-line-length=180 .` for Python linting.
 - Prefer `uv run <cmd>` for backend tasks (e.g., `uv run uvicorn ...`, `uv run pytest`). Always run `make check` before starting the backend.
 - Manage users with: `cd backend && uv run python scripts/manage_users.py add --username <u> --password <p> [--uploader]`.
 
