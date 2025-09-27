@@ -1,0 +1,9 @@
+[flake8]
+max-line-length = 180
+extend-ignore = E203,W503,E402
+exclude = .venv,venv,__pycache__,.git,node_modules,.pytest_cache,.mypy_cache
+per-file-ignores =
+    # Ignore unused imports in test files
+    test_*.py:F401
+    # Ignore f-strings without placeholders in test files
+    test_*.py:F541
