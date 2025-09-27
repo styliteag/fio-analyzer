@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Performance Graphs Dark Mode**: Fixed text visibility issues in dark mode across all Performance Graphs components
+  - Updated PerformanceMatrix gradient text colors to use `text-gray-900 dark:text-gray-100` for proper contrast
+  - Fixed all chart components (IOPSComparisonChart, LatencyAnalysisChart, BandwidthTrendsChart, ResponsivenessChart) to use theme-aware CSS classes
+  - Replaced hardcoded `text-muted-foreground` and `text-foreground` classes with proper dark mode variants
+  - Updated chart container backgrounds to use `bg-white dark:bg-gray-800` with proper border colors
+  - Fixed button and control styling to use appropriate dark mode colors
+  - All text now properly visible in both light and dark themes
 - Resolve all flake8 warnings (29 total)
   - Remove unused imports (F401): Union, HTTPException, log_info, Depends, HTTPBasicCredentials, List, log_warning, field, sys, Set, Any, Dict, File, Form, UploadFile, require_auth, TestRun, dataclass_to_dict, Optional
   - Fix f-strings without placeholders (F541): Convert unnecessary f-strings to regular strings

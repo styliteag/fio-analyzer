@@ -266,10 +266,10 @@ export const ResponsivenessChart: React.FC<ResponsivenessChartProps> = ({
   if (!data.series.length) {
     return (
       <div
-        className={`flex items-center justify-center bg-card rounded-lg border ${className}`}
+        className={`flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}
         style={{ height }}
       >
-        <div className="text-center text-muted-foreground">
+        <div className="text-center text-gray-600 dark:text-gray-400">
           <div className="text-lg font-medium mb-2">No Responsiveness Data Available</div>
           <div className="text-sm">
             Select drives and test configurations to view responsiveness comparison
@@ -280,16 +280,16 @@ export const ResponsivenessChart: React.FC<ResponsivenessChartProps> = ({
   }
 
   return (
-    <div className={`bg-card rounded-lg border p-4 ${className}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 ${className}`}>
       {/* Controls */}
       <div className="mb-4 flex flex-wrap items-center gap-4">
         {/* Sort Mode */}
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">Sort:</span>
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Sort:</span>
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as SortMode)}
-            className="px-2 py-1 text-sm border rounded bg-background text-foreground"
+            className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           >
             <option value="performance">Performance</option>
             <option value="alphabetical">Alphabetical</option>
@@ -299,11 +299,11 @@ export const ResponsivenessChart: React.FC<ResponsivenessChartProps> = ({
 
         {/* Aggregation Mode */}
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">Metric:</span>
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Metric:</span>
           <select
             value={aggregationMode}
             onChange={(e) => setAggregationMode(e.target.value as AggregationMode)}
-            className="px-2 py-1 text-sm border rounded bg-background text-foreground"
+            className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           >
             <option value="average">Average</option>
             <option value="max">Maximum</option>
@@ -320,7 +320,7 @@ export const ResponsivenessChart: React.FC<ResponsivenessChartProps> = ({
             onChange={(e) => setShowTiers(e.target.checked)}
             className="rounded"
           />
-          <label htmlFor="show-tiers" className="text-sm text-foreground">
+          <label htmlFor="show-tiers" className="text-sm text-gray-900 dark:text-gray-100">
             Color by Performance
           </label>
         </div>
@@ -331,7 +331,7 @@ export const ResponsivenessChart: React.FC<ResponsivenessChartProps> = ({
         {processedData.values.length > 0 ? (
           <Bar data={chartData} options={customOptions as any} />
         ) : (
-          <div className="flex items-center justify-center h-full text-center text-muted-foreground">
+          <div className="flex items-center justify-center h-full text-center text-gray-600 dark:text-gray-400">
             <div>
               <div className="text-lg font-medium mb-2">No Valid Responsiveness Data</div>
               <div className="text-sm">
@@ -345,8 +345,8 @@ export const ResponsivenessChart: React.FC<ResponsivenessChartProps> = ({
       {/* Performance Tier Summary */}
       {tierSummary && showTiers && (
         <div className="mt-4">
-          <h4 className="text-sm font-medium text-foreground mb-2">Performance Distribution</h4>
-          <div className="flex flex-wrap gap-4 text-sm">
+          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Performance Distribution</h4>
+          <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded" style={{ backgroundColor: '#10B981' }} />
               <span>Excellent: {tierSummary.excellent}</span>
@@ -368,7 +368,7 @@ export const ResponsivenessChart: React.FC<ResponsivenessChartProps> = ({
       )}
 
       {/* Chart Info */}
-      <div className="mt-4 text-xs text-muted-foreground">
+      <div className="mt-4 text-xs text-gray-600 dark:text-gray-400">
         <div>Responsiveness = 1000 / Average Latency (higher is better)</div>
         <div>Showing {processedData.values.length} configurations sorted by {sortMode}</div>
       </div>

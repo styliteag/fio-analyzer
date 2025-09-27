@@ -237,10 +237,10 @@ export const BandwidthTrendsChart: React.FC<BandwidthTrendsChartProps> = ({
   if (!data.series.length || !data.blockSizes.length) {
     return (
       <div
-        className={`flex items-center justify-center bg-card rounded-lg border ${className}`}
+        className={`flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}
         style={{ height }}
       >
-        <div className="text-center text-muted-foreground">
+        <div className="text-center text-gray-600 dark:text-gray-400">
           <div className="text-lg font-medium mb-2">No Bandwidth Data Available</div>
           <div className="text-sm">
             Select drives and test configurations to view bandwidth trends
@@ -251,19 +251,19 @@ export const BandwidthTrendsChart: React.FC<BandwidthTrendsChartProps> = ({
   }
 
   return (
-    <div className={`bg-card rounded-lg border p-4 ${className}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 ${className}`}>
       {/* Controls */}
       <div className="mb-4 flex flex-wrap items-center gap-4">
         {/* View Mode Toggle */}
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">View:</span>
+          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">View:</span>
           <div className="flex border rounded">
             <button
               onClick={() => setViewMode('absolute')}
               className={`px-3 py-1 text-sm transition-colors ${
                 viewMode === 'absolute'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-background text-muted-foreground hover:bg-accent'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
               }`}
             >
               Absolute
@@ -272,8 +272,8 @@ export const BandwidthTrendsChart: React.FC<BandwidthTrendsChartProps> = ({
               onClick={() => setViewMode('normalized')}
               className={`px-3 py-1 text-sm transition-colors border-l ${
                 viewMode === 'normalized'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-background text-muted-foreground hover:bg-accent'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
               }`}
             >
               Normalized
@@ -290,7 +290,7 @@ export const BandwidthTrendsChart: React.FC<BandwidthTrendsChartProps> = ({
             onChange={(e) => setShowArea(e.target.checked)}
             className="rounded"
           />
-          <label htmlFor="show-area" className="text-sm text-foreground">
+          <label htmlFor="show-area" className="text-sm text-gray-900 dark:text-gray-100">
             Show Area Fill
           </label>
         </div>
@@ -301,7 +301,7 @@ export const BandwidthTrendsChart: React.FC<BandwidthTrendsChartProps> = ({
         {chartData.datasets.length > 0 ? (
           <Line data={chartData} options={customOptions as any} />
         ) : (
-          <div className="flex items-center justify-center h-full text-center text-muted-foreground">
+          <div className="flex items-center justify-center h-full text-center text-gray-600 dark:text-gray-400">
             <div>
               <div className="text-lg font-medium mb-2">No Valid Bandwidth Data</div>
               <div className="text-sm">
@@ -315,14 +315,14 @@ export const BandwidthTrendsChart: React.FC<BandwidthTrendsChartProps> = ({
       {/* Trend Statistics */}
       {trendStats && trendStats.length > 0 && (
         <div className="mt-4 space-y-2">
-          <h4 className="text-sm font-medium text-foreground">Performance Summary</h4>
+          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Performance Summary</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
             {trendStats.map((stat, index) => (
-              <div key={index} className="bg-muted/50 rounded p-2">
-                <div className="font-medium text-foreground mb-1">
+              <div key={index} className="bg-gray-100 dark:bg-gray-700 rounded p-2">
+                <div className="font-medium text-gray-900 dark:text-gray-100 mb-1">
                   {stat?.hostname} - {stat?.driveModel}
                 </div>
-                <div className="text-muted-foreground space-y-0.5">
+                <div className="text-gray-600 dark:text-gray-400 space-y-0.5">
                   <div>Avg: {stat?.avg} MB/s</div>
                   <div>Range: {stat?.min} - {stat?.max} MB/s</div>
                   <div>Variance: {stat?.variance}%</div>
@@ -334,7 +334,7 @@ export const BandwidthTrendsChart: React.FC<BandwidthTrendsChartProps> = ({
       )}
 
       {/* Pattern Legend */}
-      <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
+      <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
         {Array.from(new Set(data.series.flatMap(s => s.data.map(d => d.pattern)))).map((pattern: PatternType) => (
           <div key={pattern} className="flex items-center gap-2">
             <div

@@ -253,10 +253,10 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
   if (!data.series.length || !data.blockSizes.length) {
     return (
       <div
-        className={`flex items-center justify-center bg-card rounded-lg border ${className}`}
+        className={`flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}
         style={{ height }}
       >
-        <div className="text-center text-muted-foreground">
+        <div className="text-center text-gray-600 dark:text-gray-400">
           <div className="text-lg font-medium mb-2">No Latency Data Available</div>
           <div className="text-sm">
             Select drives and test configurations to view latency analysis
@@ -267,18 +267,18 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
   }
 
   return (
-    <div className={`bg-card rounded-lg border p-4 ${className}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 ${className}`}>
       {/* Metric Selection Controls */}
       <div className="mb-4 flex flex-wrap gap-2">
-        <span className="text-sm font-medium text-foreground mr-2">Metrics:</span>
+        <span className="text-sm font-medium text-gray-900 dark:text-gray-100 mr-2">Metrics:</span>
         {(['avg_latency', 'p95_latency', 'p99_latency'] as LatencyMetric[]).map(metric => (
           <button
             key={metric}
             onClick={() => toggleMetric(metric)}
             className={`px-3 py-1 text-sm rounded border transition-colors ${
               selectedMetrics.includes(metric)
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background text-muted-foreground border-border hover:bg-accent'
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
             }`}
           >
             {metric === 'avg_latency' ? 'Average' :
@@ -292,7 +292,7 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
         {chartData.datasets.length > 0 ? (
           <Line data={chartData} options={customOptions as any} />
         ) : (
-          <div className="flex items-center justify-center h-full text-center text-muted-foreground">
+          <div className="flex items-center justify-center h-full text-center text-gray-600 dark:text-gray-400">
             <div>
               <div className="text-lg font-medium mb-2">No Data for Selected Metrics</div>
               <div className="text-sm">
@@ -304,7 +304,7 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
       </div>
 
       {/* Chart Info */}
-      <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
+      <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
         <div className="flex items-center gap-2">
           <div className="w-3 h-0.5 bg-current" />
           <span>Average (Left Axis)</span>

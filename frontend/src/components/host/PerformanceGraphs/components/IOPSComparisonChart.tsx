@@ -166,10 +166,10 @@ export const IOPSComparisonChart: React.FC<IOPSComparisonChartProps> = ({
   if (!data.series.length || !data.blockSizes.length) {
     return (
       <div
-        className={`flex items-center justify-center bg-card rounded-lg border ${className}`}
+        className={`flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}
         style={{ height }}
       >
-        <div className="text-center text-muted-foreground">
+        <div className="text-center text-gray-600 dark:text-gray-400">
           <div className="text-lg font-medium mb-2">No IOPS Data Available</div>
           <div className="text-sm">
             Select drives and test configurations to view IOPS comparison
@@ -183,10 +183,10 @@ export const IOPSComparisonChart: React.FC<IOPSComparisonChartProps> = ({
   if (!chartData.datasets.length) {
     return (
       <div
-        className={`flex items-center justify-center bg-card rounded-lg border ${className}`}
+        className={`flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}
         style={{ height }}
       >
-        <div className="text-center text-muted-foreground">
+        <div className="text-center text-gray-600 dark:text-gray-400">
           <div className="text-lg font-medium mb-2">No Valid IOPS Data</div>
           <div className="text-sm">
             The selected data does not contain valid IOPS measurements
@@ -197,13 +197,13 @@ export const IOPSComparisonChart: React.FC<IOPSComparisonChartProps> = ({
   }
 
   return (
-    <div className={`bg-card rounded-lg border p-4 ${className}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 ${className}`}>
       <div style={{ height }}>
         <Line data={chartData} options={customOptions as any} />
       </div>
 
       {/* Chart legend with pattern indicators */}
-      <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
+      <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400">
         {Array.from(new Set(data.series.flatMap(s => s.data.map(d => d.pattern)))).map((pattern: PatternType) => (
           <div key={pattern} className="flex items-center gap-2">
             <div

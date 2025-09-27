@@ -158,17 +158,17 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
         if (colorName) {
             if (cell.intensity > 0.8) return `bg-gradient-to-br from-${colorName}-400 to-${colorName}-600 text-white`;
             if (cell.intensity > 0.6) return `bg-gradient-to-br from-${colorName}-300 to-${colorName}-500 text-white`;
-            if (cell.intensity > 0.4) return `bg-gradient-to-br from-${colorName}-200 to-${colorName}-400 text-gray-800`;
-            if (cell.intensity > 0.2) return `bg-gradient-to-br from-${colorName}-100 to-${colorName}-300 text-gray-800`;
-            if (cell.intensity > 0) return `bg-gradient-to-br from-gray-100 to-${colorName}-200 text-gray-800`;
+            if (cell.intensity > 0.4) return `bg-gradient-to-br from-${colorName}-200 to-${colorName}-400 text-gray-900 dark:text-gray-100`;
+            if (cell.intensity > 0.2) return `bg-gradient-to-br from-${colorName}-100 to-${colorName}-300 text-gray-900 dark:text-gray-100`;
+            if (cell.intensity > 0) return `bg-gradient-to-br from-gray-100 to-${colorName}-200 text-gray-900 dark:text-gray-100`;
         }
         
         // Fallback to blue if no color extracted
         if (cell.intensity > 0.8) return 'bg-gradient-to-br from-blue-400 to-blue-600 text-white';
         if (cell.intensity > 0.6) return 'bg-gradient-to-br from-blue-300 to-blue-500 text-white';
-        if (cell.intensity > 0.4) return 'bg-gradient-to-br from-blue-200 to-blue-400 text-gray-800';
-        if (cell.intensity > 0.2) return 'bg-gradient-to-br from-blue-100 to-blue-300 text-gray-800';
-        if (cell.intensity > 0) return 'bg-gradient-to-br from-gray-100 to-blue-200 text-gray-800';
+        if (cell.intensity > 0.4) return 'bg-gradient-to-br from-blue-200 to-blue-400 text-gray-900 dark:text-gray-100';
+        if (cell.intensity > 0.2) return 'bg-gradient-to-br from-blue-100 to-blue-300 text-gray-900 dark:text-gray-100';
+        if (cell.intensity > 0) return 'bg-gradient-to-br from-gray-100 to-blue-200 text-gray-900 dark:text-gray-100';
         
         return 'bg-gray-100 dark:bg-gray-800 text-gray-500';
     };
