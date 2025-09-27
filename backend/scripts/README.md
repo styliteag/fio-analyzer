@@ -17,6 +17,25 @@ source venv/bin/activate  # Activate virtual environment
 
 ## 🔧 Available Scripts
 
+### Code Quality & Development Tools
+
+Before running scripts or making changes, ensure code quality:
+
+```bash
+cd backend
+
+# Run Python linting
+uv run flake8 --max-line-length=180.          # Check code quality
+uv run black . && uv run isort .              # Auto-format code
+uv run python -m py_compile main.py           # Check syntax
+
+# Alternative (with traditional venv)
+source venv/bin/activate
+flake8 --max-line-length=88 .                 # Check code quality  
+black . && isort .                            # Auto-format code
+python -m py_compile main.py                  # Check syntax
+```
+
 ### 1. `manage_users.py` - User Management Script
 
 Python script for managing admin and uploader users in the FIO Analyzer system.

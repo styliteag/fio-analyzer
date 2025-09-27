@@ -36,6 +36,35 @@ pip3 install -r requirements.txt --break-system-packages
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+## 🛠️ Development & Code Quality
+
+### Code Quality Tools
+The project uses several tools to maintain high code quality:
+
+```bash
+cd backend
+
+# With uv (recommended)
+uv run flake8 --max-line-length=180 .          # Python linting
+uv run black .                               # Code formatting
+uv run isort .                               # Import organization  
+uv run python -m py_compile main.py          # Syntax checking
+
+# With traditional venv (if tools installed)
+source venv/bin/activate
+flake8 --max-line-length=180 .                # Python linting
+black .                                      # Code formatting
+isort .                                      # Import organization
+python -m py_compile main.py                 # Syntax checking
+```
+
+### Development Workflow
+1. **Make changes** to Python files
+2. **Run linting** to check code quality: `uv run flake8 --max-line-length=88 .`
+3. **Auto-format code** if needed: `uv run black . && uv run isort .`
+4. **Test imports** and syntax: `uv run python -m py_compile main.py`
+5. **Start server** to test changes: `uvicorn main:app --reload`
+
 ## 🌐 Access Points
 
 - **Frontend**: http://localhost:5173
