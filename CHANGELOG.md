@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- 
+
+## [0.5.10] - 2025-09-27
+
 ### Changed
 - **Host Page URL Structure**: Removed hostname from URL path for cleaner navigation
   - Changed route from `/host/:hostname?` to `/host` in App.tsx
