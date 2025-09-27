@@ -123,6 +123,13 @@ For local development with separate frontend/backend:
    ```
    The application will be available at `http://localhost:5173`.
 
+4. **Code Quality & Linting**:
+   ```bash
+   npm run lint        # Run ESLint for code quality checks
+   npm run type-check  # Run TypeScript compiler for type checking
+   npm run build       # Build for production (includes type checking)
+   ```
+
 #### Backend
 
 1. **Navigate to the backend directory**:
@@ -160,6 +167,22 @@ For local development with separate frontend/backend:
    uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
    The API will be available at `http://localhost:8000`.
+
+5. **Code Quality & Linting**:
+   
+   **With uv (recommended)**:
+   ```bash
+   uv run flake8 --max-line-length=88 .          # Python linting
+   uv run black . && uv run isort .              # Auto-format code
+   uv run python -m py_compile main.py           # Syntax check
+   ```
+   
+   **With traditional setup** (if flake8, black, isort installed):
+   ```bash
+   flake8 --max-line-length=88 .                 # Python linting
+   black . && isort .                            # Auto-format code
+   python -m py_compile main.py                  # Syntax check
+   ```
 
 ### Database Setup
 
