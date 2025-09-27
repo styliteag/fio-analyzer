@@ -100,6 +100,40 @@ const Host: React.FC = () => {
         );
     }
 
+    // Show host selector when no hosts are selected
+    if (selectedHosts.length === 0) {
+        return (
+            <div className="min-h-screen theme-bg-secondary">
+                <DashboardHeader />
+                <main className="container mx-auto px-4 py-8">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="mb-8">
+                            <h1 className="text-3xl font-bold theme-text-primary mb-2">Host Analysis</h1>
+                            <p className="theme-text-secondary">Select one or more hosts to analyze their storage performance</p>
+                        </div>
+                        
+                        <Card className="p-6">
+                            <div className="mb-4">
+                                <h2 className="text-xl font-semibold theme-text-primary mb-2">Available Hosts</h2>
+                                <p className="theme-text-secondary text-sm">Choose hosts to analyze their performance data</p>
+                            </div>
+                            
+                            <HostSelector
+                                selectedHosts={selectedHosts}
+                                onHostsChange={handleHostsChangeWithReset}
+                                availableHosts={availableHosts}
+                                loadingHosts={loadingHosts}
+                                loading={loading}
+                                onRefresh={refreshData}
+                            />
+                        </Card>
+                    </div>
+                </main>
+                <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen theme-bg-secondary">
             <DashboardHeader />

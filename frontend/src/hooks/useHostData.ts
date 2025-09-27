@@ -40,17 +40,14 @@ export const useHostData = (): UseHostDataReturn => {
             const hosts = await getHostList();
             setAvailableHosts(hosts);
             
-            // Auto-select first available host if none selected
-            if (hosts.length > 0 && selectedHosts.length === 0) {
-                setSelectedHosts([hosts[0]]);
-            }
+            // Don't auto-select any host - let user choose
         } catch (err) {
             console.error('Failed to load host list:', err);
             setError('Failed to load available hosts');
         } finally {
             setLoadingHosts(false);
         }
-    }, [selectedHosts.length]);
+    }, []);
 
     // Load host analysis data for multiple hosts
     const loadHostsData = useCallback(async (hosts: string[] = selectedHosts) => {
