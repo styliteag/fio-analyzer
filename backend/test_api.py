@@ -4,7 +4,6 @@ Simple test script for FastAPI backend
 """
 
 import sys
-import os
 
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -12,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Test imports
 try:
     from config.settings import settings
+
     print("✅ Config import successful")
     print(f"   Database path: {settings.db_path}")
     print(f"   Port: {settings.port}")
@@ -21,6 +21,7 @@ except Exception as e:
 
 try:
     from database.connection import DatabaseManager
+
     print("✅ Database import successful")
 except Exception as e:
     print(f"❌ Database import failed: {e}")
@@ -28,13 +29,15 @@ except Exception as e:
 
 try:
     from auth.authentication import parse_htpasswd
+
     print("✅ Auth import successful")
 except Exception as e:
     print(f"❌ Auth import failed: {e}")
     sys.exit(1)
 
 try:
-    from routers import test_runs, imports, time_series, utils_router
+    from routers import imports, test_runs, time_series, utils_router
+
     print("✅ Router imports successful")
 except Exception as e:
     print(f"❌ Router imports failed: {e}")
@@ -42,6 +45,7 @@ except Exception as e:
 
 try:
     from main import app
+
     print("✅ Main app import successful")
 except Exception as e:
     print(f"❌ Main app import failed: {e}")

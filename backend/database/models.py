@@ -1,12 +1,13 @@
 """Database models using Python dataclasses"""
 
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, TypedDict
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional, TypedDict
 
 
 @dataclass
 class TestRunBase:
     """Base test run model"""
+
     timestamp: str
     drive_model: str
     drive_type: str
@@ -46,12 +47,14 @@ class TestRunBase:
 @dataclass
 class TestRun(TestRunBase):
     """Test run model with ID"""
+
     id: int = 0
 
 
 @dataclass
 class TestRunUpdate:
     """Test run update model"""
+
     description: Optional[str] = None
     test_name: Optional[str] = None
     hostname: Optional[str] = None
@@ -60,9 +63,10 @@ class TestRunUpdate:
     drive_model: Optional[str] = None
 
 
-@dataclass 
+@dataclass
 class BulkUpdateRequest:
     """Bulk update request model"""
+
     test_run_ids: List[int]
     updates: TestRunUpdate
 
@@ -70,6 +74,7 @@ class BulkUpdateRequest:
 @dataclass
 class PerformanceMetric:
     """Performance metric model"""
+
     id: int
     test_run_id: int
     metric_type: str
@@ -81,6 +86,7 @@ class PerformanceMetric:
 @dataclass
 class ServerInfo:
     """Server information model"""
+
     hostname: str
     protocol: str
     drive_model: str
@@ -92,6 +98,7 @@ class ServerInfo:
 @dataclass
 class TrendData:
     """Trend data model"""
+
     timestamp: str
     block_size: str
     read_write_pattern: str
@@ -105,6 +112,7 @@ class TrendData:
 # Simple TypedDict classes for API responses
 class FilterOptions(TypedDict):
     """Filter options response"""
+
     hostnames: List[str]
     protocols: List[str]
     drive_types: List[str]
@@ -115,6 +123,7 @@ class FilterOptions(TypedDict):
 
 class ImportResponse(TypedDict):
     """Import response"""
+
     message: str
     test_run_id: int
     filename: str
@@ -122,6 +131,7 @@ class ImportResponse(TypedDict):
 
 class BulkUpdateResponse(TypedDict):
     """Bulk update response"""
+
     message: str
     updated: int
     failed: int
@@ -129,6 +139,7 @@ class BulkUpdateResponse(TypedDict):
 
 class ErrorResponse(TypedDict):
     """Error response"""
+
     error: str
     request_id: Optional[str]
 
@@ -136,8 +147,8 @@ class ErrorResponse(TypedDict):
 # Helper functions for dataclass conversion
 def dataclass_to_dict(obj) -> Dict[str, Any]:
     """Convert dataclass to dictionary"""
-    if hasattr(obj, '__dataclass_fields__'):
-        from dataclasses import asdict
+    if hasattr(obj, "__dataclass_fields__"):
+
         return asdict(obj)
     return obj
 
@@ -146,5 +157,7 @@ def dict_to_test_run(data: Dict[str, Any]) -> TestRun:
     """Convert dictionary to TestRun dataclass"""
     # Filter out None values and unknown fields
     known_fields = {f.name for f in TestRun.__dataclass_fields__.values()}
-    filtered_data = {k: v for k, v in data.items() if k in known_fields and v is not None}
+    filtered_data = {
+        k: v for k, v in data.items() if k in known_fields and v is not None
+    }
     return TestRun(**filtered_data)
