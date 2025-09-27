@@ -2,16 +2,18 @@
 
 <!--
 Sync Impact Report:
-- Version: 1.0.0 (initial constitution)
-- Templates requiring updates: ✅ constitution created (no existing templates to sync)
+- Version: 1.1.0 (minor amendment - added new principles for code quality and feature development)
+- Modified principles: None renamed
+- Added sections: Principle 8 (Code Quality Standards), Principle 9 (Feature Specification Workflow)
+- Removed sections: None
+- Templates requiring updates: ✅ plan-template.md references updated
 - Follow-up TODOs: None
-- Created: 2025-09-22 (initial ratification)
 -->
 
 **Project Name**: FIO Analyzer - Storage Performance Visualizer
-**Constitution Version**: 1.0.0
+**Constitution Version**: 1.1.0
 **Ratification Date**: 2025-09-22
-**Last Amended Date**: 2025-09-22
+**Last Amended Date**: 2025-09-27
 
 ## Purpose and Scope
 
@@ -61,6 +63,18 @@ FIO Analyzer is a comprehensive full-stack web application designed to analyze a
 
 **Rationale**: Consistent deployment reduces operational complexity and ensures reproducible environments across development, testing, and production.
 
+### Principle 8: Code Quality Standards
+**Name**: Code Quality Standards
+**Rule**: All Python code MUST pass flake8 linting without warnings. Code formatting MUST be enforced using Black and import organization with isort. The UV package manager MUST be used for Python dependency management. All code MUST compile without syntax errors before commits.
+
+**Rationale**: Consistent code quality standards ensure maintainability, readability, and reduce technical debt. Modern tooling like UV provides faster dependency resolution and better reproducible builds.
+
+### Principle 9: Feature Specification Workflow
+**Name**: Feature Specification Workflow
+**Rule**: All significant features MUST follow the specification workflow using /specify, /plan, /clarify, /tasks, and /implement commands. Feature specifications MUST be documented before implementation begins. Clarification workflows MUST be used to resolve ambiguities in requirements.
+
+**Rationale**: Structured feature development ensures thorough planning, reduces implementation errors, and maintains consistency in feature delivery. The specification workflow provides traceability from requirements to implementation.
+
 ## Governance
 
 ### Amendment Process
@@ -83,6 +97,13 @@ FIO Analyzer is a comprehensive full-stack web application designed to analyze a
 - Pull request reviews MUST verify adherence to constitutional principles
 - Continuous integration MUST enforce technical principles (linting, type checking, testing)
 - Security principles MUST be validated through code review and testing
+- Code quality standards MUST be enforced through automated tooling (flake8, black, isort)
+- Feature specification workflow MUST be followed for all significant changes
+
+### Tool Integration
+- Constitution principles MUST be integrated into development templates and workflows
+- Feature specification commands (/specify, /plan, /clarify, /tasks, /implement) MUST reference constitutional requirements
+- Development tooling MUST align with constitutional standards (UV for Python, TypeScript strict mode, automated linting)
 
 ---
 
