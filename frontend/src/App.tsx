@@ -33,7 +33,7 @@ const ProtectedApp = () => {
 			<Route path="/performance" element={<Performance />} />
 			<Route path="/history" element={<History />} />
 			<Route path="/compare" element={<Compare />} />
-			<Route path="/host/:hostname?" element={<Host />} />
+			<Route path="/host" element={<Host />} />
 			<Route path="/upload" element={<Upload />} />
 			<Route path="/admin" element={<Admin />} />
 			<Route path="/users" element={<UserManager />} />

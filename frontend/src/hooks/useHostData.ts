@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { fetchHostAnalysis, getHostList, type HostAnalysisData } from '../services/api/hostAnalysis';
 
 export interface UseHostDataProps {
-    hostname?: string;
+    // No longer using hostname from URL
 }
 
 export interface UseHostDataReturn {
@@ -23,9 +22,7 @@ export interface UseHostDataReturn {
     refreshData: () => void;
 }
 
-export const useHostData = ({ hostname }: UseHostDataProps = {}): UseHostDataReturn => {
-    const navigate = useNavigate();
-    
+export const useHostData = (): UseHostDataReturn => {
     // Host list states
     const [availableHosts, setAvailableHosts] = useState<string[]>([]);
     const [loadingHosts, setLoadingHosts] = useState(true);
@@ -43,12 +40,9 @@ export const useHostData = ({ hostname }: UseHostDataProps = {}): UseHostDataRet
             const hosts = await getHostList();
             setAvailableHosts(hosts);
             
-            // Auto-select host from URL or first available host
-            if (hostname && hosts.includes(hostname)) {
-                setSelectedHosts([hostname]);
-            } else if (!hostname && hosts.length > 0) {
+            // Auto-select first available host if none selected
+            if (hosts.length > 0 && selectedHosts.length === 0) {
                 setSelectedHosts([hosts[0]]);
-                navigate(`/host/${hosts[0]}`, { replace: true });
             }
         } catch (err) {
             console.error('Failed to load host list:', err);
@@ -56,7 +50,7 @@ export const useHostData = ({ hostname }: UseHostDataProps = {}): UseHostDataRet
         } finally {
             setLoadingHosts(false);
         }
-    }, [hostname, navigate]);
+    }, [selectedHosts.length]);
 
     // Load host analysis data for multiple hosts
     const loadHostsData = useCallback(async (hosts: string[] = selectedHosts) => {
@@ -93,12 +87,8 @@ export const useHostData = ({ hostname }: UseHostDataProps = {}): UseHostDataRet
     // Handle host selection change
     const handleHostsChange = useCallback((newHosts: string[]) => {
         setSelectedHosts(newHosts);
-        // Update URL to reflect primary host (first selected)
-        if (newHosts.length > 0) {
-            navigate(`/host/${newHosts[0]}`);
-        }
         loadHostsData(newHosts);
-    }, [navigate, loadHostsData]);
+    }, [loadHostsData]);
 
     // Refresh data function
     const refreshData = useCallback(() => {
@@ -114,13 +104,6 @@ export const useHostData = ({ hostname }: UseHostDataProps = {}): UseHostDataRet
         loadHostList();
     }, [loadHostList]);
 
-    // Load host data when hostname changes
-    useEffect(() => {
-        if (hostname && !selectedHosts.includes(hostname)) {
-            setSelectedHosts([hostname]);
-            loadHostsData([hostname]);
-        }
-    }, [hostname, selectedHosts, loadHostsData]);
 
     // Load host data when selected hosts change (after host list is loaded)
     useEffect(() => {

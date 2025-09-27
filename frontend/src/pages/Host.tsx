@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
 import { DashboardHeader, DashboardFooter } from '../components/layout';
 import { Card, Loading, ErrorDisplay } from '../components/ui';
 import { useHostData } from '../hooks/useHostData';
@@ -20,7 +19,6 @@ import PerformanceFingerprintHeatmap from '../components/host/PerformanceFingerp
 import PerformanceGraphs from '../components/host/PerformanceGraphs';
 
 const Host: React.FC = () => {
-    const { hostname } = useParams<{ hostname: string }>();
     
     // Visualization states
     const [activeView, setActiveView] = useState<VisualizationView>('overview');
@@ -35,7 +33,7 @@ const Host: React.FC = () => {
         error,
         handleHostsChange,
         refreshData
-    } = useHostData({ hostname });
+    } = useHostData();
 
     const {
         selectedBlockSizes,

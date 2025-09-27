@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Host Page URL Structure**: Removed hostname from URL path for cleaner navigation
+  - Changed route from `/host/:hostname?` to `/host` in App.tsx
+  - Updated Host.tsx to no longer use hostname from URL parameters
+  - Modified useHostData hook to remove URL-based hostname navigation
+  - Host selection now works without including hostname in the URL
+  - Page starts with empty hostname selection and auto-selects first available host
+
 ### Fixed
 - **Performance Graphs Dark Mode**: Fixed text visibility issues in dark mode across all Performance Graphs components
   - Updated PerformanceMatrix gradient text colors to use `text-gray-900 dark:text-gray-100` for proper contrast
