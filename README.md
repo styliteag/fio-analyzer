@@ -172,14 +172,14 @@ For local development with separate frontend/backend:
    
    **With uv (recommended)**:
    ```bash
-   uv run flake8 --max-line-length=180 .          # Python linting
+   uv run flake8 .                                 # Python linting
    uv run black . && uv run isort .              # Auto-format code
    uv run python -m py_compile main.py           # Syntax check
    ```
    
    **With traditional setup** (if flake8, black, isort installed):
    ```bash
-   flake8 --max-line-length=180 .                 # Python linting
+   flake8 .                                       # Python linting
    black . && isort .                            # Auto-format code
    python -m py_compile main.py                  # Syntax check
    ```

@@ -25,13 +25,13 @@ Before running scripts or making changes, ensure code quality:
 cd backend
 
 # Run Python linting
-uv run flake8 --max-line-length=180.          # Check code quality
+uv run flake8 .                                 # Check code quality
 uv run black . && uv run isort .              # Auto-format code
 uv run python -m py_compile main.py           # Check syntax
 
 # Alternative (with traditional venv)
 source venv/bin/activate
-flake8 --max-line-length=180 .                 # Check code quality  
+flake8 .                                       # Check code quality  
 black . && isort .                            # Auto-format code
 python -m py_compile main.py                  # Check syntax
 ```

@@ -40,7 +40,7 @@ cd backend
 # Using uv (recommended - fast package manager)
 uv sync                       # Install Python dependencies with uv
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000  # Start FastAPI server with uv
-uv run flake8 --max-line-length=180 .  # Run Python linting with flake8
+uv run flake8 .                                 # Run Python linting with flake8
 uv run python -m py_compile main.py   # Check Python syntax
 
 # Alternative: Traditional pip/venv approach
@@ -48,7 +48,7 @@ python3 -m venv venv          # Create virtual environment (first time only)
 source venv/bin/activate      # Activate virtual environment
 pip install -r requirements.txt  # Install Python dependencies
 uvicorn main:app --reload --host 0.0.0.0 --port 8000  # Start FastAPI server
-flake8 --max-line-length=180 . # Run Python linting (if flake8 installed in venv)
+flake8 .                                       # Run Python linting (if flake8 installed in venv)
 
 # Utilities
 rm db/storage_performance.db  # Remove the db, it will be regenerated on the next run

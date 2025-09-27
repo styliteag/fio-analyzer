@@ -45,14 +45,14 @@ The project uses several tools to maintain high code quality:
 cd backend
 
 # With uv (recommended)
-uv run flake8 --max-line-length=180 .          # Python linting
+uv run flake8 .                                 # Python linting
 uv run black .                               # Code formatting
 uv run isort .                               # Import organization  
 uv run python -m py_compile main.py          # Syntax checking
 
 # With traditional venv (if tools installed)
 source venv/bin/activate
-flake8 --max-line-length=180 .                # Python linting
+flake8 .                                       # Python linting
 black .                                      # Code formatting
 isort .                                      # Import organization
 python -m py_compile main.py                 # Syntax checking
@@ -60,7 +60,7 @@ python -m py_compile main.py                 # Syntax checking
 
 ### Development Workflow
 1. **Make changes** to Python files
-2. **Run linting** to check code quality: `uv run flake8 --max-line-length=180 .`
+2. **Run linting** to check code quality: `uv run flake8 .`
 3. **Auto-format code** if needed: `uv run black . && uv run isort .`
 4. **Test imports** and syntax: `uv run python -m py_compile main.py`
 5. **Start server** to test changes: `uvicorn main:app --reload`

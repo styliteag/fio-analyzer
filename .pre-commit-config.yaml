@@ -21,7 +21,6 @@ repos:
     hooks:
       - id: flake8
         files: ^backend/.*\.py$
-        args: ["--max-line-length=180", "--extend-ignore=E203,W503"]
 
   # JavaScript/TypeScript formatting
   - repo: https://github.com/pre-commit/mirrors-prettier
