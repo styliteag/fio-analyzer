@@ -59,7 +59,7 @@ COPY docker/app/health-check.sh /app/health-check.sh
 # Copy frontend build from builder stage
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
-# Copy scripts for download
+# Copy scripts for download (serve directly from nginx)
 COPY scripts/fio-analyzer-tests.sh /usr/share/nginx/html/fio-analyzer-tests.sh
 COPY scripts/fio-analyzer-tests.sh /usr/share/nginx/html/script.sh
 COPY scripts/.env.example /usr/share/nginx/html/.env.example

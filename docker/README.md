@@ -8,10 +8,10 @@ This directory contains Docker configuration for production deployment in a sing
 Internet -> Single Container (Port 80) -> Nginx -> Frontend (Static) + Backend (Port 8000)
 ```
 
-- **Single Container**: Consolidated architecture with nginx and Node.js
+- **Single Container**: Consolidated architecture with nginx and FastAPI
 - **Nginx**: Serves static files and reverse proxies `/api/*` to backend
 - **Frontend**: React SPA served as optimized static files
-- **Backend**: Node.js/Express API server with authentication
+- **Backend**: Python FastAPI server with authentication
 - **Database**: SQLite with persistent volume
 - **Authentication**: Role-based access control with external user management
 

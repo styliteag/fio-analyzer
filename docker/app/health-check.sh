@@ -50,7 +50,6 @@ else
     exit 1
 fi
 
-
 # Check 5: FastAPI backend on port 8000
 echo -n "5. Checking FastAPI backend on port 8000... "
 if wget --no-verbose --tries=1 --spider http://127.0.0.1:8000/health > /dev/null 2>&1; then
