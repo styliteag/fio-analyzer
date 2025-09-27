@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added dedicated empty state UI with host selector
   - Users must explicitly choose hosts before analysis begins
   - Improved user experience with clear selection interface
+  - Fixed loading state logic to properly show empty state instead of spinner
 
 ### Fixed
 - **Performance Graphs Dark Mode**: Fixed text visibility issues in dark mode across all Performance Graphs components

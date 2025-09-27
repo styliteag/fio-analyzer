@@ -58,7 +58,7 @@ const Host: React.FC = () => {
         resetFilters();
     };
 
-    if (loadingHosts || (loading && selectedHosts.length === 0)) {
+    if (loadingHosts) {
         return (
             <div className="min-h-screen theme-bg-secondary">
                 <DashboardHeader />
@@ -128,6 +128,19 @@ const Host: React.FC = () => {
                             />
                         </Card>
                     </div>
+                </main>
+                <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
+            </div>
+        );
+    }
+
+    // Show loading when hosts are selected but data is still loading
+    if (loading && selectedHosts.length > 0) {
+        return (
+            <div className="min-h-screen theme-bg-secondary">
+                <DashboardHeader />
+                <main className="container mx-auto px-4 py-8">
+                    <Loading />
                 </main>
                 <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
             </div>
