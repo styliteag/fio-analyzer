@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "build:prod": "vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "type-check": "tsc --noEmit",
     "preview": "vite preview",
     "server": "python backend/main.py"
   },
