@@ -33,9 +33,7 @@ def check_imports(file_path: str) -> Tuple[bool, List[str]]:
                     if alias.name == "*":
                         imports.append(module)
                     else:
-                        imports.append(
-                            f"{module}.{alias.name}" if module else alias.name
-                        )
+                        imports.append(f"{module}.{alias.name}" if module else alias.name)
 
         # Check each import
         for imp in imports:
@@ -49,10 +47,7 @@ def check_imports(file_path: str) -> Tuple[bool, List[str]]:
                 if base_module in ["auth", "database", "routers", "utils", "config"]:
                     # Local module - check if file exists
                     local_path = Path(base_module)
-                    if not (
-                        local_path.exists()
-                        or (local_path.parent / f"{base_module}.py").exists()
-                    ):
+                    if not (local_path.exists() or (local_path.parent / f"{base_module}.py").exists()):
                         errors.append(f"Local module '{base_module}' not found")
                 else:
                     # External module - try to import
@@ -128,12 +123,7 @@ def check_undefined_names(file_path: str) -> Tuple[bool, List[str]]:
         for node in ast.walk(tree):
             if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
                 name = node.id
-                if (
-                    name not in defined_names
-                    and name not in imported_names
-                    and name not in __builtins__
-                    and not name.startswith("_")
-                ):  # Skip private/magic names
+                if name not in defined_names and name not in imported_names and name not in __builtins__ and not name.startswith("_"):  # Skip private/magic names
 
                     # Common undefined names we should catch
                     if name in [
@@ -143,9 +133,7 @@ def check_undefined_names(file_path: str) -> Tuple[bool, List[str]]:
                         "File",
                         "UploadFile",
                     ]:
-                        errors.append(
-                            f"Undefined name '{name}' - likely missing import"
-                        )
+                        errors.append(f"Undefined name '{name}' - likely missing import")
 
     except Exception as e:
         errors.append(f"Error checking undefined names: {e}")
@@ -219,13 +207,7 @@ def main():
 
     # Summary
     total_files = len(all_results)
-    passed_files = len(
-        [
-            r
-            for r in all_results
-            if r["syntax_ok"] and r["imports_ok"] and r["undefined_ok"]
-        ]
-    )
+    passed_files = len([r for r in all_results if r["syntax_ok"] and r["imports_ok"] and r["undefined_ok"]])
     failed_files = total_files - passed_files
 
     print("=" * 50)

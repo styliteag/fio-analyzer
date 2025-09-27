@@ -224,13 +224,9 @@ class TestRunService(DatabaseService):
         builder.where_in("drive_model", drive_models or [])
         builder.where_in("protocol", protocols or [])
         builder.where_in("read_write_pattern", patterns or [])
-        builder.where_in(
-            "block_size", [int(bs) for bs in block_sizes] if block_sizes else []
-        )
+        builder.where_in("block_size", [int(bs) for bs in block_sizes] if block_sizes else [])
         builder.where_in("sync", [int(s) for s in syncs] if syncs else [])
-        builder.where_in(
-            "queue_depth", [int(qd) for qd in queue_depths] if queue_depths else []
-        )
+        builder.where_in("queue_depth", [int(qd) for qd in queue_depths] if queue_depths else [])
         builder.where_in("direct", [int(d) for d in directs] if directs else [])
         builder.where_in("num_jobs", [int(nj) for nj in num_jobs] if num_jobs else [])
 
@@ -307,9 +303,7 @@ class TestRunService(DatabaseService):
         parameters = list(updates.values()) + [test_run_id]
         rows_affected = self.execute_write(query, parameters)
 
-        log_info(
-            "Updated test run", {"id": test_run_id, "fields": list(updates.keys())}
-        )
+        log_info("Updated test run", {"id": test_run_id, "fields": list(updates.keys())})
         return rows_affected
 
     def delete_test_run(self, test_run_id: str) -> int:
@@ -340,9 +334,7 @@ class TestRunService(DatabaseService):
         for column in filter_columns:
             query = f"SELECT DISTINCT {column} FROM {self.table} WHERE {column} IS NOT NULL ORDER BY {column}"
             results = self.execute_query(query)
-            filters[column] = [
-                str(row[column]) for row in results if row[column] is not None
-            ]
+            filters[column] = [str(row[column]) for row in results if row[column] is not None]
 
         return filters
 

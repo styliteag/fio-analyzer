@@ -29,9 +29,7 @@ class DatabaseManager:
         log_info("Initializing database connection", {"db_path": str(self.db_path)})
 
         try:
-            self._connection = sqlite3.connect(
-                str(self.db_path), check_same_thread=False
-            )
+            self._connection = sqlite3.connect(str(self.db_path), check_same_thread=False)
             self._connection.row_factory = sqlite3.Row  # Enable column access by name
 
             log_info(
@@ -194,9 +192,7 @@ class DatabaseManager:
         ]
 
         for index_name, table_name, columns in indexes:
-            cursor.execute(
-                f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({columns})"
-            )
+            cursor.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({columns})")
 
     def _create_views(self, cursor: sqlite3.Cursor):
         """Create database views"""
@@ -266,9 +262,7 @@ class DatabaseManager:
         for server in servers:
             for drive_model, drive_type in server["drives"]:
                 for day_offset in range(0, 30, 2 + random.randint(0, 3)):
-                    timestamp = (
-                        datetime.now(timezone.utc) - timedelta(days=day_offset)
-                    ).isoformat()
+                    timestamp = (datetime.now(timezone.utc) - timedelta(days=day_offset)).isoformat()
 
                     block_size = random.choice(block_sizes)
                     pattern = random.choice(patterns)
@@ -277,17 +271,9 @@ class DatabaseManager:
                     test_name = f"{server['hostname']}_{pattern}_{block_size}"
 
                     # Calculate realistic metrics
-                    fake_iops = int(
-                        get_base_iops(drive_type, pattern, block_size)
-                        * (0.8 + random.random() * 0.4)
-                    )
-                    fake_latency = get_base_latency(drive_type, pattern) * (
-                        0.8 + random.random() * 0.4
-                    )
-                    fake_bandwidth = int(
-                        get_base_bandwidth(drive_type, pattern, block_size)
-                        * (0.8 + random.random() * 0.4)
-                    )
+                    fake_iops = int(get_base_iops(drive_type, pattern, block_size) * (0.8 + random.random() * 0.4))
+                    fake_latency = get_base_latency(drive_type, pattern) * (0.8 + random.random() * 0.4)
+                    fake_bandwidth = int(get_base_bandwidth(drive_type, pattern, block_size) * (0.8 + random.random() * 0.4))
 
                     # Generate job options
                     num_jobs = random.choice([1, 2, 4, 8])

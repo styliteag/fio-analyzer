@@ -56,9 +56,7 @@ router = APIRouter()
         500: {"description": "Internal server error"},
     },
 )
-@router.get(
-    "/filters/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.get("/filters/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_filters(
     request: Request,
     user: User = Depends(require_admin),
@@ -206,9 +204,7 @@ async def get_filters(
     },
     tags=["API Info"],
 )
-@router.get(
-    "/info/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.get("/info/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_api_info():
     """
     Retrieve basic information about the FIO Analyzer API.

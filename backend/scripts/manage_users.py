@@ -71,9 +71,7 @@ def list_users(file_path: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Manage FIO Analyzer users")
-    parser.add_argument(
-        "action", choices=["add", "remove", "list"], help="Action to perform"
-    )
+    parser.add_argument("action", choices=["add", "remove", "list"], help="Action to perform")
     parser.add_argument("--username", "-u", help="Username")
     parser.add_argument("--password", "-p", help="Password")
     parser.add_argument(

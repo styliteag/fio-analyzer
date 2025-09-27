@@ -313,9 +313,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
     # Extract first validation error and create simple error message
     error_detail = exc.errors()[0] if exc.errors() else {}
-    field_name = error_detail.get("loc", ["unknown"])[
-        -1
-    ]  # Get the last part of the location
+    field_name = error_detail.get("loc", ["unknown"])[-1]  # Get the last part of the location
     error_type = error_detail.get("type", "validation_error")
 
     # Create user-friendly error message

@@ -24,6 +24,19 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["."]
 
+[tool.black]
+line-length = 180
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 180
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

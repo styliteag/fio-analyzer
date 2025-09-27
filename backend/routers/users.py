@@ -85,9 +85,7 @@ def validate_user_operation(username: str, current_username: str, operation: str
     if operation == "delete":
         admin_users = parse_htpasswd(settings.htpasswd_path) or {}
         if len(admin_users) <= 1 and username in admin_users:
-            raise HTTPException(
-                status_code=400, detail="Cannot delete the last admin user"
-            )
+            raise HTTPException(status_code=400, detail="Cannot delete the last admin user")
 
 
 @router.get("/", response_model=List[UserResponse])
@@ -120,9 +118,7 @@ async def create_user(user_data: UserCreate, current_user=Depends(require_admin)
         uploader_users = parse_htpasswd(settings.htuploaders_path) or {}
 
         if user_data.username in admin_users or user_data.username in uploader_users:
-            raise HTTPException(
-                status_code=400, detail=f"User '{user_data.username}' already exists"
-            )
+            raise HTTPException(status_code=400, detail=f"User '{user_data.username}' already exists")
 
         # Hash password and add user to appropriate file
         password_hash = hash_password(user_data.password)
@@ -173,9 +169,7 @@ async def get_user(username: str, current_user=Depends(require_admin)):
 
 
 @router.put("/{username}", response_model=UserResponse)
-async def update_user(
-    username: str, user_data: UserUpdate, current_user=Depends(require_admin)
-):
+async def update_user(username: str, user_data: UserUpdate, current_user=Depends(require_admin)):
     """Update user (admin only)"""
     try:
         # Find current user and role
@@ -199,9 +193,7 @@ async def update_user(
             current_users = parse_htpasswd(current_file_path) or {}
 
             if username not in current_users:
-                raise HTTPException(
-                    status_code=404, detail="User not found in current role file"
-                )
+                raise HTTPException(status_code=404, detail="User not found in current role file")
 
             password_hash = current_users[username]
             del current_users[username]

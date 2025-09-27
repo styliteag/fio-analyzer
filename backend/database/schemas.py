@@ -13,48 +13,24 @@ from pydantic import BaseModel, Field, validator
 class TestRunFilters(BaseModel):
     """Request model for test run filtering"""
 
-    hostnames: Optional[str] = Field(
-        None, description="Comma-separated hostnames to filter"
-    )
-    drive_types: Optional[str] = Field(
-        None, description="Comma-separated drive types to filter"
-    )
-    drive_models: Optional[str] = Field(
-        None, description="Comma-separated drive models to filter"
-    )
-    protocols: Optional[str] = Field(
-        None, description="Comma-separated protocols to filter"
-    )
-    patterns: Optional[str] = Field(
-        None, description="Comma-separated patterns to filter"
-    )
-    block_sizes: Optional[str] = Field(
-        None, description="Comma-separated block sizes to filter"
-    )
-    syncs: Optional[str] = Field(
-        None, description="Comma-separated sync values to filter"
-    )
-    queue_depths: Optional[str] = Field(
-        None, description="Comma-separated queue depths to filter"
-    )
-    directs: Optional[str] = Field(
-        None, description="Comma-separated direct values to filter"
-    )
-    num_jobs: Optional[str] = Field(
-        None, description="Comma-separated num_jobs values to filter"
-    )
+    hostnames: Optional[str] = Field(None, description="Comma-separated hostnames to filter")
+    drive_types: Optional[str] = Field(None, description="Comma-separated drive types to filter")
+    drive_models: Optional[str] = Field(None, description="Comma-separated drive models to filter")
+    protocols: Optional[str] = Field(None, description="Comma-separated protocols to filter")
+    patterns: Optional[str] = Field(None, description="Comma-separated patterns to filter")
+    block_sizes: Optional[str] = Field(None, description="Comma-separated block sizes to filter")
+    syncs: Optional[str] = Field(None, description="Comma-separated sync values to filter")
+    queue_depths: Optional[str] = Field(None, description="Comma-separated queue depths to filter")
+    directs: Optional[str] = Field(None, description="Comma-separated direct values to filter")
+    num_jobs: Optional[str] = Field(None, description="Comma-separated num_jobs values to filter")
 
     # Pagination
-    limit: Optional[int] = Field(
-        None, ge=1, le=1000, description="Maximum number of results to return"
-    )
+    limit: Optional[int] = Field(None, ge=1, le=1000, description="Maximum number of results to return")
     offset: Optional[int] = Field(None, ge=0, description="Number of results to skip")
 
     # Sorting
     order_by: Optional[str] = Field("timestamp", description="Column to sort by")
-    order_direction: Optional[str] = Field(
-        "DESC", description="Sort direction (ASC or DESC)"
-    )
+    order_direction: Optional[str] = Field("DESC", description="Sort direction (ASC or DESC)")
 
     @validator("order_direction")
     def validate_order_direction(cls, v):
@@ -140,12 +116,8 @@ class TimeSeriesFilters(BaseModel):
 
     hostname: Optional[str] = Field(None, description="Hostname to filter by")
     drive_model: Optional[str] = Field(None, description="Drive model to filter by")
-    metric: str = Field(
-        "iops", description="Metric to return (iops, latency, bandwidth)"
-    )
-    days: Optional[int] = Field(
-        30, ge=1, le=365, description="Number of days of data to return"
-    )
+    metric: str = Field("iops", description="Metric to return (iops, latency, bandwidth)")
+    days: Optional[int] = Field(30, ge=1, le=365, description="Number of days of data to return")
 
     @validator("metric")
     def validate_metric(cls, v):

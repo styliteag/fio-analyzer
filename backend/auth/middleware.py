@@ -38,11 +38,7 @@ def get_current_user(request: Request) -> Optional[User]:
         {
             "request_id": request_id,
             "auth_header_present": auth_header is not None,
-            "auth_header_value": (
-                auth_header[:20] + "..."
-                if auth_header and len(auth_header) > 20
-                else auth_header
-            ),
+            "auth_header_value": (auth_header[:20] + "..." if auth_header and len(auth_header) > 20 else auth_header),
         },
     )
 

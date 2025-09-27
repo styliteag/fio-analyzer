@@ -62,9 +62,7 @@ router = APIRouter()
                         },
                         "invalid_json": {
                             "summary": "Malformed JSON",
-                            "value": {
-                                "error": "Invalid JSON format: Expecting ',' delimiter"
-                            },
+                            "value": {"error": "Invalid JSON format: Expecting ',' delimiter"},
                         },
                     }
                 }
@@ -75,9 +73,7 @@ router = APIRouter()
         500: {"description": "Internal server error during import"},
     },
 )
-@router.post(
-    "", include_in_schema=False
-)  # Handle route without trailing slash but hide from docs
+@router.post("", include_in_schema=False)  # Handle route without trailing slash but hide from docs
 async def import_fio_data(
     request: Request,
     file: UploadFile = File(
@@ -91,18 +87,14 @@ async def import_fio_data(
         example="Samsung SSD 980 PRO",
         max_length=255,
     ),
-    drive_type: str = Form(
-        ..., description="Storage technology type", example="NVMe", max_length=100
-    ),
+    drive_type: str = Form(..., description="Storage technology type", example="NVMe", max_length=100),
     hostname: str = Form(
         ...,
         description="Server hostname where the test was executed",
         example="server-01",
         max_length=255,
     ),
-    protocol: str = Form(
-        ..., description="Storage access protocol", example="Local", max_length=100
-    ),
+    protocol: str = Form(..., description="Storage access protocol", example="Local", max_length=100),
     description: str = Form(
         ...,
         description="Human-readable description of the test",
@@ -166,9 +158,7 @@ async def import_fio_data(
         try:
             fio_data = json.loads(content.decode("utf-8"))
         except json.JSONDecodeError as e:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid JSON format: {str(e)}"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
 
         # Extract test run data from FIO JSON
         test_run_data = extract_test_run_data(fio_data, file.filename)
@@ -195,9 +185,7 @@ async def import_fio_data(
         file_path = save_uploaded_file(content, file.filename, test_run_data)
 
         # Create metadata file (matching Node.js behavior)
-        metadata_path = create_metadata_file(
-            file_path, test_run_data, user.username, file.filename
-        )
+        metadata_path = create_metadata_file(file_path, test_run_data, user.username, file.filename)
 
         # Insert into database with file path
         test_run_id = insert_test_run(db, test_run_data, file_path)
@@ -280,17 +268,13 @@ async def import_fio_data(
                 }
             },
         },
-        400: {
-            "description": "Invalid request parameters or uploads directory not found"
-        },
+        400: {"description": "Invalid request parameters or uploads directory not found"},
         401: {"description": "Authentication required"},
         403: {"description": "Admin access required"},
         500: {"description": "Internal server error during bulk import"},
     },
 )
-@router.post(
-    "/bulk/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.post("/bulk/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def bulk_import_fio_data(
     request: Request,
     bulk_request: Dict[str, Any] = Body(
@@ -411,15 +395,11 @@ async def bulk_import_fio_data(
                 # Use timestamp from .info file if available
                 if metadata.get("upload_timestamp"):
                     test_run_data["timestamp"] = metadata["upload_timestamp"]
-                    test_run_data["test_date"] = metadata.get(
-                        "test_date", metadata["upload_timestamp"]
-                    )
+                    test_run_data["test_date"] = metadata.get("test_date", metadata["upload_timestamp"])
 
                 if dry_run:
                     # For dry run, just collect metadata
-                    dry_run_results.append(
-                        {"path": str(json_file), "metadata": test_run_data}
-                    )
+                    dry_run_results.append({"path": str(json_file), "metadata": test_run_data})
                     processed_files += 1
                 else:
                     # Check if test run already exists with more specific criteria
@@ -459,9 +439,7 @@ async def bulk_import_fio_data(
                     processed_files += 1
 
             except Exception as e:
-                log_error(
-                    f"Error processing file {json_file}", e, {"request_id": request_id}
-                )
+                log_error(f"Error processing file {json_file}", e, {"request_id": request_id})
                 error_files += 1
 
         log_info(
@@ -586,9 +564,7 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
         "block_size": (job_opts.get("bs") or global_opts.get("bs") or "4k").upper(),
         "read_write_pattern": job_opts.get("rw") or global_opts.get("rw") or "read",
         "queue_depth": int(job_opts.get("iodepth") or global_opts.get("iodepth") or 1),
-        "output_file": job_opts.get("filename")
-        or global_opts.get("filename")
-        or "testfile",
+        "output_file": job_opts.get("filename") or global_opts.get("filename") or "testfile",
         "num_jobs": int(job_opts.get("numjobs") or global_opts.get("numjobs") or 1),
         "direct": int(job_opts.get("direct") or global_opts.get("direct") or 0),
         "test_size": job_opts.get("size") or global_opts.get("size") or "1M",
@@ -649,9 +625,7 @@ def extract_latency(job: Dict[str, Any]) -> float:
     write_lat = job.get("write", {}).get("lat_ns", {}).get("mean", 0)
 
     # Convert nanoseconds to milliseconds
-    total_ios = job.get("read", {}).get("io_ops", 0) + job.get("write", {}).get(
-        "io_ops", 0
-    )
+    total_ios = job.get("read", {}).get("io_ops", 0) + job.get("write", {}).get("io_ops", 0)
     if total_ios == 0:
         return 0.0
 
@@ -695,27 +669,15 @@ def extract_percentile_latency(job: Dict[str, Any], percentile: int) -> float:
     Returns:
         Percentile latency in milliseconds
     """
-    read_lat = (
-        job.get("read", {})
-        .get("clat_ns", {})
-        .get("percentile", {})
-        .get(f"{percentile}.000000", 0)
-    )
-    write_lat = (
-        job.get("write", {})
-        .get("clat_ns", {})
-        .get("percentile", {})
-        .get(f"{percentile}.000000", 0)
-    )
+    read_lat = job.get("read", {}).get("clat_ns", {}).get("percentile", {}).get(f"{percentile}.000000", 0)
+    write_lat = job.get("write", {}).get("clat_ns", {}).get("percentile", {}).get(f"{percentile}.000000", 0)
 
     # Use the higher of read/write latency
     max_lat = max(read_lat, write_lat)
     return max_lat / 1000000  # Convert ns to ms
 
 
-def insert_test_run(
-    db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None
-) -> int:
+def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> int:
     """
     Insert test run data into both current and historical database tables.
 
@@ -799,9 +761,7 @@ def insert_test_run(
     return test_run_id
 
 
-def save_uploaded_file(
-    content: bytes, filename: str, test_run_data: Dict[str, Any]
-) -> str:
+def save_uploaded_file(content: bytes, filename: str, test_run_data: Dict[str, Any]) -> str:
     """
     Save uploaded file to organized directory structure on disk.
 
@@ -824,13 +784,7 @@ def save_uploaded_file(
     protocol = test_run_data.get("protocol", "unknown")
     timestamp = datetime.now(timezone.utc)
 
-    dir_path = (
-        settings.upload_dir
-        / hostname
-        / protocol
-        / timestamp.strftime("%Y-%m-%d")
-        / timestamp.strftime("%H-%M")
-    )
+    dir_path = settings.upload_dir / hostname / protocol / timestamp.strftime("%Y-%m-%d") / timestamp.strftime("%H-%M")
 
     dir_path.mkdir(parents=True, exist_ok=True)
 
@@ -844,9 +798,7 @@ def save_uploaded_file(
     return str(file_path)
 
 
-def create_metadata_file(
-    file_path: str, test_run_data: Dict[str, Any], username: str, original_filename: str
-) -> str:
+def create_metadata_file(file_path: str, test_run_data: Dict[str, Any], username: str, original_filename: str) -> str:
     """
     Create a metadata (.info) file alongside the uploaded JSON file.
 

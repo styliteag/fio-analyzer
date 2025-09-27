@@ -60,9 +60,7 @@ router = APIRouter()
         500: {"description": "Internal server error"},
     },
 )
-@router.get(
-    "", include_in_schema=False
-)  # Handle route without trailing slash but hide from docs
+@router.get("", include_in_schema=False)  # Handle route without trailing slash but hide from docs
 async def get_test_runs(
     request: Request,
     hostnames: Optional[str] = Query(
@@ -132,9 +130,7 @@ async def get_test_runs(
         description="Maximum number of test runs to return",
         example=100,
     ),
-    offset: int = Query(
-        0, ge=0, description="Number of test runs to skip for pagination", example=0
-    ),
+    offset: int = Query(0, ge=0, description="Number of test runs to skip for pagination", example=0),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -272,9 +268,7 @@ async def get_test_runs(
         test_runs = []
         for row in rows:
             test_run_data = dict(row)
-            test_run_data["block_size"] = str(
-                test_run_data["block_size"]
-            )  # Ensure string
+            test_run_data["block_size"] = str(test_run_data["block_size"])  # Ensure string
             test_runs.append(test_run_data)
 
         log_info(
@@ -325,9 +319,7 @@ async def get_test_runs(
         500: {"description": "Internal server error"},
     },
 )
-@router.put(
-    "/bulk/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.put("/bulk/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def bulk_update_test_runs(
     request: Request,
     bulk_request: BulkUpdateRequest,
@@ -367,9 +359,7 @@ async def bulk_update_test_runs(
     try:
         # Validate that we have updates to apply
 
-        updates = {
-            k: v for k, v in asdict(bulk_request.updates).items() if v is not None
-        }
+        updates = {k: v for k, v in asdict(bulk_request.updates).items() if v is not None}
         if not updates:
             raise HTTPException(status_code=400, detail="No updates provided")
 
@@ -468,9 +458,7 @@ async def bulk_update_test_runs(
         500: {"description": "Internal server error"},
     },
 )
-@router.get(
-    "/performance-data/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.get("/performance-data/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_performance_data(
     request: Request,
     test_run_ids: str = Query(
@@ -552,31 +540,11 @@ async def get_performance_data(
                     "iodepth": test_run_data["iodepth"],
                     "duration": test_run_data["duration"],
                     "metrics": {
-                        "avg_latency": (
-                            {"value": test_run_data["avg_latency"], "unit": "ms"}
-                            if test_run_data["avg_latency"] is not None
-                            else None
-                        ),
-                        "bandwidth": (
-                            {"value": test_run_data["bandwidth"], "unit": "MB/s"}
-                            if test_run_data["bandwidth"] is not None
-                            else None
-                        ),
-                        "iops": (
-                            {"value": test_run_data["iops"], "unit": "IOPS"}
-                            if test_run_data["iops"] is not None
-                            else None
-                        ),
-                        "p95_latency": (
-                            {"value": test_run_data["p95_latency"], "unit": "ms"}
-                            if test_run_data["p95_latency"] is not None
-                            else None
-                        ),
-                        "p99_latency": (
-                            {"value": test_run_data["p99_latency"], "unit": "ms"}
-                            if test_run_data["p99_latency"] is not None
-                            else None
-                        ),
+                        "avg_latency": ({"value": test_run_data["avg_latency"], "unit": "ms"} if test_run_data["avg_latency"] is not None else None),
+                        "bandwidth": ({"value": test_run_data["bandwidth"], "unit": "MB/s"} if test_run_data["bandwidth"] is not None else None),
+                        "iops": ({"value": test_run_data["iops"], "unit": "IOPS"} if test_run_data["iops"] is not None else None),
+                        "p95_latency": ({"value": test_run_data["p95_latency"], "unit": "ms"} if test_run_data["p95_latency"] is not None else None),
+                        "p99_latency": ({"value": test_run_data["p99_latency"], "unit": "ms"} if test_run_data["p99_latency"] is not None else None),
                     },
                 }
 
@@ -595,9 +563,7 @@ async def get_performance_data(
 
     except Exception as e:
         log_error("Error retrieving performance data", e, {"request_id": request_id})
-        raise HTTPException(
-            status_code=500, detail="Failed to retrieve performance data"
-        )
+        raise HTTPException(status_code=500, detail="Failed to retrieve performance data")
 
 
 @router.get(
@@ -709,11 +675,7 @@ async def get_test_run(
     responses={
         200: {
             "description": "Test run updated successfully",
-            "content": {
-                "application/json": {
-                    "example": {"message": "Test run updated successfully"}
-                }
-            },
+            "content": {"application/json": {"example": {"message": "Test run updated successfully"}}},
         },
         400: {"description": "Invalid field names or values provided"},
         401: {"description": "Authentication required"},
@@ -724,9 +686,7 @@ async def get_test_run(
 )
 async def update_test_run(
     request: Request,
-    test_run_id: int = Path(
-        ..., description="Unique identifier of the test run to update", example=1, gt=0
-    ),
+    test_run_id: int = Path(..., description="Unique identifier of the test run to update", example=1, gt=0),
     update_data: dict = Body(
         ...,
         description="Fields to update with their new values",
@@ -773,9 +733,7 @@ async def update_test_run(
         submitted_fields = list(update_data.keys())
 
         # Check for invalid fields
-        invalid_fields = [
-            field for field in submitted_fields if field not in allowed_fields
-        ]
+        invalid_fields = [field for field in submitted_fields if field not in allowed_fields]
         if invalid_fields:
             raise HTTPException(
                 status_code=400,
@@ -793,11 +751,7 @@ async def update_test_run(
         }
 
         for field, value in update_data.items():
-            if (
-                value
-                and field in validation
-                and len(str(value)) > validation[field]["maxLength"]
-            ):
+            if value and field in validation and len(str(value)) > validation[field]["maxLength"]:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Field '{field}' exceeds maximum length of {validation[field]['maxLength']} characters",
@@ -887,11 +841,7 @@ async def update_test_run(
     responses={
         200: {
             "description": "Test run deleted successfully",
-            "content": {
-                "application/json": {
-                    "example": {"message": "Test run deleted successfully"}
-                }
-            },
+            "content": {"application/json": {"example": {"message": "Test run deleted successfully"}}},
         },
         401: {"description": "Authentication required"},
         403: {"description": "Admin access required"},
@@ -901,9 +851,7 @@ async def update_test_run(
 )
 async def delete_test_run(
     request: Request,
-    test_run_id: int = Path(
-        ..., description="Unique identifier of the test run to delete", example=1, gt=0
-    ),
+    test_run_id: int = Path(..., description="Unique identifier of the test run to delete", example=1, gt=0),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db),
 ):

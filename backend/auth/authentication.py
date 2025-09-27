@@ -61,11 +61,7 @@ def parse_htpasswd(file_path: Path) -> Optional[Dict[str, str]]:
 def verify_password(password: str, hash_value: str) -> bool:
     """Verify password against hash"""
     try:
-        if (
-            hash_value.startswith("$2y$")
-            or hash_value.startswith("$2a$")
-            or hash_value.startswith("$2b$")
-        ):
+        if hash_value.startswith("$2y$") or hash_value.startswith("$2a$") or hash_value.startswith("$2b$"):
             # Bcrypt format
             return bcrypt.checkpw(password.encode("utf-8"), hash_value.encode("utf-8"))
         elif hash_value.startswith("$apr1$"):
@@ -95,9 +91,7 @@ def is_admin_user(username: str, password: str) -> bool:
             "Admin authentication failed",
             {
                 "username": username,
-                "reason": (
-                    "no_htpasswd_file" if not htpasswd_users else "user_not_found"
-                ),
+                "reason": ("no_htpasswd_file" if not htpasswd_users else "user_not_found"),
             },
         )
         return False
@@ -105,9 +99,7 @@ def is_admin_user(username: str, password: str) -> bool:
     hash_value = htpasswd_users[username]
     is_valid = verify_password(password, hash_value)
 
-    log_debug(
-        "Admin authentication attempt", {"username": username, "success": is_valid}
-    )
+    log_debug("Admin authentication attempt", {"username": username, "success": is_valid})
 
     return is_valid
 
@@ -120,9 +112,7 @@ def is_uploader_user(username: str, password: str) -> bool:
             "Uploader authentication failed",
             {
                 "username": username,
-                "reason": (
-                    "no_htuploaders_file" if not htuploaders_users else "user_not_found"
-                ),
+                "reason": ("no_htuploaders_file" if not htuploaders_users else "user_not_found"),
             },
         )
         return False
@@ -130,9 +120,7 @@ def is_uploader_user(username: str, password: str) -> bool:
     hash_value = htuploaders_users[username]
     is_valid = verify_password(password, hash_value)
 
-    log_debug(
-        "Uploader authentication attempt", {"username": username, "success": is_valid}
-    )
+    log_debug("Uploader authentication attempt", {"username": username, "success": is_valid})
 
     return is_valid
 
@@ -173,11 +161,7 @@ def get_user_role(username: str, password: str) -> Optional[str]:
 
     # Clean old cache entries periodically (simple cleanup)
     if len(_auth_cache) > 100:  # Arbitrary limit
-        expired_keys = [
-            k
-            for k, (_, ts) in _auth_cache.items()
-            if current_time - ts > _cache_duration
-        ]
+        expired_keys = [k for k, (_, ts) in _auth_cache.items() if current_time - ts > _cache_duration]
         for key in expired_keys:
             del _auth_cache[key]
         log_debug("Cleaned expired auth cache entries", {"removed": len(expired_keys)})

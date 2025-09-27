@@ -50,9 +50,7 @@ router = APIRouter()
         500: {"description": "Internal server error"},
     },
 )
-@router.get(
-    "/servers/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.get("/servers/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_servers(
     request: Request,
     user: User = Depends(require_admin),
@@ -183,9 +181,7 @@ async def get_servers(
         500: {"description": "Internal server error"},
     },
 )
-@router.get(
-    "/all/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.get("/all/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_all_time_series(
     request: Request,
     hostnames: Optional[str] = Query(
@@ -255,9 +251,7 @@ async def get_all_time_series(
         description="Maximum number of records to return",
         example=500,
     ),
-    offset: int = Query(
-        0, ge=0, description="Number of records to skip for pagination", example=0
-    ),
+    offset: int = Query(0, ge=0, description="Number of records to skip for pagination", example=0),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -392,9 +386,7 @@ async def get_all_time_series(
         results = []
         for row in cursor.fetchall():
             test_run_data = dict(row)
-            test_run_data["block_size"] = str(
-                test_run_data["block_size"]
-            )  # Ensure string
+            test_run_data["block_size"] = str(test_run_data["block_size"])  # Ensure string
             results.append(test_run_data)
 
         log_info(
@@ -422,12 +414,8 @@ async def get_all_time_series(
         return results
 
     except Exception as e:
-        log_error(
-            "Error retrieving all time series data", e, {"request_id": request_id}
-        )
-        raise HTTPException(
-            status_code=500, detail="Failed to retrieve all time series data"
-        )
+        log_error("Error retrieving all time series data", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to retrieve all time series data")
 
 
 @router.get(
@@ -476,9 +464,7 @@ async def get_all_time_series(
         500: {"description": "Internal server error"},
     },
 )
-@router.get(
-    "/latest/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.get("/latest/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_latest_time_series(
     request: Request,
     hostnames: Optional[str] = Query(
@@ -603,12 +589,8 @@ async def get_latest_time_series(
         return results
 
     except Exception as e:
-        log_error(
-            "Error retrieving latest time series data", e, {"request_id": request_id}
-        )
-        raise HTTPException(
-            status_code=500, detail="Failed to retrieve latest time series data"
-        )
+        log_error("Error retrieving latest time series data", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to retrieve latest time series data")
 
 
 @router.get(
@@ -646,9 +628,7 @@ async def get_latest_time_series(
         500: {"description": "Internal server error"},
     },
 )
-@router.get(
-    "/history/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.get("/history/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_historical_time_series(
     request: Request,
     hostname: Optional[str] = Query(
@@ -661,26 +641,16 @@ async def get_historical_time_series(
         description="Comma-separated list of hostnames (alternative to hostname parameter)",
         example="server-01,server-02",
     ),
-    protocol: Optional[str] = Query(
-        None, description="Storage protocol to filter by", example="Local"
-    ),
+    protocol: Optional[str] = Query(None, description="Storage protocol to filter by", example="Local"),
     drive_model: Optional[str] = Query(
         None,
         description="Specific drive model to filter by",
         example="Samsung SSD 980 PRO",
     ),
-    drive_type: Optional[str] = Query(
-        None, description="Drive technology type to filter by", example="NVMe"
-    ),
-    block_size: Optional[str] = Query(
-        None, description="I/O block size to filter by", example="4K"
-    ),
-    read_write_pattern: Optional[str] = Query(
-        None, description="I/O access pattern to filter by", example="randread"
-    ),
-    queue_depth: Optional[int] = Query(
-        None, description="I/O queue depth to filter by", example=32
-    ),
+    drive_type: Optional[str] = Query(None, description="Drive technology type to filter by", example="NVMe"),
+    block_size: Optional[str] = Query(None, description="I/O block size to filter by", example="4K"),
+    read_write_pattern: Optional[str] = Query(None, description="I/O access pattern to filter by", example="randread"),
+    queue_depth: Optional[int] = Query(None, description="I/O queue depth to filter by", example=32),
     metric_type: Optional[str] = Query(
         None,
         description="Filter to show only records with non-null values for this metric",
@@ -693,23 +663,15 @@ async def get_historical_time_series(
         ge=1,
         le=365,
     ),
-    test_size: Optional[str] = Query(
-        None, description="Test data size to filter by", example="10G"
-    ),
-    sync: Optional[int] = Query(
-        None, description="Sync flag to filter by (0=async, 1=sync)", example=0
-    ),
+    test_size: Optional[str] = Query(None, description="Test data size to filter by", example="10G"),
+    sync: Optional[int] = Query(None, description="Sync flag to filter by (0=async, 1=sync)", example=0),
     direct: Optional[int] = Query(
         None,
         description="Direct I/O flag to filter by (0=buffered, 1=direct)",
         example=1,
     ),
-    num_jobs: Optional[int] = Query(
-        None, description="Number of concurrent jobs to filter by", example=4
-    ),
-    duration: Optional[int] = Query(
-        None, description="Test duration in seconds to filter by", example=300
-    ),
+    num_jobs: Optional[int] = Query(None, description="Number of concurrent jobs to filter by", example=4),
+    duration: Optional[int] = Query(None, description="Test duration in seconds to filter by", example=300),
     start_date: Optional[str] = Query(
         None,
         description="Start date for data range in ISO format (overrides days parameter)",
@@ -727,9 +689,7 @@ async def get_historical_time_series(
         description="Maximum number of records to return",
         example=1000,
     ),
-    offset: int = Query(
-        0, ge=0, description="Number of records to skip for pagination", example=0
-    ),
+    offset: int = Query(0, ge=0, description="Number of records to skip for pagination", example=0),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -939,9 +899,7 @@ async def get_historical_time_series(
             e,
             {"request_id": request_id},
         )
-        raise HTTPException(
-            status_code=500, detail="Failed to retrieve historical time series data"
-        )
+        raise HTTPException(status_code=500, detail="Failed to retrieve historical time series data")
 
 
 @router.get(
@@ -987,9 +945,7 @@ async def get_historical_time_series(
         500: {"description": "Internal server error"},
     },
 )
-@router.get(
-    "/trends/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.get("/trends/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_trends(
     request: Request,
     hostname: str = Query(
@@ -1119,11 +1075,7 @@ async def get_trends(
             "avg_value": sum(values) / len(values),
             "first_value": values[0],
             "last_value": values[-1],
-            "overall_change": (
-                f"{((values[-1] - values[0]) / values[0]) * 100:.2f}%"
-                if values[0] != 0
-                else "N/A"
-            ),
+            "overall_change": (f"{((values[-1] - values[0]) / values[0]) * 100:.2f}%" if values[0] != 0 else "N/A"),
         }
 
         log_info(
@@ -1162,17 +1114,13 @@ async def get_trends(
                 }
             },
         },
-        400: {
-            "description": "Invalid request data, missing fields, or no valid updates"
-        },
+        400: {"description": "Invalid request data, missing fields, or no valid updates"},
         401: {"description": "Authentication required"},
         403: {"description": "Admin access required"},
         500: {"description": "Internal server error during update"},
     },
 )
-@router.put(
-    "/bulk/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.put("/bulk/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def bulk_update_time_series(
     request: Request,
     bulk_request: dict = Body(
@@ -1235,11 +1183,7 @@ async def bulk_update_time_series(
         updates = bulk_request.get("updates")
 
         # Validate required fields
-        if (
-            not test_run_ids
-            or not isinstance(test_run_ids, list)
-            or len(test_run_ids) == 0
-        ):
+        if not test_run_ids or not isinstance(test_run_ids, list) or len(test_run_ids) == 0:
             raise HTTPException(
                 status_code=400,
                 detail="testRunIds array is required and must not be empty",
@@ -1260,9 +1204,7 @@ async def bulk_update_time_series(
         submitted_fields = list(updates.keys())
 
         # Check for invalid fields
-        invalid_fields = [
-            field for field in submitted_fields if field not in allowed_fields
-        ]
+        invalid_fields = [field for field in submitted_fields if field not in allowed_fields]
         if invalid_fields:
             raise HTTPException(
                 status_code=400,
@@ -1357,9 +1299,7 @@ async def bulk_update_time_series(
         raise
     except Exception as e:
         log_error("Error during bulk time-series update", e, {"request_id": request_id})
-        raise HTTPException(
-            status_code=500, detail="Failed to update time-series test runs"
-        )
+        raise HTTPException(status_code=500, detail="Failed to update time-series test runs")
 
 
 @router.delete(
@@ -1378,9 +1318,7 @@ async def bulk_update_time_series(
         500: {"description": "Internal server error during deletion"},
     },
 )
-@router.delete(
-    "/delete/", include_in_schema=False
-)  # Handle with trailing slash but hide from docs
+@router.delete("/delete/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def delete_time_series(
     request: Request,
     delete_request: dict = Body(
@@ -1436,11 +1374,7 @@ async def delete_time_series(
         test_run_ids = delete_request.get("testRunIds")
 
         # Validate required fields
-        if (
-            not test_run_ids
-            or not isinstance(test_run_ids, list)
-            or len(test_run_ids) == 0
-        ):
+        if not test_run_ids or not isinstance(test_run_ids, list) or len(test_run_ids) == 0:
             raise HTTPException(
                 status_code=400,
                 detail="testRunIds array is required and must not be empty",
@@ -1453,9 +1387,7 @@ async def delete_time_series(
         int_test_run_ids = [int(test_id) for test_id in test_run_ids]
 
         # Delete from test_runs_all
-        cursor.execute(
-            f"DELETE FROM test_runs_all WHERE id IN ({placeholders})", int_test_run_ids
-        )
+        cursor.execute(f"DELETE FROM test_runs_all WHERE id IN ({placeholders})", int_test_run_ids)
         deleted = cursor.rowcount
         not_found = len(test_run_ids) - deleted
 
@@ -1478,9 +1410,7 @@ async def delete_time_series(
         raise
     except Exception as e:
         log_error("Error during time-series delete", e, {"request_id": request_id})
-        raise HTTPException(
-            status_code=500, detail="Failed to delete time-series test runs"
-        )
+        raise HTTPException(status_code=500, detail="Failed to delete time-series test runs")
 
 
 def get_metric_unit(metric: str) -> str:

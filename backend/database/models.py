@@ -157,7 +157,5 @@ def dict_to_test_run(data: Dict[str, Any]) -> TestRun:
     """Convert dictionary to TestRun dataclass"""
     # Filter out None values and unknown fields
     known_fields = {f.name for f in TestRun.__dataclass_fields__.values()}
-    filtered_data = {
-        k: v for k, v in data.items() if k in known_fields and v is not None
-    }
+    filtered_data = {k: v for k, v in data.items() if k in known_fields and v is not None}
     return TestRun(**filtered_data)

@@ -84,9 +84,7 @@ def check_fastapi_imports(file_path: str):
         else:
             if missing_imports:
                 print(f"  ❌ Missing FastAPI imports: {missing_imports}")
-                print(
-                    f"     Add to imports: from fastapi import {', '.join(missing_imports)}"
-                )
+                print(f"     Add to imports: from fastapi import {', '.join(missing_imports)}")
             return False
 
     except Exception as e:
