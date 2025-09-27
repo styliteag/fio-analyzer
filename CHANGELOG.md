@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Resolve all flake8 warnings (29 total)
+  - Remove unused imports (F401): Union, HTTPException, log_info, Depends, HTTPBasicCredentials, List, log_warning, field, sys, Set, Any, Dict, File, Form, UploadFile, require_auth, TestRun, dataclass_to_dict, Optional
+  - Fix f-strings without placeholders (F541): Convert unnecessary f-strings to regular strings
+  - Remove unused variables (F841): metadata_path, test_run_id, placeholders, user_type
+  - Add missing imports: Path, os, asdict for proper functionality
+- Add .flake8 configuration file with default exclusions for .venv, venv, __pycache__, .git
+- Update documentation to remove redundant --max-line-length=180 parameters from flake8 commands
 - **Docker Configuration Cleanup**: Comprehensive optimization and modernization of Docker setup
   - Fixed health-check.sh script permissions (now properly executable for container health checks)
   - Removed deprecated Docker Compose version field to eliminate deployment warnings  
