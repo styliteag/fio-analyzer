@@ -5,6 +5,7 @@ User management script for FIO Analyzer
 
 import argparse
 import sys
+from pathlib import Path
 
 import bcrypt
 
@@ -84,7 +85,6 @@ def main():
 
     # Determine which file to use
     file_path = settings.htuploaders_path if args.uploader else settings.htpasswd_path
-    user_type = "uploader" if args.uploader else "admin"
 
     if args.action == "add":
         if not args.username or not args.password:

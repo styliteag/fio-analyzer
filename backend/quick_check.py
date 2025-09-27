@@ -5,7 +5,7 @@ This catches issues like missing 'Depends' imports without needing virtual envir
 """
 
 import ast
-import sys
+from pathlib import Path
 
 
 def check_fastapi_imports(file_path: str):
@@ -79,7 +79,7 @@ def check_fastapi_imports(file_path: str):
 
         # Report results
         if syntax_ok and not missing_imports:
-            print(f"  ✅ Syntax OK, all imports look good")
+            print("  ✅ Syntax OK, all imports look good")
             return True
         else:
             if missing_imports:

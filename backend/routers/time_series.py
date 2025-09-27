@@ -4,11 +4,11 @@ Time series API router
 
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
-from auth.middleware import User, require_admin, require_auth
+from auth.middleware import User, require_admin
 from database.connection import get_db
 from database.models import TrendData
 from utils.logging import log_error, log_info

@@ -3,24 +3,22 @@ Test runs API router
 """
 
 import sqlite3
-from typing import Any, Dict, List, Optional
+from dataclasses import asdict
+from typing import Optional
 
 from fastapi import (
     APIRouter,
     Body,
     Depends,
-    File,
-    Form,
     HTTPException,
     Path,
     Query,
     Request,
-    UploadFile,
 )
 
-from auth.middleware import User, require_admin, require_auth
+from auth.middleware import User, require_admin
 from database.connection import get_db
-from database.models import BulkUpdateRequest, TestRun, dataclass_to_dict
+from database.models import BulkUpdateRequest
 from utils.logging import log_error, log_info
 
 router = APIRouter()
@@ -497,7 +495,6 @@ async def get_performance_data(
         test_run_id_list = [int(id.strip()) for id in test_run_ids.split(",")]
 
         # Build query
-        placeholders = ",".join(["?" for _ in test_run_id_list])
         cursor = db.cursor()
 
         results = []

@@ -7,7 +7,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import (
     APIRouter,
@@ -185,7 +185,7 @@ async def import_fio_data(
         file_path = save_uploaded_file(content, file.filename, test_run_data)
 
         # Create metadata file (matching Node.js behavior)
-        metadata_path = create_metadata_file(file_path, test_run_data, user.username, file.filename)
+        create_metadata_file(file_path, test_run_data, user.username, file.filename)
 
         # Insert into database with file path
         test_run_id = insert_test_run(db, test_run_data, file_path)
@@ -434,7 +434,7 @@ async def bulk_import_fio_data(
                     await db_manager.update_latest_flags(test_run_data)
 
                     # Insert into database with file path
-                    test_run_id = insert_test_run(db, test_run_data, str(json_file))
+                    insert_test_run(db, test_run_data, str(json_file))
                     total_test_runs += 1
                     processed_files += 1
 

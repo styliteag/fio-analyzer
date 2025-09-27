@@ -5,6 +5,7 @@ Check syntax of Python files without running them
 
 import ast
 import sys
+from pathlib import Path
 
 
 def check_syntax(file_path):

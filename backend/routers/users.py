@@ -2,6 +2,7 @@
 User management API endpoints
 """
 
+from pathlib import Path
 from typing import List, Optional
 
 import bcrypt
@@ -11,7 +12,7 @@ from pydantic import BaseModel, Field
 from auth.authentication import parse_htpasswd
 from auth.middleware import require_admin, require_auth
 from config.settings import settings
-from utils.logging import log_error, log_info, log_warning
+from utils.logging import log_error, log_info
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 

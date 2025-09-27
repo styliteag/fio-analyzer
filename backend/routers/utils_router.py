@@ -3,12 +3,11 @@ Utils API router
 """
 
 import sqlite3
-from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 # Removed FilterOptions import - using plain dictionary
-from auth.middleware import User, require_admin, require_auth
+from auth.middleware import User, require_admin
 from config.settings import settings
 from database.connection import get_db
 from utils.logging import log_error, log_info
@@ -112,7 +111,9 @@ async def get_filters(
             ),
             (
                 "host_disk_combinations",
-                "SELECT DISTINCT (hostname || ' - ' || protocol || ' - ' || drive_model) as host_disk_combo FROM test_runs WHERE hostname IS NOT NULL AND protocol IS NOT NULL AND drive_model IS NOT NULL ORDER BY host_disk_combo",
+                "SELECT DISTINCT (hostname || ' - ' || protocol || ' - ' || drive_model) as host_disk_combo "
+                "FROM test_runs WHERE hostname IS NOT NULL AND protocol IS NOT NULL AND drive_model IS NOT NULL "
+                "ORDER BY host_disk_combo",
             ),
             (
                 "block_sizes",

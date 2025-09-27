@@ -5,7 +5,7 @@ These models provide enhanced Swagger documentation and automatic
 validation for FastAPI endpoints.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 

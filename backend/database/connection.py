@@ -4,7 +4,7 @@ Database connection and initialization
 
 import sqlite3
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from config.settings import settings
 from utils.helpers import (
@@ -14,7 +14,7 @@ from utils.helpers import (
     get_base_latency,
     show_server_ready,
 )
-from utils.logging import log_error, log_info, log_warning
+from utils.logging import log_error, log_info
 
 
 class DatabaseManager:

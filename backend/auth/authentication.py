@@ -9,10 +9,9 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import bcrypt
-from fastapi import HTTPException
 
 from config.settings import settings
-from utils.logging import log_debug, log_error, log_info, log_warning
+from utils.logging import log_debug, log_error, log_warning
 
 # Authentication cache (username_hash -> (role, timestamp))
 _auth_cache: Dict[str, Tuple[str, float]] = {}
@@ -27,7 +26,7 @@ def _get_cache_key(username: str, password: str) -> str:
 def parse_htpasswd(file_path: Path) -> Optional[Dict[str, str]]:
     """Parse htpasswd file"""
     if not file_path.exists():
-        log_warning(f"htpasswd file not found", {"file_path": str(file_path)})
+        log_warning("htpasswd file not found", {"file_path": str(file_path)})
         return None
 
     try:

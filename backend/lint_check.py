@@ -6,8 +6,9 @@ This script catches import errors, syntax issues, and code quality problems.
 
 import ast
 import importlib.util
-import sys
-from typing import Dict, List, Set, Tuple
+import os
+from pathlib import Path
+from typing import Dict, List, Tuple
 
 
 def check_imports(file_path: str) -> Tuple[bool, List[str]]:
@@ -175,9 +176,9 @@ def lint_file(file_path: str) -> Dict[str, any]:
 
     # Print results
     if results["syntax_ok"] and results["imports_ok"] and results["undefined_ok"]:
-        print(f"  ✅ All checks passed")
+        print("  ✅ All checks passed")
     else:
-        print(f"  ❌ Issues found:")
+        print("  ❌ Issues found:")
         for error in results["errors"]:
             print(f"    • {error}")
 
@@ -211,7 +212,7 @@ def main():
     failed_files = total_files - passed_files
 
     print("=" * 50)
-    print(f"📊 LINTING SUMMARY")
+    print("📊 LINTING SUMMARY")
     print(f"Total files: {total_files}")
     print(f"Passed: {passed_files}")
     print(f"Failed: {failed_files}")

@@ -4,8 +4,8 @@ Authentication middleware for FastAPI
 
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import HTTPException, Request
+from fastapi.security import HTTPBasic
 
 from auth.authentication import get_user_role, parse_auth_header
 from utils.logging import log_debug, log_info

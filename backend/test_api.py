@@ -3,6 +3,7 @@
 Simple test script for FastAPI backend
 """
 
+import os
 import sys
 
 # Add current directory to path
