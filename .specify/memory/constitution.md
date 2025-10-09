@@ -1,110 +1,50 @@
-# FIO Analyzer Project Constitution
-
-<!--
-Sync Impact Report:
-- Version: 1.1.0 (minor amendment - added new principles for code quality and feature development)
-- Modified principles: None renamed
-- Added sections: Principle 8 (Code Quality Standards), Principle 9 (Feature Specification Workflow)
-- Removed sections: None
-- Templates requiring updates: ✅ plan-template.md references updated
-- Follow-up TODOs: None
--->
-
-**Project Name**: FIO Analyzer - Storage Performance Visualizer
-**Constitution Version**: 1.1.0
-**Ratification Date**: 2025-09-22
-**Last Amended Date**: 2025-09-27
-
-## Purpose and Scope
-
-FIO Analyzer is a comprehensive full-stack web application designed to analyze and visualize FIO (Flexible I/O Tester) benchmark results. This constitution establishes the foundational principles and governance framework for developing, maintaining, and operating this storage performance analysis platform.
+# [PROJECT_NAME] Constitution
+<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
 
 ## Core Principles
 
-### Principle 1: Performance-First Development
-**Name**: Performance-First Development
-**Rule**: All code changes MUST be evaluated for performance impact on both frontend rendering and backend processing. Performance regressions are considered blocking issues that require immediate resolution.
+### [PRINCIPLE_1_NAME]
+<!-- Example: I. Library-First -->
+[PRINCIPLE_1_DESCRIPTION]
+<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
 
-**Rationale**: Given that FIO Analyzer processes large datasets of storage performance metrics and renders complex interactive visualizations, maintaining optimal performance is critical for user experience and system scalability.
+### [PRINCIPLE_2_NAME]
+<!-- Example: II. CLI Interface -->
+[PRINCIPLE_2_DESCRIPTION]
+<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
 
-### Principle 2: API-First Architecture
-**Name**: API-First Architecture
-**Rule**: All new features MUST be developed API-first, with comprehensive OpenAPI documentation generated automatically. API contracts MUST remain stable and backward-compatible.
+### [PRINCIPLE_3_NAME]
+<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
+[PRINCIPLE_3_DESCRIPTION]
+<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
 
-**Rationale**: The FastAPI backend serves multiple consumers including the React frontend, automated testing scripts, and potential third-party integrations. API-first development ensures consistency and maintainability.
+### [PRINCIPLE_4_NAME]
+<!-- Example: IV. Integration Testing -->
+[PRINCIPLE_4_DESCRIPTION]
+<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
 
-### Principle 3: Type Safety and Data Integrity
-**Name**: Type Safety and Data Integrity
-**Rule**: All TypeScript code MUST maintain strict type safety with zero 'any' types. All database operations MUST include proper validation using Pydantic models. Performance metrics data MUST be validated for accuracy and completeness.
+### [PRINCIPLE_5_NAME]
+<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
+[PRINCIPLE_5_DESCRIPTION]
+<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
 
-**Rationale**: Storage performance data is critical for infrastructure decisions. Type safety and validation prevent data corruption and ensure reliable analysis results.
+## [SECTION_2_NAME]
+<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
 
-### Principle 4: Authentication and Security
-**Name**: Authentication and Security
-**Rule**: All API endpoints MUST require authentication. User credentials MUST be stored securely using bcrypt hashing. Role-based access control MUST be enforced between admin and upload-only users.
+[SECTION_2_CONTENT]
+<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
 
-**Rationale**: Performance data often contains sensitive infrastructure information. Proper authentication prevents unauthorized access and maintains data confidentiality.
+## [SECTION_3_NAME]
+<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
 
-### Principle 5: Test Coverage and Quality Assurance
-**Name**: Test Coverage and Quality Assurance
-**Rule**: All frontend code changes MUST pass ESLint validation and TypeScript compilation checks. All new features MUST include appropriate test coverage. Database migrations MUST be thoroughly tested.
-
-**Rationale**: The application handles critical performance data used for infrastructure decisions. Code quality and testing prevent bugs that could lead to incorrect performance analysis.
-
-### Principle 6: Documentation and Observability
-**Name**: Documentation and Observability
-**Rule**: All API changes MUST be documented in the auto-generated OpenAPI specification. All significant code changes MUST be documented in CHANGELOG.md. Performance metrics and system health MUST be observable through logging and monitoring.
-
-**Rationale**: Comprehensive documentation ensures maintainability and enables effective troubleshooting. Observability is essential for monitoring system health and performance.
-
-### Principle 7: Containerization and Deployment
-**Name**: Containerization and Deployment
-**Rule**: The application MUST be deployable as a single Docker container for production use. Development setup MUST support both containerized and native environments. All deployment configurations MUST be version-controlled.
-
-**Rationale**: Consistent deployment reduces operational complexity and ensures reproducible environments across development, testing, and production.
-
-### Principle 8: Code Quality Standards
-**Name**: Code Quality Standards
-**Rule**: All Python code MUST pass flake8 linting without warnings. Code formatting MUST be enforced using Black and import organization with isort. The UV package manager MUST be used for Python dependency management. All code MUST compile without syntax errors before commits.
-
-**Rationale**: Consistent code quality standards ensure maintainability, readability, and reduce technical debt. Modern tooling like UV provides faster dependency resolution and better reproducible builds.
-
-### Principle 9: Feature Specification Workflow
-**Name**: Feature Specification Workflow
-**Rule**: All significant features MUST follow the specification workflow using /specify, /plan, /clarify, /tasks, and /implement commands. Feature specifications MUST be documented before implementation begins. Clarification workflows MUST be used to resolve ambiguities in requirements.
-
-**Rationale**: Structured feature development ensures thorough planning, reduces implementation errors, and maintains consistency in feature delivery. The specification workflow provides traceability from requirements to implementation.
+[SECTION_3_CONTENT]
+<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
 
 ## Governance
+<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-### Amendment Process
-1. **Proposal**: Amendments may be proposed via pull request with detailed rationale
-2. **Review**: Changes require review by project maintainers
-3. **Approval**: Major amendments require consensus among active contributors
-4. **Documentation**: All amendments must update this constitution and increment version
+[GOVERNANCE_RULES]
+<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
 
-### Version Management
-- **MAJOR**: Backward incompatible principle changes or removals
-- **MINOR**: New principles added or material expansions to existing principles
-- **PATCH**: Clarifications, wording improvements, or non-semantic refinements
-
-### Compliance Review
-- Constitution compliance MUST be reviewed during all pull requests
-- Principle violations MUST be addressed before code merge
-- Regular architecture reviews MUST assess ongoing alignment with constitutional principles
-
-### Enforcement
-- Pull request reviews MUST verify adherence to constitutional principles
-- Continuous integration MUST enforce technical principles (linting, type checking, testing)
-- Security principles MUST be validated through code review and testing
-- Code quality standards MUST be enforced through automated tooling (flake8, black, isort)
-- Feature specification workflow MUST be followed for all significant changes
-
-### Tool Integration
-- Constitution principles MUST be integrated into development templates and workflows
-- Feature specification commands (/specify, /plan, /clarify, /tasks, /implement) MUST reference constitutional requirements
-- Development tooling MUST align with constitutional standards (UV for Python, TypeScript strict mode, automated linting)
-
----
-
-*This constitution serves as the foundational governance document for the FIO Analyzer project, establishing principles that guide development decisions and ensure consistent, high-quality deliverables.*
+**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
+<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
