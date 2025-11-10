@@ -28,6 +28,11 @@ export interface TestConfiguration {
     read_write_pattern: string;
     queue_depth: number;
     num_jobs: number | null | undefined;
+    sync: number | null | undefined;
+    direct: number | null | undefined;
+    iodepth: number | null | undefined;
+    test_size: string | null | undefined;
+    duration: number | null | undefined;
     iops: number | null | undefined;
     avg_latency: number | null | undefined;
     bandwidth: number | null | undefined;
@@ -43,6 +48,11 @@ export interface TestCoverage {
     numJobs: number[];
     protocols: string[];
     hostDiskCombinations: string[];
+    syncs: number[];
+    directs: number[];
+    ioDepths: number[];
+    testSizes: string[];
+    durations: number[];
 }
 
 export interface PerformanceSummary {
@@ -93,6 +103,11 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
             read_write_pattern: run.read_write_pattern,
             queue_depth: run.queue_depth,
             num_jobs: run.num_jobs || null,
+            sync: (run as any).sync ?? null,
+            direct: (run as any).direct ?? null,
+            iodepth: (run as any).iodepth ?? null,
+            test_size: (run as any).test_size ?? null,
+            duration: (run as any).duration ?? null,
             iops: run.iops,
             avg_latency: run.avg_latency,
             bandwidth: run.bandwidth,
@@ -127,7 +142,12 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
         protocols: [...new Set(validRuns.map((r: TestRun) => r.protocol || 'unknown'))].sort(),
         hostDiskCombinations: [...new Set(validRuns.map((r: TestRun) => 
             `${r.hostname} - ${r.protocol} - ${r.drive_model}`
-        ))].sort()
+        ))].sort(),
+        syncs: [...new Set(validRuns.filter((r: TestRun) => (r as any).sync !== null && (r as any).sync !== undefined).map((r: TestRun) => (r as any).sync!))].sort((a: number, b: number) => a - b),
+        directs: [...new Set(validRuns.filter((r: TestRun) => (r as any).direct !== null && (r as any).direct !== undefined).map((r: TestRun) => (r as any).direct!))].sort((a: number, b: number) => a - b),
+        ioDepths: [...new Set(validRuns.filter((r: TestRun) => (r as any).iodepth !== null && (r as any).iodepth !== undefined).map((r: TestRun) => (r as any).iodepth!))].sort((a: number, b: number) => a - b),
+        testSizes: [...new Set(validRuns.filter((r: TestRun) => (r as any).test_size !== null && (r as any).test_size !== undefined).map((r: TestRun) => (r as any).test_size!))].sort(),
+        durations: [...new Set(validRuns.filter((r: TestRun) => (r as any).duration !== null && (r as any).duration !== undefined).map((r: TestRun) => (r as any).duration!))].sort((a: number, b: number) => a - b)
     };
     
     // Calculate performance summary

@@ -11,12 +11,22 @@ interface HostFiltersProps {
     selectedNumJobs: number[];
     selectedProtocols: string[];
     selectedHostDiskCombinations: string[];
+    selectedSyncs: number[];
+    selectedDirects: number[];
+    selectedIoDepths: number[];
+    selectedTestSizes: string[];
+    selectedDurations: number[];
     onBlockSizeChange: (blockSizes: string[]) => void;
     onPatternChange: (patterns: string[]) => void;
     onQueueDepthChange: (queueDepths: number[]) => void;
     onNumJobsChange: (numJobs: number[]) => void;
     onProtocolChange: (protocols: string[]) => void;
     onHostDiskCombinationChange: (combinations: string[]) => void;
+    onSyncChange: (syncs: number[]) => void;
+    onDirectChange: (directs: number[]) => void;
+    onIoDepthChange: (ioDepths: number[]) => void;
+    onTestSizeChange: (testSizes: string[]) => void;
+    onDurationChange: (durations: number[]) => void;
     onReset: () => void;
 }
 
@@ -28,7 +38,8 @@ const FilterSection = memo<{
     onChange: (values: any[]) => void;
     colorClass: string;
     prefix?: string;
-}>(({ title, options, selectedValues, onChange, colorClass, prefix = '' }) => {
+    labelMap?: Record<string | number, string>;
+}>(({ title, options, selectedValues, onChange, colorClass, prefix = '', labelMap }) => {
     const handleFilterChange = useCallback((value: string | number) => {
         const newValues = selectedValues.includes(value)
             ? selectedValues.filter(v => v !== value)
@@ -41,9 +52,14 @@ const FilterSection = memo<{
             <h4 className="font-medium theme-text-primary mb-3">{title}</h4>
             <div className="flex flex-wrap gap-2">
                 {options.map(option => {
-                    const displayValue = typeof option === 'number' && prefix 
-                        ? `${prefix}${option}` 
-                        : option.toString();
+                    let displayValue: string;
+                    if (labelMap && option in labelMap) {
+                        displayValue = labelMap[option];
+                    } else if (typeof option === 'number' && prefix) {
+                        displayValue = `${prefix}${option}`;
+                    } else {
+                        displayValue = option.toString();
+                    }
                     const isSelected = selectedValues.includes(option);
                     
                     return (
@@ -75,15 +91,25 @@ const ActiveFilters = memo<{
     selectedNumJobs: number[];
     selectedProtocols: string[];
     selectedHostDiskCombinations: string[];
-}>(({ selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols, selectedHostDiskCombinations }) => {
+    selectedSyncs: number[];
+    selectedDirects: number[];
+    selectedIoDepths: number[];
+    selectedTestSizes: string[];
+    selectedDurations: number[];
+}>(({ selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols, selectedHostDiskCombinations, selectedSyncs, selectedDirects, selectedIoDepths, selectedTestSizes, selectedDurations }) => {
     const hasActiveFilters = useMemo(() => {
         return selectedBlockSizes.length > 0 || 
                selectedPatterns.length > 0 || 
                selectedQueueDepths.length > 0 || 
                selectedNumJobs.length > 0 ||
                selectedProtocols.length > 0 || 
-               selectedHostDiskCombinations.length > 0;
-    }, [selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols, selectedHostDiskCombinations]);
+               selectedHostDiskCombinations.length > 0 ||
+               selectedSyncs.length > 0 ||
+               selectedDirects.length > 0 ||
+               selectedIoDepths.length > 0 ||
+               selectedTestSizes.length > 0 ||
+               selectedDurations.length > 0;
+    }, [selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols, selectedHostDiskCombinations, selectedSyncs, selectedDirects, selectedIoDepths, selectedTestSizes, selectedDurations]);
 
     return (
         <div className="pt-4 border-t border-gray-200 dark:border-gray-600">
@@ -110,6 +136,21 @@ const ActiveFilters = memo<{
                     {selectedHostDiskCombinations.length > 0 && (
                         <div>Host-Disk: {selectedHostDiskCombinations.join(', ')}</div>
                     )}
+                    {selectedSyncs.length > 0 && (
+                        <div>Sync: {selectedSyncs.map(s => s === 1 ? 'On' : 'Off').join(', ')}</div>
+                    )}
+                    {selectedDirects.length > 0 && (
+                        <div>Direct I/O: {selectedDirects.map(d => d === 1 ? 'On' : 'Off').join(', ')}</div>
+                    )}
+                    {selectedIoDepths.length > 0 && (
+                        <div>I/O Depth: {selectedIoDepths.map(d => `IOD${d}`).join(', ')}</div>
+                    )}
+                    {selectedTestSizes.length > 0 && (
+                        <div>Test Size: {selectedTestSizes.join(', ')}</div>
+                    )}
+                    {selectedDurations.length > 0 && (
+                        <div>Duration: {selectedDurations.map(d => `${d}s`).join(', ')}</div>
+                    )}
                     {!hasActiveFilters && (
                         <div className="italic">No filters applied</div>
                     )}
@@ -129,12 +170,22 @@ const HostFilters: React.FC<HostFiltersProps> = ({
     selectedNumJobs,
     selectedProtocols,
     selectedHostDiskCombinations,
+    selectedSyncs,
+    selectedDirects,
+    selectedIoDepths,
+    selectedTestSizes,
+    selectedDurations,
     onBlockSizeChange,
     onPatternChange,
     onQueueDepthChange,
     onNumJobsChange,
     onProtocolChange,
     onHostDiskCombinationChange,
+    onSyncChange,
+    onDirectChange,
+    onIoDepthChange,
+    onTestSizeChange,
+    onDurationChange,
     onReset
 }) => {
     // Memoized reset handler
@@ -210,6 +261,51 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onHostDiskCombinationChange}
                     colorClass="bg-indigo-500"
                 />
+                
+                <FilterSection
+                    title="Sync Mode"
+                    options={testCoverage.syncs}
+                    selectedValues={selectedSyncs}
+                    onChange={onSyncChange}
+                    colorClass="bg-pink-500"
+                    labelMap={{ 0: 'Off', 1: 'On' }}
+                />
+                
+                <FilterSection
+                    title="Direct I/O"
+                    options={testCoverage.directs}
+                    selectedValues={selectedDirects}
+                    onChange={onDirectChange}
+                    colorClass="bg-amber-500"
+                    labelMap={{ 0: 'Off', 1: 'On' }}
+                />
+                
+                <FilterSection
+                    title="I/O Depth"
+                    options={testCoverage.ioDepths}
+                    selectedValues={selectedIoDepths}
+                    onChange={onIoDepthChange}
+                    colorClass="bg-teal-500"
+                    prefix="IOD"
+                />
+                
+                <FilterSection
+                    title="Test Size"
+                    options={testCoverage.testSizes}
+                    selectedValues={selectedTestSizes}
+                    onChange={onTestSizeChange}
+                    colorClass="bg-violet-500"
+                />
+                
+                <FilterSection
+                    title="Duration"
+                    options={testCoverage.durations}
+                    selectedValues={selectedDurations}
+                    onChange={onDurationChange}
+                    colorClass="bg-emerald-500"
+                    prefix=""
+                    labelMap={Object.fromEntries(testCoverage.durations.map(d => [d, `${d}s`]))}
+                />
 
                 <ActiveFilters
                     selectedBlockSizes={selectedBlockSizes}
@@ -218,6 +314,11 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedNumJobs={selectedNumJobs}
                     selectedProtocols={selectedProtocols}
                     selectedHostDiskCombinations={selectedHostDiskCombinations}
+                    selectedSyncs={selectedSyncs}
+                    selectedDirects={selectedDirects}
+                    selectedIoDepths={selectedIoDepths}
+                    selectedTestSizes={selectedTestSizes}
+                    selectedDurations={selectedDurations}
                 />
             </div>
         </div>
@@ -238,7 +339,12 @@ export default memo(HostFilters, (prevProps, nextProps) => {
         prevProps.onQueueDepthChange !== nextProps.onQueueDepthChange ||
         prevProps.onNumJobsChange !== nextProps.onNumJobsChange ||
         prevProps.onProtocolChange !== nextProps.onProtocolChange ||
-        prevProps.onHostDiskCombinationChange !== nextProps.onHostDiskCombinationChange) {
+        prevProps.onHostDiskCombinationChange !== nextProps.onHostDiskCombinationChange ||
+        prevProps.onSyncChange !== nextProps.onSyncChange ||
+        prevProps.onDirectChange !== nextProps.onDirectChange ||
+        prevProps.onIoDepthChange !== nextProps.onIoDepthChange ||
+        prevProps.onTestSizeChange !== nextProps.onTestSizeChange ||
+        prevProps.onDurationChange !== nextProps.onDurationChange) {
         return false;
     }
 
@@ -254,5 +360,10 @@ export default memo(HostFilters, (prevProps, nextProps) => {
            arraysEqual(prevProps.selectedQueueDepths, nextProps.selectedQueueDepths) &&
            arraysEqual(prevProps.selectedNumJobs, nextProps.selectedNumJobs) &&
            arraysEqual(prevProps.selectedProtocols, nextProps.selectedProtocols) &&
-           arraysEqual(prevProps.selectedHostDiskCombinations, nextProps.selectedHostDiskCombinations);
+           arraysEqual(prevProps.selectedHostDiskCombinations, nextProps.selectedHostDiskCombinations) &&
+           arraysEqual(prevProps.selectedSyncs, nextProps.selectedSyncs) &&
+           arraysEqual(prevProps.selectedDirects, nextProps.selectedDirects) &&
+           arraysEqual(prevProps.selectedIoDepths, nextProps.selectedIoDepths) &&
+           arraysEqual(prevProps.selectedTestSizes, nextProps.selectedTestSizes) &&
+           arraysEqual(prevProps.selectedDurations, nextProps.selectedDurations);
 });

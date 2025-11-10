@@ -42,12 +42,22 @@ const Host: React.FC = () => {
         selectedNumJobs,
         selectedProtocols,
         selectedHostDiskCombinations,
+        selectedSyncs,
+        selectedDirects,
+        selectedIoDepths,
+        selectedTestSizes,
+        selectedDurations,
         setSelectedBlockSizes,
         setSelectedPatterns,
         setSelectedQueueDepths,
         setSelectedNumJobs,
         setSelectedProtocols,
         setSelectedHostDiskCombinations,
+        setSelectedSyncs,
+        setSelectedDirects,
+        setSelectedIoDepths,
+        setSelectedTestSizes,
+        setSelectedDurations,
         filteredDrives,
         resetFilters
     } = useHostFilters({ combinedHostData });
@@ -195,12 +205,22 @@ const Host: React.FC = () => {
                                 selectedNumJobs={selectedNumJobs}
                                 selectedProtocols={selectedProtocols}
                                 selectedHostDiskCombinations={selectedHostDiskCombinations}
+                                selectedSyncs={selectedSyncs}
+                                selectedDirects={selectedDirects}
+                                selectedIoDepths={selectedIoDepths}
+                                selectedTestSizes={selectedTestSizes}
+                                selectedDurations={selectedDurations}
                                 onBlockSizeChange={setSelectedBlockSizes}
                                 onPatternChange={setSelectedPatterns}
                                 onQueueDepthChange={setSelectedQueueDepths}
                                 onNumJobsChange={setSelectedNumJobs}
                                 onProtocolChange={setSelectedProtocols}
                                 onHostDiskCombinationChange={setSelectedHostDiskCombinations}
+                                onSyncChange={setSelectedSyncs}
+                                onDirectChange={setSelectedDirects}
+                                onIoDepthChange={setSelectedIoDepths}
+                                onTestSizeChange={setSelectedTestSizes}
+                                onDurationChange={setSelectedDurations}
                                 onReset={resetFilters}
                             />
 

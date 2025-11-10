@@ -9,6 +9,11 @@ export interface UseHostFiltersReturn {
     selectedNumJobs: number[];
     selectedProtocols: string[];
     selectedHostDiskCombinations: string[];
+    selectedSyncs: number[];
+    selectedDirects: number[];
+    selectedIoDepths: number[];
+    selectedTestSizes: string[];
+    selectedDurations: number[];
     
     // Filter setters
     setSelectedBlockSizes: (sizes: string[]) => void;
@@ -17,6 +22,11 @@ export interface UseHostFiltersReturn {
     setSelectedNumJobs: (numJobs: number[]) => void;
     setSelectedProtocols: (protocols: string[]) => void;
     setSelectedHostDiskCombinations: (combinations: string[]) => void;
+    setSelectedSyncs: (syncs: number[]) => void;
+    setSelectedDirects: (directs: number[]) => void;
+    setSelectedIoDepths: (ioDepths: number[]) => void;
+    setSelectedTestSizes: (testSizes: string[]) => void;
+    setSelectedDurations: (durations: number[]) => void;
     
     // Filtered data
     filteredDrives: any[];
@@ -37,6 +47,11 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
     const [selectedNumJobs, setSelectedNumJobs] = useState<number[]>([]);
     const [selectedProtocols, setSelectedProtocols] = useState<string[]>([]);
     const [selectedHostDiskCombinations, setSelectedHostDiskCombinations] = useState<string[]>([]);
+    const [selectedSyncs, setSelectedSyncs] = useState<number[]>([]);
+    const [selectedDirects, setSelectedDirects] = useState<number[]>([]);
+    const [selectedIoDepths, setSelectedIoDepths] = useState<number[]>([]);
+    const [selectedTestSizes, setSelectedTestSizes] = useState<string[]>([]);
+    const [selectedDurations, setSelectedDurations] = useState<number[]>([]);
 
     // Reset filters function
     const resetFilters = useCallback(() => {
@@ -46,6 +61,11 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         setSelectedNumJobs([]);
         setSelectedProtocols([]);
         setSelectedHostDiskCombinations([]);
+        setSelectedSyncs([]);
+        setSelectedDirects([]);
+        setSelectedIoDepths([]);
+        setSelectedTestSizes([]);
+        setSelectedDurations([]);
     }, []);
 
     // Filter drives based on selected criteria
@@ -75,8 +95,13 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
                 const patternMatch = selectedPatterns.length === 0 || selectedPatterns.includes(config.read_write_pattern);
                 const queueDepthMatch = selectedQueueDepths.length === 0 || selectedQueueDepths.includes(config.queue_depth);
                 const numJobsMatch = selectedNumJobs.length === 0 || (config.num_jobs !== null && config.num_jobs !== undefined && selectedNumJobs.includes(config.num_jobs));
+                const syncMatch = selectedSyncs.length === 0 || (config.sync !== null && config.sync !== undefined && selectedSyncs.includes(config.sync));
+                const directMatch = selectedDirects.length === 0 || (config.direct !== null && config.direct !== undefined && selectedDirects.includes(config.direct));
+                const ioDepthMatch = selectedIoDepths.length === 0 || (config.iodepth !== null && config.iodepth !== undefined && selectedIoDepths.includes(config.iodepth));
+                const testSizeMatch = selectedTestSizes.length === 0 || (config.test_size !== null && config.test_size !== undefined && selectedTestSizes.includes(config.test_size));
+                const durationMatch = selectedDurations.length === 0 || (config.duration !== null && config.duration !== undefined && selectedDurations.includes(config.duration));
 
-                return blockSizeMatch && patternMatch && queueDepthMatch && numJobsMatch;
+                return blockSizeMatch && patternMatch && queueDepthMatch && numJobsMatch && syncMatch && directMatch && ioDepthMatch && testSizeMatch && durationMatch;
             })
         })).filter(drive => drive.configurations.length > 0);
 
@@ -88,7 +113,12 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         selectedPatterns,
         selectedQueueDepths,
         selectedNumJobs,
-        selectedHostDiskCombinations
+        selectedHostDiskCombinations,
+        selectedSyncs,
+        selectedDirects,
+        selectedIoDepths,
+        selectedTestSizes,
+        selectedDurations
     ]);
 
     return {
@@ -99,6 +129,11 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         selectedNumJobs,
         selectedProtocols,
         selectedHostDiskCombinations,
+        selectedSyncs,
+        selectedDirects,
+        selectedIoDepths,
+        selectedTestSizes,
+        selectedDurations,
         
         // Filter setters
         setSelectedBlockSizes,
@@ -107,6 +142,11 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         setSelectedNumJobs,
         setSelectedProtocols,
         setSelectedHostDiskCombinations,
+        setSelectedSyncs,
+        setSelectedDirects,
+        setSelectedIoDepths,
+        setSelectedTestSizes,
+        setSelectedDurations,
         
         // Filtered data
         filteredDrives,

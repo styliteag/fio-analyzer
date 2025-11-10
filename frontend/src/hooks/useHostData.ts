@@ -124,6 +124,11 @@ export const useHostData = (): UseHostDataReturn => {
         const allNumJobs = [...new Set(allHosts.flatMap(h => h.testCoverage.numJobs))].sort((a, b) => a - b);
         const allProtocols = [...new Set(allHosts.flatMap(h => h.testCoverage.protocols))].sort();
         const allHostDiskCombinations = [...new Set(allHosts.flatMap(h => h.testCoverage.hostDiskCombinations))].sort();
+        const allSyncs = [...new Set(allHosts.flatMap(h => h.testCoverage.syncs))].sort((a, b) => a - b);
+        const allDirects = [...new Set(allHosts.flatMap(h => h.testCoverage.directs))].sort((a, b) => a - b);
+        const allIoDepths = [...new Set(allHosts.flatMap(h => h.testCoverage.ioDepths))].sort((a, b) => a - b);
+        const allTestSizes = [...new Set(allHosts.flatMap(h => h.testCoverage.testSizes))].sort();
+        const allDurations = [...new Set(allHosts.flatMap(h => h.testCoverage.durations))].sort((a, b) => a - b);
         
         // Use first host as template and combine data
         const primaryHost = allHosts[0];
@@ -136,7 +141,12 @@ export const useHostData = (): UseHostDataReturn => {
                 queueDepths: allQueueDepths,
                 numJobs: allNumJobs,
                 protocols: allProtocols,
-                hostDiskCombinations: allHostDiskCombinations
+                hostDiskCombinations: allHostDiskCombinations,
+                syncs: allSyncs,
+                directs: allDirects,
+                ioDepths: allIoDepths,
+                testSizes: allTestSizes,
+                durations: allDurations
             },
             totalTests: allHosts.reduce((sum, h) => sum + h.totalTests, 0),
             hostname: selectedHosts.length === 1 ? selectedHosts[0] : `${selectedHosts.length} hosts`

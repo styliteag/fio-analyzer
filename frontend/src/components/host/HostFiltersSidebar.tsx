@@ -12,12 +12,22 @@ export interface HostFiltersSidebarProps {
     selectedNumJobs: number[];
     selectedProtocols: string[];
     selectedHostDiskCombinations: string[];
+    selectedSyncs: number[];
+    selectedDirects: number[];
+    selectedIoDepths: number[];
+    selectedTestSizes: string[];
+    selectedDurations: number[];
     onBlockSizeChange: (sizes: string[]) => void;
     onPatternChange: (patterns: string[]) => void;
     onQueueDepthChange: (depths: number[]) => void;
     onNumJobsChange: (numJobs: number[]) => void;
     onProtocolChange: (protocols: string[]) => void;
     onHostDiskCombinationChange: (combinations: string[]) => void;
+    onSyncChange: (syncs: number[]) => void;
+    onDirectChange: (directs: number[]) => void;
+    onIoDepthChange: (ioDepths: number[]) => void;
+    onTestSizeChange: (testSizes: string[]) => void;
+    onDurationChange: (durations: number[]) => void;
     onReset: () => void;
 }
 
@@ -29,12 +39,22 @@ const HostFiltersSidebar: React.FC<HostFiltersSidebarProps> = ({
     selectedNumJobs,
     selectedProtocols,
     selectedHostDiskCombinations,
+    selectedSyncs,
+    selectedDirects,
+    selectedIoDepths,
+    selectedTestSizes,
+    selectedDurations,
     onBlockSizeChange,
     onPatternChange,
     onQueueDepthChange,
     onNumJobsChange,
     onProtocolChange,
     onHostDiskCombinationChange,
+    onSyncChange,
+    onDirectChange,
+    onIoDepthChange,
+    onTestSizeChange,
+    onDurationChange,
     onReset
 }) => {
     return (
@@ -48,12 +68,22 @@ const HostFiltersSidebar: React.FC<HostFiltersSidebarProps> = ({
                 selectedNumJobs={selectedNumJobs}
                 selectedProtocols={selectedProtocols}
                 selectedHostDiskCombinations={selectedHostDiskCombinations}
+                selectedSyncs={selectedSyncs}
+                selectedDirects={selectedDirects}
+                selectedIoDepths={selectedIoDepths}
+                selectedTestSizes={selectedTestSizes}
+                selectedDurations={selectedDurations}
                 onBlockSizeChange={onBlockSizeChange}
                 onPatternChange={onPatternChange}
                 onQueueDepthChange={onQueueDepthChange}
                 onNumJobsChange={onNumJobsChange}
                 onProtocolChange={onProtocolChange}
                 onHostDiskCombinationChange={onHostDiskCombinationChange}
+                onSyncChange={onSyncChange}
+                onDirectChange={onDirectChange}
+                onIoDepthChange={onIoDepthChange}
+                onTestSizeChange={onTestSizeChange}
+                onDurationChange={onDurationChange}
                 onReset={onReset}
             />
 
