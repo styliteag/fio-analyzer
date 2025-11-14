@@ -1,8 +1,8 @@
 import React from 'react';
-import { HardDrive, BarChart, Radar, TrendingUp, Activity, Box, Zap, Grid3X3, BarChart3 } from 'lucide-react';
+import { HardDrive, BarChart, Radar, TrendingUp, Activity, Box, Zap, Grid3X3, BarChart3, Table2, LineChart } from 'lucide-react';
 import { Button } from '../ui';
 
-export type VisualizationView = 'overview' | 'heatmap' | 'graphs' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | '3d';
+export type VisualizationView = 'overview' | 'heatmap' | 'graphs' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | 'advancedHeatmap' | 'trends' | 'matrix' | '3d';
 
 export interface HostVisualizationControlsProps {
     activeView: VisualizationView;
@@ -88,6 +88,30 @@ const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
                 >
                     <BarChart className="w-4 h-4" />
                     Stacked Bar
+                </Button>
+                <Button
+                    variant={activeView === 'advancedHeatmap' ? 'primary' : 'outline'}
+                    onClick={() => onViewChange('advancedHeatmap')}
+                    className="flex items-center gap-2"
+                >
+                    <Table2 className="w-4 h-4" />
+                    Host Heatmap
+                </Button>
+                <Button
+                    variant={activeView === 'trends' ? 'primary' : 'outline'}
+                    onClick={() => onViewChange('trends')}
+                    className="flex items-center gap-2"
+                >
+                    <LineChart className="w-4 h-4" />
+                    Trend Analysis
+                </Button>
+                <Button
+                    variant={activeView === 'matrix' ? 'primary' : 'outline'}
+                    onClick={() => onViewChange('matrix')}
+                    className="flex items-center gap-2"
+                >
+                    <Grid3X3 className="w-4 h-4" />
+                    Performance Matrix
                 </Button>
                 <Button
                     variant={activeView === '3d' ? 'primary' : 'outline'}

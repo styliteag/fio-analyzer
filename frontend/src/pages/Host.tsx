@@ -17,6 +17,9 @@ import StackedBarChart from '../components/host/StackedBarChart';
 import Performance3DChart from '../components/host/Performance3DChart';
 import PerformanceFingerprintHeatmap from '../components/host/PerformanceFingerprintHeatmap';
 import PerformanceGraphs from '../components/host/PerformanceGraphs';
+import PerformanceHeatmapView from '../components/host/PerformanceHeatmapView';
+import TrendChartsView from '../components/host/TrendChartsView';
+import PerformanceMatrixView from '../components/host/PerformanceMatrixView';
 
 const Host: React.FC = () => {
     
@@ -254,6 +257,18 @@ const Host: React.FC = () => {
 
                                     {activeView === 'stacked' && (
                                         <StackedBarChart filteredDrives={filteredDrives} />
+                                    )}
+
+                                    {activeView === 'advancedHeatmap' && (
+                                        <PerformanceHeatmapView drives={filteredDrives} />
+                                    )}
+
+                                    {activeView === 'trends' && (
+                                        <TrendChartsView drives={filteredDrives} />
+                                    )}
+
+                                    {activeView === 'matrix' && (
+                                        <PerformanceMatrixView drives={filteredDrives} />
                                     )}
 
                                     {activeView === '3d' && (
