@@ -1,335 +1,220 @@
-# FIO Analyzer - Vue Frontend
+# FIO Analyzer - Vue.js Frontend
 
-A modern Vue.js 3 frontend dashboard for FIO performance analysis, providing comprehensive storage performance visualization and analysis capabilities.
+A clean, focused Vue 3 + TypeScript frontend for comparing FIO (Flexible I/O Tester) benchmark results with interactive charts.
 
-## 🚀 Quick Start
+## Features
+
+- **Test Comparison** - Compare multiple hosts with stacked and grouped bar charts
+- **Interactive Filters** - Filter by drive type, I/O pattern, block size, queue depth, protocol, and drive model
+- **Host Selection** - Multi-select dropdown with search for selecting hosts to compare
+- **Multiple Metrics** - Visualize IOPS, latency, bandwidth, P95/P99 latency
+- **Data Upload** - Upload new FIO test data with metadata
+- **Authentication** - HTTP Basic Auth with htpasswd
+
+## Tech Stack
+
+- **Vue 3** - Composition API with `<script setup>`
+- **TypeScript** - Full type safety
+- **Vite** - Fast build tool and dev server
+- **Pinia** - State management
+- **Vue Router** - Client-side routing
+- **TailwindCSS** - Utility-first CSS framework
+- **Chart.js + vue-chartjs** - Interactive charts
+- **Lucide Vue** - Icon library
+
+## Project Structure
+
+```
+frontend-vue/
+├── src/
+│   ├── components/
+│   │   ├── charts/          # BarChart components
+│   │   ├── filters/         # FilterSidebar, HostSelector
+│   │   └── ui/              # MultiSelect and other UI components
+│   ├── pages/
+│   │   ├── Login.vue        # Authentication page
+│   │   ├── Comparison.vue   # Main comparison view with charts
+│   │   └── Upload.vue       # Data upload page
+│   ├── stores/
+│   │   ├── auth.ts          # Authentication state
+│   │   ├── filters.ts       # Filter state
+│   │   └── testRuns.ts      # Test data state
+│   ├── composables/
+│   │   ├── useApi.ts        # API client with auth
+│   │   └── useChartData.ts  # Chart data utilities
+│   ├── types/
+│   │   └── testRun.ts       # TypeScript interfaces
+│   ├── router/
+│   │   └── index.ts         # Vue Router config
+│   ├── App.vue
+│   └── main.ts
+├── package.json
+├── vite.config.ts
+├── tailwind.config.js
+└── tsconfig.json
+```
+
+## Setup
 
 ### Prerequisites
-- Node.js 18+ 
-- npm or yarn
-- Backend API server running on `http://localhost:8000`
 
-### Installation & Setup
+- Node.js 18+ and npm
+- Backend API running on http://localhost:8000
+
+### Installation
+
 ```bash
-# Navigate to frontend directory
 cd frontend-vue
-
-# Install dependencies
 npm install
+```
 
-# Start development server
+### Development
+
+```bash
 npm run dev
 ```
 
-The application will be available at `http://localhost:5173` with API requests proxied to the backend.
+The app will be available at http://localhost:5173
 
-## 🛠️ Development
+### Build for Production
 
-### Available Scripts
 ```bash
-# Development
-npm run dev              # Start dev server with hot reload
-npm run build            # Production build
-npm run preview          # Preview production build
-
-# Code Quality
-npm run lint             # ESLint with Vue 3 + TypeScript rules
-npm run lint:fix         # Auto-fix ESLint issues
-npx tsc --noEmit         # TypeScript type checking
-
-# Testing
-npm run test             # Run unit tests
-npm run test:ui          # Run tests with UI
-npm run test:coverage    # Run tests with coverage report
-```
-
-### Project Structure
-```
-src/
-├── components/          # Reusable Vue components
-│   ├── ui/             # Basic UI components (Button, Input, etc.)
-│   ├── charts/         # Chart components (Heatmap, Graphs, etc.)
-│   ├── dashboard/      # Dashboard-specific components
-│   ├── filters/        # Filter-related components
-│   └── users/          # User management components
-├── pages/              # Route components
-├── composables/        # Vue composables for business logic
-├── stores/             # Pinia stores for state management
-├── services/           # API services and HTTP client
-├── types/              # TypeScript type definitions
-├── utils/              # Utility functions
-└── router.ts           # Vue Router configuration
-```
-
-## 🏗️ Architecture
-
-### Technology Stack
-- **Framework**: Vue 3 with Composition API
-- **Language**: TypeScript 5.4+
-- **State Management**: Pinia 2.1
-- **Styling**: TailwindCSS 3.4
-- **Charts**: Chart.js 4.4 + Vue-ChartJs 5.3
-- **Icons**: Lucide Vue Next
-- **Testing**: Vitest 3.2+ + Vue Test Utils 2.4+
-- **Build Tool**: Vite 5.4+
-
-### Key Features
-- **Authentication**: HTTP Basic Auth with role-based access control
-- **Data Visualization**: Interactive charts and heatmaps with relative color scaling
-- **Filtering System**: OR logic within categories, AND logic between categories
-- **Host Selection**: Multi-host selection with persistence across pages
-- **Real-time Updates**: Live data refresh and error handling
-- **Responsive Design**: Mobile-first responsive layout
-- **Dark Theme**: Complete dark/light theme support
-
-## 📱 Pages & Routes
-
-| Route | Component | Description | Auth Required |
-|-------|-----------|-------------|---------------|
-| `/` | Dashboard | Main dashboard with statistics and quick links | ✅ |
-| `/login` | LoginForm | Authentication page | ❌ |
-| `/host-analysis` | HostAnalysis | Multi-host performance analysis | ✅ |
-| `/test-history` | TestHistory | Historical test run data | ✅ |
-| `/performance-analytics` | PerformanceAnalytics | Advanced performance metrics | ✅ |
-| `/user-manager` | UserManager | User administration (admin only) | ✅ Admin |
-| `/upload` | UploadData | Data upload interface | ✅ |
-
-## 🔧 Configuration
-
-### Environment Variables
-- `VITE_API_URL`: API base URL (build-time)
-  - Development: `""` (empty) - uses Vite proxy
-  - Production: `"/api"` - nginx proxy configuration
-
-### API Integration
-The frontend integrates with the FastAPI backend using these endpoints:
-- `GET /api/test-runs/` - Retrieve test run data with filtering
-- `GET /api/filters/` - Get available filter options
-- `GET /api/users/` - User management (admin only)
-- `GET /health` - Health check
-
-**Note**: The frontend does NOT use `/api/time-series` endpoints per specification requirements.
-
-## 🎨 Component Development
-
-### Component Structure
-```vue
-<template>
-  <!-- Template with TailwindCSS classes -->
-</template>
-
-<script setup lang="ts">
-// TypeScript with Composition API
-import { ref, computed, onMounted } from 'vue'
-import type { ComponentProps } from '@/types'
-
-// Props with TypeScript interfaces
-interface Props {
-  title: string
-  data: TestRun[]
-}
-
-const props = defineProps<Props>()
-const emit = defineEmits<{
-  update: [value: string]
-}>()
-
-// Reactive state
-const isLoading = ref(false)
-
-// Computed properties
-const filteredData = computed(() => {
-  return props.data.filter(/* logic */)
-})
-
-// Lifecycle
-onMounted(() => {
-  // Initialization
-})
-</script>
-
-<style scoped>
-/* Component-specific styles if needed */
-</style>
-```
-
-### Composable Pattern
-```typescript
-// composables/useExample.ts
-import { ref, computed } from 'vue'
-import type { ExampleData } from '@/types'
-
-export function useExample() {
-  const data = ref<ExampleData[]>([])
-  const loading = ref(false)
-  
-  const processedData = computed(() => {
-    return data.value.map(/* processing */)
-  })
-  
-  async function fetchData() {
-    loading.value = true
-    try {
-      // API call
-    } finally {
-      loading.value = false
-    }
-  }
-  
-  return {
-    data: readonly(data),
-    loading: readonly(loading),
-    processedData,
-    fetchData
-  }
-}
-```
-
-## 🧪 Testing
-
-### Test Structure
-```
-src/
-├── components/__tests__/     # Component unit tests
-├── composables/__tests__/    # Composable unit tests
-├── pages/__tests__/          # Page integration tests
-├── utils/__tests__/          # Utility function tests
-└── test/                     # Contract and integration tests
-```
-
-### Running Tests
-```bash
-# Run all tests
-npm run test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
-
-# Run specific test file
-npm run test -- FilterSidebar.spec.ts
-```
-
-### Test Examples
-```typescript
-// Component test
-import { mount } from '@vue/test-utils'
-import { describe, it, expect } from 'vitest'
-import FilterSidebar from '@/components/filters/FilterSidebar.vue'
-
-describe('FilterSidebar', () => {
-  it('renders filter options correctly', () => {
-    const wrapper = mount(FilterSidebar, {
-      props: {
-        options: ['option1', 'option2']
-      }
-    })
-    
-    expect(wrapper.text()).toContain('option1')
-  })
-})
-```
-
-## 🚀 Deployment
-
-### Production Build
-```bash
-# Build for production
 npm run build
-
-# Preview production build
-npm run preview
 ```
 
-### Docker Deployment
-The frontend is containerized and deployed with the backend using Docker Compose:
+The built files will be in the `dist/` directory.
+
+### Type Checking
 
 ```bash
-# Build and start all services
-docker compose up --build -d
-
-# Access application
-open http://localhost
-```
-
-### Build Optimization
-- **Code Splitting**: Automatic route-based code splitting
-- **Tree Shaking**: Unused code elimination
-- **Asset Optimization**: Image and CSS optimization
-- **Bundle Analysis**: Use `npm run build -- --analyze` for bundle analysis
-
-## 🔍 Performance
-
-### Performance Targets
-- **Initial Load**: < 2 seconds
-- **Dashboard Render**: < 200ms after API response
-- **Chart Rendering**: < 100ms for typical datasets
-- **Filter Application**: < 50ms response time
-- **Memory Usage**: Stable during extended usage
-
-### Optimization Strategies
-- **Lazy Loading**: Route-based component lazy loading
-- **Request Deduplication**: Prevent duplicate API calls
-- **Data Caching**: Client-side caching with TTL
-- **Chart Optimization**: Efficient rendering for 1000+ data points
-- **Bundle Splitting**: Vendor and route-based splitting
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Build Errors**
-```bash
-# Clear node_modules and reinstall
-rm -rf node_modules package-lock.json
-npm install
-
-# Check TypeScript errors
 npx tsc --noEmit
 ```
 
-**API Connection Issues**
-- Verify backend is running on `http://localhost:8000`
-- Check CORS configuration in backend
-- Verify API endpoints are accessible
+## Usage
 
-**Chart Rendering Issues**
-- Check Chart.js dependencies
-- Verify data format matches expected schema
-- Test with different browsers
+### Login
 
-**Authentication Issues**
-- Verify user credentials in backend
-- Check authentication headers
-- Clear browser storage and retry
+1. Navigate to http://localhost:5173
+2. Enter your username and password (configured in backend .htpasswd file)
+3. Click "Sign in"
 
-### Debug Mode
-```bash
-# Enable Vue DevTools
-npm run dev
+### Compare Hosts
 
-# Enable detailed logging
-VITE_DEBUG=true npm run dev
+1. Use the Filter Sidebar to filter tests by:
+   - Drive Type (NVMe, SATA, SAS)
+   - I/O Pattern (randread, randwrite, read, write)
+   - Block Size (4K, 8K, 64K, 1M, etc.)
+   - Queue Depth (1, 8, 32, 64, etc.)
+   - Protocol (Local, iSCSI, NFS)
+   - Drive Model
+
+2. Select hosts using the Host Selector dropdown
+
+3. Choose metrics to compare:
+   - IOPS
+   - Average Latency
+   - Bandwidth
+   - P95 Latency
+   - P99 Latency
+
+4. Toggle between Grouped or Stacked chart types
+
+5. Charts are grouped by test configuration (same block size, pattern, queue depth, etc.)
+
+### Upload Data
+
+1. Click "Upload Data" button in the header
+2. Select FIO JSON output file
+3. Fill in metadata:
+   - Hostname (required)
+   - Drive Model (required)
+   - Drive Type (required)
+   - Protocol (required)
+   - Description (optional)
+   - Test Date (optional, defaults to current time)
+4. Click "Upload Test Data"
+
+## API Configuration
+
+The frontend expects the backend API at http://localhost:8000
+
+To change the API URL, update `vite.config.ts`:
+
+```typescript
+export default defineConfig({
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://your-api-server:8000',
+        changeOrigin: true
+      }
+    }
+  }
+})
 ```
 
-## 📚 Additional Resources
+## Comparison Logic
 
-- [Vue 3 Documentation](https://vuejs.org/)
-- [Pinia State Management](https://pinia.vuejs.org/)
-- [Chart.js Documentation](https://www.chartjs.org/)
-- [TailwindCSS Documentation](https://tailwindcss.com/)
-- [Vitest Testing Guide](https://vitest.dev/)
+- **Only comparable tests are grouped together**: Tests must have matching block_size, read_write_pattern, queue_depth, num_jobs, direct, sync, and duration
+- **Multi-host comparison**: Compare the same test configuration across different hosts
+- **Multi-metric visualization**: View multiple metrics side-by-side in grouped or stacked mode
 
-## 🤝 Contributing
+## State Management
 
-1. Follow the existing code style and patterns
-2. Write tests for new components and features
-3. Ensure TypeScript compilation passes
-4. Run ESLint and fix all violations
-5. Test across different browsers and screen sizes
+### Pinia Stores
 
-## 📄 License
+**Auth Store** (`stores/auth.ts`)
+- Manages authentication state
+- Stores credentials in localStorage
+- Provides auth header for API requests
 
-This project is part of the FIO Analyzer system. See the main project LICENSE for details.
+**Filters Store** (`stores/filters.ts`)
+- Manages active filter selections
+- Tracks available filter options from API
+- Generates query parameters for API requests
+
+**Test Runs Store** (`stores/testRuns.ts`)
+- Fetches and caches test run data
+- Provides filtering and grouping utilities
+- Manages loading and error states
+
+## Development
+
+### Adding New Filters
+
+1. Add the filter to `ActiveFilters` interface in `types/testRun.ts`
+2. Add corresponding logic in `stores/filters.ts`
+3. Add UI component in `FilterSidebar.vue`
+
+### Adding New Chart Types
+
+1. Create new chart component in `components/charts/`
+2. Add data transformation function in `composables/useChartData.ts`
+3. Use in `Comparison.vue` page
+
+### Adding New Pages
+
+1. Create page component in `pages/`
+2. Add route in `router/index.ts`
+3. Add navigation link in appropriate component
+
+## Troubleshooting
+
+### Authentication Fails
+- Verify backend is running on http://localhost:8000
+- Check that user exists in backend .htpasswd file
+- Clear browser localStorage and try again
+
+### Charts Not Displaying
+- Check browser console for errors
+- Verify test data exists for selected hosts
+- Ensure filters aren't too restrictive
+
+### API Requests Failing
+- Check Vite proxy configuration in `vite.config.ts`
+- Verify backend API is accessible
+- Check browser Network tab for request details
+
+## License
+
+Same as parent project

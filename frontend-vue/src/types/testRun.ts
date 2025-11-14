@@ -1,42 +1,88 @@
-// TestRun interface for FIO performance test data
 export interface TestRun {
-  // Identity
   id: number
-  timestamp: string // ISO 8601 format
-
-  // System Information
-  hostname: string
+  timestamp: string
+  test_date: string | null
   drive_model: string
-  drive_type: string // "NVMe", "SATA", "SAS"
-  protocol: string // "Local", "iSCSI", "NFS"
-
-  // Test Configuration
+  drive_type: string
   test_name: string
-  description?: string
-  block_size: string // "4K", "8K", "64K", "1M"
-  read_write_pattern: string // "randread", "randwrite", "read", "write"
+  block_size: string
+  read_write_pattern: string
   queue_depth: number
-  duration: number // seconds
-  num_jobs: number
-  direct: 0 | 1 // 0=buffered, 1=direct
-  sync: 0 | 1 // 0=async, 1=sync
-  test_size: string // "1G", "10G", "100G"
+  duration: number
 
-  // Performance Metrics
-  iops: number
-  avg_latency: number // milliseconds
-  bandwidth: number // MB/s
-  p95_latency?: number // milliseconds
-  p99_latency?: number // milliseconds
+  // FIO metadata
+  fio_version: string | null
+  job_runtime: number | null
+  rwmixread: number | null
+  total_ios_read: number | null
+  total_ios_write: number | null
+  usr_cpu: number | null
+  sys_cpu: number | null
 
-  // Additional Fields
-  fio_version?: string
-  job_runtime?: number
-  rwmixread?: number | null
-  total_ios_read?: number
-  total_ios_write?: number
-  usr_cpu?: number
-  sys_cpu?: number
-  output_file?: string
-  is_latest?: boolean
+  // System info
+  hostname: string | null
+  protocol: string | null
+  description: string | null
+  uploaded_file_path: string | null
+
+  // Job configuration
+  output_file: string | null
+  num_jobs: number | null
+  direct: number | null
+  test_size: string | null
+  sync: number | null
+  iodepth: number | null
+  is_latest: number | null
+
+  // Performance metrics
+  avg_latency: number | null
+  bandwidth: number | null
+  iops: number | null
+  p95_latency: number | null
+  p99_latency: number | null
+}
+
+export interface FilterOptions {
+  hostnames: string[]
+  protocols: string[]
+  drive_types: string[]
+  drive_models: string[]
+  block_sizes: string[]
+  patterns: string[]
+  queue_depths: number[]
+  num_jobs: number[]
+  directs: number[]
+  syncs: number[]
+  test_sizes: string[]
+  durations: number[]
+}
+
+export interface ActiveFilters {
+  hostnames: string[]
+  protocols: string[]
+  drive_types: string[]
+  drive_models: string[]
+  block_sizes: string[]
+  patterns: string[]
+  queue_depths: number[]
+  num_jobs: number[]
+  directs: number[]
+  syncs: number[]
+  test_sizes: string[]
+  durations: number[]
+}
+
+export type MetricType = 'iops' | 'avg_latency' | 'bandwidth' | 'p95_latency' | 'p99_latency'
+
+export interface ChartDataset {
+  label: string
+  data: number[]
+  backgroundColor: string
+  borderColor?: string
+  borderWidth?: number
+}
+
+export interface ChartData {
+  labels: string[]
+  datasets: ChartDataset[]
 }

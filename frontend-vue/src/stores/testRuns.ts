@@ -1,262 +1,112 @@
 import { defineStore } from 'pinia'
-import { ref, computed, readonly } from 'vue'
-import type { TestRun, FilterOptions } from '@/types'
-
-// Test runs state interface
-interface TestRunsState {
-  data: TestRun[]
-  filters: FilterOptions | null
-  isLoading: boolean
-  error: string | null
-  lastFetch: number | null
-  totalCount: number
-  hasMore: boolean
-  currentPage: number
-  pageSize: number
-}
+import { ref, computed } from 'vue'
+import type { TestRun } from '../types/testRun'
+import { useFiltersStore } from './filters'
 
 export const useTestRunsStore = defineStore('testRuns', () => {
-  // Reactive state
-  const state = ref<TestRunsState>({
-    data: [],
-    filters: null,
-    isLoading: false,
-    error: null,
-    lastFetch: null,
-    totalCount: 0,
-    hasMore: false,
-    currentPage: 1,
-    pageSize: 1000, // Large default to get all data for visualization
+  const testRuns = ref<TestRun[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  // Get unique hostnames from test runs
+  const availableHostnames = computed(() => {
+    const hostnames = new Set<string>()
+    testRuns.value.forEach((run) => {
+      if (run.hostname) hostnames.add(run.hostname)
+    })
+    return Array.from(hostnames).sort()
   })
 
-  // Computed properties
-  const hasData = computed(() => state.value.data.length > 0)
-  const isEmpty = computed(() => state.value.data.length === 0 && !state.value.isLoading)
-  const hasFilters = computed(() => state.value.filters !== null)
-  const uniqueHostnames = computed(() => {
-    const hostnames = [...new Set(state.value.data.map(run => run.hostname))]
-    return hostnames.sort()
-  })
+  // Filter test runs by selected hostnames
+  function getTestRunsByHosts(hostnames: string[]): TestRun[] {
+    if (hostnames.length === 0) return testRuns.value
 
-  const uniqueDriveTypes = computed(() => {
-    const driveTypes = [...new Set(state.value.data.map(run => run.drive_type))]
-    return driveTypes.sort()
-  })
-
-  const dateRange = computed(() => {
-    if (state.value.data.length === 0) return null
-
-    const timestamps = state.value.data.map(run => new Date(run.timestamp).getTime())
-    const minDate = new Date(Math.min(...timestamps))
-    const maxDate = new Date(Math.max(...timestamps))
-
-    return {
-      start: minDate,
-      end: maxDate,
-      duration: maxDate.getTime() - minDate.getTime(),
-    }
-  })
-
-  // Performance statistics
-  const stats = computed(() => {
-    if (state.value.data.length === 0) return null
-
-    const runs = state.value.data
-    const iopsValues = runs.map(r => r.iops).filter(v => v > 0)
-    const latencyValues = runs.map(r => r.avg_latency).filter(v => v > 0)
-    const bandwidthValues = runs.map(r => r.bandwidth).filter(v => v > 0)
-
-    return {
-      totalRuns: runs.length,
-      avgIops: iopsValues.length > 0 ? iopsValues.reduce((a, b) => a + b, 0) / iopsValues.length : 0,
-      avgLatency: latencyValues.length > 0 ? latencyValues.reduce((a, b) => a + b, 0) / latencyValues.length : 0,
-      avgBandwidth: bandwidthValues.length > 0 ? bandwidthValues.reduce((a, b) => a + b, 0) / bandwidthValues.length : 0,
-      maxIops: iopsValues.length > 0 ? Math.max(...iopsValues) : 0,
-      minLatency: latencyValues.length > 0 ? Math.min(...latencyValues) : 0,
-      hostCount: uniqueHostnames.value.length,
-      driveTypeCount: uniqueDriveTypes.value.length,
-    }
-  })
-
-  // Actions
-  function setData(testRuns: TestRun[]): void {
-    state.value.data = [...testRuns]
-    state.value.lastFetch = Date.now()
-    state.value.error = null
+    return testRuns.value.filter((run) =>
+      run.hostname && hostnames.includes(run.hostname)
+    )
   }
 
-  function appendData(testRuns: TestRun[]): void {
-    state.value.data = [...state.value.data, ...testRuns]
-    state.value.lastFetch = Date.now()
+  // Group test runs by configuration (excluding hostname)
+  function groupByConfiguration(runs: TestRun[]): Map<string, TestRun[]> {
+    const groups = new Map<string, TestRun[]>()
+
+    runs.forEach((run) => {
+      const key = [
+        run.block_size,
+        run.read_write_pattern,
+        run.queue_depth,
+        run.num_jobs,
+        run.direct,
+        run.sync,
+        run.duration
+      ].join('|')
+
+      if (!groups.has(key)) {
+        groups.set(key, [])
+      }
+      groups.get(key)!.push(run)
+    })
+
+    return groups
   }
 
-  function setFilters(filters: FilterOptions): void {
-    state.value.filters = { ...filters }
+  // Set test runs data
+  function setTestRuns(runs: TestRun[]) {
+    testRuns.value = runs
+    error.value = null
   }
 
-  function setLoading(loading: boolean): void {
-    state.value.isLoading = loading
-  }
-
-  function setError(error: string | null): void {
-    state.value.error = error
-    if (error) {
-      state.value.isLoading = false
-    }
-  }
-
-  function clearData(): void {
-    state.value.data = []
-    state.value.lastFetch = null
-    state.value.error = null
-    state.value.totalCount = 0
-    state.value.hasMore = false
-    state.value.currentPage = 1
-  }
-
-  function clearFilters(): void {
-    state.value.filters = null
-  }
-
-  function reset(): void {
-    clearData()
-    clearFilters()
-  }
-
-  // Filtering and searching
-  function getFilteredData(filters?: Record<string, (string | number)[]>): TestRun[] {
-    let filtered = [...state.value.data]
-
-    if (!filters || Object.keys(filters).length === 0) {
-      return filtered
+  // Fetch test runs from API
+  async function fetchTestRuns(authHeader: string | null) {
+    if (!authHeader) {
+      error.value = 'Not authenticated'
+      return
     }
 
-    // Apply filters
-    Object.entries(filters).forEach(([key, values]) => {
-      if (!values || (Array.isArray(values) && values.length === 0)) return
+    loading.value = true
+    error.value = null
 
-      const valueArray = Array.isArray(values) ? values : [values]
+    try {
+      const filtersStore = useFiltersStore()
+      const queryParams = filtersStore.getQueryParams()
+      const queryString = new URLSearchParams(queryParams).toString()
+      const url = queryString ? `/api/test-runs?${queryString}` : '/api/test-runs'
 
-      filtered = filtered.filter(run => {
-        const runValue = (run as Record<string, unknown>)[key]
-        if (runValue === undefined || runValue === null) return false
-
-        // Handle different filter types
-        if (key === 'hostnames' && valueArray.includes(run.hostname)) return true
-        if (key === 'drive_types' && valueArray.includes(run.drive_type)) return true
-        if (key === 'drive_models' && valueArray.includes(run.drive_model)) return true
-        if (key === 'protocols' && valueArray.includes(run.protocol)) return true
-        if (key === 'block_sizes' && valueArray.includes(run.block_size)) return true
-        if (key === 'patterns' && valueArray.includes(run.read_write_pattern)) return true
-        if (key === 'queue_depths' && valueArray.includes(run.queue_depth)) return true
-        if (key === 'num_jobs' && valueArray.includes(run.num_jobs)) return true
-        if (key === 'syncs' && valueArray.includes(run.sync)) return true
-        if (key === 'directs' && valueArray.includes(run.direct)) return true
-
-        return false
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': authHeader
+        }
       })
-    })
 
-    return filtered
-  }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${await response.text()}`)
+      }
 
-  function getRunsByHostname(hostname: string): TestRun[] {
-    return state.value.data.filter(run => run.hostname === hostname)
-  }
-
-  function getRunsByDriveType(driveType: string): TestRun[] {
-    return state.value.data.filter(run => run.drive_type === driveType)
-  }
-
-  function getRunsByDateRange(startDate: Date, endDate: Date): TestRun[] {
-    return state.value.data.filter(run => {
-      const runDate = new Date(run.timestamp)
-      return runDate >= startDate && runDate <= endDate
-    })
-  }
-
-  // Pagination helpers
-  function getPageData(page: number = 1, pageSize: number = state.value.pageSize): TestRun[] {
-    const start = (page - 1) * pageSize
-    const end = start + pageSize
-    return state.value.data.slice(start, end)
-  }
-
-  function setPagination(page: number, pageSize: number, totalCount: number): void {
-    state.value.currentPage = page
-    state.value.pageSize = pageSize
-    state.value.totalCount = totalCount
-    state.value.hasMore = (page * pageSize) < totalCount
-  }
-
-  // Data analysis helpers
-  function getPerformanceSummary(): {
-    iops: { min: number; max: number; avg: number; count: number }
-    latency: { min: number; max: number; avg: number; count: number }
-    bandwidth: { min: number; max: number; avg: number; count: number }
-  } | null {
-    if (state.value.data.length === 0) return null
-
-    const iopsValues = state.value.data.map(r => r.iops).filter(v => v > 0)
-    const latencyValues = state.value.data.map(r => r.avg_latency).filter(v => v > 0)
-    const bandwidthValues = state.value.data.map(r => r.bandwidth).filter(v => v > 0)
-
-    return {
-      iops: {
-        min: iopsValues.length > 0 ? Math.min(...iopsValues) : 0,
-        max: iopsValues.length > 0 ? Math.max(...iopsValues) : 0,
-        avg: iopsValues.length > 0 ? iopsValues.reduce((a, b) => a + b, 0) / iopsValues.length : 0,
-        count: iopsValues.length,
-      },
-      latency: {
-        min: latencyValues.length > 0 ? Math.min(...latencyValues) : 0,
-        max: latencyValues.length > 0 ? Math.max(...latencyValues) : 0,
-        avg: latencyValues.length > 0 ? latencyValues.reduce((a, b) => a + b, 0) / latencyValues.length : 0,
-        count: latencyValues.length,
-      },
-      bandwidth: {
-        min: bandwidthValues.length > 0 ? Math.min(...bandwidthValues) : 0,
-        max: bandwidthValues.length > 0 ? Math.max(...bandwidthValues) : 0,
-        avg: bandwidthValues.length > 0 ? bandwidthValues.reduce((a, b) => a + b, 0) / bandwidthValues.length : 0,
-        count: bandwidthValues.length,
-      },
+      const data = await response.json()
+      setTestRuns(data)
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to fetch test runs'
+      console.error('Error fetching test runs:', err)
+    } finally {
+      loading.value = false
     }
+  }
+
+  // Clear data
+  function clear() {
+    testRuns.value = []
+    error.value = null
   }
 
   return {
-    // Reactive state (readonly)
-    state: readonly(state),
-
-    // Computed properties
-    hasData,
-    isEmpty,
-    hasFilters,
-    uniqueHostnames,
-    uniqueDriveTypes,
-    dateRange,
-    stats,
-
-    // Actions
-    setData,
-    appendData,
-    setFilters,
-    setLoading,
-    setError,
-    clearData,
-    clearFilters,
-    reset,
-
-    // Filtering and searching
-    getFilteredData,
-    getRunsByHostname,
-    getRunsByDriveType,
-    getRunsByDateRange,
-
-    // Pagination
-    getPageData,
-    setPagination,
-
-    // Analysis
-    getPerformanceSummary,
+    testRuns,
+    loading,
+    error,
+    availableHostnames,
+    getTestRunsByHosts,
+    groupByConfiguration,
+    setTestRuns,
+    fetchTestRuns,
+    clear
   }
 })
