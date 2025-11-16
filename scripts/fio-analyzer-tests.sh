@@ -73,7 +73,7 @@ set_defaults() {
     DIRECT="${DIRECT:-1}"
     RUNTIME="${RUNTIME:-20}"
     BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
-    TARGET_DIR="${TARGET_DIR:./fio_tmp/}"
+    TARGET_DIR="${TARGET_DIR:-./fio_tmp/}"
     USERNAME="${USERNAME:-uploader}"
     PASSWORD="${PASSWORD:-uploader}"
 
