@@ -170,10 +170,6 @@ set_defaults() {
     USERNAME="${USERNAME:-uploader}"
     PASSWORD="${PASSWORD:-uploader}"
 
-    DESCRIPTION="$DESCRIPTION,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},run_uuid:${RUN_UUID},config_uuid:${CONFIG_UUID},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},runtime:${runtime},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    # Sanitize the description change " " to "_" and remove any special charaters
-    DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
-
     # UUID Generation
     # config_uuid: Fixed per host-config (from .env or generated from hostname)
     if [ -n "$CONFIG_UUID" ]; then
@@ -192,6 +188,11 @@ set_defaults() {
         RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_${current_date}")
     fi
     print_status "Generated RUN_UUID for this script run: $RUN_UUID"
+
+
+    DESCRIPTION="$DESCRIPTION,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    # Sanitize the description change " " to "_" and remove any special charaters
+    DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
 
     # Parse BLOCK_SIZES from comma-separated string if provided
     if [ -n "$BLOCK_SIZES" ] && [ "$BLOCK_SIZES" != "4k,64k,1M" ]; then
