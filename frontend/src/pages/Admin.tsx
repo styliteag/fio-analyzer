@@ -14,6 +14,8 @@ import {
 	PlayCircle,
 	Search,
 	X,
+	Calendar,
+	PackageMinus,
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Loading from '../components/ui/Loading';
@@ -85,6 +87,16 @@ const Admin: React.FC = () => {
 		uuid: null,
 		uuidType: null,
 		count: 0,
+	});
+
+	// Data cleanup state
+	const [dataCleanupState, setDataCleanupState] = useState<DataCleanupState>({
+		isOpen: false,
+		mode: null,
+		cutoffDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days ago
+		compactFrequency: 'daily',
+		previewCount: null,
+		isLoading: false,
 	});
 
 	// History state
@@ -374,6 +386,104 @@ const Admin: React.FC = () => {
 		const last = new Date(lastTest).toLocaleDateString();
 		return first === last ? first : `${first} - ${last}`;
 	};
+
+	// Open data cleanup modal
+	const openDataCleanup = useCallback((mode: 'delete-old' | 'compact') => {
+		setDataCleanupState({
+			...dataCleanupState,
+			isOpen: true,
+			mode,
+			previewCount: null,
+		});
+	}, [dataCleanupState]);
+
+	// Preview data cleanup
+	const previewDataCleanup = useCallback(async () => {
+		setDataCleanupState({ ...dataCleanupState, isLoading: true });
+
+		try {
+			const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+			const params = new URLSearchParams({
+				cutoff_date: dataCleanupState.cutoffDate,
+				mode: dataCleanupState.mode || 'delete-old',
+			});
+
+			if (dataCleanupState.mode === 'compact') {
+				params.append('frequency', dataCleanupState.compactFrequency);
+			}
+
+			const response = await fetch(`${baseUrl}/api/time-series/history/cleanup-preview?${params}`, {
+				credentials: 'include',
+			});
+
+			if (!response.ok) throw new Error('Failed to preview cleanup');
+
+			const data = await response.json();
+			setDataCleanupState({
+				...dataCleanupState,
+				previewCount: data.affected_count || 0,
+				isLoading: false,
+			});
+		} catch (err) {
+			console.error('Error previewing cleanup:', err);
+			alert('Failed to preview cleanup');
+			setDataCleanupState({ ...dataCleanupState, isLoading: false });
+		}
+	}, [dataCleanupState]);
+
+	// Execute data cleanup
+	const executeDataCleanup = useCallback(async () => {
+		setDataCleanupState({ ...dataCleanupState, isLoading: true });
+
+		try {
+			const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+			const response = await fetch(`${baseUrl}/api/time-series/history/cleanup`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({
+					cutoff_date: dataCleanupState.cutoffDate,
+					mode: dataCleanupState.mode,
+					frequency: dataCleanupState.mode === 'compact' ? dataCleanupState.compactFrequency : undefined,
+				}),
+			});
+
+			if (!response.ok) throw new Error('Failed to execute cleanup');
+
+			const data = await response.json();
+			alert(`Successfully ${dataCleanupState.mode === 'delete-old' ? 'deleted' : 'compacted'} ${data.deleted_count} test runs`);
+
+			setDataCleanupState({
+				...dataCleanupState,
+				isOpen: false,
+				isLoading: false,
+			});
+
+			// Refresh history data
+			if (activeTab === 'history') {
+				setTimeSeriesLoading(true);
+				fetchTimeSeriesHistory()
+					.then((result) => {
+						if (result.error) {
+							console.error('Error fetching history:', result.error);
+							setTimeSeriesData([]);
+						} else {
+							const historyData = Array.isArray(result.data?.data) ? result.data.data : [];
+							setTimeSeriesData(historyData);
+						}
+					})
+					.catch((err) => {
+						console.error('Error fetching history:', err);
+						setTimeSeriesData([]);
+					})
+					.finally(() => setTimeSeriesLoading(false));
+			}
+		} catch (err) {
+			console.error('Error executing cleanup:', err);
+			alert('Failed to execute cleanup');
+			setDataCleanupState({ ...dataCleanupState, isLoading: false });
+		}
+	}, [dataCleanupState, activeTab]);
 
 	// Render UUID Group Card
 	const renderUUIDGroup = (group: UUIDGroup, uuidType: 'config_uuid' | 'run_uuid') => {
@@ -816,10 +926,32 @@ const Admin: React.FC = () => {
 
 				{activeTab === 'history' && (
 					<div>
-						<h2 className="text-2xl font-bold mb-4">Historical Test Runs</h2>
-						<p className="text-gray-600 mb-6">
-							Showing {filteredHistoryData.length} {searchTerm && `/ ${timeSeriesData.length}`} historical test run{filteredHistoryData.length !== 1 ? 's' : ''}
-						</p>
+						<div className="mb-6 flex items-center justify-between">
+							<div>
+								<h2 className="text-2xl font-bold">Historical Test Runs</h2>
+								<p className="text-gray-600 mt-2">
+									Showing {filteredHistoryData.length} {searchTerm && `/ ${timeSeriesData.length}`} historical test run{filteredHistoryData.length !== 1 ? 's' : ''}
+								</p>
+							</div>
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => openDataCleanup('delete-old')}
+								>
+									<Trash2 className="w-4 h-4 mr-1" />
+									Delete Old Data
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => openDataCleanup('compact')}
+								>
+									<PackageMinus className="w-4 h-4 mr-1" />
+									Compact History
+								</Button>
+							</div>
+						</div>
 						{timeSeriesLoading ? (
 							<Loading message="Loading history..." />
 						) : filteredHistoryData.length === 0 ? (
@@ -999,6 +1131,111 @@ const Admin: React.FC = () => {
 							onClick={() =>
 								setUuidDeleteState({ ...uuidDeleteState, isOpen: false })
 							}
+						>
+							Cancel
+						</Button>
+					</div>
+				</div>
+			</Modal>
+
+			{/* Data Cleanup Modal */}
+			<Modal
+				isOpen={dataCleanupState.isOpen}
+				onClose={() => setDataCleanupState({ ...dataCleanupState, isOpen: false })}
+				title={dataCleanupState.mode === 'delete-old' ? 'Delete Old Historical Data' : 'Compact Historical Data'}
+			>
+				<div className="space-y-4">
+					{dataCleanupState.mode === 'delete-old' ? (
+						<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+							<p className="text-sm text-yellow-800">
+								<strong>Warning:</strong> This will permanently delete all test runs older than the specified date.
+							</p>
+						</div>
+					) : (
+						<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+							<p className="text-sm text-blue-800">
+								<strong>Compact Mode:</strong> This will keep only {dataCleanupState.compactFrequency} samples before the cutoff date,
+								removing hourly tests while preserving representative data.
+							</p>
+						</div>
+					)}
+
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2">
+							<Calendar className="w-4 h-4 inline mr-1" />
+							Cutoff Date (keep data after this date)
+						</label>
+						<input
+							type="date"
+							value={dataCleanupState.cutoffDate}
+							onChange={(e) => setDataCleanupState({
+								...dataCleanupState,
+								cutoffDate: e.target.value,
+								previewCount: null,
+							})}
+							className="w-full px-3 py-2 border border-gray-300 rounded-md"
+						/>
+						<p className="text-xs text-gray-500 mt-1">
+							Data before {new Date(dataCleanupState.cutoffDate).toLocaleDateString()} will be {dataCleanupState.mode === 'delete-old' ? 'deleted' : 'compacted'}
+						</p>
+					</div>
+
+					{dataCleanupState.mode === 'compact' && (
+						<div>
+							<label className="block text-sm font-medium text-gray-700 mb-2">
+								Keep Frequency (for data before cutoff date)
+							</label>
+							<select
+								value={dataCleanupState.compactFrequency}
+								onChange={(e) => setDataCleanupState({
+									...dataCleanupState,
+									compactFrequency: e.target.value as 'daily' | 'weekly' | 'monthly',
+									previewCount: null,
+								})}
+								className="w-full px-3 py-2 border border-gray-300 rounded-md"
+							>
+								<option value="daily">Daily (one test per day)</option>
+								<option value="weekly">Weekly (one test per week)</option>
+								<option value="monthly">Monthly (one test per month)</option>
+							</select>
+							<p className="text-xs text-gray-500 mt-1">
+								Only the most recent test per {dataCleanupState.compactFrequency === 'daily' ? 'day' : dataCleanupState.compactFrequency === 'weekly' ? 'week' : 'month'} will be kept
+							</p>
+						</div>
+					)}
+
+					<div className="flex gap-2 pt-2">
+						<Button
+							variant="outline"
+							onClick={previewDataCleanup}
+							disabled={dataCleanupState.isLoading}
+							className="flex-1"
+						>
+							{dataCleanupState.isLoading ? 'Calculating...' : 'Preview Changes'}
+						</Button>
+					</div>
+
+					{dataCleanupState.previewCount !== null && (
+						<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+							<p className="text-sm text-gray-800">
+								<strong>Preview:</strong> This operation will affect <strong>{dataCleanupState.previewCount}</strong> test run{dataCleanupState.previewCount !== 1 ? 's' : ''}.
+							</p>
+						</div>
+					)}
+
+					<div className="flex gap-2 pt-4 border-t">
+						<Button
+							variant="danger"
+							onClick={executeDataCleanup}
+							disabled={dataCleanupState.isLoading || dataCleanupState.previewCount === null}
+							className="flex-1"
+						>
+							{dataCleanupState.isLoading ? 'Processing...' : `Execute ${dataCleanupState.mode === 'delete-old' ? 'Deletion' : 'Compaction'}`}
+						</Button>
+						<Button
+							variant="outline"
+							onClick={() => setDataCleanupState({ ...dataCleanupState, isOpen: false })}
+							disabled={dataCleanupState.isLoading}
 						>
 							Cancel
 						</Button>

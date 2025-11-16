@@ -1428,6 +1428,170 @@ async def delete_time_series(
         raise HTTPException(status_code=500, detail="Failed to delete time-series test runs")
 
 
+@router.get(
+    "/history/cleanup-preview",
+    summary="Preview Historical Data Cleanup",
+    description="Preview how many records will be affected by a cleanup operation",
+)
+async def preview_history_cleanup(
+    request: Request,
+    cutoff_date: str = Query(..., description="Cutoff date in YYYY-MM-DD format"),
+    mode: str = Query(..., description="Cleanup mode: 'delete-old' or 'compact'"),
+    frequency: Optional[str] = Query(None, description="For compact mode: 'daily', 'weekly', or 'monthly'"),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Preview the number of records that will be affected by cleanup operation."""
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    try:
+        cursor = db.cursor()
+
+        if mode == "delete-old":
+            # Simple deletion: count all records before cutoff date
+            cursor.execute(
+                "SELECT COUNT(*) FROM test_runs_all WHERE timestamp < ?",
+                [cutoff_date]
+            )
+            affected_count = cursor.fetchone()[0]
+
+        elif mode == "compact":
+            # Compact mode: count records that will be deleted (not kept as daily/weekly/monthly)
+            if frequency == "daily":
+                date_format = "%Y-%m-%d"
+            elif frequency == "weekly":
+                date_format = "%Y-%W"  # Year-Week
+            elif frequency == "monthly":
+                date_format = "%Y-%m"
+            else:
+                raise HTTPException(status_code=400, detail="Invalid frequency")
+
+            # Find records to delete (all except the most recent per period)
+            cursor.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM test_runs_all
+                WHERE timestamp < ?
+                AND id NOT IN (
+                    SELECT MAX(id)
+                    FROM test_runs_all
+                    WHERE timestamp < ?
+                    GROUP BY strftime(?, timestamp), hostname, protocol, drive_model
+                )
+                """,
+                [cutoff_date, cutoff_date, date_format]
+            )
+            affected_count = cursor.fetchone()[0]
+
+        else:
+            raise HTTPException(status_code=400, detail="Invalid mode")
+
+        log_info(
+            "History cleanup preview completed",
+            {
+                "request_id": request_id,
+                "mode": mode,
+                "cutoff_date": cutoff_date,
+                "frequency": frequency,
+                "affected_count": affected_count,
+            },
+        )
+
+        return {"affected_count": affected_count}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error previewing history cleanup", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to preview cleanup")
+
+
+@router.post(
+    "/history/cleanup",
+    summary="Execute Historical Data Cleanup",
+    description="Delete or compact old historical test data",
+)
+async def execute_history_cleanup(
+    request: Request,
+    cleanup_request: dict = Body(...),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Execute cleanup operation on historical data."""
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    try:
+        cutoff_date = cleanup_request.get("cutoff_date")
+        mode = cleanup_request.get("mode")
+        frequency = cleanup_request.get("frequency")
+
+        if not cutoff_date or not mode:
+            raise HTTPException(status_code=400, detail="Missing required parameters")
+
+        cursor = db.cursor()
+
+        if mode == "delete-old":
+            # Simple deletion: remove all records before cutoff date
+            cursor.execute(
+                "DELETE FROM test_runs_all WHERE timestamp < ?",
+                [cutoff_date]
+            )
+            deleted_count = cursor.rowcount
+
+        elif mode == "compact":
+            # Compact mode: keep only daily/weekly/monthly samples before cutoff
+            if frequency == "daily":
+                date_format = "%Y-%m-%d"
+            elif frequency == "weekly":
+                date_format = "%Y-%W"
+            elif frequency == "monthly":
+                date_format = "%Y-%m"
+            else:
+                raise HTTPException(status_code=400, detail="Invalid frequency")
+
+            # Delete all except the most recent per period
+            cursor.execute(
+                f"""
+                DELETE FROM test_runs_all
+                WHERE timestamp < ?
+                AND id NOT IN (
+                    SELECT MAX(id)
+                    FROM test_runs_all
+                    WHERE timestamp < ?
+                    GROUP BY strftime(?, timestamp), hostname, protocol, drive_model
+                )
+                """,
+                [cutoff_date, cutoff_date, date_format]
+            )
+            deleted_count = cursor.rowcount
+
+        else:
+            raise HTTPException(status_code=400, detail="Invalid mode")
+
+        db.commit()
+
+        log_info(
+            "History cleanup executed successfully",
+            {
+                "request_id": request_id,
+                "user": user.username,
+                "mode": mode,
+                "cutoff_date": cutoff_date,
+                "frequency": frequency,
+                "deleted_count": deleted_count,
+            },
+        )
+
+        return {"deleted_count": deleted_count, "mode": mode}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        log_error("Error executing history cleanup", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to execute cleanup")
+
+
 def get_metric_unit(metric: str) -> str:
     """
     Get the appropriate unit string for a given performance metric.
