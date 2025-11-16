@@ -159,7 +159,7 @@ generate_uuid_from_hash() {
 set_defaults() {
     HOSTNAME="${HOSTNAME:-$(hostname -s)}"
     PROTOCOL="${PROTOCOL:-unknown}"
-    DESCRIPTION="${DESCRIPTION:-script_test}"
+    DESCRIPTION="${DESCRIPTION:-}"
     # Sanitize the description change " " to "_" and remove any special charaters
     DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
     DRIVE_TYPE="${DRIVE_TYPE:-unknown}"
@@ -478,7 +478,8 @@ run_fio_test() {
     # Capture stderr to detect specific errors
     local error_file="/tmp/fio_error_$$_$(date +%s).txt"
     
-    fio --name="${DESCRIPTION},run_uuid:${RUN_UUID},config_uuid:${CONFIG_UUID},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},runtime:${runtime},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    fio --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
+        --description="${DESCRIPTION},hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},run_uuid:${RUN_UUID},config_uuid:${CONFIG_UUID},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},runtime:${runtime},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --rw="$pattern" \
         --bs="$block_size" \
         --size="$test_size" \
@@ -992,8 +993,7 @@ IODEPTH="1"
 RUNTIME="60"
 # Test directory default is "./fio_tmp/"
 # TARGET_DIR=/mnt/pool/tests/
-DESCRIPTION="hostname:\$HOSTNAME,protocol:\$PROTOCOL,drivetype:\$DRIVE_TYPE,drivemodel:\$DRIVE_MODEL"
-
+DESCRIPTION="FIO-Performance-Test"
 
 # Backend Configuration
 BACKEND_URL=https://fio-analyzer.stylite-live.net
@@ -1097,7 +1097,7 @@ Pre-flight Checks:
 Configuration Variables:
   HOSTNAME       - Server hostname (default: current hostname)
   PROTOCOL       - Storage protocol (default: unknown)
-  DESCRIPTION    - Test description (default: "script_test")
+  DESCRIPTION    - Test description (default: "")
   DRIVE_MODEL    - Drive model (default: unknown)
   DRIVE_TYPE     - Drive type (default: unknown)
   TEST_SIZE      - Size of test file (default: 10M)
