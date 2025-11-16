@@ -162,6 +162,11 @@ set_defaults() {
     DESCRIPTION="${DESCRIPTION:-FIO-Performance-Test}"
     # Sanitize the description change " " to "_" and remove any special charaters
     DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
+    # Ensure description is not empty after sanitization
+    if [ -z "$DESCRIPTION" ] || [ -z "${DESCRIPTION// }" ]; then
+        print_warning "Description became empty after sanitization, using default"
+        DESCRIPTION="FIO-Performance-Test"
+    fi
     DRIVE_TYPE="${DRIVE_TYPE:-unknown}"
     DRIVE_MODEL="${DRIVE_MODEL:-unknown}"
     TEST_SIZE="${TEST_SIZE:-100M}"
