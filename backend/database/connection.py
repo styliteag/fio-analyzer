@@ -98,6 +98,9 @@ class DatabaseManager:
                 iops REAL,
                 p95_latency REAL,
                 p99_latency REAL,
+                -- UUID fields
+                config_uuid TEXT,
+                run_uuid TEXT,
                 -- Uniqueness tracking
                 is_latest INTEGER DEFAULT 1
             )
@@ -142,6 +145,9 @@ class DatabaseManager:
                 iops REAL,
                 p95_latency REAL,
                 p99_latency REAL,
+                -- UUID fields
+                config_uuid TEXT,
+                run_uuid TEXT,
                 -- Uniqueness tracking
                 is_latest INTEGER DEFAULT 1,
                 -- Unique constraint
@@ -149,6 +155,9 @@ class DatabaseManager:
             )
         """
         )
+
+        # Run automatic migrations
+        self._run_migrations(cursor)
 
         # Create indexes
         self._create_indexes(cursor)
@@ -217,6 +226,76 @@ class DatabaseManager:
             WHERE rn = 1
         """
         )
+
+    def _run_migrations(self, cursor: sqlite3.Cursor):
+        """
+        Run automatic database migrations.
+
+        This method checks for and applies any necessary schema updates
+        to existing databases to maintain compatibility with new versions.
+        """
+        import hashlib
+
+        def generate_uuid_from_hash(input_string: str) -> str:
+            """Generate UUID5 from SHA256 hash"""
+            hash_bytes = hashlib.sha256(input_string.encode('utf-8')).digest()
+            uuid_bytes = bytearray(hash_bytes[:16])
+            uuid_bytes[6] = (uuid_bytes[6] & 0x0F) | 0x50  # Version 5
+            uuid_bytes[8] = (uuid_bytes[8] & 0x3F) | 0x80  # RFC 4122 variant
+
+            import uuid as uuid_module
+            return str(uuid_module.UUID(bytes=bytes(uuid_bytes)))
+
+        # Migration 1: Add UUID columns
+        for table_name in ['test_runs_all', 'test_runs']:
+            # Check if uuid columns exist
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            needs_migration = False
+
+            if 'config_uuid' not in columns:
+                log_info(f"Adding config_uuid column to {table_name}")
+                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN config_uuid TEXT")
+                needs_migration = True
+
+            if 'run_uuid' not in columns:
+                log_info(f"Adding run_uuid column to {table_name}")
+                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN run_uuid TEXT")
+                needs_migration = True
+
+            # Backfill UUIDs for existing records
+            if needs_migration:
+                log_info(f"Backfilling UUIDs in {table_name}...")
+
+                cursor.execute(f"""
+                    SELECT id, hostname, test_date, timestamp
+                    FROM {table_name}
+                    WHERE config_uuid IS NULL OR run_uuid IS NULL
+                """)
+
+                records = cursor.fetchall()
+                for record_id, hostname, test_date, timestamp in records:
+                    if not hostname:
+                        hostname = "unknown"
+
+                    # Generate config_uuid from hostname
+                    config_uuid = generate_uuid_from_hash(hostname)
+
+                    # Generate run_uuid from hostname + date
+                    date_str = test_date or timestamp or "unknown"
+                    date_part = date_str.split('T')[0] if 'T' in date_str else date_str.split(' ')[0]
+                    run_uuid = generate_uuid_from_hash(f"{hostname}_{date_part}")
+
+                    cursor.execute(f"""
+                        UPDATE {table_name}
+                        SET config_uuid = ?, run_uuid = ?
+                        WHERE id = ?
+                    """, (config_uuid, run_uuid, record_id))
+
+                log_info(f"Backfilled {len(records)} records in {table_name}")
+
+        self.connection.commit()
 
     async def _populate_sample_data(self, cursor: sqlite3.Cursor):
         """Populate sample data"""

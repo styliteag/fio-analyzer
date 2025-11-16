@@ -300,7 +300,7 @@ HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" ./fio-analyzer-t
 | `NUM_JOBS` | Number of parallel jobs | `4` |
 | `RUNTIME` | Test runtime in seconds | `60` |
 | `BACKEND_URL` | Backend API URL | `http://localhost:8000` |
-| `TARGET_DIR` | Directory for test files | `/tmp/fio_test` |
+| `TARGET_DIR` | Directory for test files | `./fio_tmp/` |
 
 #### What the Script Tests
 The script automatically tests **12 combinations**:

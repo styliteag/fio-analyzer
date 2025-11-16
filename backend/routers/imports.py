@@ -2,6 +2,7 @@
 Import API router
 """
 
+import hashlib
 import json
 import sqlite3
 import uuid
@@ -27,6 +28,35 @@ from database.connection import db_manager, get_db
 from utils.logging import log_error, log_info
 
 router = APIRouter()
+
+
+def generate_uuid_from_hash(input_string: str) -> str:
+    """
+    Generate a UUID5 from a string using SHA256 hash.
+
+    This creates a deterministic UUID from an input string, ensuring
+    the same input always produces the same UUID.
+
+    Args:
+        input_string: String to hash (e.g., hostname or hostname_date)
+
+    Returns:
+        UUID string in standard UUID4 format with hyphens
+    """
+    # Create SHA256 hash of the input
+    hash_bytes = hashlib.sha256(input_string.encode('utf-8')).digest()
+
+    # Use first 16 bytes to create UUID
+    uuid_bytes = bytearray(hash_bytes[:16])
+
+    # Set version to 5 (0101)
+    uuid_bytes[6] = (uuid_bytes[6] & 0x0F) | 0x50
+
+    # Set variant to RFC 4122 (10xx)
+    uuid_bytes[8] = (uuid_bytes[8] & 0x3F) | 0x80
+
+    # Convert to UUID object and return as string
+    return str(uuid.UUID(bytes=bytes(uuid_bytes)))
 
 
 @router.post(
@@ -106,6 +136,16 @@ async def import_fio_data(
         description="Test execution date in ISO format (YYYY-MM-DDTHH:MM:SS). Uses current timestamp if not provided.",
         example="2025-06-31T20:00:00",
     ),
+    config_uuid: Optional[str] = Form(
+        None,
+        description="Configuration UUID - fixed per host-config (generated from hostname if not provided)",
+        example="550e8400-e29b-41d4-a716-446655440000",
+    ),
+    run_uuid: Optional[str] = Form(
+        None,
+        description="Run UUID - unique per script execution (generated from hostname+date if not provided)",
+        example="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    ),
     user: User = Depends(require_uploader),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -177,6 +217,22 @@ async def import_fio_data(
         # Set date if provided
         if date:
             test_run_data["test_date"] = date
+
+        # Handle UUIDs with fallback generation
+        if config_uuid:
+            test_run_data["config_uuid"] = config_uuid
+        else:
+            # Fallback: Generate from hostname
+            test_run_data["config_uuid"] = generate_uuid_from_hash(hostname)
+
+        if run_uuid:
+            test_run_data["run_uuid"] = run_uuid
+        else:
+            # Fallback: Generate from hostname + date (not time)
+            test_date = test_run_data.get("test_date", test_run_data.get("timestamp", ""))
+            # Extract just the date part (YYYY-MM-DD)
+            date_part = test_date.split('T')[0] if 'T' in test_date else test_date.split(' ')[0]
+            test_run_data["run_uuid"] = generate_uuid_from_hash(f"{hostname}_{date_part}")
 
         # Update latest flags
         await db_manager.update_latest_flags(test_run_data)
@@ -715,6 +771,8 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
         "hostname",
         "protocol",
         "description",
+        "config_uuid",
+        "run_uuid",
         "output_file",
         "num_jobs",
         "direct",

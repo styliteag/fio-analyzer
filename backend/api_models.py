@@ -63,6 +63,18 @@ class TestRunBase(BaseModel):
         example="/uploads/server-01/Local/2025-06-31/20-00/results.json",
     )
 
+    # UUID fields
+    config_uuid: Optional[str] = Field(
+        None,
+        description="Configuration UUID - fixed per host-config (generated from hostname if not provided)",
+        example="550e8400-e29b-41d4-a716-446655440000",
+    )
+    run_uuid: Optional[str] = Field(
+        None,
+        description="Run UUID - unique per script execution (generated from hostname+date if not provided)",
+        example="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    )
+
     # Job options
     output_file: Optional[str] = Field(None, description="FIO output filename", example="testfile")
     num_jobs: Optional[int] = Field(None, description="Number of concurrent jobs", example=4, ge=1)

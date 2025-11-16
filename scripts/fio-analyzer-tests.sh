@@ -44,6 +44,21 @@ load_env() {
     fi
 }
 
+# Function to generate UUID from hash (SHA256-based UUID5)
+generate_uuid_from_hash() {
+    local input_string="$1"
+
+    # Generate SHA256 hash
+    local hash=$(echo -n "$input_string" | sha256sum | awk '{print $1}')
+
+    # Take first 32 chars and format as UUID (8-4-4-4-12)
+    # Set version to 5 in the 13th character position (version nibble)
+    # Set variant to RFC 4122 in the 17th character position
+    local uuid="${hash:0:8}-${hash:8:4}-5${hash:13:3}-${hash:16:1}${hash:17:3}-${hash:20:12}"
+
+    echo "$uuid"
+}
+
 # Configuration Variables with defaults
 set_defaults() {
     HOSTNAME="${HOSTNAME:-$(hostname -s)}"
@@ -58,10 +73,29 @@ set_defaults() {
     DIRECT="${DIRECT:-1}"
     RUNTIME="${RUNTIME:-20}"
     BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
-    TARGET_DIR="${TARGET_DIR:-/tmp/fio_test}"
+    TARGET_DIR="${TARGET_DIR:./fio_tmp/}"
     USERNAME="${USERNAME:-uploader}"
     PASSWORD="${PASSWORD:-uploader}"
-    
+
+    # UUID Generation
+    # config_uuid: Fixed per host-config (from .env or generated from hostname)
+    if [ -n "$CONFIG_UUID" ]; then
+        print_status "Using CONFIG_UUID from .env: $CONFIG_UUID"
+    else
+        CONFIG_UUID=$(generate_uuid_from_hash "$HOSTNAME")
+        print_status "Generated CONFIG_UUID from hostname: $CONFIG_UUID"
+    fi
+
+    # run_uuid: Unique per script run (random UUID4)
+    if command -v uuidgen &> /dev/null; then
+        RUN_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+    else
+        # Fallback: Generate from hostname + current date (not time)
+        current_date=$(date -u +%Y-%m-%d)
+        RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_${current_date}")
+    fi
+    print_status "Generated RUN_UUID for this script run: $RUN_UUID"
+
     # Parse BLOCK_SIZES from comma-separated string if provided
     if [ -n "$BLOCK_SIZES" ] && [ "$BLOCK_SIZES" != "4k,64k,1M" ]; then
         IFS=',' read -ra BLOCK_SIZES_ARRAY <<< "$BLOCK_SIZES"
@@ -348,7 +382,7 @@ run_fio_test() {
     # Capture stderr to detect specific errors
     local error_file="/tmp/fio_error_$$_$(date +%s).txt"
     
-    fio --name="${DESCRIPTION},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},runtime:${runtime},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    fio --name="${DESCRIPTION},run_uuid:${RUN_UUID},config_uuid:${CONFIG_UUID},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},runtime:${runtime},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --rw="$pattern" \
         --bs="$block_size" \
         --size="$test_size" \
@@ -427,6 +461,8 @@ upload_results() {
         -F "protocol=$PROTOCOL" \
         -F "description=$DESCRIPTION" \
         -F "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        -F "config_uuid=$CONFIG_UUID" \
+        -F "run_uuid=$RUN_UUID" \
         "$BACKEND_URL/api/import")
     
     http_code="${response: -3}"
@@ -471,6 +507,8 @@ show_config() {
     echo "Description:  $DESCRIPTION"
     echo "Drive Model:  $DRIVE_MODEL"
     echo "Drive Type:   $DRIVE_TYPE"
+    echo "Config UUID:  $CONFIG_UUID"
+    echo "Run UUID:     $RUN_UUID"
     echo "Test Size:    $TEST_SIZE"
     echo "Num Jobs:     $NUM_JOBS"
     echo "Runtime:      ${RUNTIME[*]} (max: ${max_runtime}s)"
@@ -651,6 +689,138 @@ main() {
 # Handle script interruption
 trap 'print_warning "Script interrupted. Cleaning up..."; cleanup; exit 1' INT TERM
 
+# Function to generate .env file
+generate_env_file() {
+    local env_file=".env"
+    local hostname_default
+    hostname_default=$(hostname -s 2>/dev/null || echo "localhost")
+    
+    # Generate CONFIG_UUID from hostname
+    local config_uuid
+    if command -v uuidgen &> /dev/null; then
+        config_uuid=$(uuidgen | tr '[:upper:]' '[:lower:]')
+    else
+        config_uuid=$(generate_uuid_from_hash "$hostname_default")
+    fi
+    
+    # Check if file exists
+    if [ -f "$env_file" ]; then
+        print_warning ".env file already exists at $env_file"
+        echo
+        read -p "Do you want to overwrite it? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_warning "Generation cancelled. Existing .env file preserved."
+            exit 0
+        fi
+        print_status "Overwriting existing .env file..."
+    fi
+    
+    # Generate .env file content
+    cat > "$env_file" << EOF
+# FIO Performance Testing Configuration
+# Generated on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+# Edit this file to customize your test configuration
+
+# Host Configuration
+# Hostname (default: current hostname)
+# Use -vm if its a virtual machine
+HOSTNAME="${hostname_default}"
+# Protocol (unknown, NFS, iSCSI, Local, etc.)
+PROTOCOL="local"
+# Drive type (hdd, ssd, nvme, mirror, raidz1, raidz2, raidz3, etc.)
+# If its a VM use "vm-hdd", "vm-ssd", "vm-nvme", "vm-mirror", "vm-raidz1", "vm-raidz2", "vm-raidz3", etc.
+DRIVE_TYPE="unknown"
+# Drive model (unknown, WD1003FZEX, WD1003FZEX, poolName, poolName-syncoff, poolName-syncall, etc.)
+# If its a VM use the Drive model of the Hypervisor
+# if there are special parameters of the drive model, use them in the format "drive-model-special-parameters"
+DRIVE_MODEL="unknown"
+CONFIG_UUID="${config_uuid}"
+
+# Test Configuration
+# Block sizes to test (comma-separated)
+# 4k is very low ZFS uses a default of 128 KiB blocks
+BLOCK_SIZES="4k,64k,128k,1M"
+
+# Test patterns to run (comma-separated: read, write, randread, randwrite, rw, randrw)
+TEST_PATTERNS="read,write,randread,randwrite,rw,randrw"
+
+# Number of parallel jobs (comma-separated for multiple values)
+NUM_JOBS="4"
+
+# Direct I/O mode (1 = enabled, 0 = disabled, comma-separated for multiple values)
+# it is the opposite of the buffered I/O mode
+DIRECT="1"
+
+# Test file size per job (comma-separated for multiple values)
+# Examples: 10M, 100M, 1G
+TEST_SIZE="10G"
+
+# Sync mode (1 = enabled, 0 = disabled, comma-separated for multiple values)
+SYNC="1"
+
+# I/O Depth (comma-separated for multiple values)
+IODEPTH="1"
+
+# Test runtime in seconds (comma-separated for multiple values)
+RUNTIME="60"
+# Test directory default is "./fio_tmp/"
+# TARGET_DIR=/mnt/pool/tests/
+DESCRIPTION="hostname:$HOSTNAME,protocol:$PROTOCOL,drivetype:$DRIVE_TYPE,drivemodel:$DRIVE_MODEL"
+
+
+# Backend Configuration
+BACKEND_URL="https://fio-analyzer.stylite-live.net"
+USERNAME=xxxxxxx
+PASSWORD=xxxxxxx
+EOF
+    
+    if [ $? -eq 0 ]; then
+        print_success ".env file generated successfully at $env_file"
+        print_status "Edit the file to customize your configuration before running tests."
+    else
+        print_error "Failed to generate .env file"
+        exit 1
+    fi
+}
+
+# Generate .env file if requested
+if [ "$1" = "-g" ] || [ "$1" = "--generate-env" ]; then
+    generate_env_file
+    exit 0
+fi
+
+# Generate UUID if requested
+if [ "$1" = "-u" ] || [ "$1" = "--uuid" ]; then
+    if command -v uuidgen &> /dev/null; then
+        uuidgen | tr '[:upper:]' '[:lower:]'
+    else
+        # Fallback: Generate random UUID4 using /dev/urandom
+        # Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+        # where x is any hexadecimal digit and y is one of 8, 9, a, or b
+        local uuid_hex
+        uuid_hex=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || echo "")
+        
+        if [ -z "$uuid_hex" ] || [ ${#uuid_hex} -lt 32 ]; then
+            # Alternative method if od fails
+            uuid_hex=$(hexdump -n 16 -e '4/4 "%08x"' /dev/urandom 2>/dev/null || echo "")
+        fi
+        
+        if [ -n "$uuid_hex" ] && [ ${#uuid_hex} -ge 32 ]; then
+            # Format as UUID and set version (4) and variant bits
+            local variant_byte
+            variant_byte=$(od -An -N1 -tu1 /dev/urandom 2>/dev/null | tr -d ' ' || echo "8")
+            local variant=$((8 + (variant_byte % 4)))
+            local uuid="${uuid_hex:0:8}-${uuid_hex:8:4}-4${uuid_hex:13:3}-${variant}${uuid_hex:17:3}-${uuid_hex:20:12}"
+            echo "$uuid"
+        else
+            # Last resort: use date-based hash
+            generate_uuid_from_hash "$(date +%s.%N)$RANDOM"
+        fi
+    fi
+    exit 0
+fi
+
 # Show help if requested
 if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     cat << EOF
@@ -659,12 +829,15 @@ FIO Performance Testing Script
 Usage: $0 [options]
 
 Options:
-  -h, --help    Show this help message
-  -y, --yes     Skip confirmation prompt and start tests automatically
+  -h, --help         Show this help message
+  -y, --yes          Skip confirmation prompt and start tests automatically
+  -u, --uuid         Generate and output a random UUID
+  -g, --generate-env Generate a ready-to-use .env configuration file
 
 Configuration:
-  The script loads configuration from a .env file in the same directory.
-  Copy .env.example to .env and customize the values.
+  The script loads configuration from a .env file in the current directory.
+  Generate a .env file using: $0 --generate-env
+  Or copy .env.example to .env and customize the values.
   Environment variables override .env file settings.
 
 Pre-flight Checks:
@@ -686,7 +859,7 @@ Configuration Variables:
   RUNTIME        - Test runtime in seconds (default: 30)
   DIRECT         - Direct I/O mode (default: 1)
   BACKEND_URL    - Backend API URL (default: http://localhost:8000)
-  TARGET_DIR     - Directory for test files (default: /tmp/fio_test)
+  TARGET_DIR     - Directory for test files (default: ./tmp/fio_test)
   USERNAME       - Authentication username (default: admin)
   PASSWORD       - Authentication password (default: admin)
   BLOCK_SIZES    - Comma-separated block sizes (default: 4k,64k,1M)
@@ -699,7 +872,12 @@ Configuration Variables:
   RUNTIME        - Test runtime in seconds (default: 30)
 
 Examples:
-  # Setup configuration file
+  # Generate configuration file
+  $0 --generate-env
+  # Edit .env with your settings, then:
+  $0
+  
+  # Or use the old method:
   cp .env.example .env
   # Edit .env with your settings, then:
   $0

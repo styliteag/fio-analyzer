@@ -130,6 +130,8 @@ cp .env.example .env
 - Auto-initializes with sample data on first run if database is empty
 - Database path: `backend/db/storage_performance.db`
 - Two main tables: `test_runs` (latest data) and `test_runs_all` (historical data)
+- **Automatic Migrations**: Schema updates (like UUID columns) are applied automatically on backend startup
+- **Manual Migration** (optional): `uv run python backend/scripts/migrate_add_uuids.py` for standalone UUID migration
 - Docker volume mounts:
   - `./data/backend/db:/app/db` (database)
   - `./data/backend/uploads:/app/uploads` (uploaded files)
@@ -144,6 +146,22 @@ The application uses a simplified SQLite schema with two main tables:
 - **`test_runs_all`**: Complete historical data for all test runs
 - Performance metrics (iops, latency, bandwidth, p95/p99 latency) are stored directly in these tables
 - No separate performance_metrics tables - everything consolidated for better performance
+
+### UUID Tracking
+
+Each test run is tracked with two UUIDs for grouping and correlation:
+
+- **`config_uuid`**: Fixed per host-config (same hostname generates same UUID)
+  - Specified in `.env` file as `CONFIG_UUID` (optional)
+  - Auto-generated from hostname hash if not provided
+  - Allows grouping all tests from the same host configuration
+
+- **`run_uuid`**: Unique per script execution
+  - Randomly generated (UUID4) at script start
+  - Falls back to hash(hostname + date) if missing from upload
+  - Identifies all tests from a single script run
+
+**Migration**: UUID columns are automatically added and backfilled when the backend starts with an older database
 
 ## API Endpoints
 
@@ -216,3 +234,5 @@ The following documentation files provide detailed information about various asp
 - If you want to do something in the FrontEnd which is hard to do, you can also add functions to the backend
 - Use the auto-generated API documentation at http://localhost:8000/docs for testing endpoints
 - Before running the backend check the syntax!
+- The database has automatic migrations in `_run_migrations()` - schema changes are applied on startup without manual intervention
+- All test runs have `config_uuid` (fixed per hostname) and `run_uuid` (unique per script run) for tracking and grouping

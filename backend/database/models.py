@@ -28,6 +28,9 @@ class TestRunBase:
     protocol: Optional[str] = None
     description: Optional[str] = None
     uploaded_file_path: Optional[str] = None
+    # UUID fields
+    config_uuid: Optional[str] = None
+    run_uuid: Optional[str] = None
     # Job options
     output_file: Optional[str] = None
     num_jobs: Optional[int] = None
