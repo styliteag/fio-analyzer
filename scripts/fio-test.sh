@@ -159,7 +159,7 @@ generate_uuid_from_hash() {
 set_defaults() {
     HOSTNAME="${HOSTNAME:-$(hostname -s)}"
     PROTOCOL="${PROTOCOL:-unknown}"
-    DESCRIPTION="${DESCRIPTION:-}"
+    DESCRIPTION="${DESCRIPTION:-FIO-Performance-Test}"
     # Sanitize the description change " " to "_" and remove any special charaters
     DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
     DRIVE_TYPE="${DRIVE_TYPE:-unknown}"
@@ -993,7 +993,7 @@ IODEPTH="1"
 RUNTIME="60"
 # Test directory default is "./fio_tmp/"
 # TARGET_DIR=/mnt/pool/tests/
-DESCRIPTION="FIO-Performance-Test"
+# DESCRIPTION="FIO-Performance-Test"
 
 # Backend Configuration
 BACKEND_URL=https://fio-analyzer.stylite-live.net
@@ -1097,7 +1097,7 @@ Pre-flight Checks:
 Configuration Variables:
   HOSTNAME       - Server hostname (default: current hostname)
   PROTOCOL       - Storage protocol (default: unknown)
-  DESCRIPTION    - Test description (default: "")
+  DESCRIPTION    - Test description (default: "FIO-Performance-Test")
   DRIVE_MODEL    - Drive model (default: unknown)
   DRIVE_TYPE     - Drive type (default: unknown)
   TEST_SIZE      - Size of test file (default: 10M)
