@@ -101,18 +101,22 @@ load_env() {
                 continue
             fi
             
-            # Export regular env variables using source (safer than eval)
-            # Create a temporary export statement
+            # Export regular env variables
             if [[ "$line" =~ ^[[:space:]]*([^=]+)=(.*)$ ]]; then
                 local key="${BASH_REMATCH[1]}"
                 local value="${BASH_REMATCH[2]}"
                 # Remove leading/trailing whitespace from key
                 key="${key#"${key%%[![:space:]]*}"}"
                 key="${key%"${key##*[![:space:]]}"}"
-                # Remove leading/trailing whitespace from value (keep quotes for now)
+                # Remove leading/trailing whitespace from value
                 value="${value#"${value%%[![:space:]]*}"}"
                 value="${value%"${value##*[![:space:]]}"}"
-                # Export - bash will handle quote removal
+                # Remove quotes (both single and double) from value
+                value="${value#\"}"
+                value="${value#\'}"
+                value="${value%\"}"
+                value="${value%\'}"
+                # Export the variable
                 export "$key=$value"
             fi
         done < "$env_file"
@@ -536,6 +540,64 @@ run_fio_test() {
     fi
 }
 
+# Function to extract IOPS from FIO JSON output
+extract_iops() {
+    local json_file=$1
+    
+    # Try using jq if available (most reliable)
+    if command -v jq &> /dev/null; then
+        local read_iops=$(jq -r '.jobs[0].read.iops // 0' "$json_file" 2>/dev/null || echo "0")
+        local write_iops=$(jq -r '.jobs[0].write.iops // 0' "$json_file" 2>/dev/null || echo "0")
+        
+        # Calculate total IOPS (use awk if bc not available)
+        local total_iops="0"
+        if command -v bc &> /dev/null; then
+            total_iops=$(echo "$read_iops + $write_iops" | bc 2>/dev/null || echo "0")
+        else
+            total_iops=$(awk "BEGIN {printf \"%.0f\", $read_iops + $write_iops}" 2>/dev/null || echo "0")
+        fi
+        
+        # Format IOPS values (remove decimals if whole number)
+        read_iops=$(printf "%.0f" "$read_iops" 2>/dev/null || echo "$read_iops")
+        write_iops=$(printf "%.0f" "$write_iops" 2>/dev/null || echo "$write_iops")
+        total_iops=$(printf "%.0f" "$total_iops" 2>/dev/null || echo "$total_iops")
+        
+        echo "$read_iops|$write_iops|$total_iops"
+        return 0
+    fi
+    
+    # Fallback: use grep/awk to extract IOPS (less reliable but works without jq)
+    local read_iops=$(grep -o '"iops"[[:space:]]*:[[:space:]]*[0-9.]*' "$json_file" 2>/dev/null | head -1 | grep -o '[0-9.]*' || echo "0")
+    local write_iops=$(grep -o '"iops"[[:space:]]*:[[:space:]]*[0-9.]*' "$json_file" 2>/dev/null | tail -1 | grep -o '[0-9.]*' || echo "0")
+    
+    # Simple addition without bc
+    local total_iops="0"
+    if [ -n "$read_iops" ] && [ -n "$write_iops" ]; then
+        total_iops=$(awk "BEGIN {printf \"%.0f\", $read_iops + $write_iops}" 2>/dev/null || echo "0")
+    fi
+    
+    read_iops=$(printf "%.0f" "$read_iops" 2>/dev/null || echo "$read_iops")
+    write_iops=$(printf "%.0f" "$write_iops" 2>/dev/null || echo "$write_iops")
+    
+    echo "$read_iops|$write_iops|$total_iops"
+}
+
+# Function to display IOPS information
+display_iops() {
+    local json_file=$1
+    local test_name=$2
+    
+    local iops_data=$(extract_iops "$json_file")
+    if [ -z "$iops_data" ] || [ "$iops_data" = "0|0|0" ]; then
+        return 0  # Skip if no IOPS data available
+    fi
+    
+    IFS='|' read -r read_iops write_iops total_iops <<< "$iops_data"
+    
+    # Display IOPS information
+    echo -e "  └─ ${YELLOW}IOPS${NC}: Read=${read_iops}, Write=${write_iops}, Total=${total_iops}"
+}
+
 # Function to upload results to backend
 upload_results() {
     local json_file=$1
@@ -581,8 +643,22 @@ cleanup() {
 get_max_value() {
     local max=0
     for val in "$@"; do
-        if [ "$val" -gt "$max" ]; then
-            max=$val
+        # Skip empty values
+        if [ -z "$val" ]; then
+            continue
+        fi
+        # Remove quotes and whitespace
+        val="${val#"${val%%[![:space:]]*}"}"
+        val="${val%"${val##*[![:space:]]}"}"
+        val="${val#\"}"
+        val="${val#\'}"
+        val="${val%\"}"
+        val="${val%\'}"
+        # Validate that value is numeric before comparison
+        if [[ "$val" =~ ^[0-9]+$ ]]; then
+            if [ "$val" -gt "$max" ]; then
+                max=$val
+            fi
         fi
     done
     echo "$max"
@@ -622,6 +698,9 @@ run_all_tests() {
     local current_test=0
     local successful_uploads=0
     local failed_uploads=0
+    local total_iops_sum=0
+    local iops_count=0
+    local last_iops=0
     
     print_status "Starting $total_tests FIO performance tests..."
     
@@ -639,6 +718,22 @@ run_all_tests() {
                                     output_file="/tmp/fio_results_${pattern}_${block_size}_${num_jobs}_${direct}_${test_size}_$(date +%s).json"
 
                                     if run_fio_test "$block_size" "$pattern" "$output_file" "$num_jobs" "$direct" "$test_size" "$sync" "$iodepth" "$runtime"; then
+                                        # Display IOPS after successful test and collect for average
+                                        if [ -f "$output_file" ]; then
+                                            display_iops "$output_file" "${pattern}_${block_size}"
+                                            
+                                            # Extract and accumulate IOPS for average calculation
+                                            local iops_data=$(extract_iops "$output_file")
+                                            if [ -n "$iops_data" ] && [ "$iops_data" != "0|0|0" ]; then
+                                                IFS='|' read -r read_iops write_iops total_iops <<< "$iops_data"
+                                                if [ -n "$total_iops" ] && [ "$total_iops" != "0" ]; then
+                                                    total_iops_sum=$(echo "$total_iops_sum + $total_iops" | bc 2>/dev/null || awk "BEGIN {printf \"%.0f\", $total_iops_sum + $total_iops}")
+                                                    iops_count=$((iops_count + 1))
+                                                    last_iops=$total_iops
+                                                fi
+                                            fi
+                                        fi
+                                        
                                         if upload_results "$output_file" "${pattern}_${block_size}_${num_jobs}_${direct}_${test_size}_${sync}_${iodepth}_${runtime}"; then
                                             successful_uploads=$((successful_uploads + 1))
                                         else
@@ -666,6 +761,22 @@ run_all_tests() {
     echo "Total tests:      $total_tests"
     echo "Successful:       $successful_uploads"
     echo "Failed:           $failed_uploads"
+    
+    # Display IOPS statistics if available
+    if [ $iops_count -gt 0 ]; then
+        local avg_iops=0
+        if command -v bc &> /dev/null; then
+            avg_iops=$(echo "scale=0; $total_iops_sum / $iops_count" | bc)
+        else
+            avg_iops=$(awk "BEGIN {printf \"%.0f\", $total_iops_sum / $iops_count}")
+        fi
+        echo "----------------------------------------"
+        echo -e "${YELLOW}IOPS${NC} Statistics:"
+        echo -e "  Last test ${YELLOW}IOPS${NC}:  $last_iops"
+        if [ $iops_count -gt 1 ]; then
+            echo -e "  Average ${YELLOW}IOPS${NC}:    $avg_iops (from $iops_count tests)"
+        fi
+    fi
     echo "========================================="
     
     if [ $failed_uploads -gt 0 ]; then
@@ -803,7 +914,7 @@ trap 'print_warning "Script interrupted. Cleaning up..."; cleanup; exit 1' INT T
 
 # Function to generate .env file
 generate_env_file() {
-    local env_file=".env"
+    local env_file="${1:-.env}"
     local hostname_default
     hostname_default=$(hostname -s 2>/dev/null || echo "localhost")
     
@@ -885,7 +996,7 @@ DESCRIPTION="hostname:\$HOSTNAME,protocol:\$PROTOCOL,drivetype:\$DRIVE_TYPE,driv
 
 
 # Backend Configuration
-BACKEND_URL="https://fio-analyzer.stylite-live.net"
+BACKEND_URL=https://fio-analyzer.stylite-live.net
 USERNAME=xxxxxxx
 PASSWORD=xxxxxxx
 EOF
@@ -901,7 +1012,12 @@ EOF
 
 # Generate .env file if requested
 if [ "$1" = "-g" ] || [ "$1" = "--generate-env" ]; then
-    generate_env_file
+    # Check if a filename was provided as second argument
+    env_filename=".env"
+    if [ -n "$2" ] && [[ ! "$2" =~ ^- ]]; then
+        env_filename="$2"
+    fi
+    generate_env_file "$env_filename"
     exit 0
 fi
 
@@ -946,13 +1062,18 @@ Options:
   -y, --yes          Skip confirmation prompt and start tests automatically
   -u, --uuid         Generate and output a random UUID
   -g, --generate-env Generate a ready-to-use .env configuration file
+                     Optional: specify filename (default: .env)
+                     Example: $0 --generate-env base.env
   -e, --env-file     Specify a custom .env file path (can be used multiple times)
                      Files are loaded in order, with later files overriding earlier ones.
                      Default: .env if no -e options are specified.
 
 Configuration:
   The script loads configuration from a .env file in the current directory.
-  Generate a .env file using: $0 --generate-env
+  Generate a .env file using: $0 --generate-env [filename]
+                     Examples: $0 --generate-env
+                              $0 --generate-env base.env
+                              $0 -g production.env
   Or copy .env.example to .env and customize the values.
   
   Multiple .env files can be specified:
@@ -997,10 +1118,13 @@ Configuration Variables:
   RUNTIME        - Test runtime in seconds (default: 30)
 
 Examples:
-  # Generate configuration file
+  # Generate configuration file (default: .env)
   $0 --generate-env
-  # Edit .env with your settings, then:
-  $0
+  # Or generate a named file
+  $0 --generate-env base.env
+  $0 -g production.env
+  # Edit the file with your settings, then:
+  $0 -e base.env
   
   # Or use the old method:
   cp .env.example .env
