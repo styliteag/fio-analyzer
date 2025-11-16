@@ -672,10 +672,24 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
         "iops": extract_iops(job),
         "avg_latency": extract_latency(job),
         "bandwidth": extract_bandwidth(job),
+        # Extract all latency percentiles
+        "p1_latency": extract_percentile_latency(job, 1),
+        "p5_latency": extract_percentile_latency(job, 5),
+        "p10_latency": extract_percentile_latency(job, 10),
+        "p20_latency": extract_percentile_latency(job, 20),
+        "p30_latency": extract_percentile_latency(job, 30),
+        "p40_latency": extract_percentile_latency(job, 40),
+        "p50_latency": extract_percentile_latency(job, 50),
+        "p60_latency": extract_percentile_latency(job, 60),
         "p70_latency": extract_percentile_latency(job, 70),
+        "p80_latency": extract_percentile_latency(job, 80),
         "p90_latency": extract_percentile_latency(job, 90),
         "p95_latency": extract_percentile_latency(job, 95),
         "p99_latency": extract_percentile_latency(job, 99),
+        "p99_5_latency": extract_percentile_latency(job, 99.5),
+        "p99_9_latency": extract_percentile_latency(job, 99.9),
+        "p99_95_latency": extract_percentile_latency(job, 99.95),
+        "p99_99_latency": extract_percentile_latency(job, 99.99),
         # Extract system info
         "usr_cpu": fio_data.get("usr_cpu", 0),
         "sys_cpu": fio_data.get("sys_cpu", 0),
@@ -754,27 +768,32 @@ def extract_bandwidth(job: Dict[str, Any]) -> float:
     return (read_bw + write_bw) / (1024 * 1024)  # Convert to MB/s
 
 
-def extract_percentile_latency(job: Dict[str, Any], percentile: int) -> float:
+def extract_percentile_latency(job: Dict[str, Any], percentile: float) -> float:
     """
     Extract percentile latency statistics from FIO job data.
 
-    Retrieves the specified percentile latency value (P95, P99, etc.)
+    Retrieves the specified percentile latency value (P1, P5, P95, P99, etc.)
     and converts from nanoseconds to milliseconds. Uses the higher
     value between read and write operations.
 
     Args:
         job: FIO job data containing latency percentile statistics
-        percentile: Percentile value to extract (e.g., 95 for P95)
+        percentile: Percentile value to extract (e.g., 95 for P95, 99.5 for P99.5)
 
     Returns:
         Percentile latency in milliseconds
     """
-    read_lat = job.get("read", {}).get("clat_ns", {}).get("percentile", {}).get(f"{percentile}.000000", 0)
-    write_lat = job.get("write", {}).get("clat_ns", {}).get("percentile", {}).get(f"{percentile}.000000", 0)
+    # Format percentile key to match FIO format (e.g., "1.000000", "99.500000")
+    percentile_key = f"{percentile:.6f}"
+    
+    read_lat = job.get("read", {}).get("clat_ns", {}).get("percentile", {}).get(percentile_key, 0)
+    write_lat = job.get("write", {}).get("clat_ns", {}).get("percentile", {}).get(percentile_key, 0)
 
     # Use the higher of read/write latency
     max_lat = max(read_lat, write_lat)
     return max_lat / 1000000  # Convert ns to ms
+
+
 
 
 def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> int:
@@ -826,10 +845,23 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
         "avg_latency",
         "bandwidth",
         "iops",
+        "p1_latency",
+        "p5_latency",
+        "p10_latency",
+        "p20_latency",
+        "p30_latency",
+        "p40_latency",
+        "p50_latency",
+        "p60_latency",
         "p70_latency",
+        "p80_latency",
         "p90_latency",
         "p95_latency",
         "p99_latency",
+        "p99_5_latency",
+        "p99_9_latency",
+        "p99_95_latency",
+        "p99_99_latency",
         "is_latest",
     ]
 

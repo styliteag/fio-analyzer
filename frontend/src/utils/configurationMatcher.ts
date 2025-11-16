@@ -25,6 +25,8 @@ export interface HostComparisonData {
   metrics: {
     iops?: number;
     bandwidth?: number;
+    p70_latency?: number;
+    p90_latency?: number;
     p95_latency?: number;
     p99_latency?: number;
     avg_latency?: number;
@@ -114,6 +116,8 @@ export function createComparableConfigurations(
         metrics: {
           iops: run.metrics.iops?.value,
           bandwidth: run.metrics.bandwidth?.value,
+          p70_latency: run.metrics.p70_latency?.value,
+          p90_latency: run.metrics.p90_latency?.value,
           p95_latency: run.metrics.p95_latency?.value,
           p99_latency: run.metrics.p99_latency?.value,
           avg_latency: run.metrics.avg_latency?.value

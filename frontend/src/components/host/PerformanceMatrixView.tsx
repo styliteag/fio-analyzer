@@ -82,6 +82,8 @@ const PerformanceMatrixView: React.FC<PerformanceMatrixViewProps> = ({ drives })
                         <option value="iops">IOPS</option>
                         <option value="avg_latency">Average Latency</option>
                         <option value="bandwidth">Bandwidth</option>
+                        <option value="p70_latency">P70 Latency</option>
+                        <option value="p90_latency">P90 Latency</option>
                         <option value="p95_latency">P95 Latency</option>
                         <option value="p99_latency">P99 Latency</option>
                     </select>
@@ -218,6 +220,8 @@ function formatMetricValue(value: number, metric: MetricType): string {
         case 'iops':
             return new Intl.NumberFormat().format(Math.round(value));
         case 'avg_latency':
+        case 'p70_latency':
+        case 'p90_latency':
         case 'p95_latency':
         case 'p99_latency':
             return `${value.toFixed(3)}ms`;

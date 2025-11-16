@@ -36,6 +36,8 @@ export interface TestConfiguration {
     iops: number | null | undefined;
     avg_latency: number | null | undefined;
     bandwidth: number | null | undefined;
+    p70_latency: number | null | undefined;
+    p90_latency: number | null | undefined;
     p95_latency: number | null | undefined;
     p99_latency: number | null | undefined;
     timestamp: string;
@@ -111,6 +113,8 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
             iops: run.iops,
             avg_latency: run.avg_latency,
             bandwidth: run.bandwidth,
+            p70_latency: run.p70_latency,
+            p90_latency: run.p90_latency,
             p95_latency: run.p95_latency,
             p99_latency: run.p99_latency,
             timestamp: run.timestamp

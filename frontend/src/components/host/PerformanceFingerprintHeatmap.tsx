@@ -17,6 +17,8 @@ interface HeatmapCell {
     timestamp: string;
     avgLatency?: number;
     bandwidth?: number;
+    p70Latency?: number;
+    p90Latency?: number;
     p95Latency?: number;
     p99Latency?: number;
 }
@@ -159,6 +161,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 timestamp: '',
                 avgLatency: undefined,
                 bandwidth: undefined,
+                p70Latency: undefined,
+                p90Latency: undefined,
                 p95Latency: undefined,
                 p99Latency: undefined,
             };
@@ -220,6 +224,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 timestamp: config.timestamp,
                 avgLatency: config.avg_latency !== null && config.avg_latency !== undefined ? config.avg_latency : undefined,
                 bandwidth: config.bandwidth !== null && config.bandwidth !== undefined ? config.bandwidth : undefined,
+                p70Latency: config.p70_latency !== null && config.p70_latency !== undefined ? config.p70_latency : undefined,
+                p90Latency: config.p90_latency !== null && config.p90_latency !== undefined ? config.p90_latency : undefined,
                 p95Latency: config.p95_latency !== null && config.p95_latency !== undefined ? config.p95_latency : undefined,
                 p99Latency: config.p99_latency !== null && config.p99_latency !== undefined ? config.p99_latency : undefined,
             };
@@ -536,8 +542,17 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                 {hoveredCell.cell.avgLatency && hoveredCell.cell.avgLatency > 0 && (
                                     <div>Responsiveness: <span className="font-medium">{(1000 / hoveredCell.cell.avgLatency).toFixed(1)} ops/ms</span></div>
                                 )}
+                                {hoveredCell.cell.p70Latency && (
+                                    <div>70th %ile: <span className="font-medium">{(hoveredCell.cell.p70Latency * 1000).toFixed(0)}ns</span></div>
+                                )}
+                                {hoveredCell.cell.p90Latency && (
+                                    <div>90th %ile: <span className="font-medium">{(hoveredCell.cell.p90Latency * 1000).toFixed(0)}ns</span></div>
+                                )}
                                 {hoveredCell.cell.p95Latency && (
                                     <div>95th %ile: <span className="font-medium">{(hoveredCell.cell.p95Latency * 1000).toFixed(0)}ns</span></div>
+                                )}
+                                {hoveredCell.cell.p99Latency && (
+                                    <div>99th %ile: <span className="font-medium">{(hoveredCell.cell.p99Latency * 1000).toFixed(0)}ns</span></div>
                                 )}
                             </div>
                         </div>

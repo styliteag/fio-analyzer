@@ -132,6 +132,26 @@ function MultiChartGrid({ comparisons, selectedComparisonIndex, className = '' }
             yAxisID: 'y',
           },
           {
+            label: 'P70 Latency (μs)',
+            data: visibleHostData.map(data => data.metrics.p70_latency || 0),
+            backgroundColor: hostLabels.map((_, idx) => 
+              getBarColor(idx, colors[idx % colors.length])
+            ),
+            borderColor: hostLabels.map((_, idx) => colors[idx % colors.length]),
+            borderWidth: chartState.highlightedHost ? 2 : 1,
+            yAxisID: 'y',
+          },
+          {
+            label: 'P90 Latency (μs)',
+            data: visibleHostData.map(data => data.metrics.p90_latency || 0),
+            backgroundColor: hostLabels.map((_, idx) => 
+              getBarColor(idx, colors[idx % colors.length])
+            ),
+            borderColor: hostLabels.map((_, idx) => colors[idx % colors.length]),
+            borderWidth: chartState.highlightedHost ? 2 : 1,
+            yAxisID: 'y',
+          },
+          {
             label: 'P95 Latency (μs)',
             data: visibleHostData.map(data => data.metrics.p95_latency || 0),
             backgroundColor: hostLabels.map((_, idx) => 

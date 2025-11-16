@@ -96,10 +96,23 @@ class DatabaseManager:
                 avg_latency REAL,
                 bandwidth REAL,
                 iops REAL,
+                p1_latency REAL,
+                p5_latency REAL,
+                p10_latency REAL,
+                p20_latency REAL,
+                p30_latency REAL,
+                p40_latency REAL,
+                p50_latency REAL,
+                p60_latency REAL,
                 p70_latency REAL,
+                p80_latency REAL,
                 p90_latency REAL,
                 p95_latency REAL,
                 p99_latency REAL,
+                p99_5_latency REAL,
+                p99_9_latency REAL,
+                p99_95_latency REAL,
+                p99_99_latency REAL,
                 -- UUID fields
                 config_uuid TEXT,
                 run_uuid TEXT,
@@ -145,10 +158,23 @@ class DatabaseManager:
                 avg_latency REAL,
                 bandwidth REAL,
                 iops REAL,
+                p1_latency REAL,
+                p5_latency REAL,
+                p10_latency REAL,
+                p20_latency REAL,
+                p30_latency REAL,
+                p40_latency REAL,
+                p50_latency REAL,
+                p60_latency REAL,
                 p70_latency REAL,
+                p80_latency REAL,
                 p90_latency REAL,
                 p95_latency REAL,
                 p99_latency REAL,
+                p99_5_latency REAL,
+                p99_9_latency REAL,
+                p99_95_latency REAL,
+                p99_99_latency REAL,
                 -- UUID fields
                 config_uuid TEXT,
                 run_uuid TEXT,
@@ -315,18 +341,22 @@ class DatabaseManager:
 
                 log_info(f"Backfilled {len(records)} records in {table_name}")
 
-        # Migration 2: Add P70 and P90 latency columns
+        # Migration 2: Add all latency percentile columns
+        percentile_columns = [
+            'p1_latency', 'p5_latency', 'p10_latency', 'p20_latency', 'p30_latency',
+            'p40_latency', 'p50_latency', 'p60_latency', 'p70_latency', 'p80_latency',
+            'p90_latency', 'p95_latency', 'p99_latency', 'p99_5_latency', 'p99_9_latency',
+            'p99_95_latency', 'p99_99_latency'
+        ]
+        
         for table_name in ['test_runs_all', 'test_runs']:
             cursor.execute(f"PRAGMA table_info({table_name})")
             columns = [row[1] for row in cursor.fetchall()]
 
-            if 'p70_latency' not in columns:
-                log_info(f"Adding p70_latency column to {table_name}")
-                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN p70_latency REAL")
-
-            if 'p90_latency' not in columns:
-                log_info(f"Adding p90_latency column to {table_name}")
-                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN p90_latency REAL")
+            for col_name in percentile_columns:
+                if col_name not in columns:
+                    log_info(f"Adding {col_name} column to {table_name}")
+                    cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_name} REAL")
 
         self.connection.commit()
 

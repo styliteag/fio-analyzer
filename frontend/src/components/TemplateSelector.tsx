@@ -63,7 +63,7 @@ const chartTemplates: ChartTemplate[] = [
 		xAxis: "hostname",
 		yAxis: "multi_metrics",
 		groupBy: "drive_model",
-		metrics: ["iops", "avg_latency", "bandwidth", "p95_latency", "p99_latency", "consistency"],
+		metrics: ["iops", "avg_latency", "bandwidth", "p70_latency", "p90_latency", "p95_latency", "p99_latency", "consistency"],
 	},
 	{
 		id: "3d-bar",

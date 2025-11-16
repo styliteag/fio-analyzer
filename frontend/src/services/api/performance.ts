@@ -42,7 +42,7 @@ export const getDefaultMetrics = (): string[] => [
 
 // Validate metric types
 export const isValidMetricType = (metric: string): boolean => {
-    const validMetrics = ["iops", "avg_latency", "bandwidth", "p95_latency", "p99_latency"];
+    const validMetrics = ["iops", "avg_latency", "bandwidth", "p70_latency", "p90_latency", "p95_latency", "p99_latency"];
     return validMetrics.includes(metric);
 };
 

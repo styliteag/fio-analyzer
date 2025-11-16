@@ -27,6 +27,8 @@ interface TestConfiguration {
   iops: number | null | undefined;
   avg_latency: number | null | undefined;
   bandwidth: number | null | undefined;
+  p70_latency: number | null | undefined;
+  p90_latency: number | null | undefined;
   p95_latency: number | null | undefined;
   p99_latency: number | null | undefined;
   timestamp: string;

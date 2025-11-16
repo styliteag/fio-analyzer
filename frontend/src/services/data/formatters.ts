@@ -11,6 +11,8 @@ export const formatMetricValue = (
         case 'iops':
             return formatIOPS(value);
         case 'avg_latency':
+        case 'p70_latency':
+        case 'p90_latency':
         case 'p95_latency':
         case 'p99_latency':
             return formatLatency(value, precision);
@@ -157,6 +159,8 @@ export const formatMetricLabel = (metricType: string): string => {
         'iops': 'IOPS',
         'avg_latency': 'Average Latency (ms)',
         'bandwidth': 'Bandwidth (MB/s)',
+        'p70_latency': '70th Percentile Latency (ms)',
+        'p90_latency': '90th Percentile Latency (ms)',
         'p95_latency': '95th Percentile Latency (ms)',
         'p99_latency': '99th Percentile Latency (ms)'
     };

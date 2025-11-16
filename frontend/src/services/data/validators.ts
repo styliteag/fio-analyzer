@@ -57,7 +57,7 @@ export const validatePerformanceData = (data: any[]): ValidationResult => {
 // Validate metrics object
 export const validateMetrics = (metrics: Record<string, any>): ValidationResult => {
     const errors: string[] = [];
-    const validMetricTypes = ['iops', 'avg_latency', 'bandwidth', 'p95_latency', 'p99_latency'];
+    const validMetricTypes = ['iops', 'avg_latency', 'bandwidth', 'p70_latency', 'p90_latency', 'p95_latency', 'p99_latency'];
 
     Object.entries(metrics).forEach(([key, metric]) => {
         if (!validMetricTypes.includes(key)) {

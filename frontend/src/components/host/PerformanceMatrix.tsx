@@ -20,6 +20,8 @@ interface MatrixCell {
         iops: number | null | undefined;
         avg_latency: number | null | undefined;
         bandwidth: number | null | undefined;
+        p70_latency: number | null | undefined;
+        p90_latency: number | null | undefined;
         p95_latency: number | null | undefined;
         p99_latency: number | null | undefined;
         timestamp: string;
@@ -295,6 +297,8 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
                                     <div>IOPS: <span className="font-medium">{hoveredCell.cell.fullConfig.iops !== null && hoveredCell.cell.fullConfig.iops !== undefined ? hoveredCell.cell.fullConfig.iops.toFixed(0) : 'N/A'}</span></div>
                                     <div>Avg Latency: <span className="font-medium">{hoveredCell.cell.fullConfig.avg_latency !== null && hoveredCell.cell.fullConfig.avg_latency !== undefined ? hoveredCell.cell.fullConfig.avg_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
                                     <div>Bandwidth: <span className="font-medium">{hoveredCell.cell.fullConfig.bandwidth !== null && hoveredCell.cell.fullConfig.bandwidth !== undefined ? hoveredCell.cell.fullConfig.bandwidth.toFixed(1) + ' MB/s' : 'N/A'}</span></div>
+                                    <div>70th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p70_latency !== null && hoveredCell.cell.fullConfig.p70_latency !== undefined ? hoveredCell.cell.fullConfig.p70_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                    <div>90th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p90_latency !== null && hoveredCell.cell.fullConfig.p90_latency !== undefined ? hoveredCell.cell.fullConfig.p90_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
                                     <div>95th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p95_latency !== null && hoveredCell.cell.fullConfig.p95_latency !== undefined ? hoveredCell.cell.fullConfig.p95_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
                                     <div>99th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p99_latency !== null && hoveredCell.cell.fullConfig.p99_latency !== undefined ? hoveredCell.cell.fullConfig.p99_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
                                 </div>

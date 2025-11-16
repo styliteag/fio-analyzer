@@ -36,7 +36,7 @@ const CHART_CONFIGS: Record<ChartType, ChartConfig> = {
     title: 'Latency Analysis',
     description: 'Analyze latency metrics including average and percentiles',
     icon: Activity,
-    supportedMetrics: ['avg_latency', 'p95_latency', 'p99_latency'],
+    supportedMetrics: ['avg_latency', 'p70_latency', 'p90_latency', 'p95_latency', 'p99_latency'],
     defaultMetrics: ['avg_latency', 'p95_latency']
   },
   'bandwidth-trends': {

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { DriveAnalysis, TestConfiguration } from '../services/api/hostAnalysis';
 
-export type MetricType = 'iops' | 'avg_latency' | 'bandwidth' | 'p95_latency' | 'p99_latency';
+export type MetricType = 'iops' | 'avg_latency' | 'bandwidth' | 'p70_latency' | 'p90_latency' | 'p95_latency' | 'p99_latency';
 
 export interface HeatmapCell {
     row: string;

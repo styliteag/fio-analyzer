@@ -162,6 +162,8 @@ export const getTimeSeriesMetricTypes = () => [
     { value: "iops", label: "IOPS" },
     { value: "avg_latency", label: "Average Latency" },
     { value: "bandwidth", label: "Bandwidth" },
+    { value: "p70_latency", label: "70th Percentile Latency" },
+    { value: "p90_latency", label: "90th Percentile Latency" },
     { value: "p95_latency", label: "95th Percentile Latency" },
     { value: "p99_latency", label: "99th Percentile Latency" },
 ];

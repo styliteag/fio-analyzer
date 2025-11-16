@@ -196,7 +196,7 @@ export const isPerformanceDataPoint = (point: unknown): point is PerformanceChar
 };
 
 // Chart utility types
-export type ChartMetricType = 'iops' | 'latency' | 'bandwidth' | 'p95_latency' | 'p99_latency';
+export type ChartMetricType = 'iops' | 'latency' | 'bandwidth' | 'p70_latency' | 'p90_latency' | 'p95_latency' | 'p99_latency';
 
 export type ChartAxisType = 'linear' | 'logarithmic' | 'time' | 'category';
 

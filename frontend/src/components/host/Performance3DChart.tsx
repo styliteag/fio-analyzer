@@ -21,6 +21,8 @@ interface PerformancePoint {
     queueDepth: number;
     color: string;
     performanceScore: number;
+    p70_latency?: number | null;
+    p90_latency?: number | null;
     p95_latency?: number | null;
     p99_latency?: number | null;
     timestamp: string;
@@ -469,6 +471,8 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                     queueDepth: config.queue_depth,
                     color: driveColors[driveIndex] || currentScheme.drives[driveIndex % currentScheme.drives.length],
                     performanceScore,
+                    p70_latency: config.p70_latency,
+                    p90_latency: config.p90_latency,
                     p95_latency: config.p95_latency,
                     p99_latency: config.p99_latency,
                     timestamp: config.timestamp,
@@ -666,6 +670,8 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                             <div>Latency: <span className="font-medium">{hoveredPoint.x.toFixed(2)}ms</span></div>
                                             <div>IOPS: <span className="font-medium">{hoveredPoint.y.toFixed(0)}</span></div>
                                             <div>Bandwidth: <span className="font-medium">{hoveredPoint.z.toFixed(1)} MB/s</span></div>
+                                            <div>70th Percentile: <span className="font-medium">{hoveredPoint.p70_latency !== null && hoveredPoint.p70_latency !== undefined ? hoveredPoint.p70_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                            <div>90th Percentile: <span className="font-medium">{hoveredPoint.p90_latency !== null && hoveredPoint.p90_latency !== undefined ? hoveredPoint.p90_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
                                             <div>95th Percentile: <span className="font-medium">{hoveredPoint.p95_latency !== null && hoveredPoint.p95_latency !== undefined ? hoveredPoint.p95_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
                                             <div>99th Percentile: <span className="font-medium">{hoveredPoint.p99_latency !== null && hoveredPoint.p99_latency !== undefined ? hoveredPoint.p99_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
                                             <div>Score: <span className="font-medium">{hoveredPoint.performanceScore.toFixed(2)}</span></div>
