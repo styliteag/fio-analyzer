@@ -27,20 +27,112 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Function to load .env file
+# Function to load .env file with support for INCLUDE directive
 load_env() {
-    #local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    #local env_file="$script_dir/.env"
-    local env_file=".env"
+    local env_file="${1:-.env}"
+    local processed_files="${2:-}"  # Track processed files to prevent circular includes
+    local base_dir
+    
+    # Get directory of the env file for resolving relative INCLUDE paths
+    if [ -f "$env_file" ]; then
+        base_dir=$(dirname "$(readlink -f "$env_file" 2>/dev/null || echo "$env_file")")
+    else
+        base_dir="$(pwd)"
+    fi
+    
+    # Resolve absolute path for circular include detection
+    local abs_path
+    if [ -f "$env_file" ]; then
+        abs_path=$(readlink -f "$env_file" 2>/dev/null || realpath "$env_file" 2>/dev/null || echo "$env_file")
+    else
+        abs_path="$env_file"
+    fi
+    
+    # Check for circular includes
+    if echo "$processed_files" | grep -q ":$abs_path:"; then
+        print_error "Circular include detected: $env_file"
+        return 1
+    fi
+    
+    # Add current file to processed list
+    processed_files="${processed_files}:${abs_path}:"
     
     if [ -f "$env_file" ]; then
         print_status "Loading configuration from $env_file"
-        # Export variables from .env file
+        
+        # Process INCLUDE directives first, then export variables
         set -a
-        source "$env_file"
+        while IFS= read -r line || [ -n "$line" ]; do
+            # Skip comments and empty lines
+            if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
+                continue
+            fi
+            
+            # Check for INCLUDE directive (case-insensitive, with optional quotes)
+            if [[ "$line" =~ ^[[:space:]]*[Ii][Nn][Cc][Ll][Uu][Dd][Ee][[:space:]]*=[[:space:]]*(.+)$ ]]; then
+                local include_file="${BASH_REMATCH[1]}"
+                # Remove quotes if present
+                include_file="${include_file#\"}"
+                include_file="${include_file#\'}"
+                include_file="${include_file%\"}"
+                include_file="${include_file%\'}"
+                # Remove leading/trailing whitespace
+                include_file="${include_file#"${include_file%%[![:space:]]*}"}"
+                include_file="${include_file%"${include_file##*[![:space:]]}"}"
+                
+                # Resolve relative paths relative to the current env file's directory
+                if [[ "$include_file" != /* ]]; then
+                    include_file="$base_dir/$include_file"
+                fi
+                
+                # Recursively load included file (before processing remaining variables)
+                if [ -f "$include_file" ]; then
+                    load_env "$include_file" "$processed_files"
+                else
+                    print_warning "INCLUDE file not found: $include_file (referenced from $env_file)"
+                fi
+            fi
+        done < "$env_file"
+        
+        # Now process regular variables (second pass, after INCLUDEs are processed)
+        while IFS= read -r line || [ -n "$line" ]; do
+            # Skip comments, empty lines, and INCLUDE directives
+            if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]] || [[ "$line" =~ ^[[:space:]]*[Ii][Nn][Cc][Ll][Uu][Dd][Ee][[:space:]]*= ]]; then
+                continue
+            fi
+            
+            # Export regular env variables using source (safer than eval)
+            # Create a temporary export statement
+            if [[ "$line" =~ ^[[:space:]]*([^=]+)=(.*)$ ]]; then
+                local key="${BASH_REMATCH[1]}"
+                local value="${BASH_REMATCH[2]}"
+                # Remove leading/trailing whitespace from key
+                key="${key#"${key%%[![:space:]]*}"}"
+                key="${key%"${key##*[![:space:]]}"}"
+                # Remove leading/trailing whitespace from value (keep quotes for now)
+                value="${value#"${value%%[![:space:]]*}"}"
+                value="${value%"${value##*[![:space:]]}"}"
+                # Export - bash will handle quote removal
+                export "$key=$value"
+            fi
+        done < "$env_file"
         set +a
     else
         print_status "No .env file found at $env_file, using defaults and environment variables"
+    fi
+}
+
+# Function to load multiple .env files in order
+load_env_files() {
+    local env_files=("$@")
+    
+    if [ ${#env_files[@]} -eq 0 ]; then
+        # Default to .env if no files specified
+        load_env ".env"
+    else
+        for env_file in "${env_files[@]}"; do
+            load_env "$env_file"
+        done
     fi
 }
 
@@ -591,17 +683,37 @@ main() {
     echo "============================="
     echo
     
-    # Check for --yes flag to skip confirmation and server checks
+    # Parse command-line arguments
     local skip_confirmation=false
-    for arg in "$@"; do
-        if [ "$arg" = "--yes" ] || [ "$arg" = "-y" ]; then
-            skip_confirmation=true
-            break
-        fi
+    local env_files=()
+    local args=()
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -y|--yes)
+                skip_confirmation=true
+                shift
+                ;;
+            -e|--env-file)
+                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
+                    print_error "Option $1 requires a file path"
+                    exit 1
+                fi
+                env_files+=("$2")
+                shift 2
+                ;;
+            *)
+                args+=("$1")
+                shift
+                ;;
+        esac
     done
     
-    # Load configuration
-    load_env
+    # Restore remaining arguments for potential future use
+    set -- "${args[@]}"
+    
+    # Load configuration (supports multiple env files and INCLUDE directives)
+    load_env_files "${env_files[@]}"
     set_defaults
     
     # Check prerequisites
@@ -722,6 +834,9 @@ generate_env_file() {
 # Generated on $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 # Edit this file to customize your test configuration
 
+# INCLUDE directive to include other .env files
+# INCLUDE=/path/to/base.env
+
 # Host Configuration
 # Hostname (default: current hostname)
 # Use -vm if its a virtual machine
@@ -831,11 +946,23 @@ Options:
   -y, --yes          Skip confirmation prompt and start tests automatically
   -u, --uuid         Generate and output a random UUID
   -g, --generate-env Generate a ready-to-use .env configuration file
+  -e, --env-file     Specify a custom .env file path (can be used multiple times)
+                     Files are loaded in order, with later files overriding earlier ones.
+                     Default: .env if no -e options are specified.
 
 Configuration:
   The script loads configuration from a .env file in the current directory.
   Generate a .env file using: $0 --generate-env
   Or copy .env.example to .env and customize the values.
+  
+  Multiple .env files can be specified:
+    $0 -e base.env -e overrides.env
+  
+  .env files can include other .env files using the INCLUDE directive:
+    INCLUDE=/path/to/base.env
+    INCLUDE="relative/path/to/shared.env"
+  
+  Later files and variables override earlier ones.
   Environment variables override .env file settings.
 
 Pre-flight Checks:
@@ -879,6 +1006,20 @@ Examples:
   cp .env.example .env
   # Edit .env with your settings, then:
   $0
+  
+  # Use a custom .env file
+  $0 --env-file /path/to/custom.env
+  $0 -e ./configs/production.env
+  
+  # Use multiple .env files (later files override earlier ones)
+  $0 -e base.env -e overrides.env
+  $0 -e shared.env -e server1.env -e server1-overrides.env
+  
+  # Use INCLUDE directive in .env file:
+  # In your .env file, add:
+  # INCLUDE=/path/to/base.env
+  # HOSTNAME=server1
+  # TEST_SIZE=10G
   
   # Override with environment variables
   HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" DRIVE_MODEL="WD1003FZEX" DRIVE_TYPE="HDD" $0
