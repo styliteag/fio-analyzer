@@ -28,7 +28,11 @@ import {
 	bulkUpdateTestRunsByUUID,
 	fetchTestRun,
 } from '../services/api/testRuns';
-import { fetchTimeSeriesHistory } from '../services/api/timeSeries';
+import {
+	fetchTimeSeriesHistory,
+	previewTimeSeriesCleanup,
+	executeTimeSeriesCleanup,
+} from '../services/api/timeSeries';
 import { useNavigate } from 'react-router-dom';
 import type { TestRun, UUIDGroup } from '../types';
 
@@ -465,26 +469,19 @@ const Admin: React.FC = () => {
 		setDataCleanupState({ ...dataCleanupState, isLoading: true });
 
 		try {
-			const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-			const params = new URLSearchParams({
-				cutoff_date: dataCleanupState.cutoffDate,
-				mode: dataCleanupState.mode || 'delete-old',
-			});
+			const result = await previewTimeSeriesCleanup(
+				dataCleanupState.cutoffDate,
+				dataCleanupState.mode || 'delete-old',
+				dataCleanupState.mode === 'compact' ? dataCleanupState.compactFrequency : undefined
+			);
 
-			if (dataCleanupState.mode === 'compact') {
-				params.append('frequency', dataCleanupState.compactFrequency);
+			if (result.error) {
+				throw new Error(result.error);
 			}
 
-			const response = await fetch(`${baseUrl}/api/time-series/history/cleanup-preview?${params}`, {
-				credentials: 'include',
-			});
-
-			if (!response.ok) throw new Error('Failed to preview cleanup');
-
-			const data = await response.json();
 			setDataCleanupState({
 				...dataCleanupState,
-				previewCount: data.affected_count || 0,
+				previewCount: result.data?.affected_count || 0,
 				isLoading: false,
 			});
 		} catch (err) {
@@ -499,22 +496,17 @@ const Admin: React.FC = () => {
 		setDataCleanupState({ ...dataCleanupState, isLoading: true });
 
 		try {
-			const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-			const response = await fetch(`${baseUrl}/api/time-series/history/cleanup`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
-				body: JSON.stringify({
-					cutoff_date: dataCleanupState.cutoffDate,
-					mode: dataCleanupState.mode,
-					frequency: dataCleanupState.mode === 'compact' ? dataCleanupState.compactFrequency : undefined,
-				}),
-			});
+			const result = await executeTimeSeriesCleanup(
+				dataCleanupState.cutoffDate,
+				dataCleanupState.mode || 'delete-old',
+				dataCleanupState.mode === 'compact' ? dataCleanupState.compactFrequency : undefined
+			);
 
-			if (!response.ok) throw new Error('Failed to execute cleanup');
+			if (result.error) {
+				throw new Error(result.error);
+			}
 
-			const data = await response.json();
-			alert(`Successfully ${dataCleanupState.mode === 'delete-old' ? 'deleted' : 'compacted'} ${data.deleted_count} test runs`);
+			alert(`Successfully ${dataCleanupState.mode === 'delete-old' ? 'deleted' : 'compacted'} ${result.data?.deleted_count || 0} test runs`);
 
 			setDataCleanupState({
 				...dataCleanupState,

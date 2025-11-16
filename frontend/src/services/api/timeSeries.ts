@@ -191,3 +191,47 @@ export const fetchTimeSeriesAll = async (filters?: {
         signal: abortSignal
     });
 };
+
+// Preview cleanup operation (how many rows will be affected)
+export const previewTimeSeriesCleanup = async (
+    cutoffDate: string,
+    mode: 'delete-old' | 'compact',
+    frequency?: 'daily' | 'weekly' | 'monthly',
+    abortSignal?: AbortSignal
+) => {
+    const params = new URLSearchParams({
+        cutoff_date: cutoffDate,
+        mode,
+    });
+
+    if (frequency) {
+        params.append('frequency', frequency);
+    }
+
+    return apiCall<{ affected_count: number }>(`/api/time-series/history/cleanup-preview?${params}`, {
+        signal: abortSignal
+    });
+};
+
+// Execute cleanup operation
+export const executeTimeSeriesCleanup = async (
+    cutoffDate: string,
+    mode: 'delete-old' | 'compact',
+    frequency?: 'daily' | 'weekly' | 'monthly',
+    abortSignal?: AbortSignal
+) => {
+    const body: any = {
+        cutoff_date: cutoffDate,
+        mode,
+    };
+
+    if (frequency) {
+        body.frequency = frequency;
+    }
+
+    return apiCall<{ deleted_count: number; message: string }>('/api/time-series/history/cleanup', {
+        method: 'POST',
+        body: JSON.stringify(body),
+        signal: abortSignal
+    });
+};
