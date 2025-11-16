@@ -150,6 +150,8 @@ export interface RadarMetrics {
   iops: number;
   latency: number;
   bandwidth: number;
+  p70_latency: number;
+  p90_latency: number;
   p95_latency: number;
   p99_latency: number;
   consistency: number;

@@ -42,6 +42,8 @@ class TestRunBase:
     avg_latency: Optional[float] = None
     bandwidth: Optional[float] = None
     iops: Optional[float] = None
+    p70_latency: Optional[float] = None
+    p90_latency: Optional[float] = None
     p95_latency: Optional[float] = None
     p99_latency: Optional[float] = None
     is_latest: int = 1

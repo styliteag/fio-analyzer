@@ -90,6 +90,16 @@ const generateLatencyAnalysisData = (aggregatedData: AggregatedData): {
 
   // Percentile latency data
   const percentileDatasets = series.flatMap(seriesItem => {
+    const p70Data = blockSizes.map(blockSize => {
+      const point = seriesItem.data.find(p => p.blockSize === blockSize);
+      return point?.p70Latency || 0;
+    });
+
+    const p90Data = blockSizes.map(blockSize => {
+      const point = seriesItem.data.find(p => p.blockSize === blockSize);
+      return point?.p90Latency || 0;
+    });
+
     const p95Data = blockSizes.map(blockSize => {
       const point = seriesItem.data.find(p => p.blockSize === blockSize);
       return point?.p95Latency || 0;
@@ -101,6 +111,38 @@ const generateLatencyAnalysisData = (aggregatedData: AggregatedData): {
     });
 
     const results = [];
+
+    if (p70Data.some(value => value > 0)) {
+      results.push({
+        label: `${seriesItem.label} (P70)`,
+        data: p70Data,
+        backgroundColor: `${seriesItem.color || '#10B981'}80`,
+        borderColor: seriesItem.color || '#059669',
+        borderWidth: 1,
+        borderDash: [10, 5],
+        tension: 0.1,
+        fill: false,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        yAxisID: 'y1'
+      });
+    }
+
+    if (p90Data.some(value => value > 0)) {
+      results.push({
+        label: `${seriesItem.label} (P90)`,
+        data: p90Data,
+        backgroundColor: `${seriesItem.color || '#3B82F6'}80`,
+        borderColor: seriesItem.color || '#2563EB',
+        borderWidth: 1,
+        borderDash: [8, 4],
+        tension: 0.1,
+        fill: false,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        yAxisID: 'y1'
+      });
+    }
 
     if (p95Data.some(value => value > 0)) {
       results.push({

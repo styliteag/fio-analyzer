@@ -253,7 +253,7 @@ async def get_test_runs(
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
                    output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
-                   avg_latency, bandwidth, iops, p95_latency, p99_latency,
+                   avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency,
                    config_uuid, run_uuid
             FROM test_runs
             WHERE {where_clause}
@@ -586,6 +586,8 @@ async def bulk_update_test_runs_by_uuid(
                                 "iops": {"value": 125000.5, "unit": "IOPS"},
                                 "avg_latency": {"value": 0.256, "unit": "ms"},
                                 "bandwidth": {"value": 488.28, "unit": "MB/s"},
+                                "p70_latency": {"value": 0.384, "unit": "ms"},
+                                "p90_latency": {"value": 0.448, "unit": "ms"},
                                 "p95_latency": {"value": 0.512, "unit": "ms"},
                                 "p99_latency": {"value": 1.024, "unit": "ms"},
                             },
@@ -688,6 +690,8 @@ async def get_performance_data(
                         "avg_latency": ({"value": test_run_data["avg_latency"], "unit": "ms"} if test_run_data["avg_latency"] is not None else None),
                         "bandwidth": ({"value": test_run_data["bandwidth"], "unit": "MB/s"} if test_run_data["bandwidth"] is not None else None),
                         "iops": ({"value": test_run_data["iops"], "unit": "IOPS"} if test_run_data["iops"] is not None else None),
+                        "p70_latency": ({"value": test_run_data["p70_latency"], "unit": "ms"} if test_run_data["p70_latency"] is not None else None),
+                        "p90_latency": ({"value": test_run_data["p90_latency"], "unit": "ms"} if test_run_data["p90_latency"] is not None else None),
                         "p95_latency": ({"value": test_run_data["p95_latency"], "unit": "ms"} if test_run_data["p95_latency"] is not None else None),
                         "p99_latency": ({"value": test_run_data["p99_latency"], "unit": "ms"} if test_run_data["p99_latency"] is not None else None),
                     },
@@ -897,6 +901,8 @@ async def get_test_runs_grouped_by_uuid(
                         "iops": 125000.5,
                         "avg_latency": 0.256,
                         "bandwidth": 488.28,
+                        "p70_latency": 0.384,
+                        "p90_latency": 0.448,
                         "p95_latency": 0.512,
                         "p99_latency": 1.024,
                     }
@@ -945,7 +951,7 @@ async def get_test_run(
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
                    output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
-                   avg_latency, bandwidth, iops, p95_latency, p99_latency,
+                   avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency,
                    config_uuid, run_uuid
             FROM test_runs WHERE id = ?
         """,
@@ -1214,6 +1220,8 @@ def get_metric_unit(metric_type: str) -> str:
     units = {
         "iops": "IOPS",
         "avg_latency": "ms",
+        "p70_latency": "ms",
+        "p90_latency": "ms",
         "p95_latency": "ms",
         "p99_latency": "ms",
         "bandwidth": "MB/s",

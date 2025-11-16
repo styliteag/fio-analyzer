@@ -12,7 +12,7 @@ export interface PerformanceGraphsProps {
 // Chart type definitions
 export type ChartType = 'iops-comparison' | 'latency-analysis' | 'bandwidth-trends' | 'responsiveness';
 export type PatternType = 'random_read' | 'random_write' | 'sequential_read' | 'sequential_write';
-export type MetricType = 'iops' | 'avg_latency' | 'p95_latency' | 'p99_latency' | 'bandwidth' | 'responsiveness';
+export type MetricType = 'iops' | 'avg_latency' | 'p70_latency' | 'p90_latency' | 'p95_latency' | 'p99_latency' | 'bandwidth' | 'responsiveness';
 
 // Chart configuration
 export interface ChartConfig {
@@ -54,6 +54,8 @@ export interface DataPoint {
   pattern: PatternType;
   iops: number;
   avgLatency: number | null;
+  p70Latency: number | null;
+  p90Latency: number | null;
   p95Latency: number | null;
   p99Latency: number | null;
   bandwidth: number | null;

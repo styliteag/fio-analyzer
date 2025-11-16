@@ -672,6 +672,8 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
         "iops": extract_iops(job),
         "avg_latency": extract_latency(job),
         "bandwidth": extract_bandwidth(job),
+        "p70_latency": extract_percentile_latency(job, 70),
+        "p90_latency": extract_percentile_latency(job, 90),
         "p95_latency": extract_percentile_latency(job, 95),
         "p99_latency": extract_percentile_latency(job, 99),
         # Extract system info
@@ -710,19 +712,19 @@ def extract_latency(job: Dict[str, Any]) -> float:
     """
     Extract weighted average latency from FIO job data.
 
-    Calculates the I/O weighted average latency across read and write
+    Calculates the I/O weighted average completion latency across read and write
     operations, converting from nanoseconds to milliseconds.
+    Uses clat_ns (completion latency) for consistency with percentile metrics.
 
     Args:
         job: FIO job data containing latency statistics
 
     Returns:
-        Weighted average latency in milliseconds
+        Weighted average completion latency in milliseconds
     """
-    read_lat = job.get("read", {}).get("lat_ns", {}).get("mean", 0)
-    write_lat = job.get("write", {}).get("lat_ns", {}).get("mean", 0)
+    read_lat = job.get("read", {}).get("clat_ns", {}).get("mean", 0)
+    write_lat = job.get("write", {}).get("clat_ns", {}).get("mean", 0)
 
-    # Convert nanoseconds to milliseconds
     total_ios = job.get("read", {}).get("io_ops", 0) + job.get("write", {}).get("io_ops", 0)
     if total_ios == 0:
         return 0.0
@@ -824,6 +826,8 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
         "avg_latency",
         "bandwidth",
         "iops",
+        "p70_latency",
+        "p90_latency",
         "p95_latency",
         "p99_latency",
         "is_latest",

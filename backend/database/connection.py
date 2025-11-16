@@ -96,6 +96,8 @@ class DatabaseManager:
                 avg_latency REAL,
                 bandwidth REAL,
                 iops REAL,
+                p70_latency REAL,
+                p90_latency REAL,
                 p95_latency REAL,
                 p99_latency REAL,
                 -- UUID fields
@@ -143,6 +145,8 @@ class DatabaseManager:
                 avg_latency REAL,
                 bandwidth REAL,
                 iops REAL,
+                p70_latency REAL,
+                p90_latency REAL,
                 p95_latency REAL,
                 p99_latency REAL,
                 -- UUID fields
@@ -311,6 +315,19 @@ class DatabaseManager:
 
                 log_info(f"Backfilled {len(records)} records in {table_name}")
 
+        # Migration 2: Add P70 and P90 latency columns
+        for table_name in ['test_runs_all', 'test_runs']:
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            if 'p70_latency' not in columns:
+                log_info(f"Adding p70_latency column to {table_name}")
+                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN p70_latency REAL")
+
+            if 'p90_latency' not in columns:
+                log_info(f"Adding p90_latency column to {table_name}")
+                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN p90_latency REAL")
+
         self.connection.commit()
 
     async def _populate_sample_data(self, cursor: sqlite3.Cursor):
@@ -407,6 +424,8 @@ class DatabaseManager:
                         "avg_latency": fake_latency,
                         "bandwidth": fake_bandwidth,
                         "iops": fake_iops,
+                        "p70_latency": fake_latency * 1.1,
+                        "p90_latency": fake_latency * 1.15,
                         "p95_latency": fake_latency * 1.25,
                         "p99_latency": fake_latency * 1.5,
                         "is_latest": 1,

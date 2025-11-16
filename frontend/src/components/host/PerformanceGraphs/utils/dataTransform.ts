@@ -85,6 +85,8 @@ const transformConfiguration = (
     pattern,
     iops: iopsValue,
     avgLatency: config.avg_latency !== null && config.avg_latency !== undefined ? config.avg_latency : null,
+    p70Latency: config.p70_latency !== null && config.p70_latency !== undefined ? config.p70_latency : null,
+    p90Latency: config.p90_latency !== null && config.p90_latency !== undefined ? config.p90_latency : null,
     p95Latency: config.p95_latency !== null && config.p95_latency !== undefined ? config.p95_latency : null,
     p99Latency: config.p99_latency !== null && config.p99_latency !== undefined ? config.p99_latency : null,
     bandwidth: config.bandwidth !== null && config.bandwidth !== undefined ? config.bandwidth : null,
@@ -105,6 +107,8 @@ export const aggregateData = (drives: DriveAnalysis[]): AggregatedData => {
   const maxValues: Record<MetricType, number> = {
     iops: 0,
     avg_latency: 0,
+    p70_latency: 0,
+    p90_latency: 0,
     p95_latency: 0,
     p99_latency: 0,
     bandwidth: 0,
@@ -146,6 +150,8 @@ export const aggregateData = (drives: DriveAnalysis[]): AggregatedData => {
         // Update maximum values for normalization
         if (dataPoint.iops > maxValues.iops) maxValues.iops = dataPoint.iops;
         if (dataPoint.avgLatency && dataPoint.avgLatency > maxValues.avg_latency) maxValues.avg_latency = dataPoint.avgLatency;
+        if (dataPoint.p70Latency && dataPoint.p70Latency > maxValues.p70_latency) maxValues.p70_latency = dataPoint.p70Latency;
+        if (dataPoint.p90Latency && dataPoint.p90Latency > maxValues.p90_latency) maxValues.p90_latency = dataPoint.p90Latency;
         if (dataPoint.p95Latency && dataPoint.p95Latency > maxValues.p95_latency) maxValues.p95_latency = dataPoint.p95Latency;
         if (dataPoint.p99Latency && dataPoint.p99Latency > maxValues.p99_latency) maxValues.p99_latency = dataPoint.p99Latency;
         if (dataPoint.bandwidth && dataPoint.bandwidth > maxValues.bandwidth) maxValues.bandwidth = dataPoint.bandwidth;
@@ -197,6 +203,8 @@ export const applyFilters = (data: AggregatedData, filters: ChartFilters): Aggre
   const maxValues: Record<MetricType, number> = {
     iops: 0,
     avg_latency: 0,
+    p70_latency: 0,
+    p90_latency: 0,
     p95_latency: 0,
     p99_latency: 0,
     bandwidth: 0,

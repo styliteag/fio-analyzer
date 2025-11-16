@@ -38,7 +38,7 @@ interface LatencyAnalysisChartProps {
   className?: string;
 }
 
-type LatencyMetric = 'avg_latency' | 'p95_latency' | 'p99_latency';
+type LatencyMetric = 'avg_latency' | 'p70_latency' | 'p90_latency' | 'p95_latency' | 'p99_latency';
 
 /**
  * Latency Analysis Chart Component
@@ -87,6 +87,54 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
             pointRadius: 4,
             pointHoverRadius: 6,
             yAxisID: 'y'
+          });
+        }
+      }
+
+      // P70 latency dataset (right axis)
+      if (selectedMetrics.includes('p70_latency')) {
+        const p70Data = labels.map(blockSize => {
+          const dataPoint = series.data.find(point => point.blockSize === blockSize);
+          return dataPoint?.p70Latency || 0;
+        });
+
+        if (p70Data.some(value => value > 0)) {
+          datasets.push({
+            label: `${series.hostname} - P70 Latency`,
+            data: p70Data,
+            backgroundColor: `${baseColor}80`,
+            borderColor: baseColor,
+            borderWidth: 1,
+            borderDash: [10, 5],
+            tension: 0.1,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            yAxisID: 'y1'
+          });
+        }
+      }
+
+      // P90 latency dataset (right axis)
+      if (selectedMetrics.includes('p90_latency')) {
+        const p90Data = labels.map(blockSize => {
+          const dataPoint = series.data.find(point => point.blockSize === blockSize);
+          return dataPoint?.p90Latency || 0;
+        });
+
+        if (p90Data.some(value => value > 0)) {
+          datasets.push({
+            label: `${series.hostname} - P90 Latency`,
+            data: p90Data,
+            backgroundColor: `${baseColor}80`,
+            borderColor: baseColor,
+            borderWidth: 1,
+            borderDash: [8, 4],
+            tension: 0.1,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            yAxisID: 'y1'
           });
         }
       }
@@ -271,7 +319,7 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
       {/* Metric Selection Controls */}
       <div className="mb-4 flex flex-wrap gap-2">
         <span className="text-sm font-medium text-gray-900 dark:text-gray-100 mr-2">Metrics:</span>
-        {(['avg_latency', 'p95_latency', 'p99_latency'] as LatencyMetric[]).map(metric => (
+        {(['avg_latency', 'p70_latency', 'p90_latency', 'p95_latency', 'p99_latency'] as LatencyMetric[]).map(metric => (
           <button
             key={metric}
             onClick={() => toggleMetric(metric)}
@@ -282,6 +330,8 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
             }`}
           >
             {metric === 'avg_latency' ? 'Average' :
+             metric === 'p70_latency' ? 'P70' :
+             metric === 'p90_latency' ? 'P90' :
              metric === 'p95_latency' ? 'P95' : 'P99'}
           </button>
         ))}

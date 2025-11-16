@@ -93,6 +93,8 @@ class TestRunBase(BaseModel):
     avg_latency: Optional[float] = Field(None, description="Average latency in milliseconds", example=0.256, ge=0)
     bandwidth: Optional[float] = Field(None, description="Bandwidth in MB/s", example=488.28, ge=0)
     iops: Optional[float] = Field(None, description="Input/Output Operations Per Second", example=125000.5, ge=0)
+    p70_latency: Optional[float] = Field(None, description="70th percentile latency in milliseconds", example=0.384, ge=0)
+    p90_latency: Optional[float] = Field(None, description="90th percentile latency in milliseconds", example=0.448, ge=0)
     p95_latency: Optional[float] = Field(None, description="95th percentile latency in milliseconds", example=0.512, ge=0)
     p99_latency: Optional[float] = Field(None, description="99th percentile latency in milliseconds", example=1.024, ge=0)
     is_latest: int = Field(
@@ -161,6 +163,8 @@ class PerformanceMetrics(BaseModel):
     iops: Optional[PerformanceMetric] = Field(None, description="Input/Output Operations Per Second")
     avg_latency: Optional[PerformanceMetric] = Field(None, description="Average response time")
     bandwidth: Optional[PerformanceMetric] = Field(None, description="Data transfer rate")
+    p70_latency: Optional[PerformanceMetric] = Field(None, description="70th percentile latency")
+    p90_latency: Optional[PerformanceMetric] = Field(None, description="90th percentile latency")
     p95_latency: Optional[PerformanceMetric] = Field(None, description="95th percentile latency")
     p99_latency: Optional[PerformanceMetric] = Field(None, description="99th percentile latency")
 
@@ -261,6 +265,8 @@ class HistoricalDataPoint(BaseModel):
     iops: Optional[float] = Field(None, description="IOPS value", example=125000.5)
     avg_latency: Optional[float] = Field(None, description="Average latency in ms", example=0.256)
     bandwidth: Optional[float] = Field(None, description="Bandwidth in MB/s", example=488.28)
+    p70_latency: Optional[float] = Field(None, description="P70 latency in ms", example=0.384)
+    p90_latency: Optional[float] = Field(None, description="P90 latency in ms", example=0.448)
     p95_latency: Optional[float] = Field(None, description="P95 latency in ms", example=0.512)
     p99_latency: Optional[float] = Field(None, description="P99 latency in ms", example=1.024)
 

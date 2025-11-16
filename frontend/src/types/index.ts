@@ -34,6 +34,8 @@ export interface TestRun {
 	iops?: number | null;
 	avg_latency?: number | null;
 	bandwidth?: number | null;
+	p70_latency?: number | null;
+	p90_latency?: number | null;
 	p95_latency?: number | null;
 	p99_latency?: number | null;
 }
@@ -119,6 +121,8 @@ export interface RadarMetrics {
 	iops: number;
 	latency: number;
 	bandwidth: number;
+	p70_latency: number;
+	p90_latency: number;
 	p95_latency: number;
 	p99_latency: number;
 	consistency: number;

@@ -169,6 +169,8 @@ async def get_servers(
                             "iops": 125000.5,
                             "avg_latency": 0.256,
                             "bandwidth": 488.28,
+                            "p70_latency": 0.384,
+                            "p90_latency": 0.448,
                             "p95_latency": 0.512,
                             "p99_latency": 1.024,
                         }
@@ -373,7 +375,7 @@ async def get_all_time_series(
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
                    output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
-                   avg_latency, bandwidth, iops, p95_latency, p99_latency
+                   avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency
             FROM test_runs_all
             WHERE {where_clause}
             ORDER BY timestamp DESC
@@ -502,6 +504,8 @@ async def get_latest_time_series(
     - **iops**: Input/Output Operations Per Second
     - **avg_latency**: Average response time in milliseconds
     - **bandwidth**: Data transfer rate in MB/s
+    - **p70_latency**: 70th percentile latency in milliseconds
+    - **p90_latency**: 90th percentile latency in milliseconds
     - **p95_latency**: 95th percentile latency in milliseconds
     - **p99_latency**: 99th percentile latency in milliseconds
 
@@ -537,7 +541,7 @@ async def get_latest_time_series(
             SELECT
                 timestamp, hostname, protocol, drive_model, drive_type,
                 block_size, read_write_pattern, queue_depth,
-                iops, avg_latency, bandwidth, p95_latency, p99_latency
+                iops, avg_latency, bandwidth, p70_latency, p90_latency, p95_latency, p99_latency
             FROM test_runs
             WHERE {where_clause}
             ORDER BY timestamp DESC
@@ -552,8 +556,10 @@ async def get_latest_time_series(
             ("iops", 8, "IOPS"),
             ("avg_latency", 9, "ms"),
             ("bandwidth", 10, "MB/s"),
-            ("p95_latency", 11, "ms"),
-            ("p99_latency", 12, "ms"),
+            ("p70_latency", 11, "ms"),
+            ("p90_latency", 12, "ms"),
+            ("p95_latency", 13, "ms"),
+            ("p99_latency", 14, "ms"),
         ]
 
         for row in cursor.fetchall():
@@ -616,6 +622,8 @@ async def get_latest_time_series(
                             "iops": 125000.5,
                             "avg_latency": 0.256,
                             "bandwidth": 488.28,
+                            "p70_latency": 0.384,
+                            "p90_latency": 0.448,
                             "p95_latency": 0.512,
                             "p99_latency": 1.024,
                         }
@@ -831,7 +839,7 @@ async def get_historical_time_series(
             SELECT
                 id, timestamp, hostname, protocol, drive_model, drive_type,
                 block_size, read_write_pattern, queue_depth,
-                iops, avg_latency, bandwidth, p95_latency, p99_latency,
+                iops, avg_latency, bandwidth, p70_latency, p90_latency, p95_latency, p99_latency,
                 config_uuid, run_uuid
             FROM test_runs_all
             WHERE {where_clause}
@@ -856,10 +864,12 @@ async def get_historical_time_series(
                 "avg_latency": row[10],
                 "bandwidth": row[11],
                 "iops": row[9],
-                "p95_latency": row[12],
-                "p99_latency": row[13],
-                "config_uuid": row[14],
-                "run_uuid": row[15],
+                "p70_latency": row[12],
+                "p90_latency": row[13],
+                "p95_latency": row[14],
+                "p99_latency": row[15],
+                "config_uuid": row[16],
+                "run_uuid": row[17],
             }
 
             # If metric_type is specified, filter results to only include records with that metric value
@@ -960,7 +970,7 @@ async def get_trends(
         "iops",
         description="Performance metric to analyze",
         example="iops",
-        regex="^(iops|avg_latency|bandwidth|p95_latency|p99_latency)$",
+        regex="^(iops|avg_latency|bandwidth|p70_latency|p90_latency|p95_latency|p99_latency)$",
     ),
     days: int = Query(
         30,
@@ -985,6 +995,8 @@ async def get_trends(
     - **iops**: Input/Output Operations Per Second
     - **avg_latency**: Average response time in milliseconds
     - **bandwidth**: Data transfer rate in MB/s
+    - **p70_latency**: 70th percentile latency
+    - **p90_latency**: 90th percentile latency
     - **p95_latency**: 95th percentile latency
     - **p99_latency**: 99th percentile latency
 
@@ -1432,6 +1444,8 @@ def get_metric_unit(metric: str) -> str:
     units = {
         "iops": "IOPS",
         "avg_latency": "ms",
+        "p70_latency": "ms",
+        "p90_latency": "ms",
         "p95_latency": "ms",
         "p99_latency": "ms",
         "bandwidth": "MB/s",
