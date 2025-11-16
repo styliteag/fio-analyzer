@@ -239,7 +239,6 @@ async def import_fio_data(
                 protocol or "unknown",
                 drive_type or "unknown",
                 drive_model or "unknown",
-                description or "unknown",
                 date_part
             ]
             hash_seed = "_".join(meta_fields)
@@ -463,6 +462,38 @@ async def bulk_import_fio_data(
                 if metadata.get("upload_timestamp"):
                     test_run_data["timestamp"] = metadata["upload_timestamp"]
                     test_run_data["test_date"] = metadata.get("test_date", metadata["upload_timestamp"])
+
+                # Generate UUIDs if not provided (preserve client-provided UUIDs)
+                hostname = test_run_data.get("hostname", "unknown")
+                protocol = test_run_data.get("protocol", "unknown")
+                drive_type = test_run_data.get("drive_type", "unknown")
+                drive_model = test_run_data.get("drive_model", "unknown")
+
+                # config_uuid: Use from metadata if provided, otherwise generate from hostname
+                if metadata.get("config_uuid"):
+                    test_run_data["config_uuid"] = metadata["config_uuid"]
+                elif not test_run_data.get("config_uuid"):
+                    test_run_data["config_uuid"] = generate_uuid_from_hash(hostname)
+
+                # run_uuid: Use from metadata if provided, otherwise generate from hash seed
+                if metadata.get("run_uuid"):
+                    test_run_data["run_uuid"] = metadata["run_uuid"]
+                elif not test_run_data.get("run_uuid"):
+                    # Generate from all meta fields + date (not time)
+                    test_date = test_run_data.get("test_date", test_run_data.get("timestamp", ""))
+                    # Extract just the date part (YYYY-MM-DD)
+                    date_part = test_date.split('T')[0] if 'T' in test_date else test_date.split(' ')[0]
+                    
+                    # Build hash seed from all meta fields
+                    meta_fields = [
+                        hostname or "unknown",
+                        protocol or "unknown",
+                        drive_type or "unknown",
+                        drive_model or "unknown",
+                        date_part
+                    ]
+                    hash_seed = "_".join(meta_fields)
+                    test_run_data["run_uuid"] = generate_uuid_from_hash(hash_seed)
 
                 if dry_run:
                     # For dry run, just collect metadata
@@ -902,6 +933,12 @@ def create_metadata_file(file_path: str, test_run_data: Dict[str, Any], username
         "original_filename": original_filename,
         "uploaded_by": username,
     }
+    
+    # Include UUIDs if present (preserve client-provided UUIDs)
+    if test_run_data.get("config_uuid"):
+        metadata["config_uuid"] = test_run_data.get("config_uuid")
+    if test_run_data.get("run_uuid"):
+        metadata["run_uuid"] = test_run_data.get("run_uuid")
 
     # Write metadata file
     with open(metadata_path, "w") as f:

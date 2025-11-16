@@ -100,7 +100,6 @@ def backfill_uuids(cursor: sqlite3.Cursor, table_name: str) -> int:
             protocol or "unknown",
             drive_type or "unknown",
             drive_model or "unknown",
-            description or "unknown",
             date_part
         ]
         hash_seed = "_".join(meta_fields)
