@@ -269,23 +269,34 @@ class DatabaseManager:
                 log_info(f"Backfilling UUIDs in {table_name}...")
 
                 cursor.execute(f"""
-                    SELECT id, hostname, test_date, timestamp
+                    SELECT id, hostname, protocol, drive_type, drive_model, description, test_date, timestamp
                     FROM {table_name}
                     WHERE config_uuid IS NULL OR run_uuid IS NULL
                 """)
 
                 records = cursor.fetchall()
-                for record_id, hostname, test_date, timestamp in records:
+                for record_id, hostname, protocol, drive_type, drive_model, description, test_date, timestamp in records:
                     if not hostname:
                         hostname = "unknown"
 
                     # Generate config_uuid from hostname
                     config_uuid = generate_uuid_from_hash(hostname)
 
-                    # Generate run_uuid from hostname + date
+                    # Generate run_uuid from all meta fields + date
+                    # Include hostname, protocol, drive_type, drive_model, description, and date
                     date_str = test_date or timestamp or "unknown"
                     date_part = date_str.split('T')[0] if 'T' in date_str else date_str.split(' ')[0]
-                    run_uuid = generate_uuid_from_hash(f"{hostname}_{date_part}")
+                    
+                    # Build hash seed from all meta fields
+                    meta_fields = [
+                        hostname or "unknown",
+                        protocol or "unknown",
+                        drive_type or "unknown",
+                        drive_model or "unknown",
+                        date_part
+                    ]
+                    hash_seed = "_".join(meta_fields)
+                    run_uuid = generate_uuid_from_hash(hash_seed)
 
                     cursor.execute(f"""
                         UPDATE {table_name}

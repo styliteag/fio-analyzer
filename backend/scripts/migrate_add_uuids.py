@@ -78,7 +78,7 @@ def backfill_uuids(cursor: sqlite3.Cursor, table_name: str) -> int:
 
     # Get all records that need UUIDs
     cursor.execute(f"""
-        SELECT id, hostname, test_date
+        SELECT id, hostname, protocol, drive_type, drive_model, description, test_date
         FROM {table_name}
         WHERE config_uuid IS NULL OR run_uuid IS NULL
     """)
@@ -86,14 +86,25 @@ def backfill_uuids(cursor: sqlite3.Cursor, table_name: str) -> int:
     records = cursor.fetchall()
     updated_count = 0
 
-    for record_id, hostname, test_date in records:
+    for record_id, hostname, protocol, drive_type, drive_model, description, test_date in records:
         # Generate config_uuid from hostname
         config_uuid = generate_uuid_from_hash(hostname)
 
-        # Generate run_uuid from hostname + date (not time)
+        # Generate run_uuid from all meta fields + date (not time)
         # Extract just the date part if timestamp includes time
-        date_part = test_date.split('T')[0] if 'T' in test_date else test_date.split(' ')[0]
-        run_uuid = generate_uuid_from_hash(f"{hostname}_{date_part}")
+        date_part = test_date.split('T')[0] if 'T' in test_date else test_date.split(' ')[0] if test_date else "unknown"
+        
+        # Build hash seed from all meta fields
+        meta_fields = [
+            hostname or "unknown",
+            protocol or "unknown",
+            drive_type or "unknown",
+            drive_model or "unknown",
+            description or "unknown",
+            date_part
+        ]
+        hash_seed = "_".join(meta_fields)
+        run_uuid = generate_uuid_from_hash(hash_seed)
 
         # Update the record
         cursor.execute(f"""

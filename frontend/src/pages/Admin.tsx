@@ -15,6 +15,8 @@ import {
 	Check,
 	Server,
 	PlayCircle,
+	Search,
+	X,
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Loading from '../components/ui/Loading';
@@ -77,6 +79,7 @@ const Admin: React.FC = () => {
 	const navigate = useNavigate();
 	const [activeTab, setActiveTab] = useState<AdminTab>('by-config');
 	const [copiedUUID, setCopiedUUID] = useState<string | null>(null);
+	const [searchTerm, setSearchTerm] = useState<string>('');
 
 	// UUID Grouping States
 	const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -139,14 +142,12 @@ const Admin: React.FC = () => {
 			fetchTimeSeriesHistory()
 				.then((result) => {
 					// Extract data from ApiResponse wrapper with pagination
-					console.log('History API result:', result);
 					if (result.error) {
 						console.error('Error fetching history:', result.error);
 						setTimeSeriesData([]);
 					} else {
 						// Backend returns { data: { data: [...], pagination: {...} } }
 						const historyData = Array.isArray(result.data?.data) ? result.data.data : [];
-						console.log('Setting history data:', historyData.length, 'records');
 						setTimeSeriesData(historyData);
 					}
 				})
@@ -157,6 +158,110 @@ const Admin: React.FC = () => {
 				.finally(() => setTimeSeriesLoading(false));
 		}
 	}, [activeTab]);
+
+	// Filter UUID groups based on search term
+	const filteredConfigGroups = useMemo(() => {
+		if (!searchTerm || !Array.isArray(configGroups.data)) return configGroups.data;
+
+		const lowerSearch = searchTerm.toLowerCase();
+		return configGroups.data.filter((group) => {
+			const metadata = group.sample_metadata;
+			return (
+				metadata.hostname?.toLowerCase().includes(lowerSearch) ||
+				metadata.protocol?.toLowerCase().includes(lowerSearch) ||
+				metadata.drive_model?.toLowerCase().includes(lowerSearch) ||
+				metadata.drive_type?.toLowerCase().includes(lowerSearch) ||
+				metadata.test_name?.toLowerCase().includes(lowerSearch) ||
+				metadata.description?.toLowerCase().includes(lowerSearch) ||
+				group.uuid.toLowerCase().includes(lowerSearch)
+			);
+		});
+	}, [configGroups.data, searchTerm]);
+
+	const filteredRunGroups = useMemo(() => {
+		if (!searchTerm || !Array.isArray(runGroups.data)) return runGroups.data;
+
+		const lowerSearch = searchTerm.toLowerCase();
+		return runGroups.data.filter((group) => {
+			const metadata = group.sample_metadata;
+			return (
+				metadata.hostname?.toLowerCase().includes(lowerSearch) ||
+				metadata.protocol?.toLowerCase().includes(lowerSearch) ||
+				metadata.drive_model?.toLowerCase().includes(lowerSearch) ||
+				metadata.drive_type?.toLowerCase().includes(lowerSearch) ||
+				metadata.test_name?.toLowerCase().includes(lowerSearch) ||
+				metadata.description?.toLowerCase().includes(lowerSearch) ||
+				group.uuid.toLowerCase().includes(lowerSearch)
+			);
+		});
+	}, [runGroups.data, searchTerm]);
+
+	// Filter latest runs based on search term
+	const filteredLatestRuns = useMemo(() => {
+		if (!searchTerm) return latestRuns;
+
+		const lowerSearch = searchTerm.toLowerCase();
+		return latestRuns.filter((run) => {
+			return (
+				run.hostname?.toLowerCase().includes(lowerSearch) ||
+				run.protocol?.toLowerCase().includes(lowerSearch) ||
+				run.drive_model?.toLowerCase().includes(lowerSearch) ||
+				run.drive_type?.toLowerCase().includes(lowerSearch) ||
+				run.test_name?.toLowerCase().includes(lowerSearch) ||
+				run.description?.toLowerCase().includes(lowerSearch) ||
+				run.read_write_pattern?.toLowerCase().includes(lowerSearch) ||
+				run.block_size?.toLowerCase().includes(lowerSearch) ||
+				run.config_uuid?.toLowerCase().includes(lowerSearch) ||
+				run.run_uuid?.toLowerCase().includes(lowerSearch)
+			);
+		});
+	}, [latestRuns, searchTerm]);
+
+	// Filter history data based on search term
+	const filteredHistoryData = useMemo(() => {
+		if (!searchTerm || !Array.isArray(timeSeriesData)) return timeSeriesData;
+
+		const lowerSearch = searchTerm.toLowerCase();
+		return timeSeriesData.filter((run: any) => {
+			return (
+				run.hostname?.toLowerCase().includes(lowerSearch) ||
+				run.protocol?.toLowerCase().includes(lowerSearch) ||
+				run.drive_model?.toLowerCase().includes(lowerSearch) ||
+				run.drive_type?.toLowerCase().includes(lowerSearch) ||
+				run.test_name?.toLowerCase().includes(lowerSearch) ||
+				run.description?.toLowerCase().includes(lowerSearch) ||
+				run.read_write_pattern?.toLowerCase().includes(lowerSearch) ||
+				run.block_size?.toLowerCase().includes(lowerSearch) ||
+				run.config_uuid?.toLowerCase().includes(lowerSearch) ||
+				run.run_uuid?.toLowerCase().includes(lowerSearch)
+			);
+		});
+	}, [timeSeriesData, searchTerm]);
+
+	// Group latest runs by run_uuid
+	const groupedLatestRuns = useMemo(() => {
+		const groups = new Map<string, TestRun[]>();
+
+		filteredLatestRuns.forEach((run) => {
+			const uuid = run.run_uuid || 'no-uuid';
+			if (!groups.has(uuid)) {
+				groups.set(uuid, []);
+			}
+			groups.get(uuid)!.push(run);
+		});
+
+		// Convert to array and sort by most recent timestamp
+		return Array.from(groups.entries())
+			.map(([uuid, runs]) => ({
+				uuid,
+				runs,
+				count: runs.length,
+				avgIops: runs.reduce((sum, r) => sum + (r.iops || 0), 0) / runs.length,
+				latestTimestamp: Math.max(...runs.map(r => new Date(r.timestamp).getTime())),
+				hostname: runs[0]?.hostname || 'N/A',
+			}))
+			.sort((a, b) => b.latestTimestamp - a.latestTimestamp);
+	}, [filteredLatestRuns]);
 
 	// Copy UUID to clipboard
 	const copyUUID = useCallback((uuid: string) => {
@@ -306,22 +411,33 @@ const Admin: React.FC = () => {
 				<div className="p-4 bg-gray-50 border-b border-gray-200">
 					<div className="flex items-start justify-between">
 						<div className="flex-1">
-							<div className="flex items-center gap-2 mb-2">
-								<h3 className="font-mono text-sm text-gray-600">{group.uuid}</h3>
-								<button
-									onClick={() => copyUUID(group.uuid)}
-									className="p-1 hover:bg-gray-200 rounded transition-colors"
-									title="Copy UUID"
-								>
-									{copiedUUID === group.uuid ? (
-										<Check className="w-4 h-4 text-green-600" />
-									) : (
-										<Copy className="w-4 h-4 text-gray-500" />
-									)}
-								</button>
+							<div className="flex items-center gap-3 mb-3">
+								<div className="flex items-center gap-2">
+									<span className="text-gray-500 text-sm">Host:</span>
+									<h3 className="text-lg font-semibold text-gray-900">
+										{group.sample_metadata.hostname || 'N/A'}
+									</h3>
+								</div>
+								<div className="flex items-center gap-2">
+									<span className="text-gray-500 text-sm">
+										{uuidType === 'config_uuid' ? 'Config UUID:' : 'Run UUID:'}
+									</span>
+									<span className="font-mono text-sm text-gray-600">{group.uuid}</span>
+									<button
+										onClick={() => copyUUID(group.uuid)}
+										className="p-1 hover:bg-gray-200 rounded transition-colors"
+										title="Copy UUID"
+									>
+										{copiedUUID === group.uuid ? (
+											<Check className="w-4 h-4 text-green-600" />
+										) : (
+											<Copy className="w-4 h-4 text-gray-500" />
+										)}
+									</button>
+								</div>
 							</div>
 
-							<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+							<div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
 								<div>
 									<span className="text-gray-500">Tests:</span>
 									<span className="ml-2 font-semibold">{group.count}</span>
@@ -330,7 +446,7 @@ const Admin: React.FC = () => {
 									<span className="text-gray-500">Avg IOPS:</span>
 									<span className="ml-2 font-semibold">
 										{group.avg_iops
-											? group.avg_iops.toLocaleString()
+											? Math.round(group.avg_iops).toLocaleString()
 											: 'N/A'}
 									</span>
 								</div>
@@ -338,12 +454,6 @@ const Admin: React.FC = () => {
 									<span className="text-gray-500">Date Range:</span>
 									<span className="ml-2 font-semibold">
 										{formatDateRange(group.first_test, group.last_test)}
-									</span>
-								</div>
-								<div>
-									<span className="text-gray-500">Host:</span>
-									<span className="ml-2 font-semibold">
-										{group.sample_metadata.hostname || 'N/A'}
 									</span>
 								</div>
 							</div>
@@ -425,6 +535,7 @@ const Admin: React.FC = () => {
 	// Render UUID Groups Tab
 	const renderUUIDGroupsTab = (
 		groups: typeof configGroups | typeof runGroups,
+		filteredData: UUIDGroup[] | undefined,
 		uuidType: 'config_uuid' | 'run_uuid',
 		title: string,
 		icon: React.ReactNode
@@ -437,8 +548,9 @@ const Admin: React.FC = () => {
 			return <ErrorDisplay error={groups.error} />;
 		}
 
-		// Safety check: ensure data is an array
-		const groupsData = Array.isArray(groups.data) ? groups.data : [];
+		// Use filtered data
+		const groupsData = Array.isArray(filteredData) ? filteredData : [];
+		const totalGroups = Array.isArray(groups.data) ? groups.data.length : 0;
 
 		return (
 			<div>
@@ -448,13 +560,16 @@ const Admin: React.FC = () => {
 						<h2 className="text-2xl font-bold">{title}</h2>
 					</div>
 					<div className="text-sm text-gray-600">
-						{groupsData.length} group{groupsData.length !== 1 ? 's' : ''}
+						{groupsData.length} {searchTerm && `/ ${totalGroups}`} group{groupsData.length !== 1 ? 's' : ''}
 					</div>
 				</div>
 
 				{groupsData.length === 0 ? (
 					<div className="text-center py-12 text-gray-500">
-						No test runs found with {uuidType === 'config_uuid' ? 'configuration' : 'run'} UUIDs
+						{searchTerm
+							? `No test runs found matching "${searchTerm}"`
+							: `No test runs found with ${uuidType === 'config_uuid' ? 'configuration' : 'run'} UUIDs`
+						}
 					</div>
 				) : (
 					<div>
@@ -486,6 +601,28 @@ const Admin: React.FC = () => {
 									Admin Panel
 								</h1>
 							</div>
+						</div>
+					</div>
+
+					{/* Search Bar */}
+					<div className="mt-4 mb-2">
+						<div className="relative max-w-md">
+							<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+							<input
+								type="text"
+								placeholder="Search by hostname, protocol, drive, name, description, UUID..."
+								value={searchTerm}
+								onChange={(e) => setSearchTerm(e.target.value)}
+								className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+							/>
+							{searchTerm && (
+								<button
+									onClick={() => setSearchTerm('')}
+									className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+								>
+									<X className="w-5 h-5" />
+								</button>
+							)}
 						</div>
 					</div>
 
@@ -544,6 +681,7 @@ const Admin: React.FC = () => {
 				{activeTab === 'by-config' &&
 					renderUUIDGroupsTab(
 						configGroups,
+						filteredConfigGroups,
 						'config_uuid',
 						'By Host Configuration',
 						<Server className="w-6 h-6 text-indigo-600" />
@@ -552,6 +690,7 @@ const Admin: React.FC = () => {
 				{activeTab === 'by-run' &&
 					renderUUIDGroupsTab(
 						runGroups,
+						filteredRunGroups,
 						'run_uuid',
 						'By Script Run',
 						<PlayCircle className="w-6 h-6 text-indigo-600" />
@@ -559,73 +698,143 @@ const Admin: React.FC = () => {
 
 				{activeTab === 'latest' && (
 					<div>
-						<h2 className="text-2xl font-bold mb-4">Latest Test Runs</h2>
-						<p className="text-gray-600 mb-6">
-							Showing the most recent test for each unique configuration ({latestRuns.length} runs)
-						</p>
+						<div className="mb-6 flex items-center justify-between">
+							<div className="flex items-center gap-2">
+								<Database className="w-6 h-6 text-indigo-600" />
+								<h2 className="text-2xl font-bold">Latest Test Runs (Grouped by Run)</h2>
+							</div>
+							<div className="text-sm text-gray-600">
+								{groupedLatestRuns.length} {searchTerm && `/ ${new Set(latestRuns.map(r => r.run_uuid)).size}`} run{groupedLatestRuns.length !== 1 ? 's' : ''}
+							</div>
+						</div>
+
 						{latestLoading ? (
 							<Loading message="Loading latest runs..." />
 						) : latestError ? (
 							<ErrorDisplay error={latestError} />
-						) : latestRuns.length === 0 ? (
+						) : groupedLatestRuns.length === 0 ? (
 							<div className="text-center py-12 text-gray-500">
-								No test runs found
+								{searchTerm ? `No test runs found matching "${searchTerm}"` : 'No test runs found'}
 							</div>
 						) : (
-							<div className="bg-white rounded-lg shadow overflow-hidden">
-								<div className="overflow-x-auto">
-									<table className="min-w-full divide-y divide-gray-200">
-										<thead className="bg-gray-50">
-											<tr>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hostname</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Protocol</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Drive</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pattern</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Block Size</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IOPS</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">UUIDs</th>
-											</tr>
-										</thead>
-										<tbody className="bg-white divide-y divide-gray-200">
-											{latestRuns.map((run) => (
-												<tr key={run.id} className="hover:bg-gray-50">
-													<td className="px-4 py-3 text-sm text-gray-900">{run.id}</td>
-													<td className="px-4 py-3 text-sm text-gray-500">
-														{new Date(run.timestamp).toLocaleDateString()}
-													</td>
-													<td className="px-4 py-3 text-sm text-gray-900">{run.hostname}</td>
-													<td className="px-4 py-3 text-sm text-gray-600">{run.protocol}</td>
-													<td className="px-4 py-3 text-sm text-gray-600">
-														{run.drive_type}
-														<br />
-														<span className="text-xs text-gray-500">{run.drive_model}</span>
-													</td>
-													<td className="px-4 py-3 text-sm text-gray-600">{run.read_write_pattern}</td>
-													<td className="px-4 py-3 text-sm text-gray-600">{run.block_size}</td>
-													<td className="px-4 py-3 text-sm font-semibold text-gray-900">
-														{run.iops ? run.iops.toLocaleString() : 'N/A'}
-													</td>
-													<td className="px-4 py-3 text-xs text-gray-500">
-														<div className="space-y-1">
-															{run.config_uuid && (
-																<div title={run.config_uuid}>
-																	C: {run.config_uuid.slice(0, 8)}...
-																</div>
-															)}
-															{run.run_uuid && (
-																<div title={run.run_uuid}>
-																	R: {run.run_uuid.slice(0, 8)}...
+							<div>
+								{groupedLatestRuns.map((group) => {
+									const isExpanded = expandedGroups.has(group.uuid);
+									return (
+										<div key={group.uuid} className="border border-gray-200 rounded-lg mb-4 bg-white">
+											{/* Group Header */}
+											<div className="p-4 bg-gray-50 border-b border-gray-200">
+												<div className="flex items-start justify-between">
+													<div className="flex-1">
+														<div className="flex items-center gap-3 mb-3">
+															<div className="flex items-center gap-2">
+																<span className="text-gray-500 text-sm">Host:</span>
+																<h3 className="text-lg font-semibold text-gray-900">
+																	{group.hostname}
+																</h3>
+															</div>
+															{group.uuid !== 'no-uuid' && (
+																<div className="flex items-center gap-2">
+																	<span className="text-gray-500 text-sm">Run UUID:</span>
+																	<span className="font-mono text-sm text-gray-600">{group.uuid}</span>
+																	<button
+																		onClick={() => copyUUID(group.uuid)}
+																		className="p-1 hover:bg-gray-200 rounded transition-colors"
+																		title="Copy UUID"
+																	>
+																		{copiedUUID === group.uuid ? (
+																			<Check className="w-4 h-4 text-green-600" />
+																		) : (
+																			<Copy className="w-4 h-4 text-gray-500" />
+																		)}
+																	</button>
 																</div>
 															)}
 														</div>
-													</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</div>
+
+														<div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+															<div>
+																<span className="text-gray-500">Tests:</span>
+																<span className="ml-2 font-semibold">{group.count}</span>
+															</div>
+															<div>
+																<span className="text-gray-500">Avg IOPS:</span>
+																<span className="ml-2 font-semibold">
+																	{Math.round(group.avgIops).toLocaleString()}
+																</span>
+															</div>
+															<div>
+																<span className="text-gray-500">Latest:</span>
+																<span className="ml-2 font-semibold">
+																	{new Date(group.latestTimestamp).toLocaleDateString()}
+																</span>
+															</div>
+														</div>
+													</div>
+
+													<button
+														onClick={() => toggleGroup(group.uuid)}
+														className="p-2 hover:bg-gray-200 rounded transition-colors ml-4"
+													>
+														{isExpanded ? (
+															<ChevronUp className="w-5 h-5" />
+														) : (
+															<ChevronDown className="w-5 h-5" />
+														)}
+													</button>
+												</div>
+											</div>
+
+											{/* Expanded Test Table */}
+											{isExpanded && (
+												<div className="overflow-x-auto">
+													<table className="min-w-full divide-y divide-gray-200">
+														<thead className="bg-gray-100">
+															<tr>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Protocol</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Drive</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pattern</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Block Size</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IOPS</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Config UUID</th>
+															</tr>
+														</thead>
+														<tbody className="bg-white divide-y divide-gray-200">
+															{group.runs.map((run) => (
+																<tr key={run.id} className="hover:bg-gray-50">
+																	<td className="px-4 py-3 text-sm text-gray-900">{run.id}</td>
+																	<td className="px-4 py-3 text-sm text-gray-500">
+																		{new Date(run.timestamp).toLocaleDateString()}
+																	</td>
+																	<td className="px-4 py-3 text-sm text-gray-600">{run.protocol}</td>
+																	<td className="px-4 py-3 text-sm text-gray-600">
+																		{run.drive_type}
+																		<br />
+																		<span className="text-xs text-gray-500">{run.drive_model}</span>
+																	</td>
+																	<td className="px-4 py-3 text-sm text-gray-600">{run.read_write_pattern}</td>
+																	<td className="px-4 py-3 text-sm text-gray-600">{run.block_size}</td>
+																	<td className="px-4 py-3 text-sm font-semibold text-gray-900">
+																		{run.iops ? Math.round(run.iops).toLocaleString() : 'N/A'}
+																	</td>
+																	<td className="px-4 py-3 text-xs text-gray-500">
+																		{run.config_uuid && (
+																			<div title={run.config_uuid}>
+																				{run.config_uuid.slice(0, 8)}...
+																			</div>
+																		)}
+																	</td>
+																</tr>
+															))}
+														</tbody>
+													</table>
+												</div>
+											)}
+										</div>
+									);
+								})}
 							</div>
 						)}
 					</div>
@@ -635,13 +844,13 @@ const Admin: React.FC = () => {
 					<div>
 						<h2 className="text-2xl font-bold mb-4">Historical Test Runs</h2>
 						<p className="text-gray-600 mb-6">
-							All historical test data ({Array.isArray(timeSeriesData) ? timeSeriesData.length : 0} runs)
+							Showing {filteredHistoryData.length} {searchTerm && `/ ${timeSeriesData.length}`} historical test run{filteredHistoryData.length !== 1 ? 's' : ''}
 						</p>
 						{timeSeriesLoading ? (
 							<Loading message="Loading history..." />
-						) : !Array.isArray(timeSeriesData) || timeSeriesData.length === 0 ? (
+						) : filteredHistoryData.length === 0 ? (
 							<div className="text-center py-12 text-gray-500">
-								No historical test runs found
+								{searchTerm ? `No historical test runs found matching "${searchTerm}"` : 'No historical test runs found'}
 							</div>
 						) : (
 							<div className="bg-white rounded-lg shadow overflow-hidden">
@@ -661,7 +870,7 @@ const Admin: React.FC = () => {
 											</tr>
 										</thead>
 										<tbody className="bg-white divide-y divide-gray-200">
-											{timeSeriesData.map((run: any) => (
+											{filteredHistoryData.map((run: any) => (
 												<tr key={run.test_run_id || run.id} className="hover:bg-gray-50">
 													<td className="px-4 py-3 text-sm text-gray-900">{run.test_run_id || run.id}</td>
 													<td className="px-4 py-3 text-sm text-gray-500">
@@ -681,7 +890,7 @@ const Admin: React.FC = () => {
 													<td className="px-4 py-3 text-sm text-gray-600">{run.read_write_pattern}</td>
 													<td className="px-4 py-3 text-sm text-gray-600">{run.block_size}</td>
 													<td className="px-4 py-3 text-sm font-semibold text-gray-900">
-														{run.iops ? run.iops.toLocaleString() : 'N/A'}
+														{run.iops ? Math.round(run.iops).toLocaleString() : 'N/A'}
 													</td>
 													<td className="px-4 py-3 text-xs text-gray-500">
 														<div className="space-y-1">

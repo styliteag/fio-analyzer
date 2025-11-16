@@ -228,11 +228,22 @@ async def import_fio_data(
         if run_uuid:
             test_run_data["run_uuid"] = run_uuid
         else:
-            # Fallback: Generate from hostname + date (not time)
+            # Fallback: Generate from all meta fields + date (not time)
             test_date = test_run_data.get("test_date", test_run_data.get("timestamp", ""))
             # Extract just the date part (YYYY-MM-DD)
             date_part = test_date.split('T')[0] if 'T' in test_date else test_date.split(' ')[0]
-            test_run_data["run_uuid"] = generate_uuid_from_hash(f"{hostname}_{date_part}")
+            
+            # Build hash seed from all meta fields
+            meta_fields = [
+                hostname or "unknown",
+                protocol or "unknown",
+                drive_type or "unknown",
+                drive_model or "unknown",
+                description or "unknown",
+                date_part
+            ]
+            hash_seed = "_".join(meta_fields)
+            test_run_data["run_uuid"] = generate_uuid_from_hash(hash_seed)
 
         # Update latest flags
         await db_manager.update_latest_flags(test_run_data)
