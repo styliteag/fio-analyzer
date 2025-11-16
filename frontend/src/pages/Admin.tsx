@@ -2,15 +2,12 @@ import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
 	Settings,
 	Database,
-	Filter,
-	BarChart3,
 	History,
 	ChevronUp,
 	ChevronDown,
 	Edit2,
 	Trash2,
 	ArrowLeft,
-	Upload,
 	Copy,
 	Check,
 	Server,
@@ -25,30 +22,15 @@ import Modal from '../components/ui/Modal';
 import { useServerSideTestRuns } from '../hooks/useServerSideTestRuns';
 import { useUUIDGroupedRuns } from '../hooks/api/useUUIDGroupedRuns';
 import {
-	bulkUpdateTestRuns,
 	deleteTestRuns,
 	bulkUpdateTestRunsByUUID,
 } from '../services/api/testRuns';
-import { bulkImportFioData } from '../services/api/upload';
-import { fetchTimeSeriesHistory, fetchTimeSeriesServers } from '../services/api/timeSeries';
-import { bulkUpdateTimeSeries, deleteTimeSeriesRuns } from '../services/api/timeSeries';
+import { fetchTimeSeriesHistory } from '../services/api/timeSeries';
 import { useNavigate } from 'react-router-dom';
 import type { TestRun, UUIDGroup } from '../types';
 
 // Tab types
 type AdminTab = 'by-config' | 'by-run' | 'latest' | 'history';
-
-// Helper function for grouping history by config key
-const groupKey = (run: TestRun) =>
-	[
-		run.hostname,
-		run.protocol,
-		run.drive_model,
-		run.drive_type,
-		run.read_write_pattern,
-		run.block_size,
-		run.queue_depth,
-	].join('|');
 
 interface EditableFields {
 	hostname?: string;
@@ -105,11 +87,6 @@ const Admin: React.FC = () => {
 		count: 0,
 	});
 
-	// Latest Runs state
-	const [latestSortField, setLatestSortField] = useState<keyof TestRun>('timestamp');
-	const [latestSortDirection, setLatestSortDirection] = useState<'asc' | 'desc'>('desc');
-	const [selectedLatestRuns, setSelectedLatestRuns] = useState<Set<number>>(new Set());
-
 	// History state
 	const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
 	const [timeSeriesLoading, setTimeSeriesLoading] = useState(false);
@@ -130,9 +107,8 @@ const Admin: React.FC = () => {
 		testRuns: latestRuns,
 		loading: latestLoading,
 		error: latestError,
-		refresh: refreshLatest,
 	} = useServerSideTestRuns({
-		enabled: activeTab === 'latest',
+		autoFetch: activeTab === 'latest',
 	});
 
 	// Fetch history data
@@ -171,8 +147,6 @@ const Admin: React.FC = () => {
 				metadata.protocol?.toLowerCase().includes(lowerSearch) ||
 				metadata.drive_model?.toLowerCase().includes(lowerSearch) ||
 				metadata.drive_type?.toLowerCase().includes(lowerSearch) ||
-				metadata.test_name?.toLowerCase().includes(lowerSearch) ||
-				metadata.description?.toLowerCase().includes(lowerSearch) ||
 				group.uuid.toLowerCase().includes(lowerSearch)
 			);
 		});
@@ -189,8 +163,6 @@ const Admin: React.FC = () => {
 				metadata.protocol?.toLowerCase().includes(lowerSearch) ||
 				metadata.drive_model?.toLowerCase().includes(lowerSearch) ||
 				metadata.drive_type?.toLowerCase().includes(lowerSearch) ||
-				metadata.test_name?.toLowerCase().includes(lowerSearch) ||
-				metadata.description?.toLowerCase().includes(lowerSearch) ||
 				group.uuid.toLowerCase().includes(lowerSearch)
 			);
 		});
@@ -202,6 +174,7 @@ const Admin: React.FC = () => {
 
 		const lowerSearch = searchTerm.toLowerCase();
 		return latestRuns.filter((run) => {
+			const blockSizeStr = typeof run.block_size === 'string' ? run.block_size : String(run.block_size);
 			return (
 				run.hostname?.toLowerCase().includes(lowerSearch) ||
 				run.protocol?.toLowerCase().includes(lowerSearch) ||
@@ -210,7 +183,7 @@ const Admin: React.FC = () => {
 				run.test_name?.toLowerCase().includes(lowerSearch) ||
 				run.description?.toLowerCase().includes(lowerSearch) ||
 				run.read_write_pattern?.toLowerCase().includes(lowerSearch) ||
-				run.block_size?.toLowerCase().includes(lowerSearch) ||
+				blockSizeStr.toLowerCase().includes(lowerSearch) ||
 				run.config_uuid?.toLowerCase().includes(lowerSearch) ||
 				run.run_uuid?.toLowerCase().includes(lowerSearch)
 			);
@@ -223,6 +196,7 @@ const Admin: React.FC = () => {
 
 		const lowerSearch = searchTerm.toLowerCase();
 		return timeSeriesData.filter((run: any) => {
+			const blockSizeStr = typeof run.block_size === 'string' ? run.block_size : String(run.block_size || '');
 			return (
 				run.hostname?.toLowerCase().includes(lowerSearch) ||
 				run.protocol?.toLowerCase().includes(lowerSearch) ||
@@ -231,7 +205,7 @@ const Admin: React.FC = () => {
 				run.test_name?.toLowerCase().includes(lowerSearch) ||
 				run.description?.toLowerCase().includes(lowerSearch) ||
 				run.read_write_pattern?.toLowerCase().includes(lowerSearch) ||
-				run.block_size?.toLowerCase().includes(lowerSearch) ||
+				blockSizeStr.toLowerCase().includes(lowerSearch) ||
 				run.config_uuid?.toLowerCase().includes(lowerSearch) ||
 				run.run_uuid?.toLowerCase().includes(lowerSearch)
 			);

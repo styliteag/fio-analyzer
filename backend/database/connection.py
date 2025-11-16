@@ -285,7 +285,12 @@ class DatabaseManager:
                     # Generate run_uuid from all meta fields + date
                     # Include hostname, protocol, drive_type, drive_model, description, and date
                     date_str = test_date or timestamp or "unknown"
-                    date_part = date_str.split('T')[0] if 'T' in date_str else date_str.split(' ')[0]
+                    if 'T' in date_str:
+                        date_part = date_str.split('T')[0]
+                    elif ' ' in date_str:
+                        date_part = date_str.split(' ')[0]
+                    else:
+                        date_part = date_str[:10] if len(date_str) >= 10 else date_str
                     
                     # Build hash seed from all meta fields
                     meta_fields = [
