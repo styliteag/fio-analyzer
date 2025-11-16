@@ -95,8 +95,8 @@ jobs:
         # The $VITE_API_URL is set to empty string in the Dockerfile
         # VITE_API_URL=
         tags: |
-          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}
           ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}
+        # styliteag/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}
           
   merge:
     runs-on: ubuntu-latest
@@ -152,27 +152,6 @@ jobs:
     
     - name: Create and push multi-arch manifests
       run: |
-        # Docker Hub manifests
-        docker buildx imagetools create \
-          -t styliteag/fio-analyzer:${{ steps.version.outputs.version }} \
-          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
-          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
-        
-        docker buildx imagetools create \
-          -t styliteag/fio-analyzer:latest \
-          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
-          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
-        
-        docker buildx imagetools create \
-          -t styliteag/fio-analyzer:${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }} \
-          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
-          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
-        
-        docker buildx imagetools create \
-          -t styliteag/fio-analyzer:${{ steps.version.outputs.major }} \
-          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
-          styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
-        
         # GHCR manifests
         docker buildx imagetools create \
           -t ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }} \
@@ -193,6 +172,28 @@ jobs:
           -t ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.major }} \
           ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
           ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+          
+        ## Docker Hub manifests
+        #docker buildx imagetools create \
+        #  -t styliteag/fio-analyzer:${{ steps.version.outputs.version }} \
+        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        #
+        #docker buildx imagetools create \
+        #  -t styliteag/fio-analyzer:latest \
+        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        #
+        #docker buildx imagetools create \
+        #  -t styliteag/fio-analyzer:${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }} \
+        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        #
+        #docker buildx imagetools create \
+        #  -t styliteag/fio-analyzer:${{ steps.version.outputs.major }} \
+        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        #
 
     - name: Create GitHub release
       run: |
@@ -203,8 +204,7 @@ jobs:
         Built from tag: ${{ steps.tag.outputs.tag }}
 
         Docker Images:
-        - \`styliteag/fio-analyzer:${{ steps.version.outputs.version }}\`
-        - \`ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}\`" \
-          --latest
+        - \`ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}\`"
+      # - \`styliteag/fio-analyzer:${{ steps.version.outputs.version }}\`
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
