@@ -798,7 +798,6 @@ if [ "$1" = "-u" ] || [ "$1" = "--uuid" ]; then
         # Fallback: Generate random UUID4 using /dev/urandom
         # Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
         # where x is any hexadecimal digit and y is one of 8, 9, a, or b
-        local uuid_hex
         uuid_hex=$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || echo "")
         
         if [ -z "$uuid_hex" ] || [ ${#uuid_hex} -lt 32 ]; then
@@ -808,10 +807,9 @@ if [ "$1" = "-u" ] || [ "$1" = "--uuid" ]; then
         
         if [ -n "$uuid_hex" ] && [ ${#uuid_hex} -ge 32 ]; then
             # Format as UUID and set version (4) and variant bits
-            local variant_byte
             variant_byte=$(od -An -N1 -tu1 /dev/urandom 2>/dev/null | tr -d ' ' || echo "8")
-            local variant=$((8 + (variant_byte % 4)))
-            local uuid="${uuid_hex:0:8}-${uuid_hex:8:4}-4${uuid_hex:13:3}-${variant}${uuid_hex:17:3}-${uuid_hex:20:12}"
+            variant=$((8 + (variant_byte % 4)))
+            uuid="${uuid_hex:0:8}-${uuid_hex:8:4}-4${uuid_hex:13:3}-${variant}${uuid_hex:17:3}-${uuid_hex:20:12}"
             echo "$uuid"
         else
             # Last resort: use date-based hash
