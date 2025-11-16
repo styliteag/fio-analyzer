@@ -26,6 +26,7 @@ import { useUUIDGroupedRuns } from '../hooks/api/useUUIDGroupedRuns';
 import {
 	deleteTestRuns,
 	bulkUpdateTestRunsByUUID,
+	fetchTestRun,
 } from '../services/api/testRuns';
 import { fetchTimeSeriesHistory } from '../services/api/timeSeries';
 import { useNavigate } from 'react-router-dom';
@@ -68,6 +69,12 @@ interface DataCleanupState {
 	isLoading: boolean;
 }
 
+interface TestRunDetailsState {
+	isOpen: boolean;
+	testRun: TestRun | null;
+	isLoading: boolean;
+}
+
 const Admin: React.FC = () => {
 	const navigate = useNavigate();
 	const [activeTab, setActiveTab] = useState<AdminTab>('by-config');
@@ -107,6 +114,17 @@ const Admin: React.FC = () => {
 		previewCount: null,
 		isLoading: false,
 	});
+
+	// Test run details state
+	const [testRunDetailsState, setTestRunDetailsState] = useState<TestRunDetailsState>({
+		isOpen: false,
+		testRun: null,
+		isLoading: false,
+	});
+
+	// UUID group runs state - stores fetched runs for each UUID
+	const [uuidGroupRuns, setUuidGroupRuns] = useState<Map<string, TestRun[]>>(new Map());
+	const [uuidGroupRunsLoading, setUuidGroupRunsLoading] = useState<Map<string, boolean>>(new Map());
 
 	// History state
 	const [timeSeriesData, setTimeSeriesData] = useState<any[]>([]);
@@ -265,18 +283,54 @@ const Admin: React.FC = () => {
 		setTimeout(() => setCopiedUUID(null), 2000);
 	}, []);
 
+	// Fetch runs for a UUID group
+	const fetchUUIDGroupRuns = useCallback(async (uuid: string, testRunIds: number[]) => {
+		// Skip if already loading or loaded
+		if (uuidGroupRunsLoading.get(uuid) || uuidGroupRuns.has(uuid)) {
+			return;
+		}
+
+		// Mark as loading
+		setUuidGroupRunsLoading(new Map(uuidGroupRunsLoading.set(uuid, true)));
+
+		try {
+			// Fetch each test run individually using the service API
+			const fetchPromises = testRunIds.map(async (id) => {
+				const result = await fetchTestRun(id);
+				if (result.error) {
+					throw new Error(result.error);
+				}
+				return result.data;
+			});
+
+			const runs = await Promise.all(fetchPromises);
+
+			// Store the runs (filter out any null/undefined results)
+			const validRuns = runs.filter((run): run is TestRun => run !== null && run !== undefined);
+			setUuidGroupRuns(new Map(uuidGroupRuns.set(uuid, validRuns)));
+		} catch (err) {
+			console.error('Error fetching UUID group runs:', err);
+		} finally {
+			setUuidGroupRunsLoading(new Map(uuidGroupRunsLoading.set(uuid, false)));
+		}
+	}, [uuidGroupRuns, uuidGroupRunsLoading]);
+
 	// Toggle group expansion
-	const toggleGroup = useCallback((uuid: string) => {
+	const toggleGroup = useCallback((uuid: string, testRunIds?: number[]) => {
 		setExpandedGroups((prev) => {
 			const next = new Set(prev);
 			if (next.has(uuid)) {
 				next.delete(uuid);
 			} else {
 				next.add(uuid);
+				// Fetch runs when expanding if not already loaded
+				if (testRunIds && testRunIds.length > 0) {
+					fetchUUIDGroupRuns(uuid, testRunIds);
+				}
 			}
 			return next;
 		});
-	}, []);
+	}, [fetchUUIDGroupRuns]);
 
 	// Open UUID edit modal
 	const openUUIDEdit = useCallback(
@@ -494,6 +548,29 @@ const Admin: React.FC = () => {
 		}
 	}, [dataCleanupState, activeTab]);
 
+	// Open test run details
+	const openTestRunDetails = useCallback(async (testRunId: number) => {
+		setTestRunDetailsState({ isOpen: true, testRun: null, isLoading: true });
+
+		try {
+			const result = await fetchTestRun(testRunId);
+
+			if (result.error) {
+				throw new Error(result.error);
+			}
+
+			setTestRunDetailsState({
+				isOpen: true,
+				testRun: result.data || null,
+				isLoading: false,
+			});
+		} catch (err) {
+			console.error('Error fetching test run details:', err);
+			alert('Failed to load test run details');
+			setTestRunDetailsState({ isOpen: false, testRun: null, isLoading: false });
+		}
+	}, []);
+
 	// Render UUID Group Card
 	const renderUUIDGroup = (group: UUIDGroup, uuidType: 'config_uuid' | 'run_uuid') => {
 		const isExpanded = expandedGroups.has(group.uuid);
@@ -588,7 +665,7 @@ const Admin: React.FC = () => {
 								Delete
 							</Button>
 							<button
-								onClick={() => toggleGroup(group.uuid)}
+								onClick={() => toggleGroup(group.uuid, group.test_run_ids)}
 								className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
 							>
 								{isExpanded ? (
@@ -601,24 +678,90 @@ const Admin: React.FC = () => {
 					</div>
 				</div>
 
-				{/* Expanded Test List */}
+				{/* Expanded Test Table */}
 				{isExpanded && (
-					<div className="p-4">
-						<div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-							{group.count} test run{group.count !== 1 ? 's' : ''} in this group:
-						</div>
-						<div className="bg-gray-50 dark:bg-gray-900 rounded p-2 max-h-96 overflow-y-auto">
-							<div className="space-y-1">
-								{group.test_run_ids.map((id) => (
-									<div
-										key={id}
-										className="text-sm text-gray-700 dark:text-gray-300 font-mono px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-									>
-										Test Run ID: {id}
-									</div>
-								))}
+					<div className="overflow-x-auto">
+						{uuidGroupRunsLoading.get(group.uuid) ? (
+							<div className="p-8 text-center">
+								<Loading message="Loading test runs..." />
 							</div>
-						</div>
+						) : uuidGroupRuns.get(group.uuid) ? (
+							<table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+								<thead className="bg-gray-100 dark:bg-gray-700">
+									<tr>
+										<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Test Run</th>
+										<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Configuration</th>
+										<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Performance</th>
+										<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">UUIDs</th>
+									</tr>
+								</thead>
+								<tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+									{uuidGroupRuns.get(group.uuid)!.map((run) => (
+										<tr
+											key={run.id}
+											onClick={() => openTestRunDetails(run.id)}
+											className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+										>
+											<td className="px-4 py-3">
+												<div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+													Test Run #{run.id}
+												</div>
+												<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+													{new Date(run.timestamp).toLocaleString()}
+												</div>
+												<div className="text-xs text-gray-600 dark:text-gray-400 mt-1" title={run.test_name || 'Unnamed Test'}>
+													{run.test_name && run.test_name.length > 40
+														? `${run.test_name.substring(0, 40)}...`
+														: run.test_name || 'Unnamed Test'}
+												</div>
+											</td>
+											<td className="px-4 py-3">
+												<div className="text-sm text-gray-900 dark:text-gray-100">
+													<span className="font-medium">{run.protocol}</span> • {run.read_write_pattern}
+												</div>
+												<div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+													{run.drive_type} - {run.drive_model}
+												</div>
+												<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+													Block: {run.block_size} • QD: {run.queue_depth} • Jobs: {run.num_jobs || 1}
+												</div>
+											</td>
+											<td className="px-4 py-3">
+												<div className="text-sm font-bold text-gray-900 dark:text-gray-100">
+													{run.iops ? Math.round(run.iops).toLocaleString() : 'N/A'} IOPS
+												</div>
+												{run.bandwidth && (
+													<div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+														BW: {run.bandwidth.toFixed(2)} MB/s
+													</div>
+												)}
+												{run.avg_latency && (
+													<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+														Latency: {run.avg_latency.toFixed(3)} ms
+													</div>
+												)}
+											</td>
+											<td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+												{run.config_uuid && (
+													<div title={run.config_uuid} className="mb-1">
+														C: {run.config_uuid.slice(0, 8)}...
+													</div>
+												)}
+												{run.run_uuid && (
+													<div title={run.run_uuid}>
+														R: {run.run_uuid.slice(0, 8)}...
+													</div>
+												)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						) : (
+							<div className="p-4 text-center text-gray-500 dark:text-gray-400">
+								No test runs available
+							</div>
+						)}
 					</div>
 				)}
 			</div>
@@ -884,38 +1027,67 @@ const Admin: React.FC = () => {
 													<table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
 														<thead className="bg-gray-100 dark:bg-gray-700">
 															<tr>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ID</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Timestamp</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Protocol</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Drive</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Pattern</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Block Size</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">IOPS</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Config UUID</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Test Run</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Configuration</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Performance</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">UUIDs</th>
 															</tr>
 														</thead>
 														<tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
 															{group.runs.map((run) => (
-																<tr key={run.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-																	<td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{run.id}</td>
-																	<td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-																		{new Date(run.timestamp).toLocaleDateString()}
+																<tr
+																	key={run.id}
+																	onClick={() => openTestRunDetails(run.id)}
+																	className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+																>
+																	<td className="px-4 py-3">
+																		<div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+																			Test Run #{run.id}
+																		</div>
+																		<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+																			{new Date(run.timestamp).toLocaleString()}
+																		</div>
+																		<div className="text-xs text-gray-600 dark:text-gray-400 mt-1" title={run.test_name || 'Unnamed Test'}>
+																			{run.test_name && run.test_name.length > 40
+																				? `${run.test_name.substring(0, 40)}...`
+																				: run.test_name || 'Unnamed Test'}
+																		</div>
 																	</td>
-																	<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{run.protocol}</td>
-																	<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-																		{run.drive_type}
-																		<br />
-																		<span className="text-xs text-gray-500 dark:text-gray-400">{run.drive_model}</span>
+																	<td className="px-4 py-3">
+																		<div className="text-sm text-gray-900 dark:text-gray-100">
+																			<span className="font-medium">{run.protocol}</span> • {run.read_write_pattern}
+																		</div>
+																		<div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+																			{run.drive_type} - {run.drive_model}
+																		</div>
+																		<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+																			Block: {run.block_size} • QD: {run.queue_depth} • Jobs: {run.num_jobs || 1}
+																		</div>
 																	</td>
-																	<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{run.read_write_pattern}</td>
-																	<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{run.block_size}</td>
-																	<td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
-																		{run.iops ? Math.round(run.iops).toLocaleString() : 'N/A'}
+																	<td className="px-4 py-3">
+																		<div className="text-sm font-bold text-gray-900 dark:text-gray-100">
+																			{run.iops ? Math.round(run.iops).toLocaleString() : 'N/A'} IOPS
+																		</div>
+																		{run.bandwidth && (
+																			<div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+																				BW: {run.bandwidth.toFixed(2)} MB/s
+																			</div>
+																		)}
+																		{run.avg_latency && (
+																			<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+																				Latency: {run.avg_latency.toFixed(3)} ms
+																			</div>
+																		)}
 																	</td>
 																	<td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
 																		{run.config_uuid && (
-																			<div title={run.config_uuid}>
-																				{run.config_uuid.slice(0, 8)}...
+																			<div title={run.config_uuid} className="mb-1">
+																				C: {run.config_uuid.slice(0, 8)}...
+																			</div>
+																		)}
+																		{run.run_uuid && (
+																			<div title={run.run_uuid}>
+																				R: {run.run_uuid.slice(0, 8)}...
 																			</div>
 																		)}
 																	</td>
@@ -1250,6 +1422,188 @@ const Admin: React.FC = () => {
 						</Button>
 					</div>
 				</div>
+			</Modal>
+
+			{/* Test Run Details Modal */}
+			<Modal
+				isOpen={testRunDetailsState.isOpen}
+				onClose={() => setTestRunDetailsState({ isOpen: false, testRun: null, isLoading: false })}
+				title="Test Run Details"
+			>
+				{testRunDetailsState.isLoading ? (
+					<Loading message="Loading test details..." />
+				) : testRunDetailsState.testRun ? (
+					<div className="space-y-6">
+						{/* Basic Info */}
+						<div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Test Information</h3>
+							<div className="grid grid-cols-2 gap-4 text-sm">
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Test Run ID:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">#{testRunDetailsState.testRun.id}</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Test Name:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100" title={testRunDetailsState.testRun.test_name || 'N/A'}>
+										{testRunDetailsState.testRun.test_name && testRunDetailsState.testRun.test_name.length > 40
+											? `${testRunDetailsState.testRun.test_name.substring(0, 40)}...`
+											: testRunDetailsState.testRun.test_name || 'N/A'}
+									</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Timestamp:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">
+										{new Date(testRunDetailsState.testRun.timestamp).toLocaleString()}
+									</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Hostname:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.hostname}</div>
+								</div>
+							</div>
+						</div>
+
+						{/* UUIDs */}
+						<div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">UUIDs</h3>
+							<div className="grid grid-cols-1 gap-3 text-sm">
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Config UUID:</span>
+									<div className="font-mono text-xs text-gray-900 dark:text-gray-100 mt-1 bg-gray-100 dark:bg-gray-700 p-2 rounded">
+										{testRunDetailsState.testRun.config_uuid || 'N/A'}
+									</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Run UUID:</span>
+									<div className="font-mono text-xs text-gray-900 dark:text-gray-100 mt-1 bg-gray-100 dark:bg-gray-700 p-2 rounded">
+										{testRunDetailsState.testRun.run_uuid || 'N/A'}
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Storage Configuration */}
+						<div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Storage Configuration</h3>
+							<div className="grid grid-cols-2 gap-4 text-sm">
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Protocol:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.protocol}</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Drive Type:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.drive_type}</div>
+								</div>
+								<div className="col-span-2">
+									<span className="text-gray-500 dark:text-gray-400">Drive Model:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.drive_model}</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Test Parameters */}
+						<div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Test Parameters</h3>
+							<div className="grid grid-cols-2 gap-4 text-sm">
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Pattern:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.read_write_pattern}</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Block Size:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.block_size}</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Queue Depth:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.queue_depth}</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Number of Jobs:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.num_jobs || 1}</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Test Size:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.test_size || 'N/A'}</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Duration:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.duration ? `${testRunDetailsState.testRun.duration}s` : 'N/A'}</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Direct I/O:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.direct ? 'Yes' : 'No'}</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Sync:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.sync ? 'Yes' : 'No'}</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Performance Metrics */}
+						<div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Performance Metrics</h3>
+							<div className="grid grid-cols-2 gap-4 text-sm">
+								<div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg">
+									<span className="text-gray-500 dark:text-gray-400">IOPS:</span>
+									<div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
+										{testRunDetailsState.testRun.iops ? Math.round(testRunDetailsState.testRun.iops).toLocaleString() : 'N/A'}
+									</div>
+								</div>
+								<div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+									<span className="text-gray-500 dark:text-gray-400">Bandwidth:</span>
+									<div className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+										{testRunDetailsState.testRun.bandwidth ? `${testRunDetailsState.testRun.bandwidth.toFixed(2)} MB/s` : 'N/A'}
+									</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">Avg Latency:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">
+										{testRunDetailsState.testRun.avg_latency ? `${testRunDetailsState.testRun.avg_latency.toFixed(3)} ms` : 'N/A'}
+									</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">P95 Latency:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">
+										{testRunDetailsState.testRun.p95_latency ? `${testRunDetailsState.testRun.p95_latency.toFixed(3)} ms` : 'N/A'}
+									</div>
+								</div>
+								<div>
+									<span className="text-gray-500 dark:text-gray-400">P99 Latency:</span>
+									<div className="font-semibold text-gray-900 dark:text-gray-100">
+										{testRunDetailsState.testRun.p99_latency ? `${testRunDetailsState.testRun.p99_latency.toFixed(3)} ms` : 'N/A'}
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Description */}
+						{testRunDetailsState.testRun.description && (
+							<div>
+								<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Description</h3>
+								<div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 p-3 rounded-lg" title={testRunDetailsState.testRun.description}>
+									{testRunDetailsState.testRun.description.length > 40
+										? `${testRunDetailsState.testRun.description.substring(0, 40)}...`
+										: testRunDetailsState.testRun.description}
+								</div>
+							</div>
+						)}
+
+						<div className="flex gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+							<Button
+								variant="outline"
+								onClick={() => setTestRunDetailsState({ isOpen: false, testRun: null, isLoading: false })}
+								className="flex-1"
+							>
+								Close
+							</Button>
+						</div>
+					</div>
+				) : (
+					<div className="text-center py-12 text-gray-500 dark:text-gray-400">
+						No test run data available
+					</div>
+				)}
 			</Modal>
 		</div>
 	);

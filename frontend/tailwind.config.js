@@ -10,6 +10,11 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
+      colors: {
+        gray: {
+          750: '#2d3748', // Custom gray-750 for dark mode headers
+        },
+      },
     },
   },
   plugins: [],
