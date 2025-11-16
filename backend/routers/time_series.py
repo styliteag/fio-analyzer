@@ -831,7 +831,8 @@ async def get_historical_time_series(
             SELECT
                 id, timestamp, hostname, protocol, drive_model, drive_type,
                 block_size, read_write_pattern, queue_depth,
-                iops, avg_latency, bandwidth, p95_latency, p99_latency
+                iops, avg_latency, bandwidth, p95_latency, p99_latency,
+                config_uuid, run_uuid
             FROM test_runs_all
             WHERE {where_clause}
             ORDER BY timestamp DESC
@@ -857,6 +858,8 @@ async def get_historical_time_series(
                 "iops": row[9],
                 "p95_latency": row[12],
                 "p99_latency": row[13],
+                "config_uuid": row[14],
+                "run_uuid": row[15],
             }
 
             # If metric_type is specified, filter results to only include records with that metric value

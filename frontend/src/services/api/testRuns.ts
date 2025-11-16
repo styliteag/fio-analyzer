@@ -1,5 +1,5 @@
 // Test runs API service
-import type { TestRun, FilterOptions } from '../../types';
+import type { TestRun, FilterOptions, UUIDGroup } from '../../types';
 import type { ActiveFilters } from '../../hooks/useTestRunFilters';
 import { apiCall, buildFilterParams } from './base';
 
@@ -178,6 +178,32 @@ export const deleteTestRuns = async (ids: number[], abortSignal?: AbortSignal) =
 // Fetch filter options for UI
 export const fetchFilters = async (abortSignal?: AbortSignal) => {
     return apiCall<FilterOptions>("/api/filters", {
+        signal: abortSignal
+    });
+};
+
+// Fetch test runs grouped by UUID
+export const fetchTestRunsGroupedByUUID = async (
+    groupBy: 'config_uuid' | 'run_uuid',
+    abortSignal?: AbortSignal
+) => {
+    return apiCall<UUIDGroup[]>(`/api/test-runs/grouped-by-uuid?group_by=${groupBy}`, {
+        signal: abortSignal
+    });
+};
+
+// Bulk update test runs by UUID
+export const bulkUpdateTestRunsByUUID = async (
+    uuid: string,
+    uuidType: 'config_uuid' | 'run_uuid',
+    updates: TestRunUpdateData,
+    abortSignal?: AbortSignal
+) => {
+    const queryParam = uuidType === 'config_uuid' ? `config_uuid=${uuid}` : `run_uuid=${uuid}`;
+
+    return apiCall(`/api/test-runs/bulk-by-uuid?${queryParam}`, {
+        method: "PUT",
+        body: JSON.stringify(updates),
         signal: abortSignal
     });
 };

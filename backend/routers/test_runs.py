@@ -253,7 +253,8 @@ async def get_test_runs(
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
                    output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
-                   avg_latency, bandwidth, iops, p95_latency, p99_latency
+                   avg_latency, bandwidth, iops, p95_latency, p99_latency,
+                   config_uuid, run_uuid
             FROM test_runs
             WHERE {where_clause}
             ORDER BY timestamp DESC
@@ -417,6 +418,150 @@ async def bulk_update_test_runs(
         raise HTTPException(status_code=500, detail="Failed to update test runs")
 
 
+@router.put(
+    "/bulk-by-uuid",
+    summary="Bulk Update Test Runs by UUID",
+    description="Update all test runs with a specific config_uuid or run_uuid",
+    response_description="Bulk update operation results",
+    responses={
+        200: {
+            "description": "Bulk update by UUID completed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Successfully updated 15 test runs",
+                        "updated": 15,
+                        "uuid": "550e8400-e29b-41d4-a716-446655440000",
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid request data or missing UUID filter"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def bulk_update_test_runs_by_uuid(
+    request: Request,
+    config_uuid: Optional[str] = Query(None, description="Update all runs with this config_uuid"),
+    run_uuid: Optional[str] = Query(None, description="Update all runs with this run_uuid"),
+    updates: dict = Body(..., description="Fields to update (description, test_name, hostname, protocol, drive_type, drive_model)"),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Perform bulk updates on all test runs matching a UUID filter.
+
+    Updates all test runs that match either a config_uuid or run_uuid.
+    This is useful for renaming all tests from a specific host configuration
+    or all tests from a single script execution.
+
+    **Authentication Required:** Admin access
+
+    **UUID Filters** (specify exactly one):
+    - config_uuid: Update all runs from this host configuration
+    - run_uuid: Update all runs from this script execution
+
+    **Updatable Fields:**
+    - description, test_name, hostname, protocol, drive_type, drive_model
+
+    **Example Request:**
+    ```
+    PUT /api/test-runs/bulk-by-uuid?config_uuid=550e8400-e29b-41d4-a716-446655440000
+    Body: {"hostname": "new-server-name", "description": "Updated description"}
+    ```
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    try:
+        # Validate UUID filter
+        if not config_uuid and not run_uuid:
+            raise HTTPException(
+                status_code=400,
+                detail="Must specify either config_uuid or run_uuid parameter"
+            )
+
+        if config_uuid and run_uuid:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot specify both config_uuid and run_uuid. Choose one."
+            )
+
+        # Validate updates
+        allowed_fields = {"description", "test_name", "hostname", "protocol", "drive_type", "drive_model"}
+        invalid_fields = set(updates.keys()) - allowed_fields
+        if invalid_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid fields: {', '.join(invalid_fields)}. Allowed: {', '.join(allowed_fields)}"
+            )
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updates provided")
+
+        # Build update query
+        set_clauses = []
+        params = []
+
+        for field, value in updates.items():
+            set_clauses.append(f"{field} = ?")
+            params.append(value)
+
+        set_clause = ", ".join(set_clauses)
+
+        # Determine which UUID to filter by
+        uuid_field = "config_uuid" if config_uuid else "run_uuid"
+        uuid_value = config_uuid if config_uuid else run_uuid
+        params.append(uuid_value)
+
+        # Execute update on test_runs
+        cursor = db.cursor()
+        update_query = f"""
+            UPDATE test_runs
+            SET {set_clause}
+            WHERE {uuid_field} = ?
+        """
+        cursor.execute(update_query, params)
+        updated = cursor.rowcount
+
+        # Also update test_runs_all
+        cursor.execute(
+            f"""
+            UPDATE test_runs_all
+            SET {set_clause}
+            WHERE {uuid_field} = ?
+        """,
+            params,
+        )
+
+        db.commit()
+
+        log_info(
+            "Bulk update by UUID completed successfully",
+            {
+                "request_id": request_id,
+                "user": user.username,
+                "updated": updated,
+                "uuid_field": uuid_field,
+                "uuid_value": uuid_value,
+                "updates": updates,
+            },
+        )
+
+        return {
+            "message": f"Successfully updated {updated} test runs",
+            "updated": updated,
+            "uuid": uuid_value,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error during bulk update by UUID", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to update test runs by UUID")
+
+
 @router.get(
     "/performance-data",
     summary="Get Performance Data",
@@ -506,7 +651,8 @@ async def get_performance_data(
                        fio_version, job_runtime, rwmixread, total_ios_read,
                        total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
                        uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
-                       avg_latency, bandwidth, iops, p95_latency, p99_latency
+                       avg_latency, bandwidth, iops, p95_latency, p99_latency,
+                       config_uuid, run_uuid
                 FROM test_runs WHERE id = ?
             """,
                 (test_run_id,),
@@ -536,6 +682,8 @@ async def get_performance_data(
                     "sync": test_run_data["sync"],
                     "iodepth": test_run_data["iodepth"],
                     "duration": test_run_data["duration"],
+                    "config_uuid": test_run_data["config_uuid"],
+                    "run_uuid": test_run_data["run_uuid"],
                     "metrics": {
                         "avg_latency": ({"value": test_run_data["avg_latency"], "unit": "ms"} if test_run_data["avg_latency"] is not None else None),
                         "bandwidth": ({"value": test_run_data["bandwidth"], "unit": "MB/s"} if test_run_data["bandwidth"] is not None else None),
@@ -561,6 +709,166 @@ async def get_performance_data(
     except Exception as e:
         log_error("Error retrieving performance data", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to retrieve performance data")
+
+
+@router.get(
+    "/grouped-by-uuid",
+    summary="Get Test Runs Grouped by UUID",
+    description="Retrieve test runs grouped by config_uuid or run_uuid with statistics",
+    response_description="UUID groups with statistics and test run information",
+    responses={
+        200: {
+            "description": "Successfully retrieved UUID-grouped data",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "uuid": "550e8400-e29b-41d4-a716-446655440000",
+                            "count": 15,
+                            "avg_iops": 125000.5,
+                            "first_test": "2025-01-15T10:00:00",
+                            "last_test": "2025-06-31T20:00:00",
+                            "sample_metadata": {
+                                "hostname": "server-01",
+                                "protocol": "Local",
+                                "drive_model": "Samsung SSD 980 PRO",
+                                "drive_type": "NVMe"
+                            },
+                            "test_run_ids": [1, 2, 3, 15, 42]
+                        }
+                    ]
+                }
+            }
+        },
+        400: {"description": "Invalid group_by parameter"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def get_test_runs_grouped_by_uuid(
+    request: Request,
+    group_by: str = Query(
+        ...,
+        description="Field to group by (config_uuid or run_uuid)",
+        example="config_uuid",
+    ),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Retrieve test runs grouped by UUID with statistics.
+
+    Groups all test runs by either config_uuid (host configuration) or
+    run_uuid (script execution), and provides aggregate statistics for each group.
+
+    **Authentication Required:** Admin access
+
+    **Group By Options:**
+    - `config_uuid`: Group by host configuration (all tests from same hostname)
+    - `run_uuid`: Group by script execution (all tests from single script run)
+
+    **Statistics Provided:**
+    - Total count of tests in group
+    - Average IOPS across all tests
+    - Date range (first and last test timestamps)
+    - Sample metadata from the group
+    - List of all test run IDs in the group
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    # Validate group_by parameter
+    if group_by not in ["config_uuid", "run_uuid"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid group_by parameter. Must be 'config_uuid' or 'run_uuid'"
+        )
+
+    try:
+        cursor = db.cursor()
+
+        # Simplified query without window functions for better compatibility
+        query = f"""
+            SELECT
+                {group_by} as uuid,
+                COUNT(*) as count,
+                AVG(iops) as avg_iops,
+                MIN(timestamp) as first_test,
+                MAX(timestamp) as last_test,
+                GROUP_CONCAT(id) as test_run_ids
+            FROM test_runs
+            WHERE {group_by} IS NOT NULL
+            GROUP BY {group_by}
+            ORDER BY MAX(timestamp) DESC
+        """
+
+        cursor.execute(query)
+        rows = cursor.fetchall()
+
+        # For each group, get sample metadata from the first (earliest) record
+        results = []
+        for row in rows:
+            row_dict = dict(row)
+            uuid_value = row_dict["uuid"]
+
+            # Get sample metadata (from first record in this UUID group)
+            cursor.execute(
+                f"""
+                SELECT hostname, protocol, drive_model, drive_type
+                FROM test_runs
+                WHERE {group_by} = ?
+                ORDER BY timestamp
+                LIMIT 1
+                """,
+                (uuid_value,)
+            )
+            metadata_row = cursor.fetchone()
+
+            if metadata_row:
+                metadata_dict = dict(metadata_row)
+            else:
+                metadata_dict = {
+                    "hostname": None,
+                    "protocol": None,
+                    "drive_model": None,
+                    "drive_type": None
+                }
+
+            test_run_ids_str = row_dict["test_run_ids"]
+            test_run_ids = [int(id_str) for id_str in test_run_ids_str.split(",")] if test_run_ids_str else []
+
+            result = {
+                "uuid": uuid_value,
+                "count": row_dict["count"],
+                "avg_iops": round(row_dict["avg_iops"], 2) if row_dict["avg_iops"] else None,
+                "first_test": row_dict["first_test"],
+                "last_test": row_dict["last_test"],
+                "sample_metadata": {
+                    "hostname": metadata_dict["hostname"],
+                    "protocol": metadata_dict["protocol"],
+                    "drive_model": metadata_dict["drive_model"],
+                    "drive_type": metadata_dict["drive_type"]
+                },
+                "test_run_ids": test_run_ids
+            }
+            results.append(result)
+
+        log_info(
+            "UUID-grouped test runs retrieved successfully",
+            {
+                "request_id": request_id,
+                "group_by": group_by,
+                "groups_count": len(results),
+            },
+        )
+
+        return results
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error retrieving UUID-grouped test runs", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to retrieve UUID-grouped test runs")
 
 
 @router.get(
@@ -637,7 +945,8 @@ async def get_test_run(
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
                    output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
-                   avg_latency, bandwidth, iops, p95_latency, p99_latency
+                   avg_latency, bandwidth, iops, p95_latency, p99_latency,
+                   config_uuid, run_uuid
             FROM test_runs WHERE id = ?
         """,
             (test_run_id,),

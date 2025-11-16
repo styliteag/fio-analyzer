@@ -3,6 +3,7 @@ export * from './useTestRuns';
 export * from './usePerformanceData';
 export * from './useTimeSeries';
 export * from './useUpload';
+export * from './useUUIDGroupedRuns';
 
 // Re-export commonly used hooks
 export {
@@ -40,3 +41,9 @@ export {
     type UseBatchUploadResult,
     type UseUploadFormResult,
 } from './useUpload';
+
+export {
+    useUUIDGroupedRuns,
+    type UseUUIDGroupedRunsOptions,
+    type UseUUIDGroupedRunsReturn,
+} from './useUUIDGroupedRuns';

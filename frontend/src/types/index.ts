@@ -27,12 +27,32 @@ export interface TestRun {
 	iodepth?: number;
 	// Uniqueness tracking
 	is_latest?: number;
+	// UUID fields
+	config_uuid?: string;
+	run_uuid?: string;
 	// Performance metrics
 	iops?: number | null;
 	avg_latency?: number | null;
 	bandwidth?: number | null;
 	p95_latency?: number | null;
 	p99_latency?: number | null;
+}
+
+export interface UUIDGroupMetadata {
+	hostname?: string;
+	protocol?: string;
+	drive_model?: string;
+	drive_type?: string;
+}
+
+export interface UUIDGroup {
+	uuid: string;
+	count: number;
+	avg_iops: number | null;
+	first_test: string;
+	last_test: string;
+	sample_metadata: UUIDGroupMetadata;
+	test_run_ids: number[];
 }
 
 export interface PerformanceMetric {
