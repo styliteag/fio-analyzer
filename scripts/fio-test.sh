@@ -881,7 +881,7 @@ IODEPTH="1"
 RUNTIME="60"
 # Test directory default is "./fio_tmp/"
 # TARGET_DIR=/mnt/pool/tests/
-DESCRIPTION="hostname:$HOSTNAME,protocol:$PROTOCOL,drivetype:$DRIVE_TYPE,drivemodel:$DRIVE_MODEL"
+DESCRIPTION="hostname:\$HOSTNAME,protocol:\$PROTOCOL,drivetype:\$DRIVE_TYPE,drivemodel:\$DRIVE_MODEL"
 
 
 # Backend Configuration
