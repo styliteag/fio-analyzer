@@ -159,14 +159,6 @@ generate_uuid_from_hash() {
 set_defaults() {
     HOSTNAME="${HOSTNAME:-$(hostname -s)}"
     PROTOCOL="${PROTOCOL:-unknown}"
-    DESCRIPTION="${DESCRIPTION:-FIO-Performance-Test}"
-    # Sanitize the description change " " to "_" and remove any special charaters
-    DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
-    # Ensure description is not empty after sanitization
-    if [ -z "$DESCRIPTION" ] || [ -z "${DESCRIPTION// }" ]; then
-        print_warning "Description became empty after sanitization, using default"
-        DESCRIPTION="FIO-Performance-Test"
-    fi
     DRIVE_TYPE="${DRIVE_TYPE:-unknown}"
     DRIVE_MODEL="${DRIVE_MODEL:-unknown}"
     TEST_SIZE="${TEST_SIZE:-100M}"
@@ -177,6 +169,10 @@ set_defaults() {
     TARGET_DIR="${TARGET_DIR:-./fio_tmp/}"
     USERNAME="${USERNAME:-uploader}"
     PASSWORD="${PASSWORD:-uploader}"
+
+    DESCRIPTION="$DESCRIPTION,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},run_uuid:${RUN_UUID},config_uuid:${CONFIG_UUID},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},runtime:${runtime},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    # Sanitize the description change " " to "_" and remove any special charaters
+    DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
 
     # UUID Generation
     # config_uuid: Fixed per host-config (from .env or generated from hostname)
@@ -484,7 +480,7 @@ run_fio_test() {
     local error_file="/tmp/fio_error_$$_$(date +%s).txt"
     
     fio --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
-        --description="${DESCRIPTION},hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},run_uuid:${RUN_UUID},config_uuid:${CONFIG_UUID},pattern:${pattern},block_size:${block_size},num_jobs:${num_jobs},direct:${direct},test_size:${test_size},sync:${sync},iodepth:${iodepth},runtime:${runtime},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --description="${DESCRIPTION}" \
         --rw="$pattern" \
         --bs="$block_size" \
         --size="$test_size" \
@@ -610,6 +606,10 @@ upload_results() {
     local test_name=$2
     
     print_status "Uploading results: $test_name"
+    print_status "         Hostname: $HOSTNAME"
+    print_status "      Description: $DESCRIPTION"
+    print_status "         Run UUID: $RUN_UUID"
+    print_status "      config_uuid: $CONFIG_UUID"
     
     response=$(curl -s -w "%{http_code}" \
         -X POST \
