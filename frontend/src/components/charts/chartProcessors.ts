@@ -738,13 +738,15 @@ export const processRadarGridData = (
             poolGroups.forEach((poolData, poolName) => {
                 // Single-pass average calculation
                 let totalIops = 0, totalLatency = 0, totalBandwidth = 0;
-                let totalP95 = 0, totalP99 = 0;
+                let totalP70 = 0, totalP90 = 0, totalP95 = 0, totalP99 = 0;
                 const count = poolData.length;
                 
                 for (const item of poolData) {
                     totalIops += getMetricValue(item.metrics, "iops");
                     totalLatency += getMetricValue(item.metrics, "avg_latency");
                     totalBandwidth += getMetricValue(item.metrics, "bandwidth");
+                    totalP70 += getMetricValue(item.metrics, "p70_latency");
+                    totalP90 += getMetricValue(item.metrics, "p90_latency");
                     totalP95 += getMetricValue(item.metrics, "p95_latency");
                     totalP99 += getMetricValue(item.metrics, "p99_latency");
                 }
@@ -753,6 +755,8 @@ export const processRadarGridData = (
                     iops: totalIops / count,
                     latency: totalLatency / count,
                     bandwidth: totalBandwidth / count,
+                    p70_latency: totalP70 / count,
+                    p90_latency: totalP90 / count,
                     p95_latency: totalP95 / count,
                     p99_latency: totalP99 / count,
                 };
@@ -761,6 +765,8 @@ export const processRadarGridData = (
                     iops: normalizeValue(avgMetrics.iops, 'iops'),
                     latency: normalizeValue(avgMetrics.latency, 'latency'),
                     bandwidth: normalizeValue(avgMetrics.bandwidth, 'bandwidth'),
+                    p70_latency: normalizeValue(avgMetrics.p70_latency, 'p70_latency'),
+                    p90_latency: normalizeValue(avgMetrics.p90_latency, 'p90_latency'),
                     p95_latency: normalizeValue(avgMetrics.p95_latency, 'p95_latency'),
                     p99_latency: normalizeValue(avgMetrics.p99_latency, 'p99_latency'),
                     consistency: calculateConsistencyScore(poolData),

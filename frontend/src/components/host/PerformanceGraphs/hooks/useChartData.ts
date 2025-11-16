@@ -281,6 +281,8 @@ export const useChartData = (
         maxValues: {
           iops: 0,
           avg_latency: 0,
+          p70_latency: 0,
+          p90_latency: 0,
           p95_latency: 0,
           p99_latency: 0,
           bandwidth: 0,
