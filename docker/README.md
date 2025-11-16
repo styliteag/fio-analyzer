@@ -34,8 +34,7 @@ docker exec -it fio-app python scripts/manage_users.py add --admin --username ad
 docker exec -it fio-app python scripts/manage_users.py add --username uploader --password your_password
 
 # Download testing script
-wget http://localhost/fio-analyzer-tests.sh
-wget http://localhost/.env.example
+wget http://localhost/fio-test.sh
 ```
 
 ## Production Deployment
@@ -83,15 +82,15 @@ docker compose -f compose.prod.yml restart
 The application serves static files directly via nginx:
 
 ```bash
-# Download testing script and configuration
-wget http://your-server/fio-analyzer-tests.sh
-wget http://your-server/.env.example
+# Download testing script
+wget http://your-server/fio-test.sh
 
 # Setup and use
-chmod +x fio-analyzer-tests.sh
-cp .env.example .env
+chmod +x fio-test.sh
+# Use --generate-env to create a .env file
+./fio-test.sh --generate-env
 # Edit .env with your server settings
-./fio-analyzer-tests.sh
+./fio-test.sh
 ```
 
 ## Persistent Data
@@ -184,8 +183,7 @@ docker exec -it fio-app python scripts/manage_users.py add --admin --username ad
 5. **Script download issues:**
    ```bash
    # Test static file serving
-   curl -I http://localhost/fio-analyzer-tests.sh
-   curl -I http://localhost/.env.example
+   curl -I http://localhost/fio-test.sh
    ```
 
 6. **View application logs:**

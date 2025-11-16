@@ -421,27 +421,17 @@ export default function Upload() {
 						{/* Download Links */}
 						<div className="flex justify-center items-center space-x-6 text-sm">
 							<a
-								href="/script.sh"
+								href="/fio-test.sh"
 								className="inline-flex items-center px-3 py-2 theme-text-secondary hover:theme-text-primary transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
 								title="Download FIO testing script"
 							>
 								<Download className="h-4 w-4 mr-2" />
 								Testing Script
 							</a>
-							<span className="theme-text-secondary">•</span>
-							<a
-								href="/env.example"
-								download
-								className="inline-flex items-center px-3 py-2 theme-text-secondary hover:theme-text-primary transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
-								title="Download configuration template"
-							>
-								<Download className="h-4 w-4 mr-2" />
-								Config Template
-							</a>
 						</div>
 
 						<div className="mt-2 text-xs theme-text-secondary">
-							Download and configure these files to run automated FIO tests
+							Download the script and use --generate-env to create a configuration file
 						</div>
 					</div>
 				</div>

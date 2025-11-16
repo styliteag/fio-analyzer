@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # FIO Performance Testing Script
 # This script runs FIO tests with multiple block sizes and uploads results to the backend

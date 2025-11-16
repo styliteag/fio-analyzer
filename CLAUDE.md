@@ -115,14 +115,13 @@ python scripts/manage_users.py list
 ### Testing Script
 ```bash
 # Download the automated testing script
-wget http://example.intern/script.sh
-wget http://example.intern/env.example
+wget http://example.intern/fio-test.sh
 
 # Setup and run tests
-chmod +x script.sh
-cp .env.example .env
+chmod +x fio-test.sh
+./fio-test.sh --generate-env
 # Edit .env with your settings
-./srcript.sh
+./fio-test.sh
 ```
 
 ### Database

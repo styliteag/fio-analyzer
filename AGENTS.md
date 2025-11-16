@@ -4,7 +4,7 @@
 - `backend/`: FastAPI app (`main.py`), API `routers/`, `auth/`, `database/`, `config/`, `utils/`; tooling (`Makefile`, `pyproject.toml`). Data persists under `backend/db/` and uploads in `backend/uploads/`.
 - `frontend/`: Vite + React + TypeScript (`src/`, `vite.config.ts`, `eslint.config.js`).
 - `docker/`: Multi‑stage image (`docker/app/Dockerfile`) and compose files.
-- `scripts/`: Utilities (`start-frontend-backend.sh`, `fio-analyzer-tests.sh`, `.env.example`).
+- `scripts/`: Utilities (`start-frontend-backend.sh`, `fio-test.sh`, `.env.example`).
 - `docs/`, `README.md`, `.pre-commit-config.yaml` for shared tooling.
 
 ## Build, Test, and Development Commands

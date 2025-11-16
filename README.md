@@ -92,13 +92,13 @@ docker exec -it fio-app python scripts/manage_users.py add --username uploader -
 #### Download Testing Script
 ```bash
 # Download from your running application
-wget http://your-server/fio-analyzer-tests.sh
-wget http://your-server/.env.example
+wget http://your-server/fio-test.sh
 
 # Setup configuration
-cp .env.example .env
+chmod +x fio-test.sh
+# Use --generate-env to create a .env file
+./fio-test.sh --generate-env
 # Edit .env with your settings
-chmod +x fio-analyzer-tests.sh
 ```
 
 ### 🛠️ Development Setup
@@ -242,13 +242,13 @@ The FIO testing script is available for download directly from your application 
 
 #### Download and Setup
 ```bash
-# Download script and configuration template
-wget http://your-server/fio-analyzer-tests.sh
-wget http://your-server/.env.example
+# Download script
+wget http://your-server/fio-test.sh
 
 # Make executable and setup configuration
-chmod +x fio-analyzer-tests.sh
-cp .env.example .env
+chmod +x fio-test.sh
+# Use --generate-env to create a .env file
+./fio-test.sh --generate-env
 # Edit .env with your specific settings
 ```
 
@@ -278,16 +278,16 @@ TEST_PATTERNS=read,write,randread,randwrite
 #### Usage Examples
 ```bash
 # Basic usage (uses .env configuration)
-./fio-analyzer-tests.sh
+./fio-test.sh
 
 # Override specific parameters
-TEST_SIZE="1M" RUNTIME="5" ./fio-analyzer-tests.sh
+TEST_SIZE="1M" RUNTIME="5" ./fio-test.sh
 
 # Custom configuration with environment variables
-HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" ./fio-analyzer-tests.sh
+HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" ./fio-test.sh
 
 # View help and all configuration options
-./fio-analyzer-tests.sh --help
+./fio-test.sh --help
 ```
 
 #### Script Configuration Variables
@@ -326,13 +326,13 @@ For continuous performance monitoring, you can set up a cron job to run FIO test
 crontab -e
 
 # Add entry for hourly tests (runs at the top of every hour)
-0 * * * * cd /path/to/your/scripts && ./fio-analyzer-tests.sh >> /var/log/fio-tests.log 2>&1
+0 * * * * cd /path/to/your/scripts && ./fio-test.sh >> /var/log/fio-tests.log 2>&1
 
 # Add entry for daily tests (runs at 2 AM every day)
-0 2 * * * cd /path/to/your/scripts && ./fio-analyzer-tests.sh >> /var/log/fio-tests.log 2>&1
+0 2 * * * cd /path/to/your/scripts && ./fio-test.sh >> /var/log/fio-tests.log 2>&1
 
 # Add entry for business hours only (9 AM to 5 PM, Monday-Friday)
-0 9-17 * * 1-5 cd /path/to/your/scripts && ./fio-analyzer-tests.sh >> /var/log/fio-tests.log 2>&1
+0 9-17 * * 1-5 cd /path/to/your/scripts && ./fio-test.sh >> /var/log/fio-tests.log 2>&1
 ```
 
 #### Advanced Cron Setup with Environment Variables
@@ -355,7 +355,7 @@ export PASSWORD="your-password"
 echo "$(date): Starting FIO performance test" >> /var/log/fio-tests.log
 
 # Run the test with timeout (kill after 30 minutes if stuck)
-timeout 1800 /path/to/your/scripts/fio-analyzer-tests.sh >> /var/log/fio-tests.log 2>&1
+timeout 1800 /path/to/your/scripts/fio-test.sh >> /var/log/fio-tests.log 2>&1
 
 # Log completion
 echo "$(date): FIO test completed with exit code $?" >> /var/log/fio-tests.log
@@ -438,7 +438,7 @@ fi
 1. **Test Script Manually First**
    ```bash
    # Ensure script works before adding to cron
-   ./fio-analyzer-tests.sh
+   ./fio-test.sh
    ```
 
 2. **Create Dedicated User (Recommended)**
@@ -543,8 +543,7 @@ All API endpoints require authentication. Use basic authentication with username
 - **GET /api/filters** - Get available filter options for drive types, models, patterns, and block sizes
 
 ### Static Downloads (Public)
-- **GET /fio-analyzer-tests.sh** - Download the FIO testing script
-- **GET /.env.example** - Download the configuration template
+- **GET /fio-test.sh** - Download the FIO testing script
 
 ## Performance Testing Examples
 

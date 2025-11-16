@@ -60,11 +60,7 @@ COPY docker/app/health-check.sh /app/health-check.sh
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
 # Copy scripts for download (serve directly from nginx)
-COPY scripts/fio-analyzer-tests.sh /usr/share/nginx/html/fio-analyzer-tests.sh
-COPY scripts/fio-analyzer-tests.sh /usr/share/nginx/html/script.sh
-COPY scripts/.env.example /usr/share/nginx/html/.env.example
-COPY scripts/.env.example /usr/share/nginx/html/env.example
-
+COPY scripts/fio-test.sh /usr/share/nginx/html/fio-test.sh
 
 # Create nginx cache directory and startup script
 RUN mkdir -p /var/cache/nginx && \

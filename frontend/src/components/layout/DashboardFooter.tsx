@@ -28,22 +28,12 @@ export const DashboardFooter: React.FC<DashboardFooterProps> = ({ getApiDocsUrl 
                     {/* Download Links */}
                     <div className="flex justify-center items-center space-x-6 text-sm">
                         <a
-                            href="/script.sh"
+                            href="/fio-test.sh"
                             className="inline-flex items-center px-3 py-2 theme-text-secondary hover:theme-text-primary transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
                             title="Download FIO testing script"
                         >
                             <Download className="h-4 w-4 mr-2" />
                             Testing Script
-                        </a>
-                        <span className="theme-text-secondary">•</span>
-                        <a
-                            href="/env.example"
-                            download
-                            className="inline-flex items-center px-3 py-2 theme-text-secondary hover:theme-text-primary transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
-                            title="Download configuration template"
-                        >
-                            <Download className="h-4 w-4 mr-2" />
-                            Config Template
                         </a>
                         <span className="theme-text-secondary">•</span>
                         <a
@@ -59,7 +49,7 @@ export const DashboardFooter: React.FC<DashboardFooterProps> = ({ getApiDocsUrl 
                     </div>
 
                     <div className="mt-2 text-xs theme-text-secondary">
-                        Download scripts to run automated FIO tests • View API documentation for integration
+                        Download script and use --generate-env to create configuration • View API documentation for integration
                     </div>
                 </div>
             </div>

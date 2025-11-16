@@ -14,7 +14,7 @@ for subdir in $subdirs; do
     
     # Check if a .env file exists in the subdirectory   
     if [ -f "$subdir/.env" ]; then
-        cd "$subdir" && ../fio-analyzer-tests.sh --yes && cd "$current_dir"
+        cd "$subdir" && ../fio-test.sh --yes && cd "$current_dir"
         if [ $? -eq 0 ]; then
             echo "✓ Success"
         else
