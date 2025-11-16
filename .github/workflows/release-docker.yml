@@ -10,6 +10,11 @@ on:
         description: 'Version to release (optional, defaults to VERSION file)'
         required: false
         type: string
+      push_to_dockerhub:
+        description: 'Push images to Docker Hub (optional, defaults to false)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -70,10 +75,23 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Login to Docker Hub
+      if: ${{ inputs.push_to_dockerhub == 'true' }}
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Prepare Docker tags
+      id: tags
+      run: |
+        TAGS="ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}"
+        if [ "${{ inputs.push_to_dockerhub }}" == "true" ]; then
+          TAGS="$TAGS
+        styliteag/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}"
+        fi
+        echo "tags<<EOF" >> $GITHUB_OUTPUT
+        echo "$TAGS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
         
     - name: Build and push release Docker images
       uses: docker/build-push-action@v6
@@ -94,9 +112,7 @@ jobs:
           VCS_REF=${{ github.sha }}
         # The $VITE_API_URL is set to empty string in the Dockerfile
         # VITE_API_URL=
-        tags: |
-          ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}
-        # styliteag/fio-analyzer:${{ steps.version.outputs.version }}-${{ matrix.arch }}
+        tags: ${{ steps.tags.outputs.tags }}
           
   merge:
     runs-on: ubuntu-latest
@@ -138,6 +154,7 @@ jobs:
         echo "Tag: $TAG_NAME"
       
     - name: Login to Docker Hub
+      if: ${{ inputs.push_to_dockerhub == 'true' }}
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -173,27 +190,28 @@ jobs:
           ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
           ghcr.io/${{ github.repository }}/fio-analyzer:${{ steps.version.outputs.version }}-arm64
           
-        ## Docker Hub manifests
-        #docker buildx imagetools create \
-        #  -t styliteag/fio-analyzer:${{ steps.version.outputs.version }} \
-        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
-        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
-        #
-        #docker buildx imagetools create \
-        #  -t styliteag/fio-analyzer:latest \
-        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
-        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
-        #
-        #docker buildx imagetools create \
-        #  -t styliteag/fio-analyzer:${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }} \
-        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
-        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
-        #
-        #docker buildx imagetools create \
-        #  -t styliteag/fio-analyzer:${{ steps.version.outputs.major }} \
-        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
-        #  styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
-        #
+        ## Docker Hub manifests (only if push_to_dockerhub is enabled)
+        if [ "${{ inputs.push_to_dockerhub }}" == "true" ]; then
+          docker buildx imagetools create \
+            -t styliteag/fio-analyzer:${{ steps.version.outputs.version }} \
+            styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+            styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+          
+          docker buildx imagetools create \
+            -t styliteag/fio-analyzer:latest \
+            styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+            styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+          
+          docker buildx imagetools create \
+            -t styliteag/fio-analyzer:${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }} \
+            styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+            styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+          
+          docker buildx imagetools create \
+            -t styliteag/fio-analyzer:${{ steps.version.outputs.major }} \
+            styliteag/fio-analyzer:${{ steps.version.outputs.version }}-amd64 \
+            styliteag/fio-analyzer:${{ steps.version.outputs.version }}-arm64
+        fi
 
     - name: Create GitHub release
       run: |
