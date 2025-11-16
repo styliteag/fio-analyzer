@@ -730,6 +730,22 @@ def extract_latency(job: Dict[str, Any]) -> float:
     operations, converting from nanoseconds to milliseconds.
     Uses clat_ns (completion latency) for consistency with percentile metrics.
 
+    Why weighting by I/O count?
+    ---------------------------
+    Read and write operations often have different latencies AND different I/O counts.
+    A simple average (read_lat + write_lat) / 2 would be misleading because it treats
+    both operations equally, regardless of how many I/Os each performed.
+
+    Example:
+        - 1000 reads @ 1ms, 1 write @ 10ms
+        - Simple avg: (1 + 10) / 2 = 5.5 ms ❌ (misleading - most I/Os were fast!)
+        - Weighted:   (1×1000 + 10×1) / 1001 = 1.009 ms ✅ (accurate)
+
+    The weighted average gives the TRUE average latency experienced across all
+    I/O operations, accounting for the actual distribution of read vs write I/Os.
+
+    Formula: weighted_avg = (read_lat × read_ios + write_lat × write_ios) / total_ios
+
     Args:
         job: FIO job data containing latency statistics
 
@@ -739,13 +755,14 @@ def extract_latency(job: Dict[str, Any]) -> float:
     read_lat = job.get("read", {}).get("clat_ns", {}).get("mean", 0)
     write_lat = job.get("write", {}).get("clat_ns", {}).get("mean", 0)
 
-    total_ios = job.get("read", {}).get("io_ops", 0) + job.get("write", {}).get("io_ops", 0)
+    total_ios = job.get("read", {}).get("total_ios", 0) + job.get("write", {}).get("total_ios", 0)
     if total_ios == 0:
         return 0.0
 
-    read_ios = job.get("read", {}).get("io_ops", 0)
-    write_ios = job.get("write", {}).get("io_ops", 0)
+    read_ios = job.get("read", {}).get("total_ios", 0)
+    write_ios = job.get("write", {}).get("total_ios", 0)
 
+    # Weight by I/O count: multiply each latency by its I/O count, sum, then divide by total
     weighted_lat = (read_lat * read_ios + write_lat * write_ios) / total_ios
     return weighted_lat / 1000000  # Convert ns to ms
 

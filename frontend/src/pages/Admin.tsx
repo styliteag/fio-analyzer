@@ -1425,145 +1425,229 @@ const Admin: React.FC = () => {
 				{testRunDetailsState.isLoading ? (
 					<Loading message="Loading test details..." />
 				) : testRunDetailsState.testRun ? (
-					<div className="space-y-6">
+					<div className="space-y-4">
 						{/* Basic Info */}
 						<div>
-							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Test Information</h3>
-							<div className="grid grid-cols-2 gap-4 text-sm">
-								<div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Test Information</h3>
+							<div className="space-y-2 text-sm">
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Test Run ID:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">#{testRunDetailsState.testRun.id}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">#{testRunDetailsState.testRun.id}</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Test Name:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100" title={testRunDetailsState.testRun.test_name || 'N/A'}>
-										{testRunDetailsState.testRun.test_name && testRunDetailsState.testRun.test_name.length > 40
-											? `${testRunDetailsState.testRun.test_name.substring(0, 40)}...`
-											: testRunDetailsState.testRun.test_name || 'N/A'}
-									</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100 text-right">{testRunDetailsState.testRun.test_name || 'N/A'}</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Timestamp:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">
+									<span className="font-semibold text-gray-900 dark:text-gray-100">
 										{new Date(testRunDetailsState.testRun.timestamp).toLocaleString()}
-									</div>
+									</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Hostname:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.hostname}</div>
-								</div>
-							</div>
-						</div>
-
-						{/* UUIDs */}
-						<div>
-							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">UUIDs</h3>
-							<div className="grid grid-cols-1 gap-3 text-sm">
-								<div>
-									<span className="text-gray-500 dark:text-gray-400">Config UUID:</span>
-									<div className="font-mono text-xs text-gray-900 dark:text-gray-100 mt-1 bg-gray-100 dark:bg-gray-700 p-2 rounded">
-										{testRunDetailsState.testRun.config_uuid || 'N/A'}
-									</div>
-								</div>
-								<div>
-									<span className="text-gray-500 dark:text-gray-400">Run UUID:</span>
-									<div className="font-mono text-xs text-gray-900 dark:text-gray-100 mt-1 bg-gray-100 dark:bg-gray-700 p-2 rounded">
-										{testRunDetailsState.testRun.run_uuid || 'N/A'}
-									</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.hostname}</span>
 								</div>
 							</div>
 						</div>
 
 						{/* Storage Configuration */}
 						<div>
-							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Storage Configuration</h3>
-							<div className="grid grid-cols-2 gap-4 text-sm">
-								<div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Storage Configuration</h3>
+							<div className="space-y-2 text-sm">
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Protocol:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.protocol}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.protocol}</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Drive Type:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.drive_type}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.drive_type}</span>
 								</div>
-								<div className="col-span-2">
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Drive Model:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.drive_model}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.drive_model}</span>
 								</div>
 							</div>
 						</div>
 
 						{/* Test Parameters */}
 						<div>
-							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Test Parameters</h3>
-							<div className="grid grid-cols-2 gap-4 text-sm">
-								<div>
-									<span className="text-gray-500 dark:text-gray-400">Pattern:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.read_write_pattern}</div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Test Parameters</h3>
+							<div className="space-y-2 text-sm">
+								<div className="flex justify-between">
+									<span className="text-gray-500 dark:text-gray-400">I/O Pattern:</span>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.read_write_pattern}</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Block Size:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.block_size}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.block_size}</span>
 								</div>
-								<div>
-									<span className="text-gray-500 dark:text-gray-400">Queue Depth:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.queue_depth}</div>
+								<div className="flex justify-between">
+									<span className="text-gray-500 dark:text-gray-400">Queue Depth (iodepth):</span>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.queue_depth}</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Number of Jobs:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.num_jobs || 1}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.num_jobs || 1}</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Test Size:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.test_size || 'N/A'}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.test_size || 'N/A'}</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Duration:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.duration ? `${testRunDetailsState.testRun.duration}s` : 'N/A'}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.duration ? `${testRunDetailsState.testRun.duration}s` : 'N/A'}</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Direct I/O:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.direct ? 'Yes' : 'No'}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.direct ? 'Yes' : 'No'}</span>
 								</div>
-								<div>
+								<div className="flex justify-between">
 									<span className="text-gray-500 dark:text-gray-400">Sync:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.sync ? 'Yes' : 'No'}</div>
+									<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.sync ? 'Yes' : 'No'}</span>
 								</div>
+								{testRunDetailsState.testRun.rwmixread !== undefined && testRunDetailsState.testRun.rwmixread !== null && (
+									<div className="flex justify-between">
+										<span className="text-gray-500 dark:text-gray-400">Read/Write Mix (Read %):</span>
+										<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.rwmixread}%</span>
+									</div>
+								)}
+								{testRunDetailsState.testRun.fio_version && (
+									<div className="flex justify-between">
+										<span className="text-gray-500 dark:text-gray-400">FIO Version:</span>
+										<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.fio_version}</span>
+									</div>
+								)}
+								{testRunDetailsState.testRun.job_runtime !== undefined && testRunDetailsState.testRun.job_runtime !== null && (
+									<div className="flex justify-between">
+										<span className="text-gray-500 dark:text-gray-400">Job Runtime:</span>
+										<span className="font-semibold text-gray-900 dark:text-gray-100">{testRunDetailsState.testRun.job_runtime}s</span>
+									</div>
+								)}
 							</div>
 						</div>
 
 						{/* Performance Metrics */}
 						<div>
-							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Performance Metrics</h3>
-							<div className="grid grid-cols-2 gap-4 text-sm">
-								<div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg">
-									<span className="text-gray-500 dark:text-gray-400">IOPS:</span>
-									<div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
-										{testRunDetailsState.testRun.iops ? Math.round(testRunDetailsState.testRun.iops).toLocaleString() : 'N/A'}
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Performance Metrics</h3>
+							<div className="space-y-3">
+								{/* Primary Metrics */}
+								<div className="grid grid-cols-2 gap-3">
+									<div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg">
+										<div className="text-xs text-gray-500 dark:text-gray-400 mb-1">IOPS</div>
+										<div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+											{testRunDetailsState.testRun.iops ? Math.round(testRunDetailsState.testRun.iops).toLocaleString() : 'N/A'}
+										</div>
+									</div>
+									<div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+										<div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Bandwidth</div>
+										<div className="text-2xl font-bold text-green-600 dark:text-green-400">
+											{testRunDetailsState.testRun.bandwidth ? `${testRunDetailsState.testRun.bandwidth.toFixed(2)} MB/s` : 'N/A'}
+										</div>
 									</div>
 								</div>
-								<div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-									<span className="text-gray-500 dark:text-gray-400">Bandwidth:</span>
-									<div className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
-										{testRunDetailsState.testRun.bandwidth ? `${testRunDetailsState.testRun.bandwidth.toFixed(2)} MB/s` : 'N/A'}
+
+								{/* Latency Metrics */}
+								<div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg space-y-2 text-sm">
+									<div className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Latency Metrics</div>
+									<div className="flex justify-between">
+										<span className="text-gray-500 dark:text-gray-400">Average Latency:</span>
+										<span className="font-semibold text-gray-900 dark:text-gray-100">
+											{testRunDetailsState.testRun.avg_latency ? `${testRunDetailsState.testRun.avg_latency.toFixed(3)} ms` : 'N/A'}
+										</span>
+									</div>
+									{testRunDetailsState.testRun.p70_latency !== undefined && testRunDetailsState.testRun.p70_latency !== null && (
+										<div className="flex justify-between">
+											<span className="text-gray-500 dark:text-gray-400">P70 Latency:</span>
+											<span className="font-semibold text-gray-900 dark:text-gray-100">
+												{testRunDetailsState.testRun.p70_latency.toFixed(3)} ms
+											</span>
+										</div>
+									)}
+									{testRunDetailsState.testRun.p90_latency !== undefined && testRunDetailsState.testRun.p90_latency !== null && (
+										<div className="flex justify-between">
+											<span className="text-gray-500 dark:text-gray-400">P90 Latency:</span>
+											<span className="font-semibold text-gray-900 dark:text-gray-100">
+												{testRunDetailsState.testRun.p90_latency.toFixed(3)} ms
+											</span>
+										</div>
+									)}
+									<div className="flex justify-between">
+										<span className="text-gray-500 dark:text-gray-400">P95 Latency:</span>
+										<span className="font-semibold text-gray-900 dark:text-gray-100">
+											{testRunDetailsState.testRun.p95_latency ? `${testRunDetailsState.testRun.p95_latency.toFixed(3)} ms` : 'N/A'}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-gray-500 dark:text-gray-400">P99 Latency:</span>
+										<span className="font-semibold text-gray-900 dark:text-gray-100">
+											{testRunDetailsState.testRun.p99_latency ? `${testRunDetailsState.testRun.p99_latency.toFixed(3)} ms` : 'N/A'}
+										</span>
+									</div>
+								</div>
+
+								{/* I/O Statistics */}
+								{(testRunDetailsState.testRun.total_ios_read || testRunDetailsState.testRun.total_ios_write) && (
+									<div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg space-y-2 text-sm">
+										<div className="font-semibold text-gray-900 dark:text-gray-100 mb-2">I/O Statistics</div>
+										{testRunDetailsState.testRun.total_ios_read !== undefined && testRunDetailsState.testRun.total_ios_read !== null && (
+											<div className="flex justify-between">
+												<span className="text-gray-500 dark:text-gray-400">Total Read I/Os:</span>
+												<span className="font-semibold text-gray-900 dark:text-gray-100">
+													{testRunDetailsState.testRun.total_ios_read.toLocaleString()}
+												</span>
+											</div>
+										)}
+										{testRunDetailsState.testRun.total_ios_write !== undefined && testRunDetailsState.testRun.total_ios_write !== null && (
+											<div className="flex justify-between">
+												<span className="text-gray-500 dark:text-gray-400">Total Write I/Os:</span>
+												<span className="font-semibold text-gray-900 dark:text-gray-100">
+													{testRunDetailsState.testRun.total_ios_write.toLocaleString()}
+												</span>
+											</div>
+										)}
+									</div>
+								)}
+
+								{/* CPU Usage */}
+								{(testRunDetailsState.testRun.usr_cpu || testRunDetailsState.testRun.sys_cpu) && (
+									<div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg space-y-2 text-sm">
+										<div className="font-semibold text-gray-900 dark:text-gray-100 mb-2">CPU Usage</div>
+										{testRunDetailsState.testRun.usr_cpu !== undefined && testRunDetailsState.testRun.usr_cpu !== null && (
+											<div className="flex justify-between">
+												<span className="text-gray-500 dark:text-gray-400">User CPU:</span>
+												<span className="font-semibold text-gray-900 dark:text-gray-100">
+													{testRunDetailsState.testRun.usr_cpu.toFixed(2)}%
+												</span>
+											</div>
+										)}
+										{testRunDetailsState.testRun.sys_cpu !== undefined && testRunDetailsState.testRun.sys_cpu !== null && (
+											<div className="flex justify-between">
+												<span className="text-gray-500 dark:text-gray-400">System CPU:</span>
+												<span className="font-semibold text-gray-900 dark:text-gray-100">
+													{testRunDetailsState.testRun.sys_cpu.toFixed(2)}%
+												</span>
+											</div>
+										)}
+									</div>
+								)}
+							</div>
+						</div>
+
+						{/* UUIDs */}
+						<div>
+							<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">UUIDs</h3>
+							<div className="space-y-2 text-sm">
+								<div>
+									<div className="text-gray-500 dark:text-gray-400 mb-1">Config UUID:</div>
+									<div className="font-mono text-xs text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-700 p-2 rounded">
+										{testRunDetailsState.testRun.config_uuid || 'N/A'}
 									</div>
 								</div>
 								<div>
-									<span className="text-gray-500 dark:text-gray-400">Avg Latency:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">
-										{testRunDetailsState.testRun.avg_latency ? `${testRunDetailsState.testRun.avg_latency.toFixed(3)} ms` : 'N/A'}
-									</div>
-								</div>
-								<div>
-									<span className="text-gray-500 dark:text-gray-400">P95 Latency:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">
-										{testRunDetailsState.testRun.p95_latency ? `${testRunDetailsState.testRun.p95_latency.toFixed(3)} ms` : 'N/A'}
-									</div>
-								</div>
-								<div>
-									<span className="text-gray-500 dark:text-gray-400">P99 Latency:</span>
-									<div className="font-semibold text-gray-900 dark:text-gray-100">
-										{testRunDetailsState.testRun.p99_latency ? `${testRunDetailsState.testRun.p99_latency.toFixed(3)} ms` : 'N/A'}
+									<div className="text-gray-500 dark:text-gray-400 mb-1">Run UUID:</div>
+									<div className="font-mono text-xs text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-700 p-2 rounded">
+										{testRunDetailsState.testRun.run_uuid || 'N/A'}
 									</div>
 								</div>
 							</div>
@@ -1572,11 +1656,9 @@ const Admin: React.FC = () => {
 						{/* Description */}
 						{testRunDetailsState.testRun.description && (
 							<div>
-								<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Description</h3>
-								<div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 p-3 rounded-lg" title={testRunDetailsState.testRun.description}>
-									{testRunDetailsState.testRun.description.length > 40
-										? `${testRunDetailsState.testRun.description.substring(0, 40)}...`
-										: testRunDetailsState.testRun.description}
+								<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Description</h3>
+								<div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 p-3 rounded-lg whitespace-pre-wrap">
+									{testRunDetailsState.testRun.description}
 								</div>
 							</div>
 						)}
