@@ -59,6 +59,15 @@ interface UUIDDeleteState {
 	count: number;
 }
 
+interface DataCleanupState {
+	isOpen: boolean;
+	mode: 'delete-old' | 'compact' | null;
+	cutoffDate: string;
+	compactFrequency: 'daily' | 'weekly' | 'monthly';
+	previewCount: number | null;
+	isLoading: boolean;
+}
+
 const Admin: React.FC = () => {
 	const navigate = useNavigate();
 	const [activeTab, setActiveTab] = useState<AdminTab>('by-config');
@@ -490,32 +499,32 @@ const Admin: React.FC = () => {
 		const isExpanded = expandedGroups.has(group.uuid);
 
 		return (
-			<div key={group.uuid} className="border border-gray-200 rounded-lg mb-4 bg-white">
+			<div key={group.uuid} className="border border-gray-200 dark:border-gray-700 rounded-lg mb-4 bg-white dark:bg-gray-800">
 				{/* Group Header */}
-				<div className="p-4 bg-gray-50 border-b border-gray-200">
+				<div className="p-4 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
 					<div className="flex items-start justify-between">
 						<div className="flex-1">
 							<div className="flex items-center gap-3 mb-3">
 								<div className="flex items-center gap-2">
-									<span className="text-gray-500 text-sm">Host:</span>
-									<h3 className="text-lg font-semibold text-gray-900">
+									<span className="text-gray-500 dark:text-gray-400 text-sm">Host:</span>
+									<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
 										{group.sample_metadata.hostname || 'N/A'}
 									</h3>
 								</div>
 								<div className="flex items-center gap-2">
-									<span className="text-gray-500 text-sm">
+									<span className="text-gray-500 dark:text-gray-400 text-sm">
 										{uuidType === 'config_uuid' ? 'Config UUID:' : 'Run UUID:'}
 									</span>
-									<span className="font-mono text-sm text-gray-600">{group.uuid}</span>
+									<span className="font-mono text-sm text-gray-600 dark:text-gray-400">{group.uuid}</span>
 									<button
 										onClick={() => copyUUID(group.uuid)}
-										className="p-1 hover:bg-gray-200 rounded transition-colors"
+										className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
 										title="Copy UUID"
 									>
 										{copiedUUID === group.uuid ? (
-											<Check className="w-4 h-4 text-green-600" />
+											<Check className="w-4 h-4 text-green-600 dark:text-green-400" />
 										) : (
-											<Copy className="w-4 h-4 text-gray-500" />
+											<Copy className="w-4 h-4 text-gray-500 dark:text-gray-400" />
 										)}
 									</button>
 								</div>
@@ -523,26 +532,26 @@ const Admin: React.FC = () => {
 
 							<div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
 								<div>
-									<span className="text-gray-500">Tests:</span>
-									<span className="ml-2 font-semibold">{group.count}</span>
+									<span className="text-gray-500 dark:text-gray-400">Tests:</span>
+									<span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">{group.count}</span>
 								</div>
 								<div>
-									<span className="text-gray-500">Avg IOPS:</span>
-									<span className="ml-2 font-semibold">
+									<span className="text-gray-500 dark:text-gray-400">Avg IOPS:</span>
+									<span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">
 										{group.avg_iops
 											? Math.round(group.avg_iops).toLocaleString()
 											: 'N/A'}
 									</span>
 								</div>
 								<div>
-									<span className="text-gray-500">Date Range:</span>
-									<span className="ml-2 font-semibold">
+									<span className="text-gray-500 dark:text-gray-400">Date Range:</span>
+									<span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">
 										{formatDateRange(group.first_test, group.last_test)}
 									</span>
 								</div>
 							</div>
 
-							<div className="mt-2 text-sm text-gray-600">
+							<div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
 								{group.sample_metadata.protocol && (
 									<span className="mr-3">
 										Protocol: {group.sample_metadata.protocol}
@@ -580,12 +589,12 @@ const Admin: React.FC = () => {
 							</Button>
 							<button
 								onClick={() => toggleGroup(group.uuid)}
-								className="p-2 hover:bg-gray-200 rounded transition-colors"
+								className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
 							>
 								{isExpanded ? (
-									<ChevronUp className="w-5 h-5" />
+									<ChevronUp className="w-5 h-5 text-gray-900 dark:text-gray-100" />
 								) : (
-									<ChevronDown className="w-5 h-5" />
+									<ChevronDown className="w-5 h-5 text-gray-900 dark:text-gray-100" />
 								)}
 							</button>
 						</div>
@@ -595,15 +604,15 @@ const Admin: React.FC = () => {
 				{/* Expanded Test List */}
 				{isExpanded && (
 					<div className="p-4">
-						<div className="text-sm text-gray-600 mb-2">
+						<div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
 							{group.count} test run{group.count !== 1 ? 's' : ''} in this group:
 						</div>
-						<div className="bg-gray-50 rounded p-2 max-h-96 overflow-y-auto">
+						<div className="bg-gray-50 dark:bg-gray-900 rounded p-2 max-h-96 overflow-y-auto">
 							<div className="space-y-1">
 								{group.test_run_ids.map((id) => (
 									<div
 										key={id}
-										className="text-sm text-gray-700 font-mono px-2 py-1 hover:bg-gray-100 rounded"
+										className="text-sm text-gray-700 dark:text-gray-300 font-mono px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
 									>
 										Test Run ID: {id}
 									</div>
@@ -641,15 +650,15 @@ const Admin: React.FC = () => {
 				<div className="mb-6 flex items-center justify-between">
 					<div className="flex items-center gap-2">
 						{icon}
-						<h2 className="text-2xl font-bold">{title}</h2>
+						<h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{title}</h2>
 					</div>
-					<div className="text-sm text-gray-600">
+					<div className="text-sm text-gray-600 dark:text-gray-400">
 						{groupsData.length} {searchTerm && `/ ${totalGroups}`} group{groupsData.length !== 1 ? 's' : ''}
 					</div>
 				</div>
 
 				{groupsData.length === 0 ? (
-					<div className="text-center py-12 text-gray-500">
+					<div className="text-center py-12 text-gray-500 dark:text-gray-400">
 						{searchTerm
 							? `No test runs found matching "${searchTerm}"`
 							: `No test runs found with ${uuidType === 'config_uuid' ? 'configuration' : 'run'} UUIDs`
@@ -665,23 +674,23 @@ const Admin: React.FC = () => {
 	};
 
 	return (
-		<div className="min-h-screen bg-gray-50">
+		<div className="min-h-screen bg-gray-50 dark:bg-gray-900">
 			{/* Header */}
-			<div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+			<div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="flex items-center justify-between h-16">
 						<div className="flex items-center gap-4">
 							<button
 								onClick={() => navigate('/')}
-								className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+								className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
 							>
 								<ArrowLeft className="w-5 h-5" />
 								<span className="font-medium">Back to Dashboard</span>
 							</button>
-							<div className="h-6 w-px bg-gray-300"></div>
+							<div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
 							<div className="flex items-center gap-2">
-								<Settings className="w-6 h-6 text-indigo-600" />
-								<h1 className="text-2xl font-bold text-gray-900">
+								<Settings className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+								<h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
 									Admin Panel
 								</h1>
 							</div>
@@ -691,18 +700,18 @@ const Admin: React.FC = () => {
 					{/* Search Bar */}
 					<div className="mt-4 mb-2">
 						<div className="relative max-w-md">
-							<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+							<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
 							<input
 								type="text"
 								placeholder="Search by hostname, protocol, drive, name, description, UUID..."
 								value={searchTerm}
 								onChange={(e) => setSearchTerm(e.target.value)}
-								className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+								className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
 							/>
 							{searchTerm && (
 								<button
 									onClick={() => setSearchTerm('')}
-									className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+									className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
 								>
 									<X className="w-5 h-5" />
 								</button>
@@ -716,8 +725,8 @@ const Admin: React.FC = () => {
 							onClick={() => setActiveTab('by-config')}
 							className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
 								activeTab === 'by-config'
-									? 'border-indigo-600 text-indigo-600'
-									: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+									? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
+									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
 							}`}
 						>
 							<Server className="w-4 h-4" />
@@ -727,8 +736,8 @@ const Admin: React.FC = () => {
 							onClick={() => setActiveTab('by-run')}
 							className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
 								activeTab === 'by-run'
-									? 'border-indigo-600 text-indigo-600'
-									: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+									? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
+									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
 							}`}
 						>
 							<PlayCircle className="w-4 h-4" />
@@ -738,8 +747,8 @@ const Admin: React.FC = () => {
 							onClick={() => setActiveTab('latest')}
 							className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
 								activeTab === 'latest'
-									? 'border-indigo-600 text-indigo-600'
-									: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+									? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
+									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
 							}`}
 						>
 							<Database className="w-4 h-4" />
@@ -749,8 +758,8 @@ const Admin: React.FC = () => {
 							onClick={() => setActiveTab('history')}
 							className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
 								activeTab === 'history'
-									? 'border-indigo-600 text-indigo-600'
-									: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+									? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
+									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
 							}`}
 						>
 							<History className="w-4 h-4" />
@@ -768,7 +777,7 @@ const Admin: React.FC = () => {
 						filteredConfigGroups,
 						'config_uuid',
 						'By Host Configuration',
-						<Server className="w-6 h-6 text-indigo-600" />
+						<Server className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
 					)}
 
 				{activeTab === 'by-run' &&
@@ -777,17 +786,17 @@ const Admin: React.FC = () => {
 						filteredRunGroups,
 						'run_uuid',
 						'By Script Run',
-						<PlayCircle className="w-6 h-6 text-indigo-600" />
+						<PlayCircle className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
 					)}
 
 				{activeTab === 'latest' && (
 					<div>
 						<div className="mb-6 flex items-center justify-between">
 							<div className="flex items-center gap-2">
-								<Database className="w-6 h-6 text-indigo-600" />
-								<h2 className="text-2xl font-bold">Latest Test Runs (Grouped by Run)</h2>
+								<Database className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+								<h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Latest Test Runs (Grouped by Run)</h2>
 							</div>
-							<div className="text-sm text-gray-600">
+							<div className="text-sm text-gray-600 dark:text-gray-400">
 								{groupedLatestRuns.length} {searchTerm && `/ ${new Set(latestRuns.map(r => r.run_uuid)).size}`} run{groupedLatestRuns.length !== 1 ? 's' : ''}
 							</div>
 						</div>
@@ -797,7 +806,7 @@ const Admin: React.FC = () => {
 						) : latestError ? (
 							<ErrorDisplay error={latestError} />
 						) : groupedLatestRuns.length === 0 ? (
-							<div className="text-center py-12 text-gray-500">
+							<div className="text-center py-12 text-gray-500 dark:text-gray-400">
 								{searchTerm ? `No test runs found matching "${searchTerm}"` : 'No test runs found'}
 							</div>
 						) : (
@@ -805,31 +814,31 @@ const Admin: React.FC = () => {
 								{groupedLatestRuns.map((group) => {
 									const isExpanded = expandedGroups.has(group.uuid);
 									return (
-										<div key={group.uuid} className="border border-gray-200 rounded-lg mb-4 bg-white">
+										<div key={group.uuid} className="border border-gray-200 dark:border-gray-700 rounded-lg mb-4 bg-white dark:bg-gray-800">
 											{/* Group Header */}
-											<div className="p-4 bg-gray-50 border-b border-gray-200">
+											<div className="p-4 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
 												<div className="flex items-start justify-between">
 													<div className="flex-1">
 														<div className="flex items-center gap-3 mb-3">
 															<div className="flex items-center gap-2">
-																<span className="text-gray-500 text-sm">Host:</span>
-																<h3 className="text-lg font-semibold text-gray-900">
+																<span className="text-gray-500 dark:text-gray-400 text-sm">Host:</span>
+																<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
 																	{group.hostname}
 																</h3>
 															</div>
 															{group.uuid !== 'no-uuid' && (
 																<div className="flex items-center gap-2">
-																	<span className="text-gray-500 text-sm">Run UUID:</span>
-																	<span className="font-mono text-sm text-gray-600">{group.uuid}</span>
+																	<span className="text-gray-500 dark:text-gray-400 text-sm">Run UUID:</span>
+																	<span className="font-mono text-sm text-gray-600 dark:text-gray-400">{group.uuid}</span>
 																	<button
 																		onClick={() => copyUUID(group.uuid)}
-																		className="p-1 hover:bg-gray-200 rounded transition-colors"
+																		className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
 																		title="Copy UUID"
 																	>
 																		{copiedUUID === group.uuid ? (
-																			<Check className="w-4 h-4 text-green-600" />
+																			<Check className="w-4 h-4 text-green-600 dark:text-green-400" />
 																		) : (
-																			<Copy className="w-4 h-4 text-gray-500" />
+																			<Copy className="w-4 h-4 text-gray-500 dark:text-gray-400" />
 																		)}
 																	</button>
 																</div>
@@ -838,18 +847,18 @@ const Admin: React.FC = () => {
 
 														<div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
 															<div>
-																<span className="text-gray-500">Tests:</span>
-																<span className="ml-2 font-semibold">{group.count}</span>
+																<span className="text-gray-500 dark:text-gray-400">Tests:</span>
+																<span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">{group.count}</span>
 															</div>
 															<div>
-																<span className="text-gray-500">Avg IOPS:</span>
-																<span className="ml-2 font-semibold">
+																<span className="text-gray-500 dark:text-gray-400">Avg IOPS:</span>
+																<span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">
 																	{Math.round(group.avgIops).toLocaleString()}
 																</span>
 															</div>
 															<div>
-																<span className="text-gray-500">Latest:</span>
-																<span className="ml-2 font-semibold">
+																<span className="text-gray-500 dark:text-gray-400">Latest:</span>
+																<span className="ml-2 font-semibold text-gray-900 dark:text-gray-100">
 																	{new Date(group.latestTimestamp).toLocaleDateString()}
 																</span>
 															</div>
@@ -858,12 +867,12 @@ const Admin: React.FC = () => {
 
 													<button
 														onClick={() => toggleGroup(group.uuid)}
-														className="p-2 hover:bg-gray-200 rounded transition-colors ml-4"
+														className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors ml-4"
 													>
 														{isExpanded ? (
-															<ChevronUp className="w-5 h-5" />
+															<ChevronUp className="w-5 h-5 text-gray-900 dark:text-gray-100" />
 														) : (
-															<ChevronDown className="w-5 h-5" />
+															<ChevronDown className="w-5 h-5 text-gray-900 dark:text-gray-100" />
 														)}
 													</button>
 												</div>
@@ -872,38 +881,38 @@ const Admin: React.FC = () => {
 											{/* Expanded Test Table */}
 											{isExpanded && (
 												<div className="overflow-x-auto">
-													<table className="min-w-full divide-y divide-gray-200">
-														<thead className="bg-gray-100">
+													<table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+														<thead className="bg-gray-100 dark:bg-gray-700">
 															<tr>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Protocol</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Drive</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pattern</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Block Size</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IOPS</th>
-																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Config UUID</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ID</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Timestamp</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Protocol</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Drive</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Pattern</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Block Size</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">IOPS</th>
+																<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Config UUID</th>
 															</tr>
 														</thead>
-														<tbody className="bg-white divide-y divide-gray-200">
+														<tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
 															{group.runs.map((run) => (
-																<tr key={run.id} className="hover:bg-gray-50">
-																	<td className="px-4 py-3 text-sm text-gray-900">{run.id}</td>
-																	<td className="px-4 py-3 text-sm text-gray-500">
+																<tr key={run.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+																	<td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{run.id}</td>
+																	<td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
 																		{new Date(run.timestamp).toLocaleDateString()}
 																	</td>
-																	<td className="px-4 py-3 text-sm text-gray-600">{run.protocol}</td>
-																	<td className="px-4 py-3 text-sm text-gray-600">
+																	<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{run.protocol}</td>
+																	<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
 																		{run.drive_type}
 																		<br />
-																		<span className="text-xs text-gray-500">{run.drive_model}</span>
+																		<span className="text-xs text-gray-500 dark:text-gray-400">{run.drive_model}</span>
 																	</td>
-																	<td className="px-4 py-3 text-sm text-gray-600">{run.read_write_pattern}</td>
-																	<td className="px-4 py-3 text-sm text-gray-600">{run.block_size}</td>
-																	<td className="px-4 py-3 text-sm font-semibold text-gray-900">
+																	<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{run.read_write_pattern}</td>
+																	<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{run.block_size}</td>
+																	<td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
 																		{run.iops ? Math.round(run.iops).toLocaleString() : 'N/A'}
 																	</td>
-																	<td className="px-4 py-3 text-xs text-gray-500">
+																	<td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
 																		{run.config_uuid && (
 																			<div title={run.config_uuid}>
 																				{run.config_uuid.slice(0, 8)}...
@@ -928,8 +937,8 @@ const Admin: React.FC = () => {
 					<div>
 						<div className="mb-6 flex items-center justify-between">
 							<div>
-								<h2 className="text-2xl font-bold">Historical Test Runs</h2>
-								<p className="text-gray-600 mt-2">
+								<h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Historical Test Runs</h2>
+								<p className="text-gray-600 dark:text-gray-400 mt-2">
 									Showing {filteredHistoryData.length} {searchTerm && `/ ${timeSeriesData.length}`} historical test run{filteredHistoryData.length !== 1 ? 's' : ''}
 								</p>
 							</div>
@@ -955,50 +964,50 @@ const Admin: React.FC = () => {
 						{timeSeriesLoading ? (
 							<Loading message="Loading history..." />
 						) : filteredHistoryData.length === 0 ? (
-							<div className="text-center py-12 text-gray-500">
+							<div className="text-center py-12 text-gray-500 dark:text-gray-400">
 								{searchTerm ? `No historical test runs found matching "${searchTerm}"` : 'No historical test runs found'}
 							</div>
 						) : (
-							<div className="bg-white rounded-lg shadow overflow-hidden">
+							<div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
 								<div className="overflow-x-auto">
-									<table className="min-w-full divide-y divide-gray-200">
-										<thead className="bg-gray-50">
+									<table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+										<thead className="bg-gray-50 dark:bg-gray-750">
 											<tr>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hostname</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Protocol</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Drive</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pattern</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Block Size</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IOPS</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">UUIDs</th>
+												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ID</th>
+												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Timestamp</th>
+												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Hostname</th>
+												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Protocol</th>
+												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Drive</th>
+												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Pattern</th>
+												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Block Size</th>
+												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">IOPS</th>
+												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">UUIDs</th>
 											</tr>
 										</thead>
-										<tbody className="bg-white divide-y divide-gray-200">
+										<tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
 											{filteredHistoryData.map((run: any) => (
-												<tr key={run.test_run_id || run.id} className="hover:bg-gray-50">
-													<td className="px-4 py-3 text-sm text-gray-900">{run.test_run_id || run.id}</td>
-													<td className="px-4 py-3 text-sm text-gray-500">
+												<tr key={run.test_run_id || run.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+													<td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{run.test_run_id || run.id}</td>
+													<td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
 														{new Date(run.timestamp || run.test_date).toLocaleDateString()}
 													</td>
-													<td className="px-4 py-3 text-sm text-gray-900">{run.hostname}</td>
-													<td className="px-4 py-3 text-sm text-gray-600">{run.protocol}</td>
-													<td className="px-4 py-3 text-sm text-gray-600">
+													<td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{run.hostname}</td>
+													<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{run.protocol}</td>
+													<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
 														{run.drive_type && (
 															<>
 																{run.drive_type}
 																<br />
 															</>
 														)}
-														<span className="text-xs text-gray-500">{run.drive_model}</span>
+														<span className="text-xs text-gray-500 dark:text-gray-400">{run.drive_model}</span>
 													</td>
-													<td className="px-4 py-3 text-sm text-gray-600">{run.read_write_pattern}</td>
-													<td className="px-4 py-3 text-sm text-gray-600">{run.block_size}</td>
-													<td className="px-4 py-3 text-sm font-semibold text-gray-900">
+													<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{run.read_write_pattern}</td>
+													<td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{run.block_size}</td>
+													<td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">
 														{run.iops ? Math.round(run.iops).toLocaleString() : 'N/A'}
 													</td>
-													<td className="px-4 py-3 text-xs text-gray-500">
+													<td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
 														<div className="space-y-1">
 															{run.config_uuid && (
 																<div title={run.config_uuid}>
@@ -1034,12 +1043,12 @@ const Admin: React.FC = () => {
 				}`}
 			>
 				<div className="space-y-4">
-					<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-						<p className="text-sm text-blue-800">
+					<div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+						<p className="text-sm text-blue-800 dark:text-blue-200">
 							<strong>Warning:</strong> This will update {uuidEditState.count} test
 							run{uuidEditState.count !== 1 ? 's' : ''} with the same values.
 						</p>
-						<p className="text-xs text-blue-600 mt-1 font-mono">
+						<p className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-mono">
 							UUID: {uuidEditState.uuid}
 						</p>
 					</div>
@@ -1050,7 +1059,7 @@ const Admin: React.FC = () => {
 							keyof EditableFields
 						>
 					).map((field) => (
-						<div key={field} className="border border-gray-200 rounded-lg p-3">
+						<div key={field} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
 							<label className="flex items-center gap-2 mb-2">
 								<input
 									type="checkbox"
@@ -1066,7 +1075,7 @@ const Admin: React.FC = () => {
 									}
 									className="rounded"
 								/>
-								<span className="font-medium text-sm capitalize">
+								<span className="font-medium text-sm capitalize text-gray-900 dark:text-gray-100">
 									{field.replace('_', ' ')}
 								</span>
 							</label>
@@ -1084,7 +1093,7 @@ const Admin: React.FC = () => {
 									})
 								}
 								placeholder={`Enter new ${field.replace('_', ' ')}`}
-								className="w-full px-3 py-2 border border-gray-300 rounded-md disabled:bg-gray-100 disabled:text-gray-400"
+								className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
 							/>
 						</div>
 					))}
@@ -1110,14 +1119,14 @@ const Admin: React.FC = () => {
 				title="Confirm Deletion"
 			>
 				<div className="space-y-4">
-					<div className="bg-red-50 border border-red-200 rounded-lg p-4">
-						<p className="text-sm text-red-800">
+					<div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+						<p className="text-sm text-red-800 dark:text-red-200">
 							<strong>Warning:</strong> You are about to delete{' '}
 							{uuidDeleteState.count} test run
 							{uuidDeleteState.count !== 1 ? 's' : ''}. This action cannot be
 							undone.
 						</p>
-						<p className="text-xs text-red-600 mt-1 font-mono">
+						<p className="text-xs text-red-600 dark:text-red-400 mt-1 font-mono">
 							UUID: {uuidDeleteState.uuid}
 						</p>
 					</div>
@@ -1146,14 +1155,14 @@ const Admin: React.FC = () => {
 			>
 				<div className="space-y-4">
 					{dataCleanupState.mode === 'delete-old' ? (
-						<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-							<p className="text-sm text-yellow-800">
+						<div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+							<p className="text-sm text-yellow-800 dark:text-yellow-200">
 								<strong>Warning:</strong> This will permanently delete all test runs older than the specified date.
 							</p>
 						</div>
 					) : (
-						<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-							<p className="text-sm text-blue-800">
+						<div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+							<p className="text-sm text-blue-800 dark:text-blue-200">
 								<strong>Compact Mode:</strong> This will keep only {dataCleanupState.compactFrequency} samples before the cutoff date,
 								removing hourly tests while preserving representative data.
 							</p>
@@ -1161,7 +1170,7 @@ const Admin: React.FC = () => {
 					)}
 
 					<div>
-						<label className="block text-sm font-medium text-gray-700 mb-2">
+						<label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
 							<Calendar className="w-4 h-4 inline mr-1" />
 							Cutoff Date (keep data after this date)
 						</label>
@@ -1173,16 +1182,16 @@ const Admin: React.FC = () => {
 								cutoffDate: e.target.value,
 								previewCount: null,
 							})}
-							className="w-full px-3 py-2 border border-gray-300 rounded-md"
+							className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
 						/>
-						<p className="text-xs text-gray-500 mt-1">
+						<p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
 							Data before {new Date(dataCleanupState.cutoffDate).toLocaleDateString()} will be {dataCleanupState.mode === 'delete-old' ? 'deleted' : 'compacted'}
 						</p>
 					</div>
 
 					{dataCleanupState.mode === 'compact' && (
 						<div>
-							<label className="block text-sm font-medium text-gray-700 mb-2">
+							<label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
 								Keep Frequency (for data before cutoff date)
 							</label>
 							<select
@@ -1192,13 +1201,13 @@ const Admin: React.FC = () => {
 									compactFrequency: e.target.value as 'daily' | 'weekly' | 'monthly',
 									previewCount: null,
 								})}
-								className="w-full px-3 py-2 border border-gray-300 rounded-md"
+								className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
 							>
 								<option value="daily">Daily (one test per day)</option>
 								<option value="weekly">Weekly (one test per week)</option>
 								<option value="monthly">Monthly (one test per month)</option>
 							</select>
-							<p className="text-xs text-gray-500 mt-1">
+							<p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
 								Only the most recent test per {dataCleanupState.compactFrequency === 'daily' ? 'day' : dataCleanupState.compactFrequency === 'weekly' ? 'week' : 'month'} will be kept
 							</p>
 						</div>
@@ -1216,14 +1225,14 @@ const Admin: React.FC = () => {
 					</div>
 
 					{dataCleanupState.previewCount !== null && (
-						<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-							<p className="text-sm text-gray-800">
+						<div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+							<p className="text-sm text-gray-800 dark:text-gray-200">
 								<strong>Preview:</strong> This operation will affect <strong>{dataCleanupState.previewCount}</strong> test run{dataCleanupState.previewCount !== 1 ? 's' : ''}.
 							</p>
 						</div>
 					)}
 
-					<div className="flex gap-2 pt-4 border-t">
+					<div className="flex gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
 						<Button
 							variant="danger"
 							onClick={executeDataCleanup}
