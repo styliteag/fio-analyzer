@@ -705,7 +705,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                             <h5 className="text-sm font-medium theme-text-primary mb-2">Drives</h5>
                             <div className="space-y-1">
                                 {drives.map((drive, index) => (
-                                    <div key={drive.drive_model} className="flex items-center gap-2 text-xs">
+                                    <div key={`${drive.hostname || 'unknown'}-${drive.protocol}-${drive.drive_type}-${drive.drive_model}-${index}`} className="flex items-center gap-2 text-xs">
                                         <div 
                                             className="w-3 h-3 rounded-full" 
                                             style={{ backgroundColor: currentScheme.drives[index % currentScheme.drives.length] }}
@@ -734,7 +734,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                 const performanceScore = (avgIOPS * avgBandwidth) / (avgLatency * 1000);
 
                                 return (
-                                    <div key={drive.drive_model} className="border-l-4 pl-3" style={{ borderColor: currentScheme.drives[index % currentScheme.drives.length] }}>
+                                    <div key={`${drive.hostname || 'unknown'}-${drive.protocol}-${drive.drive_type}-${drive.drive_model}-summary-${index}`} className="border-l-4 pl-3" style={{ borderColor: currentScheme.drives[index % currentScheme.drives.length] }}>
                                         <h6 className="font-medium theme-text-primary text-sm">{drive.drive_model}</h6>
                                         <div className="mt-2 space-y-1 text-xs theme-text-secondary">
                                             <div>Avg IOPS: <span className="font-medium">{avgIOPS.toFixed(0)}</span></div>

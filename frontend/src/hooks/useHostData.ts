@@ -123,7 +123,9 @@ export const useHostData = (): UseHostDataReturn => {
         const allQueueDepths = [...new Set(allHosts.flatMap(h => h.testCoverage.queueDepths))].sort((a, b) => a - b);
         const allNumJobs = [...new Set(allHosts.flatMap(h => h.testCoverage.numJobs))].sort((a, b) => a - b);
         const allProtocols = [...new Set(allHosts.flatMap(h => h.testCoverage.protocols))].sort();
-        const allHostDiskCombinations = [...new Set(allHosts.flatMap(h => h.testCoverage.hostDiskCombinations))].sort();
+        const allHosts_list = [...new Set(allHosts.flatMap(h => h.testCoverage.hosts))].sort();
+        const allDriveTypes = [...new Set(allHosts.flatMap(h => h.testCoverage.driveTypes))].sort();
+        const allDriveModels = [...new Set(allHosts.flatMap(h => h.testCoverage.driveModels))].sort();
         const allSyncs = [...new Set(allHosts.flatMap(h => h.testCoverage.syncs))].sort((a, b) => a - b);
         const allDirects = [...new Set(allHosts.flatMap(h => h.testCoverage.directs))].sort((a, b) => a - b);
         const allIoDepths = [...new Set(allHosts.flatMap(h => h.testCoverage.ioDepths))].sort((a, b) => a - b);
@@ -141,7 +143,9 @@ export const useHostData = (): UseHostDataReturn => {
                 queueDepths: allQueueDepths,
                 numJobs: allNumJobs,
                 protocols: allProtocols,
-                hostDiskCombinations: allHostDiskCombinations,
+                hosts: allHosts_list,
+                driveTypes: allDriveTypes,
+                driveModels: allDriveModels,
                 syncs: allSyncs,
                 directs: allDirects,
                 ioDepths: allIoDepths,

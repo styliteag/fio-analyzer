@@ -49,7 +49,9 @@ export interface TestCoverage {
     queueDepths: number[];
     numJobs: number[];
     protocols: string[];
-    hostDiskCombinations: string[];
+    hosts: string[];
+    driveTypes: string[];
+    driveModels: string[];
     syncs: number[];
     directs: number[];
     ioDepths: number[];
@@ -85,11 +87,13 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
         throw new Error(`No valid performance data found for host: ${hostname}`);
     }
     
-    // Group by protocol + drive model combination (not just drive model)
+    // Group by hostname + protocol + drive type + drive model to properly separate drives
     const driveGroups = validRuns.reduce((acc: Record<string, TestRun[]>, run: TestRun) => {
+        const hostname = run.hostname || 'unknown';
         const protocol = run.protocol || 'unknown';
+        const driveType = run.drive_type || 'unknown';
         const driveModel = run.drive_model || 'unknown';
-        const key = `${protocol}-${driveModel}`;
+        const key = `${hostname}-${protocol}-${driveType}-${driveModel}`;
         if (!acc[key]) {
             acc[key] = [];
         }
@@ -144,9 +148,9 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
         queueDepths: [...new Set(validRuns.map((r: TestRun) => r.queue_depth))].sort((a: number, b: number) => a - b),
         numJobs: [...new Set(validRuns.filter((r: TestRun) => r.num_jobs !== null && r.num_jobs !== undefined).map((r: TestRun) => r.num_jobs!))].sort((a: number, b: number) => a - b),
         protocols: [...new Set(validRuns.map((r: TestRun) => r.protocol || 'unknown'))].sort(),
-        hostDiskCombinations: [...new Set(validRuns.map((r: TestRun) => 
-            `${r.hostname} - ${r.protocol} - ${r.drive_model}`
-        ))].sort(),
+        hosts: [...new Set(validRuns.map((r: TestRun) => r.hostname || 'unknown'))].sort(),
+        driveTypes: [...new Set(validRuns.map((r: TestRun) => r.drive_type || 'unknown'))].sort(),
+        driveModels: [...new Set(validRuns.map((r: TestRun) => r.drive_model || 'unknown'))].sort(),
         syncs: [...new Set(validRuns.filter((r: TestRun) => (r as any).sync !== null && (r as any).sync !== undefined).map((r: TestRun) => (r as any).sync!))].sort((a: number, b: number) => a - b),
         directs: [...new Set(validRuns.filter((r: TestRun) => (r as any).direct !== null && (r as any).direct !== undefined).map((r: TestRun) => (r as any).direct!))].sort((a: number, b: number) => a - b),
         ioDepths: [...new Set(validRuns.filter((r: TestRun) => (r as any).iodepth !== null && (r as any).iodepth !== undefined).map((r: TestRun) => (r as any).iodepth!))].sort((a: number, b: number) => a - b),

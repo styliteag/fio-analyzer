@@ -10,7 +10,9 @@ interface HostFiltersProps {
     selectedQueueDepths: number[];
     selectedNumJobs: number[];
     selectedProtocols: string[];
-    selectedHostDiskCombinations: string[];
+    selectedFilterHosts: string[];
+    selectedDriveTypes: string[];
+    selectedDriveModels: string[];
     selectedSyncs: number[];
     selectedDirects: number[];
     selectedIoDepths: number[];
@@ -21,7 +23,9 @@ interface HostFiltersProps {
     onQueueDepthChange: (queueDepths: number[]) => void;
     onNumJobsChange: (numJobs: number[]) => void;
     onProtocolChange: (protocols: string[]) => void;
-    onHostDiskCombinationChange: (combinations: string[]) => void;
+    onFilterHostChange: (hosts: string[]) => void;
+    onDriveTypeChange: (types: string[]) => void;
+    onDriveModelChange: (models: string[]) => void;
     onSyncChange: (syncs: number[]) => void;
     onDirectChange: (directs: number[]) => void;
     onIoDepthChange: (ioDepths: number[]) => void;
@@ -90,26 +94,30 @@ const ActiveFilters = memo<{
     selectedQueueDepths: number[];
     selectedNumJobs: number[];
     selectedProtocols: string[];
-    selectedHostDiskCombinations: string[];
+    selectedFilterHosts: string[];
+    selectedDriveTypes: string[];
+    selectedDriveModels: string[];
     selectedSyncs: number[];
     selectedDirects: number[];
     selectedIoDepths: number[];
     selectedTestSizes: string[];
     selectedDurations: number[];
-}>(({ selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols, selectedHostDiskCombinations, selectedSyncs, selectedDirects, selectedIoDepths, selectedTestSizes, selectedDurations }) => {
+}>(({ selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols,     selectedFilterHosts, selectedDriveTypes, selectedDriveModels, selectedSyncs, selectedDirects, selectedIoDepths, selectedTestSizes, selectedDurations }) => {
     const hasActiveFilters = useMemo(() => {
         return selectedBlockSizes.length > 0 || 
                selectedPatterns.length > 0 || 
                selectedQueueDepths.length > 0 || 
                selectedNumJobs.length > 0 ||
                selectedProtocols.length > 0 || 
-               selectedHostDiskCombinations.length > 0 ||
+               selectedFilterHosts.length > 0 ||
+               selectedDriveTypes.length > 0 ||
+               selectedDriveModels.length > 0 ||
                selectedSyncs.length > 0 ||
                selectedDirects.length > 0 ||
                selectedIoDepths.length > 0 ||
                selectedTestSizes.length > 0 ||
                selectedDurations.length > 0;
-    }, [selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols, selectedHostDiskCombinations, selectedSyncs, selectedDirects, selectedIoDepths, selectedTestSizes, selectedDurations]);
+    }, [selectedBlockSizes, selectedPatterns, selectedQueueDepths, selectedNumJobs, selectedProtocols, selectedFilterHosts, selectedDriveTypes, selectedDriveModels, selectedSyncs, selectedDirects, selectedIoDepths, selectedTestSizes, selectedDurations]);
 
     return (
         <div className="pt-4 border-t border-gray-200 dark:border-gray-600">
@@ -133,8 +141,14 @@ const ActiveFilters = memo<{
                     {selectedProtocols.length > 0 && (
                         <div>Protocols: {selectedProtocols.join(', ')}</div>
                     )}
-                    {selectedHostDiskCombinations.length > 0 && (
-                        <div>Host-Disk: {selectedHostDiskCombinations.join(', ')}</div>
+                    {selectedFilterHosts.length > 0 && (
+                        <div>Hosts: {selectedFilterHosts.join(', ')}</div>
+                    )}
+                    {selectedDriveTypes.length > 0 && (
+                        <div>Drive Types: {selectedDriveTypes.join(', ')}</div>
+                    )}
+                    {selectedDriveModels.length > 0 && (
+                        <div>Drive Models: {selectedDriveModels.join(', ')}</div>
                     )}
                     {selectedSyncs.length > 0 && (
                         <div>Sync: {selectedSyncs.map(s => s === 1 ? 'On' : 'Off').join(', ')}</div>
@@ -169,7 +183,9 @@ const HostFilters: React.FC<HostFiltersProps> = ({
     selectedQueueDepths,
     selectedNumJobs,
     selectedProtocols,
-    selectedHostDiskCombinations,
+    selectedFilterHosts,
+    selectedDriveTypes,
+    selectedDriveModels,
     selectedSyncs,
     selectedDirects,
     selectedIoDepths,
@@ -180,7 +196,9 @@ const HostFilters: React.FC<HostFiltersProps> = ({
     onQueueDepthChange,
     onNumJobsChange,
     onProtocolChange,
-    onHostDiskCombinationChange,
+    onFilterHostChange,
+    onDriveTypeChange,
+    onDriveModelChange,
     onSyncChange,
     onDirectChange,
     onIoDepthChange,
@@ -255,11 +273,27 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                 />
                 
                 <FilterSection
-                    title="Host-Protocol-Disk"
-                    options={testCoverage.hostDiskCombinations}
-                    selectedValues={selectedHostDiskCombinations}
-                    onChange={onHostDiskCombinationChange}
+                    title="Hosts"
+                    options={testCoverage.hosts}
+                    selectedValues={selectedFilterHosts}
+                    onChange={onFilterHostChange}
                     colorClass="bg-indigo-500"
+                />
+                
+                <FilterSection
+                    title="Drive Type"
+                    options={testCoverage.driveTypes}
+                    selectedValues={selectedDriveTypes}
+                    onChange={onDriveTypeChange}
+                    colorClass="bg-rose-500"
+                />
+                
+                <FilterSection
+                    title="Drive Model"
+                    options={testCoverage.driveModels}
+                    selectedValues={selectedDriveModels}
+                    onChange={onDriveModelChange}
+                    colorClass="bg-fuchsia-500"
                 />
                 
                 <FilterSection
@@ -313,7 +347,9 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedQueueDepths={selectedQueueDepths}
                     selectedNumJobs={selectedNumJobs}
                     selectedProtocols={selectedProtocols}
-                    selectedHostDiskCombinations={selectedHostDiskCombinations}
+                    selectedFilterHosts={selectedFilterHosts}
+                    selectedDriveTypes={selectedDriveTypes}
+                    selectedDriveModels={selectedDriveModels}
                     selectedSyncs={selectedSyncs}
                     selectedDirects={selectedDirects}
                     selectedIoDepths={selectedIoDepths}
@@ -339,7 +375,9 @@ export default memo(HostFilters, (prevProps, nextProps) => {
         prevProps.onQueueDepthChange !== nextProps.onQueueDepthChange ||
         prevProps.onNumJobsChange !== nextProps.onNumJobsChange ||
         prevProps.onProtocolChange !== nextProps.onProtocolChange ||
-        prevProps.onHostDiskCombinationChange !== nextProps.onHostDiskCombinationChange ||
+        prevProps.onFilterHostChange !== nextProps.onFilterHostChange ||
+        prevProps.onDriveTypeChange !== nextProps.onDriveTypeChange ||
+        prevProps.onDriveModelChange !== nextProps.onDriveModelChange ||
         prevProps.onSyncChange !== nextProps.onSyncChange ||
         prevProps.onDirectChange !== nextProps.onDirectChange ||
         prevProps.onIoDepthChange !== nextProps.onIoDepthChange ||
@@ -360,7 +398,9 @@ export default memo(HostFilters, (prevProps, nextProps) => {
            arraysEqual(prevProps.selectedQueueDepths, nextProps.selectedQueueDepths) &&
            arraysEqual(prevProps.selectedNumJobs, nextProps.selectedNumJobs) &&
            arraysEqual(prevProps.selectedProtocols, nextProps.selectedProtocols) &&
-           arraysEqual(prevProps.selectedHostDiskCombinations, nextProps.selectedHostDiskCombinations) &&
+           arraysEqual(prevProps.selectedFilterHosts, nextProps.selectedFilterHosts) &&
+           arraysEqual(prevProps.selectedDriveTypes, nextProps.selectedDriveTypes) &&
+           arraysEqual(prevProps.selectedDriveModels, nextProps.selectedDriveModels) &&
            arraysEqual(prevProps.selectedSyncs, nextProps.selectedSyncs) &&
            arraysEqual(prevProps.selectedDirects, nextProps.selectedDirects) &&
            arraysEqual(prevProps.selectedIoDepths, nextProps.selectedIoDepths) &&

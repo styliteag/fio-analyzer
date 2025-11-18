@@ -8,7 +8,9 @@ export interface UseHostFiltersReturn {
     selectedQueueDepths: number[];
     selectedNumJobs: number[];
     selectedProtocols: string[];
-    selectedHostDiskCombinations: string[];
+    selectedFilterHosts: string[];
+    selectedDriveTypes: string[];
+    selectedDriveModels: string[];
     selectedSyncs: number[];
     selectedDirects: number[];
     selectedIoDepths: number[];
@@ -21,7 +23,9 @@ export interface UseHostFiltersReturn {
     setSelectedQueueDepths: (depths: number[]) => void;
     setSelectedNumJobs: (numJobs: number[]) => void;
     setSelectedProtocols: (protocols: string[]) => void;
-    setSelectedHostDiskCombinations: (combinations: string[]) => void;
+    setSelectedFilterHosts: (hosts: string[]) => void;
+    setSelectedDriveTypes: (types: string[]) => void;
+    setSelectedDriveModels: (models: string[]) => void;
     setSelectedSyncs: (syncs: number[]) => void;
     setSelectedDirects: (directs: number[]) => void;
     setSelectedIoDepths: (ioDepths: number[]) => void;
@@ -46,7 +50,9 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
     const [selectedQueueDepths, setSelectedQueueDepths] = useState<number[]>([]);
     const [selectedNumJobs, setSelectedNumJobs] = useState<number[]>([]);
     const [selectedProtocols, setSelectedProtocols] = useState<string[]>([]);
-    const [selectedHostDiskCombinations, setSelectedHostDiskCombinations] = useState<string[]>([]);
+    const [selectedFilterHosts, setSelectedFilterHosts] = useState<string[]>([]);
+    const [selectedDriveTypes, setSelectedDriveTypes] = useState<string[]>([]);
+    const [selectedDriveModels, setSelectedDriveModels] = useState<string[]>([]);
     const [selectedSyncs, setSelectedSyncs] = useState<number[]>([]);
     const [selectedDirects, setSelectedDirects] = useState<number[]>([]);
     const [selectedIoDepths, setSelectedIoDepths] = useState<number[]>([]);
@@ -60,7 +66,9 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         setSelectedQueueDepths([]);
         setSelectedNumJobs([]);
         setSelectedProtocols([]);
-        setSelectedHostDiskCombinations([]);
+        setSelectedFilterHosts([]);
+        setSelectedDriveTypes([]);
+        setSelectedDriveModels([]);
         setSelectedSyncs([]);
         setSelectedDirects([]);
         setSelectedIoDepths([]);
@@ -75,19 +83,12 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         }
 
         const result = combinedHostData.drives.filter(drive => {
-            // Filter drives by selected host-disk combinations
-            if (selectedHostDiskCombinations.length === 0) {
-                return true;
-            }
-            // Use the same key format as the heatmap component: hostname-protocol-driveModel-driveType-driveIndex
-            // Since we don't have driveIndex here, we'll match by hostname-protocol-driveModel-driveType pattern
-            const included = selectedHostDiskCombinations.some(combo => {
-                const [comboHostname, comboProtocol, comboDriveModel] = combo.split(' - ');
-                return drive.hostname === comboHostname &&
-                       drive.protocol === comboProtocol &&
-                       drive.drive_model === comboDriveModel;
-            });
-            return included;
+            // Filter drives by selected hosts, protocols, drive types, and drive models separately
+            const hostMatch = selectedFilterHosts.length === 0 || selectedFilterHosts.includes(drive.hostname);
+            const protocolMatch = selectedProtocols.length === 0 || selectedProtocols.includes(drive.protocol);
+            const driveTypeMatch = selectedDriveTypes.length === 0 || selectedDriveTypes.includes(drive.drive_type);
+            const driveModelMatch = selectedDriveModels.length === 0 || selectedDriveModels.includes(drive.drive_model);
+            return hostMatch && protocolMatch && driveTypeMatch && driveModelMatch;
         }).map(drive => ({
             ...drive,
             configurations: drive.configurations.filter(config => {
@@ -113,7 +114,10 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         selectedPatterns,
         selectedQueueDepths,
         selectedNumJobs,
-        selectedHostDiskCombinations,
+        selectedProtocols,
+        selectedFilterHosts,
+        selectedDriveTypes,
+        selectedDriveModels,
         selectedSyncs,
         selectedDirects,
         selectedIoDepths,
@@ -128,7 +132,9 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         selectedQueueDepths,
         selectedNumJobs,
         selectedProtocols,
-        selectedHostDiskCombinations,
+        selectedFilterHosts,
+        selectedDriveTypes,
+        selectedDriveModels,
         selectedSyncs,
         selectedDirects,
         selectedIoDepths,
@@ -141,7 +147,9 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         setSelectedQueueDepths,
         setSelectedNumJobs,
         setSelectedProtocols,
-        setSelectedHostDiskCombinations,
+        setSelectedFilterHosts,
+        setSelectedDriveTypes,
+        setSelectedDriveModels,
         setSelectedSyncs,
         setSelectedDirects,
         setSelectedIoDepths,

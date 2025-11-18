@@ -11,7 +11,9 @@ export interface HostFiltersSidebarProps {
     selectedQueueDepths: number[];
     selectedNumJobs: number[];
     selectedProtocols: string[];
-    selectedHostDiskCombinations: string[];
+    selectedFilterHosts: string[];
+    selectedDriveTypes: string[];
+    selectedDriveModels: string[];
     selectedSyncs: number[];
     selectedDirects: number[];
     selectedIoDepths: number[];
@@ -22,7 +24,9 @@ export interface HostFiltersSidebarProps {
     onQueueDepthChange: (depths: number[]) => void;
     onNumJobsChange: (numJobs: number[]) => void;
     onProtocolChange: (protocols: string[]) => void;
-    onHostDiskCombinationChange: (combinations: string[]) => void;
+    onFilterHostChange: (hosts: string[]) => void;
+    onDriveTypeChange: (types: string[]) => void;
+    onDriveModelChange: (models: string[]) => void;
     onSyncChange: (syncs: number[]) => void;
     onDirectChange: (directs: number[]) => void;
     onIoDepthChange: (ioDepths: number[]) => void;
@@ -38,7 +42,9 @@ const HostFiltersSidebar: React.FC<HostFiltersSidebarProps> = ({
     selectedQueueDepths,
     selectedNumJobs,
     selectedProtocols,
-    selectedHostDiskCombinations,
+    selectedFilterHosts,
+    selectedDriveTypes,
+    selectedDriveModels,
     selectedSyncs,
     selectedDirects,
     selectedIoDepths,
@@ -49,7 +55,9 @@ const HostFiltersSidebar: React.FC<HostFiltersSidebarProps> = ({
     onQueueDepthChange,
     onNumJobsChange,
     onProtocolChange,
-    onHostDiskCombinationChange,
+    onFilterHostChange,
+    onDriveTypeChange,
+    onDriveModelChange,
     onSyncChange,
     onDirectChange,
     onIoDepthChange,
@@ -67,7 +75,9 @@ const HostFiltersSidebar: React.FC<HostFiltersSidebarProps> = ({
                 selectedQueueDepths={selectedQueueDepths}
                 selectedNumJobs={selectedNumJobs}
                 selectedProtocols={selectedProtocols}
-                selectedHostDiskCombinations={selectedHostDiskCombinations}
+                selectedFilterHosts={selectedFilterHosts}
+                selectedDriveTypes={selectedDriveTypes}
+                selectedDriveModels={selectedDriveModels}
                 selectedSyncs={selectedSyncs}
                 selectedDirects={selectedDirects}
                 selectedIoDepths={selectedIoDepths}
@@ -78,7 +88,9 @@ const HostFiltersSidebar: React.FC<HostFiltersSidebarProps> = ({
                 onQueueDepthChange={onQueueDepthChange}
                 onNumJobsChange={onNumJobsChange}
                 onProtocolChange={onProtocolChange}
-                onHostDiskCombinationChange={onHostDiskCombinationChange}
+                onFilterHostChange={onFilterHostChange}
+                onDriveTypeChange={onDriveTypeChange}
+                onDriveModelChange={onDriveModelChange}
                 onSyncChange={onSyncChange}
                 onDirectChange={onDirectChange}
                 onIoDepthChange={onIoDepthChange}

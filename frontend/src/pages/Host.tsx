@@ -44,7 +44,9 @@ const Host: React.FC = () => {
         selectedQueueDepths,
         selectedNumJobs,
         selectedProtocols,
-        selectedHostDiskCombinations,
+        selectedFilterHosts,
+        selectedDriveTypes,
+        selectedDriveModels,
         selectedSyncs,
         selectedDirects,
         selectedIoDepths,
@@ -55,7 +57,9 @@ const Host: React.FC = () => {
         setSelectedQueueDepths,
         setSelectedNumJobs,
         setSelectedProtocols,
-        setSelectedHostDiskCombinations,
+        setSelectedFilterHosts,
+        setSelectedDriveTypes,
+        setSelectedDriveModels,
         setSelectedSyncs,
         setSelectedDirects,
         setSelectedIoDepths,
@@ -207,7 +211,9 @@ const Host: React.FC = () => {
                                 selectedQueueDepths={selectedQueueDepths}
                                 selectedNumJobs={selectedNumJobs}
                                 selectedProtocols={selectedProtocols}
-                                selectedHostDiskCombinations={selectedHostDiskCombinations}
+                                selectedFilterHosts={selectedFilterHosts}
+                                selectedDriveTypes={selectedDriveTypes}
+                                selectedDriveModels={selectedDriveModels}
                                 selectedSyncs={selectedSyncs}
                                 selectedDirects={selectedDirects}
                                 selectedIoDepths={selectedIoDepths}
@@ -218,7 +224,9 @@ const Host: React.FC = () => {
                                 onQueueDepthChange={setSelectedQueueDepths}
                                 onNumJobsChange={setSelectedNumJobs}
                                 onProtocolChange={setSelectedProtocols}
-                                onHostDiskCombinationChange={setSelectedHostDiskCombinations}
+                                onFilterHostChange={setSelectedFilterHosts}
+                                onDriveTypeChange={setSelectedDriveTypes}
+                                onDriveModelChange={setSelectedDriveModels}
                                 onSyncChange={setSelectedSyncs}
                                 onDirectChange={setSelectedDirects}
                                 onIoDepthChange={setSelectedIoDepths}

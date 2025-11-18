@@ -14,6 +14,7 @@ interface DriveData {
     drive_model: string;
     drive_type: string;
     protocol: string;
+    hostname?: string;
     configurations: DriveConfiguration[];
     topPerformance: {
         maxIOPS: number;
@@ -127,8 +128,8 @@ const HostOverview: React.FC<HostOverviewProps> = ({ filteredDrives }) => {
             </h3>
             
             <div className="grid gap-6">
-                {filteredDrives.map((drive) => (
-                    <DriveCard key={drive.drive_model} drive={drive} />
+                {filteredDrives.map((drive, index) => (
+                    <DriveCard key={`${drive.hostname || 'unknown'}-${drive.protocol}-${drive.drive_type}-${drive.drive_model}-${index}`} drive={drive} />
                 ))}
             </div>
         </div>
