@@ -1,10 +1,11 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { Filter, RotateCcw } from 'lucide-react';
 import { Button } from '../ui';
-import type { TestCoverage } from '../../services/api/hostAnalysis';
+import type { TestCoverage, HostAnalysisData } from '../../services/api/hostAnalysis';
 
 interface HostFiltersProps {
     testCoverage: TestCoverage;
+    combinedHostData: HostAnalysisData | null;
     selectedBlockSizes: string[];
     selectedPatterns: string[];
     selectedQueueDepths: number[];
@@ -43,7 +44,8 @@ const FilterSection = memo<{
     colorClass: string;
     prefix?: string;
     labelMap?: Record<string | number, string>;
-}>(({ title, options, selectedValues, onChange, colorClass, prefix = '', labelMap }) => {
+    availableOptions?: Set<string | number>;
+}>(({ title, options, selectedValues, onChange, colorClass, prefix = '', labelMap, availableOptions }) => {
     const handleFilterChange = useCallback((value: string | number) => {
         const newValues = selectedValues.includes(value)
             ? selectedValues.filter(v => v !== value)
@@ -65,15 +67,19 @@ const FilterSection = memo<{
                         displayValue = option.toString();
                     }
                     const isSelected = selectedValues.includes(option);
+                    const isAvailable = availableOptions === undefined || availableOptions.has(option);
                     
                     return (
                         <button
                             key={option.toString()}
-                            onClick={() => handleFilterChange(option)}
+                            onClick={() => isAvailable && handleFilterChange(option)}
+                            disabled={!isAvailable}
                             className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                                isSelected
-                                    ? colorClass + ' text-white'
-                                    : 'bg-gray-100 dark:bg-gray-700 theme-text-secondary hover:bg-gray-200 dark:hover:bg-gray-600'
+                                !isAvailable
+                                    ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
+                                    : isSelected
+                                        ? colorClass + ' text-white'
+                                        : 'bg-gray-100 dark:bg-gray-700 theme-text-secondary hover:bg-gray-200 dark:hover:bg-gray-600'
                             }`}
                         >
                             {displayValue}
@@ -178,6 +184,7 @@ ActiveFilters.displayName = 'ActiveFilters';
 
 const HostFilters: React.FC<HostFiltersProps> = ({
     testCoverage,
+    combinedHostData,
     selectedBlockSizes,
     selectedPatterns,
     selectedQueueDepths,
@@ -211,6 +218,272 @@ const HostFilters: React.FC<HostFiltersProps> = ({
         onReset();
     }, [onReset]);
 
+    // Calculate available options - check if selecting each option would result in any matching data
+    const availableOptions = useMemo(() => {
+        if (!combinedHostData) {
+            return {
+                blockSizes: new Set<string>(),
+                patterns: new Set<string>(),
+                queueDepths: new Set<number>(),
+                numJobs: new Set<number>(),
+                protocols: new Set<string>(),
+                hosts: new Set<string>(),
+                driveTypes: new Set<string>(),
+                driveModels: new Set<string>(),
+                syncs: new Set<number>(),
+                directs: new Set<number>(),
+                ioDepths: new Set<number>(),
+                testSizes: new Set<string>(),
+                durations: new Set<number>()
+            };
+        }
+
+        // Helper function to check if a drive matches current filters (can exclude specific fields)
+        const driveMatches = (drive: any, testHost?: string, testProtocol?: string, testDriveType?: string, testDriveModel?: string) => {
+            const hostMatch = testHost !== undefined ? drive.hostname === testHost : (selectedFilterHosts.length === 0 || selectedFilterHosts.includes(drive.hostname));
+            const protocolMatch = testProtocol !== undefined ? drive.protocol === testProtocol : (selectedProtocols.length === 0 || selectedProtocols.includes(drive.protocol));
+            const driveTypeMatch = testDriveType !== undefined ? drive.drive_type === testDriveType : (selectedDriveTypes.length === 0 || selectedDriveTypes.includes(drive.drive_type));
+            const driveModelMatch = testDriveModel !== undefined ? drive.drive_model === testDriveModel : (selectedDriveModels.length === 0 || selectedDriveModels.includes(drive.drive_model));
+            return hostMatch && protocolMatch && driveTypeMatch && driveModelMatch;
+        };
+
+        // Helper function to check if a config matches current filters (can test specific values)
+        const configMatches = (config: any, testBlockSize?: string, testPattern?: string, testQueueDepth?: number, testNumJobs?: number, testSync?: number, testDirect?: number, testIoDepth?: number, testTestSize?: string, testDuration?: number) => {
+            const blockSizeMatch = testBlockSize !== undefined ? config.block_size === testBlockSize : (selectedBlockSizes.length === 0 || selectedBlockSizes.includes(config.block_size));
+            const patternMatch = testPattern !== undefined ? config.read_write_pattern === testPattern : (selectedPatterns.length === 0 || selectedPatterns.includes(config.read_write_pattern));
+            const queueDepthMatch = testQueueDepth !== undefined ? config.queue_depth === testQueueDepth : (selectedQueueDepths.length === 0 || selectedQueueDepths.includes(config.queue_depth));
+            const numJobsMatch = testNumJobs !== undefined 
+                ? (config.num_jobs !== null && config.num_jobs !== undefined && config.num_jobs === testNumJobs)
+                : (selectedNumJobs.length === 0 || (config.num_jobs !== null && config.num_jobs !== undefined && selectedNumJobs.includes(config.num_jobs)));
+            const syncMatch = testSync !== undefined
+                ? (config.sync !== null && config.sync !== undefined && config.sync === testSync)
+                : (selectedSyncs.length === 0 || (config.sync !== null && config.sync !== undefined && selectedSyncs.includes(config.sync)));
+            const directMatch = testDirect !== undefined
+                ? (config.direct !== null && config.direct !== undefined && config.direct === testDirect)
+                : (selectedDirects.length === 0 || (config.direct !== null && config.direct !== undefined && selectedDirects.includes(config.direct)));
+            const ioDepthMatch = testIoDepth !== undefined
+                ? (config.iodepth !== null && config.iodepth !== undefined && config.iodepth === testIoDepth)
+                : (selectedIoDepths.length === 0 || (config.iodepth !== null && config.iodepth !== undefined && selectedIoDepths.includes(config.iodepth)));
+            const testSizeMatch = testTestSize !== undefined
+                ? (config.test_size !== null && config.test_size !== undefined && config.test_size === testTestSize)
+                : (selectedTestSizes.length === 0 || (config.test_size !== null && config.test_size !== undefined && selectedTestSizes.includes(config.test_size)));
+            const durationMatch = testDuration !== undefined
+                ? (config.duration !== null && config.duration !== undefined && config.duration === testDuration)
+                : (selectedDurations.length === 0 || (config.duration !== null && config.duration !== undefined && selectedDurations.includes(config.duration)));
+            return blockSizeMatch && patternMatch && queueDepthMatch && numJobsMatch && syncMatch && directMatch && ioDepthMatch && testSizeMatch && durationMatch;
+        };
+
+        const blockSizes = new Set<string>();
+        const patterns = new Set<string>();
+        const queueDepths = new Set<number>();
+        const numJobs = new Set<number>();
+        const protocols = new Set<string>();
+        const hosts = new Set<string>();
+        const driveTypes = new Set<string>();
+        const driveModels = new Set<string>();
+        const syncs = new Set<number>();
+        const directs = new Set<number>();
+        const ioDepths = new Set<number>();
+        const testSizes = new Set<string>();
+        const durations = new Set<number>();
+
+        // Check each option from testCoverage to see if selecting it would result in any matching data
+        // For each option, we check if there's at least one drive/config that matches when we select that option
+        
+        // Check each host option
+        testCoverage.hosts.forEach(host => {
+            const hasMatch = combinedHostData.drives.some(drive => {
+                if (driveMatches(drive, host)) {
+                    return drive.configurations.some(config => configMatches(config));
+                }
+                return false;
+            });
+            if (hasMatch) {
+                hosts.add(host);
+            }
+        });
+        
+        // Check each protocol option
+        testCoverage.protocols.forEach(protocol => {
+            const hasMatch = combinedHostData.drives.some(drive => {
+                if (driveMatches(drive, undefined, protocol)) {
+                    return drive.configurations.some(config => configMatches(config));
+                }
+                return false;
+            });
+            if (hasMatch) {
+                protocols.add(protocol);
+            }
+        });
+        
+        // Check each drive type option
+        testCoverage.driveTypes.forEach(driveType => {
+            const hasMatch = combinedHostData.drives.some(drive => {
+                if (driveMatches(drive, undefined, undefined, driveType)) {
+                    return drive.configurations.some(config => configMatches(config));
+                }
+                return false;
+            });
+            if (hasMatch) {
+                driveTypes.add(driveType);
+            }
+        });
+        
+        // Check each drive model option
+        testCoverage.driveModels.forEach(driveModel => {
+            const hasMatch = combinedHostData.drives.some(drive => {
+                if (driveMatches(drive, undefined, undefined, undefined, driveModel)) {
+                    return drive.configurations.some(config => configMatches(config));
+                }
+                return false;
+            });
+            if (hasMatch) {
+                driveModels.add(driveModel);
+            }
+        });
+
+        // Check configuration-level options - only check drives that match current drive-level filters
+        combinedHostData.drives.forEach(drive => {
+            if (!driveMatches(drive)) {
+                return; // Skip drives that don't match current drive-level filters
+            }
+            
+            // Check each block size option
+            testCoverage.blockSizes.forEach(blockSize => {
+                const hasMatch = drive.configurations.some(config => 
+                    config.block_size === blockSize && configMatches(config, blockSize)
+                );
+                if (hasMatch) {
+                    blockSizes.add(blockSize);
+                }
+            });
+            
+            // Check each pattern option
+            testCoverage.patterns.forEach(pattern => {
+                const hasMatch = drive.configurations.some(config => 
+                    config.read_write_pattern === pattern && configMatches(config, undefined, pattern)
+                );
+                if (hasMatch) {
+                    patterns.add(pattern);
+                }
+            });
+            
+            // Check each queue depth option
+            testCoverage.queueDepths.forEach(queueDepth => {
+                const hasMatch = drive.configurations.some(config => 
+                    config.queue_depth === queueDepth && configMatches(config, undefined, undefined, queueDepth)
+                );
+                if (hasMatch) {
+                    queueDepths.add(queueDepth);
+                }
+            });
+            
+            // Check each num jobs option
+            testCoverage.numJobs.forEach(numJob => {
+                const hasMatch = drive.configurations.some(config => 
+                    config.num_jobs !== null && config.num_jobs !== undefined && 
+                    config.num_jobs === numJob && 
+                    configMatches(config, undefined, undefined, undefined, numJob)
+                );
+                if (hasMatch) {
+                    numJobs.add(numJob);
+                }
+            });
+            
+            // Check each sync option
+            testCoverage.syncs.forEach(sync => {
+                const hasMatch = drive.configurations.some(config => 
+                    config.sync !== null && config.sync !== undefined && 
+                    config.sync === sync && 
+                    configMatches(config, undefined, undefined, undefined, undefined, sync)
+                );
+                if (hasMatch) {
+                    syncs.add(sync);
+                }
+            });
+            
+            // Check each direct option
+            testCoverage.directs.forEach(direct => {
+                const hasMatch = drive.configurations.some(config => 
+                    config.direct !== null && config.direct !== undefined && 
+                    config.direct === direct && 
+                    configMatches(config, undefined, undefined, undefined, undefined, undefined, direct)
+                );
+                if (hasMatch) {
+                    directs.add(direct);
+                }
+            });
+            
+            // Check each iodepth option
+            testCoverage.ioDepths.forEach(ioDepth => {
+                const hasMatch = drive.configurations.some(config => 
+                    config.iodepth !== null && config.iodepth !== undefined && 
+                    config.iodepth === ioDepth && 
+                    configMatches(config, undefined, undefined, undefined, undefined, undefined, undefined, ioDepth)
+                );
+                if (hasMatch) {
+                    ioDepths.add(ioDepth);
+                }
+            });
+            
+            // Check each test size option
+            testCoverage.testSizes.forEach(testSize => {
+                const hasMatch = drive.configurations.some(config => 
+                    config.test_size !== null && config.test_size !== undefined && 
+                    config.test_size === testSize && 
+                    configMatches(config, undefined, undefined, undefined, undefined, undefined, undefined, undefined, testSize)
+                );
+                if (hasMatch) {
+                    testSizes.add(testSize);
+                }
+            });
+            
+            // Check each duration option
+            testCoverage.durations.forEach(duration => {
+                const hasMatch = drive.configurations.some(config => 
+                    config.duration !== null && config.duration !== undefined && 
+                    config.duration === duration && 
+                    configMatches(config, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, duration)
+                );
+                if (hasMatch) {
+                    durations.add(duration);
+                }
+            });
+        });
+
+        return {
+            blockSizes,
+            patterns,
+            queueDepths,
+            numJobs,
+            protocols,
+            hosts,
+            driveTypes,
+            driveModels,
+            syncs,
+            directs,
+            ioDepths,
+            testSizes,
+            durations
+        };
+    }, [
+        combinedHostData,
+        testCoverage,
+        selectedBlockSizes,
+        selectedPatterns,
+        selectedQueueDepths,
+        selectedNumJobs,
+        selectedProtocols,
+        selectedFilterHosts,
+        selectedDriveTypes,
+        selectedDriveModels,
+        selectedSyncs,
+        selectedDirects,
+        selectedIoDepths,
+        selectedTestSizes,
+        selectedDurations
+    ]);
+
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border">
             <div className="flex items-center justify-between mb-6">
@@ -236,6 +509,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedValues={selectedBlockSizes}
                     onChange={onBlockSizeChange}
                     colorClass="bg-blue-500"
+                    availableOptions={availableOptions.blockSizes}
                 />
                 
                 <FilterSection
@@ -244,6 +518,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedValues={selectedPatterns}
                     onChange={onPatternChange}
                     colorClass="bg-green-500"
+                    availableOptions={availableOptions.patterns}
                 />
                 
                 <FilterSection
@@ -253,6 +528,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onQueueDepthChange}
                     colorClass="bg-purple-500"
                     prefix="QD"
+                    availableOptions={availableOptions.queueDepths}
                 />
                 
                 <FilterSection
@@ -262,6 +538,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onNumJobsChange}
                     colorClass="bg-cyan-500"
                     prefix="Jobs:"
+                    availableOptions={availableOptions.numJobs}
                 />
                 
                 <FilterSection
@@ -270,6 +547,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedValues={selectedProtocols}
                     onChange={onProtocolChange}
                     colorClass="bg-orange-500"
+                    availableOptions={availableOptions.protocols}
                 />
                 
                 <FilterSection
@@ -278,6 +556,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedValues={selectedFilterHosts}
                     onChange={onFilterHostChange}
                     colorClass="bg-indigo-500"
+                    availableOptions={availableOptions.hosts}
                 />
                 
                 <FilterSection
@@ -286,6 +565,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedValues={selectedDriveTypes}
                     onChange={onDriveTypeChange}
                     colorClass="bg-rose-500"
+                    availableOptions={availableOptions.driveTypes}
                 />
                 
                 <FilterSection
@@ -294,6 +574,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedValues={selectedDriveModels}
                     onChange={onDriveModelChange}
                     colorClass="bg-fuchsia-500"
+                    availableOptions={availableOptions.driveModels}
                 />
                 
                 <FilterSection
@@ -303,6 +584,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onSyncChange}
                     colorClass="bg-pink-500"
                     labelMap={{ 0: 'Off', 1: 'On' }}
+                    availableOptions={availableOptions.syncs}
                 />
                 
                 <FilterSection
@@ -312,6 +594,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onDirectChange}
                     colorClass="bg-amber-500"
                     labelMap={{ 0: 'Off', 1: 'On' }}
+                    availableOptions={availableOptions.directs}
                 />
                 
                 <FilterSection
@@ -321,6 +604,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onIoDepthChange}
                     colorClass="bg-teal-500"
                     prefix="IOD"
+                    availableOptions={availableOptions.ioDepths}
                 />
                 
                 <FilterSection
@@ -329,6 +613,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedValues={selectedTestSizes}
                     onChange={onTestSizeChange}
                     colorClass="bg-violet-500"
+                    availableOptions={availableOptions.testSizes}
                 />
                 
                 <FilterSection
@@ -339,6 +624,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     colorClass="bg-emerald-500"
                     prefix=""
                     labelMap={Object.fromEntries(testCoverage.durations.map(d => [d, `${d}s`]))}
+                    availableOptions={availableOptions.durations}
                 />
 
                 <ActiveFilters
@@ -365,6 +651,11 @@ const HostFilters: React.FC<HostFiltersProps> = ({
 export default memo(HostFilters, (prevProps, nextProps) => {
     // Check if testCoverage object changed
     if (prevProps.testCoverage !== nextProps.testCoverage) {
+        return false;
+    }
+
+    // Check if combinedHostData changed
+    if (prevProps.combinedHostData !== nextProps.combinedHostData) {
         return false;
     }
 

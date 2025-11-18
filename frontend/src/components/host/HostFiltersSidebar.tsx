@@ -70,6 +70,7 @@ const HostFiltersSidebar: React.FC<HostFiltersSidebarProps> = ({
             {/* Filters */}
             <HostFilters
                 testCoverage={hostData.testCoverage}
+                combinedHostData={hostData}
                 selectedBlockSizes={selectedBlockSizes}
                 selectedPatterns={selectedPatterns}
                 selectedQueueDepths={selectedQueueDepths}
