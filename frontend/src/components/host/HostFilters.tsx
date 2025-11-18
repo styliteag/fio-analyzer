@@ -539,15 +539,15 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                 patterns: new Map<string | number, number>(),
                 queueDepths: new Map<string | number, number>(),
                 numJobs: new Map<string | number, number>(),
-                protocols: new Map<string | number, number>(),
-                hosts: new Map<string | number, number>(),
-                driveTypes: new Map<string | number, number>(),
-                driveModels: new Map<string | number, number>(),
                 syncs: new Map<string | number, number>(),
                 directs: new Map<string | number, number>(),
                 ioDepths: new Map<string | number, number>(),
                 testSizes: new Map<string | number, number>(),
-                durations: new Map<string | number, number>()
+                durations: new Map<string | number, number>(),
+                hosts: new Map<string | number, number>(),
+                hostProtocols: new Map<string | number, number>(),
+                hostProtocolTypes: new Map<string | number, number>(),
+                hostProtocolTypeModels: new Map<string | number, number>()
             };
         }
 
@@ -613,6 +613,63 @@ const HostFilters: React.FC<HostFiltersProps> = ({
         const ioDepths = new Map<string | number, number>();
         const testSizes = new Map<string | number, number>();
         const durations = new Map<string | number, number>();
+        const hosts = new Map<string | number, number>();
+        const hostProtocols = new Map<string | number, number>();
+        const hostProtocolTypes = new Map<string | number, number>();
+        const hostProtocolTypeModels = new Map<string | number, number>();
+
+        // Helper to check if config matches other filters (excluding hierarchical)
+        const configMatchesOtherFilters = (config: any) => {
+            const blockSizeMatch = selectedBlockSizes.length === 0 || selectedBlockSizes.includes(config.block_size);
+            const patternMatch = selectedPatterns.length === 0 || selectedPatterns.includes(config.read_write_pattern);
+            const queueDepthMatch = selectedQueueDepths.length === 0 || selectedQueueDepths.includes(config.queue_depth);
+            const numJobsMatch = selectedNumJobs.length === 0 || (config.num_jobs !== null && config.num_jobs !== undefined && selectedNumJobs.includes(config.num_jobs));
+            const syncMatch = selectedSyncs.length === 0 || (config.sync !== null && config.sync !== undefined && selectedSyncs.includes(config.sync));
+            const directMatch = selectedDirects.length === 0 || (config.direct !== null && config.direct !== undefined && selectedDirects.includes(config.direct));
+            const ioDepthMatch = selectedIoDepths.length === 0 || (config.iodepth !== null && config.iodepth !== undefined && selectedIoDepths.includes(config.iodepth));
+            const testSizeMatch = selectedTestSizes.length === 0 || (config.test_size !== null && config.test_size !== undefined && selectedTestSizes.includes(config.test_size));
+            const durationMatch = selectedDurations.length === 0 || (config.duration !== null && config.duration !== undefined && selectedDurations.includes(config.duration));
+            return blockSizeMatch && patternMatch && queueDepthMatch && numJobsMatch && syncMatch && directMatch && ioDepthMatch && testSizeMatch && durationMatch;
+        };
+
+        // Count runs for hierarchical filter options
+        combinedHostData.drives.forEach(drive => {
+            // Count for each host (Level 1)
+            const hostCount = drive.configurations.filter(config => configMatchesOtherFilters(config)).length;
+            if (hostCount > 0) {
+                hosts.set(drive.hostname, (hosts.get(drive.hostname) || 0) + hostCount);
+            }
+
+            // Count for each host-protocol combination (Level 2)
+            const hostProtocolKey = `${drive.hostname}-${drive.protocol}`;
+            if (selectedHosts.length === 0 || selectedHosts.includes(drive.hostname)) {
+                const hostProtocolCount = drive.configurations.filter(config => configMatchesOtherFilters(config)).length;
+                if (hostProtocolCount > 0) {
+                    hostProtocols.set(hostProtocolKey, (hostProtocols.get(hostProtocolKey) || 0) + hostProtocolCount);
+                }
+            }
+
+            // Count for each host-protocol-type combination (Level 3)
+            const hostProtocolTypeKey = `${drive.hostname}-${drive.protocol}-${drive.drive_type}`;
+            if ((selectedHosts.length === 0 || selectedHosts.includes(drive.hostname)) &&
+                (selectedHostProtocols.length === 0 || selectedHostProtocols.includes(`${drive.hostname}-${drive.protocol}`))) {
+                const hostProtocolTypeCount = drive.configurations.filter(config => configMatchesOtherFilters(config)).length;
+                if (hostProtocolTypeCount > 0) {
+                    hostProtocolTypes.set(hostProtocolTypeKey, (hostProtocolTypes.get(hostProtocolTypeKey) || 0) + hostProtocolTypeCount);
+                }
+            }
+
+            // Count for each host-protocol-type-model combination (Level 4)
+            const hostProtocolTypeModelKey = `${drive.hostname}-${drive.protocol}-${drive.drive_type}-${drive.drive_model}`;
+            if ((selectedHosts.length === 0 || selectedHosts.includes(drive.hostname)) &&
+                (selectedHostProtocols.length === 0 || selectedHostProtocols.includes(`${drive.hostname}-${drive.protocol}`)) &&
+                (selectedHostProtocolTypes.length === 0 || selectedHostProtocolTypes.includes(`${drive.hostname}-${drive.protocol}-${drive.drive_type}`))) {
+                const hostProtocolTypeModelCount = drive.configurations.filter(config => configMatchesOtherFilters(config)).length;
+                if (hostProtocolTypeModelCount > 0) {
+                    hostProtocolTypeModels.set(hostProtocolTypeModelKey, (hostProtocolTypeModels.get(hostProtocolTypeModelKey) || 0) + hostProtocolTypeModelCount);
+                }
+            }
+        });
 
         // Count runs for configuration-level options - only check drives that match hierarchical filters
         combinedHostData.drives.forEach(drive => {
@@ -714,7 +771,11 @@ const HostFilters: React.FC<HostFiltersProps> = ({
             directs,
             ioDepths,
             testSizes,
-            durations
+            durations,
+            hosts,
+            hostProtocols,
+            hostProtocolTypes,
+            hostProtocolTypeModels
         };
     }, [
         combinedHostData,
@@ -803,6 +864,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onHostChange}
                     colorClass="bg-indigo-500"
                     availableOptions={hierarchicalOptions.hosts}
+                    optionCounts={optionCounts.hosts}
                 />
                 
                 <FilterSection
@@ -812,6 +874,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onHostProtocolChange}
                     colorClass="bg-orange-500"
                     availableOptions={hierarchicalOptions.hostProtocols}
+                    optionCounts={optionCounts.hostProtocols}
                 />
                 
                 <FilterSection
@@ -821,6 +884,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onHostProtocolTypeChange}
                     colorClass="bg-rose-500"
                     availableOptions={hierarchicalOptions.hostProtocolTypes}
+                    optionCounts={optionCounts.hostProtocolTypes}
                 />
                 
                 <FilterSection
@@ -830,6 +894,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onHostProtocolTypeModelChange}
                     colorClass="bg-fuchsia-500"
                     availableOptions={hierarchicalOptions.hostProtocolTypeModels}
+                    optionCounts={optionCounts.hostProtocolTypeModels}
                 />
                 
                 <FilterSection
