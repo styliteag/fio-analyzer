@@ -45,7 +45,8 @@ const FilterSection = memo<{
     prefix?: string;
     labelMap?: Record<string | number, string>;
     availableOptions?: Set<string | number>;
-}>(({ title, options, selectedValues, onChange, colorClass, prefix = '', labelMap, availableOptions }) => {
+    optionCounts?: Map<string | number, number>;
+}>(({ title, options, selectedValues, onChange, colorClass, prefix = '', labelMap, availableOptions, optionCounts }) => {
     const handleFilterChange = useCallback((value: string | number) => {
         const newValues = selectedValues.includes(value)
             ? selectedValues.filter(v => v !== value)
@@ -68,22 +69,34 @@ const FilterSection = memo<{
                     }
                     const isSelected = selectedValues.includes(option);
                     const isAvailable = availableOptions === undefined || availableOptions.has(option);
+                    const runCount = optionCounts?.get(option) ?? 0;
+                    const tooltipText = `${runCount} run${runCount !== 1 ? 's' : ''}`;
                     
                     return (
-                        <button
-                            key={option.toString()}
-                            onClick={() => isAvailable && handleFilterChange(option)}
-                            disabled={!isAvailable}
-                            className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                                !isAvailable
-                                    ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
-                                    : isSelected
-                                        ? colorClass + ' text-white'
-                                        : 'bg-gray-100 dark:bg-gray-700 theme-text-secondary hover:bg-gray-200 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            {displayValue}
-                        </button>
+                        <div key={option.toString()} className="relative group">
+                            <button
+                                onClick={() => isAvailable && handleFilterChange(option)}
+                                disabled={!isAvailable}
+                                className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                                    !isAvailable
+                                        ? 'bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
+                                        : isSelected
+                                            ? colorClass + ' text-white'
+                                            : 'bg-gray-100 dark:bg-gray-700 theme-text-secondary hover:bg-gray-200 dark:hover:bg-gray-600'
+                                }`}
+                            >
+                                {displayValue}
+                            </button>
+                            {/* Tooltip */}
+                            {isAvailable && (
+                                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+                                    {tooltipText}
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-0">
+                                        <div className="border-4 border-transparent border-b-gray-900 dark:border-b-gray-700"></div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     );
                 })}
             </div>
@@ -484,6 +497,242 @@ const HostFilters: React.FC<HostFiltersProps> = ({
         selectedDurations
     ]);
 
+    // Calculate run counts for each filter option
+    const optionCounts = useMemo(() => {
+        if (!combinedHostData) {
+            return {
+                blockSizes: new Map<string | number, number>(),
+                patterns: new Map<string | number, number>(),
+                queueDepths: new Map<string | number, number>(),
+                numJobs: new Map<string | number, number>(),
+                protocols: new Map<string | number, number>(),
+                hosts: new Map<string | number, number>(),
+                driveTypes: new Map<string | number, number>(),
+                driveModels: new Map<string | number, number>(),
+                syncs: new Map<string | number, number>(),
+                directs: new Map<string | number, number>(),
+                ioDepths: new Map<string | number, number>(),
+                testSizes: new Map<string | number, number>(),
+                durations: new Map<string | number, number>()
+            };
+        }
+
+        // Reuse the same helper functions from availableOptions
+        const driveMatches = (drive: any, testHost?: string, testProtocol?: string, testDriveType?: string, testDriveModel?: string) => {
+            const hostMatch = testHost !== undefined ? drive.hostname === testHost : (selectedFilterHosts.length === 0 || selectedFilterHosts.includes(drive.hostname));
+            const protocolMatch = testProtocol !== undefined ? drive.protocol === testProtocol : (selectedProtocols.length === 0 || selectedProtocols.includes(drive.protocol));
+            const driveTypeMatch = testDriveType !== undefined ? drive.drive_type === testDriveType : (selectedDriveTypes.length === 0 || selectedDriveTypes.includes(drive.drive_type));
+            const driveModelMatch = testDriveModel !== undefined ? drive.drive_model === testDriveModel : (selectedDriveModels.length === 0 || selectedDriveModels.includes(drive.drive_model));
+            return hostMatch && protocolMatch && driveTypeMatch && driveModelMatch;
+        };
+
+        const configMatches = (config: any, testBlockSize?: string, testPattern?: string, testQueueDepth?: number, testNumJobs?: number, testSync?: number, testDirect?: number, testIoDepth?: number, testTestSize?: string, testDuration?: number) => {
+            const blockSizeMatch = testBlockSize !== undefined ? config.block_size === testBlockSize : (selectedBlockSizes.length === 0 || selectedBlockSizes.includes(config.block_size));
+            const patternMatch = testPattern !== undefined ? config.read_write_pattern === testPattern : (selectedPatterns.length === 0 || selectedPatterns.includes(config.read_write_pattern));
+            const queueDepthMatch = testQueueDepth !== undefined ? config.queue_depth === testQueueDepth : (selectedQueueDepths.length === 0 || selectedQueueDepths.includes(config.queue_depth));
+            const numJobsMatch = testNumJobs !== undefined 
+                ? (config.num_jobs !== null && config.num_jobs !== undefined && config.num_jobs === testNumJobs)
+                : (selectedNumJobs.length === 0 || (config.num_jobs !== null && config.num_jobs !== undefined && selectedNumJobs.includes(config.num_jobs)));
+            const syncMatch = testSync !== undefined
+                ? (config.sync !== null && config.sync !== undefined && config.sync === testSync)
+                : (selectedSyncs.length === 0 || (config.sync !== null && config.sync !== undefined && selectedSyncs.includes(config.sync)));
+            const directMatch = testDirect !== undefined
+                ? (config.direct !== null && config.direct !== undefined && config.direct === testDirect)
+                : (selectedDirects.length === 0 || (config.direct !== null && config.direct !== undefined && selectedDirects.includes(config.direct)));
+            const ioDepthMatch = testIoDepth !== undefined
+                ? (config.iodepth !== null && config.iodepth !== undefined && config.iodepth === testIoDepth)
+                : (selectedIoDepths.length === 0 || (config.iodepth !== null && config.iodepth !== undefined && selectedIoDepths.includes(config.iodepth)));
+            const testSizeMatch = testTestSize !== undefined
+                ? (config.test_size !== null && config.test_size !== undefined && config.test_size === testTestSize)
+                : (selectedTestSizes.length === 0 || (config.test_size !== null && config.test_size !== undefined && selectedTestSizes.includes(config.test_size)));
+            const durationMatch = testDuration !== undefined
+                ? (config.duration !== null && config.duration !== undefined && config.duration === testDuration)
+                : (selectedDurations.length === 0 || (config.duration !== null && config.duration !== undefined && selectedDurations.includes(config.duration)));
+            return blockSizeMatch && patternMatch && queueDepthMatch && numJobsMatch && syncMatch && directMatch && ioDepthMatch && testSizeMatch && durationMatch;
+        };
+
+        const blockSizes = new Map<string | number, number>();
+        const patterns = new Map<string | number, number>();
+        const queueDepths = new Map<string | number, number>();
+        const numJobs = new Map<string | number, number>();
+        const protocols = new Map<string | number, number>();
+        const hosts = new Map<string | number, number>();
+        const driveTypes = new Map<string | number, number>();
+        const driveModels = new Map<string | number, number>();
+        const syncs = new Map<string | number, number>();
+        const directs = new Map<string | number, number>();
+        const ioDepths = new Map<string | number, number>();
+        const testSizes = new Map<string | number, number>();
+        const durations = new Map<string | number, number>();
+
+        // Count runs for each host option
+        testCoverage.hosts.forEach(host => {
+            let count = 0;
+            combinedHostData.drives.forEach(drive => {
+                if (driveMatches(drive, host)) {
+                    count += drive.configurations.filter(config => configMatches(config)).length;
+                }
+            });
+            hosts.set(host, count);
+        });
+
+        // Count runs for each protocol option
+        testCoverage.protocols.forEach(protocol => {
+            let count = 0;
+            combinedHostData.drives.forEach(drive => {
+                if (driveMatches(drive, undefined, protocol)) {
+                    count += drive.configurations.filter(config => configMatches(config)).length;
+                }
+            });
+            protocols.set(protocol, count);
+        });
+
+        // Count runs for each drive type option
+        testCoverage.driveTypes.forEach(driveType => {
+            let count = 0;
+            combinedHostData.drives.forEach(drive => {
+                if (driveMatches(drive, undefined, undefined, driveType)) {
+                    count += drive.configurations.filter(config => configMatches(config)).length;
+                }
+            });
+            driveTypes.set(driveType, count);
+        });
+
+        // Count runs for each drive model option
+        testCoverage.driveModels.forEach(driveModel => {
+            let count = 0;
+            combinedHostData.drives.forEach(drive => {
+                if (driveMatches(drive, undefined, undefined, undefined, driveModel)) {
+                    count += drive.configurations.filter(config => configMatches(config)).length;
+                }
+            });
+            driveModels.set(driveModel, count);
+        });
+
+        // Count runs for configuration-level options
+        combinedHostData.drives.forEach(drive => {
+            if (!driveMatches(drive)) {
+                return;
+            }
+
+            // Count for each block size
+            testCoverage.blockSizes.forEach(blockSize => {
+                const count = drive.configurations.filter(config => 
+                    config.block_size === blockSize && configMatches(config, blockSize)
+                ).length;
+                blockSizes.set(blockSize, (blockSizes.get(blockSize) || 0) + count);
+            });
+
+            // Count for each pattern
+            testCoverage.patterns.forEach(pattern => {
+                const count = drive.configurations.filter(config => 
+                    config.read_write_pattern === pattern && configMatches(config, undefined, pattern)
+                ).length;
+                patterns.set(pattern, (patterns.get(pattern) || 0) + count);
+            });
+
+            // Count for each queue depth
+            testCoverage.queueDepths.forEach(queueDepth => {
+                const count = drive.configurations.filter(config => 
+                    config.queue_depth === queueDepth && configMatches(config, undefined, undefined, queueDepth)
+                ).length;
+                queueDepths.set(queueDepth, (queueDepths.get(queueDepth) || 0) + count);
+            });
+
+            // Count for each num jobs
+            testCoverage.numJobs.forEach(numJob => {
+                const count = drive.configurations.filter(config => 
+                    config.num_jobs !== null && config.num_jobs !== undefined && 
+                    config.num_jobs === numJob && 
+                    configMatches(config, undefined, undefined, undefined, numJob)
+                ).length;
+                numJobs.set(numJob, (numJobs.get(numJob) || 0) + count);
+            });
+
+            // Count for each sync
+            testCoverage.syncs.forEach(sync => {
+                const count = drive.configurations.filter(config => 
+                    config.sync !== null && config.sync !== undefined && 
+                    config.sync === sync && 
+                    configMatches(config, undefined, undefined, undefined, undefined, sync)
+                ).length;
+                syncs.set(sync, (syncs.get(sync) || 0) + count);
+            });
+
+            // Count for each direct
+            testCoverage.directs.forEach(direct => {
+                const count = drive.configurations.filter(config => 
+                    config.direct !== null && config.direct !== undefined && 
+                    config.direct === direct && 
+                    configMatches(config, undefined, undefined, undefined, undefined, undefined, direct)
+                ).length;
+                directs.set(direct, (directs.get(direct) || 0) + count);
+            });
+
+            // Count for each iodepth
+            testCoverage.ioDepths.forEach(ioDepth => {
+                const count = drive.configurations.filter(config => 
+                    config.iodepth !== null && config.iodepth !== undefined && 
+                    config.iodepth === ioDepth && 
+                    configMatches(config, undefined, undefined, undefined, undefined, undefined, undefined, ioDepth)
+                ).length;
+                ioDepths.set(ioDepth, (ioDepths.get(ioDepth) || 0) + count);
+            });
+
+            // Count for each test size
+            testCoverage.testSizes.forEach(testSize => {
+                const count = drive.configurations.filter(config => 
+                    config.test_size !== null && config.test_size !== undefined && 
+                    config.test_size === testSize && 
+                    configMatches(config, undefined, undefined, undefined, undefined, undefined, undefined, undefined, testSize)
+                ).length;
+                testSizes.set(testSize, (testSizes.get(testSize) || 0) + count);
+            });
+
+            // Count for each duration
+            testCoverage.durations.forEach(duration => {
+                const count = drive.configurations.filter(config => 
+                    config.duration !== null && config.duration !== undefined && 
+                    config.duration === duration && 
+                    configMatches(config, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, duration)
+                ).length;
+                durations.set(duration, (durations.get(duration) || 0) + count);
+            });
+        });
+
+        return {
+            blockSizes,
+            patterns,
+            queueDepths,
+            numJobs,
+            protocols,
+            hosts,
+            driveTypes,
+            driveModels,
+            syncs,
+            directs,
+            ioDepths,
+            testSizes,
+            durations
+        };
+    }, [
+        combinedHostData,
+        testCoverage,
+        selectedBlockSizes,
+        selectedPatterns,
+        selectedQueueDepths,
+        selectedNumJobs,
+        selectedProtocols,
+        selectedFilterHosts,
+        selectedDriveTypes,
+        selectedDriveModels,
+        selectedSyncs,
+        selectedDirects,
+        selectedIoDepths,
+        selectedTestSizes,
+        selectedDurations
+    ]);
+
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border">
             <div className="flex items-center justify-between mb-6">
@@ -510,6 +759,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onBlockSizeChange}
                     colorClass="bg-blue-500"
                     availableOptions={availableOptions.blockSizes}
+                    optionCounts={optionCounts.blockSizes}
                 />
                 
                 <FilterSection
@@ -519,6 +769,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onPatternChange}
                     colorClass="bg-green-500"
                     availableOptions={availableOptions.patterns}
+                    optionCounts={optionCounts.patterns}
                 />
                 
                 <FilterSection
@@ -529,6 +780,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     colorClass="bg-purple-500"
                     prefix="QD"
                     availableOptions={availableOptions.queueDepths}
+                    optionCounts={optionCounts.queueDepths}
                 />
                 
                 <FilterSection
@@ -539,6 +791,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     colorClass="bg-cyan-500"
                     prefix="Jobs:"
                     availableOptions={availableOptions.numJobs}
+                    optionCounts={optionCounts.numJobs}
                 />
                 
                 <FilterSection
@@ -548,6 +801,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onProtocolChange}
                     colorClass="bg-orange-500"
                     availableOptions={availableOptions.protocols}
+                    optionCounts={optionCounts.protocols}
                 />
                 
                 <FilterSection
@@ -557,6 +811,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onFilterHostChange}
                     colorClass="bg-indigo-500"
                     availableOptions={availableOptions.hosts}
+                    optionCounts={optionCounts.hosts}
                 />
                 
                 <FilterSection
@@ -566,6 +821,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onDriveTypeChange}
                     colorClass="bg-rose-500"
                     availableOptions={availableOptions.driveTypes}
+                    optionCounts={optionCounts.driveTypes}
                 />
                 
                 <FilterSection
@@ -575,6 +831,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onDriveModelChange}
                     colorClass="bg-fuchsia-500"
                     availableOptions={availableOptions.driveModels}
+                    optionCounts={optionCounts.driveModels}
                 />
                 
                 <FilterSection
@@ -585,6 +842,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     colorClass="bg-pink-500"
                     labelMap={{ 0: 'Off', 1: 'On' }}
                     availableOptions={availableOptions.syncs}
+                    optionCounts={optionCounts.syncs}
                 />
                 
                 <FilterSection
@@ -595,6 +853,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     colorClass="bg-amber-500"
                     labelMap={{ 0: 'Off', 1: 'On' }}
                     availableOptions={availableOptions.directs}
+                    optionCounts={optionCounts.directs}
                 />
                 
                 <FilterSection
@@ -605,6 +864,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     colorClass="bg-teal-500"
                     prefix="IOD"
                     availableOptions={availableOptions.ioDepths}
+                    optionCounts={optionCounts.ioDepths}
                 />
                 
                 <FilterSection
@@ -614,6 +874,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     onChange={onTestSizeChange}
                     colorClass="bg-violet-500"
                     availableOptions={availableOptions.testSizes}
+                    optionCounts={optionCounts.testSizes}
                 />
                 
                 <FilterSection
@@ -625,6 +886,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     prefix=""
                     labelMap={Object.fromEntries(testCoverage.durations.map(d => [d, `${d}s`]))}
                     availableOptions={availableOptions.durations}
+                    optionCounts={optionCounts.durations}
                 />
 
                 <ActiveFilters
