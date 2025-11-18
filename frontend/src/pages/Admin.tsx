@@ -338,9 +338,32 @@ const Admin: React.FC = () => {
 		});
 	}, [fetchUUIDGroupRuns]);
 
+	// Helper function to find the most common value in an array
+	const getMostCommonValue = useCallback((values: (string | undefined | null)[]): string => {
+		const filtered = values.filter((v): v is string => Boolean(v && v.trim()));
+		if (filtered.length === 0) return '';
+		
+		const counts = new Map<string, number>();
+		filtered.forEach((v) => {
+			counts.set(v, (counts.get(v) || 0) + 1);
+		});
+		
+		let maxCount = 0;
+		let mostCommon = '';
+		counts.forEach((count, value) => {
+			if (count > maxCount) {
+				maxCount = count;
+				mostCommon = value;
+			}
+		});
+		
+		return mostCommon;
+	}, []);
+
 	// Open UUID edit modal
 	const openUUIDEdit = useCallback(
-		(uuid: string, uuidType: 'config_uuid' | 'run_uuid', count: number) => {
+		async (uuid: string, uuidType: 'config_uuid' | 'run_uuid', count: number, testRunIds?: number[]) => {
+			// Initialize with empty fields first
 			setUuidEditState({
 				isOpen: true,
 				uuid,
@@ -356,8 +379,61 @@ const Admin: React.FC = () => {
 					drive_model: false,
 				},
 			});
+
+			// If test run IDs are provided, fetch them and calculate most common values
+			if (testRunIds && testRunIds.length > 0) {
+				// Helper to calculate and set common fields
+				const calculateAndSetCommonFields = (runs: TestRun[]) => {
+					const commonFields: EditableFields = {
+						hostname: getMostCommonValue(runs.map(r => r.hostname)),
+						protocol: getMostCommonValue(runs.map(r => r.protocol)),
+						description: getMostCommonValue(runs.map(r => r.description)),
+						test_name: getMostCommonValue(runs.map(r => r.test_name)),
+						drive_type: getMostCommonValue(runs.map(r => r.drive_type)),
+						drive_model: getMostCommonValue(runs.map(r => r.drive_model)),
+					};
+
+					setUuidEditState((prev) => ({
+						...prev,
+						fields: commonFields,
+					}));
+				};
+
+				// Check if already loaded
+				const existingRuns = uuidGroupRuns.get(uuid);
+				if (existingRuns) {
+					// Already loaded, calculate immediately
+					calculateAndSetCommonFields(existingRuns);
+				} else {
+					// Not loaded, fetch them asynchronously
+					Promise.all(
+						testRunIds.map(async (id) => {
+							const result = await fetchTestRun(id);
+							if (result.error) {
+								throw new Error(result.error);
+							}
+							return result.data;
+						})
+					).then((fetchedRuns) => {
+						const validRuns = fetchedRuns.filter((run): run is TestRun => run !== null && run !== undefined);
+						
+						// Store for future use
+						setUuidGroupRuns((prev) => {
+							const next = new Map(prev);
+							next.set(uuid, validRuns);
+							return next;
+						});
+
+						// Calculate and set common fields
+						calculateAndSetCommonFields(validRuns);
+					}).catch((err) => {
+						console.error('Error fetching test runs for pre-fill:', err);
+						// Continue with empty fields if fetch fails
+					});
+				}
+			}
 		},
-		[]
+		[getMostCommonValue, uuidGroupRuns]
 	);
 
 	// Submit UUID bulk edit
@@ -647,7 +723,7 @@ const Admin: React.FC = () => {
 							<Button
 								variant="outline"
 								size="sm"
-								onClick={() => openUUIDEdit(group.uuid, uuidType, group.count)}
+								onClick={() => openUUIDEdit(group.uuid, uuidType, group.count, group.test_run_ids)}
 							>
 								<Edit2 className="w-4 h-4 mr-1" />
 								Edit All
