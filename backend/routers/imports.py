@@ -651,12 +651,30 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
     job_opts = job.get("job options", {})
 
     # Extract basic information
+    # Duration/runtime can be in multiple places in FIO JSON:
+    # 1. job options -> runtime (in seconds) - preferred, this is the configured runtime
+    # 2. job -> duration (in milliseconds) - fallback
+    # 3. job -> job_runtime (in milliseconds) - fallback
+    runtime_from_opts = job_opts.get("runtime") or global_opts.get("runtime")
+    duration_from_job = job.get("duration")
+    job_runtime_ms = job.get("job_runtime", 0)
+    
+    # Determine duration in seconds
+    if runtime_from_opts is not None:
+        duration_seconds = int(runtime_from_opts)
+    elif duration_from_job is not None:
+        duration_seconds = int(duration_from_job) // 1000  # Convert ms to seconds
+    elif job_runtime_ms > 0:
+        duration_seconds = int(job_runtime_ms) // 1000  # Convert ms to seconds
+    else:
+        duration_seconds = 0
+    
     test_run_data = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "test_date": datetime.now(timezone.utc).isoformat(),
         "fio_version": fio_data.get("fio version", "unknown"),
-        "job_runtime": job.get("job_runtime", 0),
-        "duration": job.get("duration", 0) // 1000,  # Convert to seconds
+        "job_runtime": job_runtime_ms,
+        "duration": duration_seconds,
         "test_name": job.get("jobname", "unknown"),
         # Extract from job options (matching Node.js logic)
         "block_size": (job_opts.get("bs") or global_opts.get("bs") or "4k").upper(),
