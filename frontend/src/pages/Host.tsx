@@ -30,7 +30,7 @@ const Host: React.FC = () => {
     const {
         availableHosts,
         loadingHosts,
-        selectedHosts,
+        selectedHosts: selectedDataHosts,
         combinedHostData,
         loading,
         error,
@@ -43,28 +43,28 @@ const Host: React.FC = () => {
         selectedPatterns,
         selectedQueueDepths,
         selectedNumJobs,
-        selectedProtocols,
-        selectedFilterHosts,
-        selectedDriveTypes,
-        selectedDriveModels,
         selectedSyncs,
         selectedDirects,
         selectedIoDepths,
         selectedTestSizes,
         selectedDurations,
+        selectedHosts,
+        selectedHostProtocols,
+        selectedHostProtocolTypes,
+        selectedHostProtocolTypeModels,
         setSelectedBlockSizes,
         setSelectedPatterns,
         setSelectedQueueDepths,
         setSelectedNumJobs,
-        setSelectedProtocols,
-        setSelectedFilterHosts,
-        setSelectedDriveTypes,
-        setSelectedDriveModels,
         setSelectedSyncs,
         setSelectedDirects,
         setSelectedIoDepths,
         setSelectedTestSizes,
         setSelectedDurations,
+        setSelectedHosts,
+        setSelectedHostProtocols,
+        setSelectedHostProtocolTypes,
+        setSelectedHostProtocolTypeModels,
         filteredDrives,
         resetFilters
     } = useHostFilters({ combinedHostData });
@@ -118,7 +118,7 @@ const Host: React.FC = () => {
     }
 
     // Show host selector when no hosts are selected
-    if (selectedHosts.length === 0) {
+    if (selectedDataHosts.length === 0) {
         return (
             <div className="min-h-screen theme-bg-secondary">
                 <DashboardHeader />
@@ -136,7 +136,7 @@ const Host: React.FC = () => {
                             </div>
                             
                             <HostSelector
-                                selectedHosts={selectedHosts}
+                                selectedHosts={selectedDataHosts}
                                 onHostsChange={handleHostsChangeWithReset}
                                 availableHosts={availableHosts}
                                 loadingHosts={loadingHosts}
@@ -152,7 +152,7 @@ const Host: React.FC = () => {
     }
 
     // Show loading when hosts are selected but data is still loading
-    if (loading && selectedHosts.length > 0) {
+    if (loading && selectedDataHosts.length > 0) {
         return (
             <div className="min-h-screen theme-bg-secondary">
                 <DashboardHeader />
@@ -180,7 +180,7 @@ const Host: React.FC = () => {
                 />
 
                 {/* Loading state for host data */}
-                {loading && selectedHosts.length > 0 && (
+                {loading && selectedDataHosts.length > 0 && (
                     <div className="flex justify-center py-12">
                         <Loading />
                     </div>
@@ -192,7 +192,7 @@ const Host: React.FC = () => {
                         {/* Summary Cards */}
                         <HostSummaryCards 
                             hostData={combinedHostData}
-                            selectedHostsCount={selectedHosts.length}
+                            selectedHostsCount={selectedDataHosts.length}
                         />
 
                         {/* Visualization Controls */}
@@ -210,28 +210,28 @@ const Host: React.FC = () => {
                                 selectedPatterns={selectedPatterns}
                                 selectedQueueDepths={selectedQueueDepths}
                                 selectedNumJobs={selectedNumJobs}
-                                selectedProtocols={selectedProtocols}
-                                selectedFilterHosts={selectedFilterHosts}
-                                selectedDriveTypes={selectedDriveTypes}
-                                selectedDriveModels={selectedDriveModels}
                                 selectedSyncs={selectedSyncs}
                                 selectedDirects={selectedDirects}
                                 selectedIoDepths={selectedIoDepths}
                                 selectedTestSizes={selectedTestSizes}
                                 selectedDurations={selectedDurations}
+                                selectedHosts={selectedHosts}
+                                selectedHostProtocols={selectedHostProtocols}
+                                selectedHostProtocolTypes={selectedHostProtocolTypes}
+                                selectedHostProtocolTypeModels={selectedHostProtocolTypeModels}
                                 onBlockSizeChange={setSelectedBlockSizes}
                                 onPatternChange={setSelectedPatterns}
                                 onQueueDepthChange={setSelectedQueueDepths}
                                 onNumJobsChange={setSelectedNumJobs}
-                                onProtocolChange={setSelectedProtocols}
-                                onFilterHostChange={setSelectedFilterHosts}
-                                onDriveTypeChange={setSelectedDriveTypes}
-                                onDriveModelChange={setSelectedDriveModels}
                                 onSyncChange={setSelectedSyncs}
                                 onDirectChange={setSelectedDirects}
                                 onIoDepthChange={setSelectedIoDepths}
                                 onTestSizeChange={setSelectedTestSizes}
                                 onDurationChange={setSelectedDurations}
+                                onHostChange={setSelectedHosts}
+                                onHostProtocolChange={setSelectedHostProtocols}
+                                onHostProtocolTypeChange={setSelectedHostProtocolTypes}
+                                onHostProtocolTypeModelChange={setSelectedHostProtocolTypeModels}
                                 onReset={resetFilters}
                             />
 

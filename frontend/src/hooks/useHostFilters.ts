@@ -7,30 +7,34 @@ export interface UseHostFiltersReturn {
     selectedPatterns: string[];
     selectedQueueDepths: number[];
     selectedNumJobs: number[];
-    selectedProtocols: string[];
-    selectedFilterHosts: string[];
-    selectedDriveTypes: string[];
-    selectedDriveModels: string[];
     selectedSyncs: number[];
     selectedDirects: number[];
     selectedIoDepths: number[];
     selectedTestSizes: string[];
     selectedDurations: number[];
     
+    // Hierarchical filter states
+    selectedHosts: string[];
+    selectedHostProtocols: string[]; // Format: "host-protocol"
+    selectedHostProtocolTypes: string[]; // Format: "host-protocol-type"
+    selectedHostProtocolTypeModels: string[]; // Format: "host-protocol-type-model"
+    
     // Filter setters
     setSelectedBlockSizes: (sizes: string[]) => void;
     setSelectedPatterns: (patterns: string[]) => void;
     setSelectedQueueDepths: (depths: number[]) => void;
     setSelectedNumJobs: (numJobs: number[]) => void;
-    setSelectedProtocols: (protocols: string[]) => void;
-    setSelectedFilterHosts: (hosts: string[]) => void;
-    setSelectedDriveTypes: (types: string[]) => void;
-    setSelectedDriveModels: (models: string[]) => void;
     setSelectedSyncs: (syncs: number[]) => void;
     setSelectedDirects: (directs: number[]) => void;
     setSelectedIoDepths: (ioDepths: number[]) => void;
     setSelectedTestSizes: (testSizes: string[]) => void;
     setSelectedDurations: (durations: number[]) => void;
+    
+    // Hierarchical filter setters
+    setSelectedHosts: (hosts: string[]) => void;
+    setSelectedHostProtocols: (combos: string[]) => void;
+    setSelectedHostProtocolTypes: (combos: string[]) => void;
+    setSelectedHostProtocolTypeModels: (combos: string[]) => void;
     
     // Filtered data
     filteredDrives: any[];
@@ -49,15 +53,17 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
     const [selectedPatterns, setSelectedPatterns] = useState<string[]>([]);
     const [selectedQueueDepths, setSelectedQueueDepths] = useState<number[]>([]);
     const [selectedNumJobs, setSelectedNumJobs] = useState<number[]>([]);
-    const [selectedProtocols, setSelectedProtocols] = useState<string[]>([]);
-    const [selectedFilterHosts, setSelectedFilterHosts] = useState<string[]>([]);
-    const [selectedDriveTypes, setSelectedDriveTypes] = useState<string[]>([]);
-    const [selectedDriveModels, setSelectedDriveModels] = useState<string[]>([]);
     const [selectedSyncs, setSelectedSyncs] = useState<number[]>([]);
     const [selectedDirects, setSelectedDirects] = useState<number[]>([]);
     const [selectedIoDepths, setSelectedIoDepths] = useState<number[]>([]);
     const [selectedTestSizes, setSelectedTestSizes] = useState<string[]>([]);
     const [selectedDurations, setSelectedDurations] = useState<number[]>([]);
+
+    // Hierarchical filter states
+    const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
+    const [selectedHostProtocols, setSelectedHostProtocols] = useState<string[]>([]);
+    const [selectedHostProtocolTypes, setSelectedHostProtocolTypes] = useState<string[]>([]);
+    const [selectedHostProtocolTypeModels, setSelectedHostProtocolTypeModels] = useState<string[]>([]);
 
     // Reset filters function
     const resetFilters = useCallback(() => {
@@ -65,15 +71,15 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         setSelectedPatterns([]);
         setSelectedQueueDepths([]);
         setSelectedNumJobs([]);
-        setSelectedProtocols([]);
-        setSelectedFilterHosts([]);
-        setSelectedDriveTypes([]);
-        setSelectedDriveModels([]);
         setSelectedSyncs([]);
         setSelectedDirects([]);
         setSelectedIoDepths([]);
         setSelectedTestSizes([]);
         setSelectedDurations([]);
+        setSelectedHosts([]);
+        setSelectedHostProtocols([]);
+        setSelectedHostProtocolTypes([]);
+        setSelectedHostProtocolTypeModels([]);
     }, []);
 
     // Filter drives based on selected criteria
@@ -83,12 +89,27 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         }
 
         const result = combinedHostData.drives.filter(drive => {
-            // Filter drives by selected hosts, protocols, drive types, and drive models separately
-            const hostMatch = selectedFilterHosts.length === 0 || selectedFilterHosts.includes(drive.hostname);
-            const protocolMatch = selectedProtocols.length === 0 || selectedProtocols.includes(drive.protocol);
-            const driveTypeMatch = selectedDriveTypes.length === 0 || selectedDriveTypes.includes(drive.drive_type);
-            const driveModelMatch = selectedDriveModels.length === 0 || selectedDriveModels.includes(drive.drive_model);
-            return hostMatch && protocolMatch && driveTypeMatch && driveModelMatch;
+            // Hierarchical filtering: check each level
+            // Level 1: Host
+            const hostMatch = selectedHosts.length === 0 || selectedHosts.includes(drive.hostname);
+            if (!hostMatch) return false;
+
+            // Level 2: Host-Protocol
+            const hostProtocolKey = `${drive.hostname}-${drive.protocol}`;
+            const hostProtocolMatch = selectedHostProtocols.length === 0 || selectedHostProtocols.includes(hostProtocolKey);
+            if (!hostProtocolMatch) return false;
+
+            // Level 3: Host-Protocol-Type
+            const hostProtocolTypeKey = `${drive.hostname}-${drive.protocol}-${drive.drive_type}`;
+            const hostProtocolTypeMatch = selectedHostProtocolTypes.length === 0 || selectedHostProtocolTypes.includes(hostProtocolTypeKey);
+            if (!hostProtocolTypeMatch) return false;
+
+            // Level 4: Host-Protocol-Type-Model
+            const hostProtocolTypeModelKey = `${drive.hostname}-${drive.protocol}-${drive.drive_type}-${drive.drive_model}`;
+            const hostProtocolTypeModelMatch = selectedHostProtocolTypeModels.length === 0 || selectedHostProtocolTypeModels.includes(hostProtocolTypeModelKey);
+            if (!hostProtocolTypeModelMatch) return false;
+
+            return true;
         }).map(drive => ({
             ...drive,
             configurations: drive.configurations.filter(config => {
@@ -114,15 +135,15 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         selectedPatterns,
         selectedQueueDepths,
         selectedNumJobs,
-        selectedProtocols,
-        selectedFilterHosts,
-        selectedDriveTypes,
-        selectedDriveModels,
         selectedSyncs,
         selectedDirects,
         selectedIoDepths,
         selectedTestSizes,
-        selectedDurations
+        selectedDurations,
+        selectedHosts,
+        selectedHostProtocols,
+        selectedHostProtocolTypes,
+        selectedHostProtocolTypeModels
     ]);
 
     return {
@@ -131,30 +152,34 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
         selectedPatterns,
         selectedQueueDepths,
         selectedNumJobs,
-        selectedProtocols,
-        selectedFilterHosts,
-        selectedDriveTypes,
-        selectedDriveModels,
         selectedSyncs,
         selectedDirects,
         selectedIoDepths,
         selectedTestSizes,
         selectedDurations,
         
+        // Hierarchical filter states
+        selectedHosts,
+        selectedHostProtocols,
+        selectedHostProtocolTypes,
+        selectedHostProtocolTypeModels,
+        
         // Filter setters
         setSelectedBlockSizes,
         setSelectedPatterns,
         setSelectedQueueDepths,
         setSelectedNumJobs,
-        setSelectedProtocols,
-        setSelectedFilterHosts,
-        setSelectedDriveTypes,
-        setSelectedDriveModels,
         setSelectedSyncs,
         setSelectedDirects,
         setSelectedIoDepths,
         setSelectedTestSizes,
         setSelectedDurations,
+        
+        // Hierarchical filter setters
+        setSelectedHosts,
+        setSelectedHostProtocols,
+        setSelectedHostProtocolTypes,
+        setSelectedHostProtocolTypeModels,
         
         // Filtered data
         filteredDrives,
