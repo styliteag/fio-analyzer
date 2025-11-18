@@ -1438,6 +1438,7 @@ async def preview_history_cleanup(
     cutoff_date: str = Query(..., description="Cutoff date in YYYY-MM-DD format"),
     mode: str = Query(..., description="Cleanup mode: 'delete-old' or 'compact'"),
     frequency: Optional[str] = Query(None, description="For compact mode: 'daily', 'weekly', or 'monthly'"),
+    hostname: Optional[str] = Query(None, description="Optional hostname filter"),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -1449,10 +1450,16 @@ async def preview_history_cleanup(
 
         if mode == "delete-old":
             # Simple deletion: count all records before cutoff date
-            cursor.execute(
-                "SELECT COUNT(*) FROM test_runs_all WHERE timestamp < ?",
-                [cutoff_date]
-            )
+            if hostname:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM test_runs_all WHERE timestamp < ? AND hostname = ?",
+                    [cutoff_date, hostname]
+                )
+            else:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM test_runs_all WHERE timestamp < ?",
+                    [cutoff_date]
+                )
             affected_count = cursor.fetchone()[0]
 
         elif mode == "compact":
@@ -1467,20 +1474,38 @@ async def preview_history_cleanup(
                 raise HTTPException(status_code=400, detail="Invalid frequency")
 
             # Find records to delete (all except the most recent per period)
-            cursor.execute(
-                f"""
-                SELECT COUNT(*)
-                FROM test_runs_all
-                WHERE timestamp < ?
-                AND id NOT IN (
-                    SELECT MAX(id)
+            if hostname:
+                cursor.execute(
+                    f"""
+                    SELECT COUNT(*)
                     FROM test_runs_all
                     WHERE timestamp < ?
-                    GROUP BY strftime(?, timestamp), hostname, protocol, drive_model
+                    AND hostname = ?
+                    AND id NOT IN (
+                        SELECT MAX(id)
+                        FROM test_runs_all
+                        WHERE timestamp < ?
+                        AND hostname = ?
+                        GROUP BY strftime(?, timestamp), hostname, protocol, drive_model
+                    )
+                    """,
+                    [cutoff_date, hostname, cutoff_date, hostname, date_format]
                 )
-                """,
-                [cutoff_date, cutoff_date, date_format]
-            )
+            else:
+                cursor.execute(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM test_runs_all
+                    WHERE timestamp < ?
+                    AND id NOT IN (
+                        SELECT MAX(id)
+                        FROM test_runs_all
+                        WHERE timestamp < ?
+                        GROUP BY strftime(?, timestamp), hostname, protocol, drive_model
+                    )
+                    """,
+                    [cutoff_date, cutoff_date, date_format]
+                )
             affected_count = cursor.fetchone()[0]
 
         else:
@@ -1493,6 +1518,7 @@ async def preview_history_cleanup(
                 "mode": mode,
                 "cutoff_date": cutoff_date,
                 "frequency": frequency,
+                "hostname": hostname,
                 "affected_count": affected_count,
             },
         )
@@ -1524,6 +1550,7 @@ async def execute_history_cleanup(
         cutoff_date = cleanup_request.get("cutoff_date")
         mode = cleanup_request.get("mode")
         frequency = cleanup_request.get("frequency")
+        hostname = cleanup_request.get("hostname")
 
         if not cutoff_date or not mode:
             raise HTTPException(status_code=400, detail="Missing required parameters")
@@ -1532,10 +1559,16 @@ async def execute_history_cleanup(
 
         if mode == "delete-old":
             # Simple deletion: remove all records before cutoff date
-            cursor.execute(
-                "DELETE FROM test_runs_all WHERE timestamp < ?",
-                [cutoff_date]
-            )
+            if hostname:
+                cursor.execute(
+                    "DELETE FROM test_runs_all WHERE timestamp < ? AND hostname = ?",
+                    [cutoff_date, hostname]
+                )
+            else:
+                cursor.execute(
+                    "DELETE FROM test_runs_all WHERE timestamp < ?",
+                    [cutoff_date]
+                )
             deleted_count = cursor.rowcount
 
         elif mode == "compact":
@@ -1550,19 +1583,36 @@ async def execute_history_cleanup(
                 raise HTTPException(status_code=400, detail="Invalid frequency")
 
             # Delete all except the most recent per period
-            cursor.execute(
-                f"""
-                DELETE FROM test_runs_all
-                WHERE timestamp < ?
-                AND id NOT IN (
-                    SELECT MAX(id)
-                    FROM test_runs_all
+            if hostname:
+                cursor.execute(
+                    f"""
+                    DELETE FROM test_runs_all
                     WHERE timestamp < ?
-                    GROUP BY strftime(?, timestamp), hostname, protocol, drive_model
+                    AND hostname = ?
+                    AND id NOT IN (
+                        SELECT MAX(id)
+                        FROM test_runs_all
+                        WHERE timestamp < ?
+                        AND hostname = ?
+                        GROUP BY strftime(?, timestamp), hostname, protocol, drive_model
+                    )
+                    """,
+                    [cutoff_date, hostname, cutoff_date, hostname, date_format]
                 )
-                """,
-                [cutoff_date, cutoff_date, date_format]
-            )
+            else:
+                cursor.execute(
+                    f"""
+                    DELETE FROM test_runs_all
+                    WHERE timestamp < ?
+                    AND id NOT IN (
+                        SELECT MAX(id)
+                        FROM test_runs_all
+                        WHERE timestamp < ?
+                        GROUP BY strftime(?, timestamp), hostname, protocol, drive_model
+                    )
+                    """,
+                    [cutoff_date, cutoff_date, date_format]
+                )
             deleted_count = cursor.rowcount
 
         else:
@@ -1578,6 +1628,7 @@ async def execute_history_cleanup(
                 "mode": mode,
                 "cutoff_date": cutoff_date,
                 "frequency": frequency,
+                "hostname": hostname,
                 "deleted_count": deleted_count,
             },
         )

@@ -197,6 +197,7 @@ export const previewTimeSeriesCleanup = async (
     cutoffDate: string,
     mode: 'delete-old' | 'compact',
     frequency?: 'daily' | 'weekly' | 'monthly',
+    hostname?: string,
     abortSignal?: AbortSignal
 ) => {
     const params = new URLSearchParams({
@@ -206,6 +207,10 @@ export const previewTimeSeriesCleanup = async (
 
     if (frequency) {
         params.append('frequency', frequency);
+    }
+
+    if (hostname) {
+        params.append('hostname', hostname);
     }
 
     return apiCall<{ affected_count: number }>(`/api/time-series/history/cleanup-preview?${params}`, {
@@ -218,6 +223,7 @@ export const executeTimeSeriesCleanup = async (
     cutoffDate: string,
     mode: 'delete-old' | 'compact',
     frequency?: 'daily' | 'weekly' | 'monthly',
+    hostname?: string,
     abortSignal?: AbortSignal
 ) => {
     const body: any = {
@@ -227,6 +233,10 @@ export const executeTimeSeriesCleanup = async (
 
     if (frequency) {
         body.frequency = frequency;
+    }
+
+    if (hostname) {
+        body.hostname = hostname;
     }
 
     return apiCall<{ deleted_count: number; message: string }>('/api/time-series/history/cleanup', {

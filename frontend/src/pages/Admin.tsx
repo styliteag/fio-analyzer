@@ -71,6 +71,7 @@ interface DataCleanupState {
 	compactFrequency: 'daily' | 'weekly' | 'monthly';
 	previewCount: number | null;
 	isLoading: boolean;
+	hostname: string | null;
 }
 
 interface TestRunDetailsState {
@@ -117,6 +118,7 @@ const Admin: React.FC = () => {
 		compactFrequency: 'daily',
 		previewCount: null,
 		isLoading: false,
+		hostname: null,
 	});
 
 	// Test run details state
@@ -461,8 +463,9 @@ const Admin: React.FC = () => {
 			isOpen: true,
 			mode,
 			previewCount: null,
+			hostname: searchTerm || null, // Use current search term as hostname filter
 		});
-	}, [dataCleanupState]);
+	}, [dataCleanupState, searchTerm]);
 
 	// Preview data cleanup
 	const previewDataCleanup = useCallback(async () => {
@@ -472,7 +475,8 @@ const Admin: React.FC = () => {
 			const result = await previewTimeSeriesCleanup(
 				dataCleanupState.cutoffDate,
 				dataCleanupState.mode || 'delete-old',
-				dataCleanupState.mode === 'compact' ? dataCleanupState.compactFrequency : undefined
+				dataCleanupState.mode === 'compact' ? dataCleanupState.compactFrequency : undefined,
+				dataCleanupState.hostname || undefined
 			);
 
 			if (result.error) {
@@ -499,14 +503,16 @@ const Admin: React.FC = () => {
 			const result = await executeTimeSeriesCleanup(
 				dataCleanupState.cutoffDate,
 				dataCleanupState.mode || 'delete-old',
-				dataCleanupState.mode === 'compact' ? dataCleanupState.compactFrequency : undefined
+				dataCleanupState.mode === 'compact' ? dataCleanupState.compactFrequency : undefined,
+				dataCleanupState.hostname || undefined
 			);
 
 			if (result.error) {
 				throw new Error(result.error);
 			}
 
-			alert(`Successfully ${dataCleanupState.mode === 'delete-old' ? 'deleted' : 'compacted'} ${result.data?.deleted_count || 0} test runs`);
+			const hostnameInfo = dataCleanupState.hostname ? ` for host "${dataCleanupState.hostname}"` : '';
+			alert(`Successfully ${dataCleanupState.mode === 'delete-old' ? 'deleted' : 'compacted'} ${result.data?.deleted_count || 0} test runs${hostnameInfo}`);
 
 			setDataCleanupState({
 				...dataCleanupState,
@@ -1329,6 +1335,15 @@ const Admin: React.FC = () => {
 							<p className="text-sm text-blue-800 dark:text-blue-200">
 								<strong>Compact Mode:</strong> This will keep only {dataCleanupState.compactFrequency} samples before the cutoff date,
 								removing hourly tests while preserving representative data.
+							</p>
+						</div>
+					)}
+
+					{/* Hostname Filter Display */}
+					{dataCleanupState.hostname && (
+						<div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
+							<p className="text-sm text-indigo-800 dark:text-indigo-200">
+								<strong>Host Filter:</strong> Only data from host <span className="font-mono font-semibold">&quot;{dataCleanupState.hostname}&quot;</span> will be affected.
 							</p>
 						</div>
 					)}
