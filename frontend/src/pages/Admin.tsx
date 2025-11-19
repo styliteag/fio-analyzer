@@ -184,7 +184,7 @@ const Admin: React.FC = () => {
 
 				try {
 					const allRuns: TestRun[] = [];
-					const chunkSize = 10000; // Backend max limit
+					const chunkSize = 1000; // Test with smaller chunks to see pagination in action
 					let offset = 0;
 					let hasMore = true;
 
