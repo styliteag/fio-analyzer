@@ -56,12 +56,12 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     ))];
 
     // Map API patterns to our display patterns
-    const patternMapping: Record<string, string> = {
+    const patternMapping: Record<string, string> = React.useMemo(() => ({
         'randread': 'random_read',
         'randwrite': 'random_write',
         'read': 'sequential_read',
         'write': 'sequential_write'
-    };
+    }), []);
 
     const allPatterns = rawPatterns.map(pattern => patternMapping[pattern] || pattern);
 
@@ -155,7 +155,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 if (responsiveness < visibleMinResponsiveness) {
                     visibleMinResponsiveness = responsiveness;
                 }
-                // Track latency directly (lower is better, so we'll invert the scale)
+                // Track latency directly
                 if (config.avg_latency > visibleMaxLatency) {
                     visibleMaxLatency = config.avg_latency;
                 }
@@ -169,11 +169,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     // Ensure we have valid ranges (if all values are the same, max = min, so we need to handle that)
     // For normalization: we want max to always be 100%, so we use max as the denominator
     // Empty/zero cells will naturally be 0%
-    // For latency: lower is better, so we invert (min latency = 100%, max latency = 0%)
     const iopsRange = visibleMaxIOPS > 0 ? visibleMaxIOPS : 1;
     const bandwidthRange = visibleMaxBandwidth > 0 ? visibleMaxBandwidth : 1;
     const responsivenessRange = visibleMaxResponsiveness > 0 ? visibleMaxResponsiveness : 1;
-    const latencyRange = visibleMaxLatency > visibleMinLatency ? (visibleMaxLatency - visibleMinLatency) : (visibleMaxLatency > 0 ? visibleMaxLatency : 1);
+    const latencyRange = visibleMaxLatency > 0 ? visibleMaxLatency : 1;
 
     console.log('All block sizes:', allBlockSizes);
     console.log('All hostnames:', allHostnames);
@@ -283,7 +282,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         });
 
         return statsMap;
-    }, [drives]);
+    }, [drives, patternMapping]);
 
     // Fill with actual data
     drives.forEach((drive) => {
@@ -327,7 +326,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
 
             // Normalize IOPS against visible data maximum - ensures max value shows as 100%
             const normalizedIops = iopsRange > 0 ? Math.min(100, Math.max(0, (iopsValue / iopsRange) * 100)) : 0;
-
 
             heatmapData[rowIndex][colIndex] = {
                 iops: iopsValue,
@@ -398,11 +396,16 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 </h4>
                 <p className="text-sm theme-text-secondary mb-4">
                     Multi-dimensional performance visualization across block sizes and test patterns.
-                    Each cell shows four normalized metrics: IOPS, Bandwidth, Responsiveness, and Latency.
+                    Each cell shows normalized metrics: IOPS, Bandwidth, Responsiveness, and Latency.
                 </p>
-                <p className="text-xs theme-text-secondary mb-4">
-                    <strong>Responsiveness</strong> = 1000 ÷ Latency (ops/ms) • Higher values = Better performance
-                </p>
+                <div className="text-xs theme-text-secondary mb-4 space-y-1">
+                    <p>
+                        <strong>Bandwidth Calculation:</strong> Bandwidth (MB/s) = (IOPS × BlockSize) / (1024 × 1024)
+                    </p>
+                    <p>
+                        <strong>Responsiveness</strong> = 1000 ÷ Latency (ops/ms) • Higher values = Better performance
+                    </p>
+                </div>
 
                 {/* Legend */}
                 <div className="space-y-2 text-xs theme-text-secondary mb-4">
@@ -421,7 +424,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-2 bg-purple-500 dark:bg-purple-400 rounded"></div>
-                            <span>Latency (inverted - lower is better)</span>
+                            <span>Latency</span>
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
@@ -590,35 +593,26 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                                 </span>
                                                             </div>
 
-                                                            {/* Latency Bar - Always show, inverted (lower latency = 100%, higher latency = 0%) */}
-                                                            {/* Latency: Lower is better, so we invert the scale */}
-                                                            {(() => {
-                                                                // Calculate normalized latency (inverted: min = 100%, max = 0%)
-                                                                const normalizedLatency = cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0
-                                                                    ? (latencyRange > 0 
-                                                                        ? 100 - (((cell.avgLatency - visibleMinLatency) / latencyRange) * 100)
-                                                                        : 100) // If all same, show 100%
-                                                                    : 0;
-                                                                const latencyWidth = Math.max(0, Math.min(100, normalizedLatency));
-                                                                
-                                                                return (
-                                                                    <div className="flex items-center gap-1">
-                                                                        <span className="text-xs text-purple-600 dark:text-purple-300 font-medium w-8">LAT</span>
-                                                                        <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                                                            <div
-                                                                                className="bg-purple-500 dark:bg-purple-500/40 h-2 rounded-full"
-                                                                                style={{
-                                                                                    width: `${latencyWidth}%`,
-                                                                                    minWidth: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? '2px' : '0px'
-                                                                                }}
-                                                                            ></div>
-                                                                        </div>
-                                                                        <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
-                                                                            {latencyWidth.toFixed(0)}%
-                                                                        </span>
-                                                                    </div>
-                                                                );
-                                                            })()}
+                                                            {/* Latency Bar - Always show, 0% for empty, 100% for max */}
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-xs text-purple-600 dark:text-purple-300 font-medium w-8">LAT</span>
+                                                                <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                                    <div
+                                                                        className="bg-purple-500 dark:bg-purple-500/40 h-2 rounded-full"
+                                                                        style={{
+                                                                            width: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 
+                                                                                ? `${Math.max(0, Math.min(100, (cell.avgLatency / latencyRange) * 100))}%` 
+                                                                                : '0%',
+                                                                            minWidth: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? '2px' : '0px'
+                                                                        }}
+                                                                    ></div>
+                                                                </div>
+                                                                <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
+                                                                    {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 
+                                                                        ? `${Math.min(100, Math.max(0, (cell.avgLatency / latencyRange) * 100)).toFixed(0)}%` 
+                                                                        : '0%'}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     ) : (
                                                         <div className="text-sm font-bold text-gray-400 dark:text-gray-500">—</div>
@@ -687,7 +681,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                         <div>Avg Latency: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.avgLatency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.avgLatency).text}</span></div>
                                     )}
                                     {hoveredCell.cell.bandwidth && (
-                                        <div>Bandwidth: <span className="font-medium">{hoveredCell.cell.bandwidth.toFixed(1)} MB/s</span></div>
+                                        <div>Bandwidth: <span className="font-medium">{hoveredCell.cell.bandwidth.toFixed(1)} MB/s</span> <span className="text-xs text-gray-500">(IOPS × BlockSize)</span></div>
                                     )}
                                     {hoveredCell.cell.avgLatency && hoveredCell.cell.avgLatency > 0 && (
                                         <div>Responsiveness: <span className="font-medium">{(1000 / hoveredCell.cell.avgLatency).toFixed(1)} ops/ms</span></div>
