@@ -15,6 +15,8 @@ interface HeatmapCell {
     hostname: string;
     driveModel: string;
     queueDepth: number;
+    numJobs?: number | null;
+    iodepth?: number | null;
     timestamp: string;
     avgLatency?: number;
     bandwidth?: number;
@@ -25,15 +27,15 @@ interface HeatmapCell {
 }
 
 type AxisOrientation = 'normal' | 'swapped';
-type RowSortOption = 'hostname-pattern' | 'pattern-hostname' | 'hostname' | 'pattern';
-type ColumnSortOption = 'size-numeric' | 'size-reverse' | 'alphabetical' | 'alphabetical-reverse';
+type RowSortOption = 'hostname' | 'pattern';
+type ColumnDimension = 'blockSize' | 'queueDepth' | 'numJobs' | 'iodepth';
 
 const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps> = ({ drives }) => {
     const { actualTheme } = useTheme();
     const [hoveredCell, setHoveredCell] = React.useState<{ cell: HeatmapCell; x: number; y: number } | null>(null);
     const [axisOrientation, setAxisOrientation] = React.useState<AxisOrientation>('normal');
-    const [rowSort, setRowSort] = React.useState<RowSortOption>('hostname-pattern');
-    const [columnSort, setColumnSort] = React.useState<ColumnSortOption>('size-numeric');
+    const [rowSort, setRowSort] = React.useState<RowSortOption>('hostname');
+    const [columnDimension, setColumnDimension] = React.useState<ColumnDimension>('blockSize');
 
 
 
@@ -47,34 +49,51 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         return value * (multipliers[unit.toUpperCase()] || 1);
     };
 
-    // Get all unique block sizes and sort based on column sort option
-    const allBlockSizes = React.useMemo(() => {
-        const unique = [...new Set(
-            drives.flatMap(drive =>
-                drive.configurations.map(config => config.block_size)
-            )
-        )];
+    // Get all unique values for the selected column dimension and sort numerically
+    const allColumnValues = React.useMemo(() => {
+        const unique = new Set<string | number>();
         
-        return unique.sort((a, b) => {
-            switch (columnSort) {
-                case 'size-numeric': {
-                    return parseBlockSizeToBytes(a) - parseBlockSizeToBytes(b);
+        drives.forEach(drive => {
+            drive.configurations.forEach(config => {
+                let value: string | number | null | undefined;
+                switch (columnDimension) {
+                    case 'blockSize':
+                        value = config.block_size;
+                        break;
+                    case 'queueDepth':
+                        value = config.queue_depth;
+                        break;
+                    case 'numJobs':
+                        value = config.num_jobs ?? null;
+                        break;
+                    case 'iodepth':
+                        value = config.iodepth ?? config.queue_depth ?? null;
+                        break;
                 }
-                case 'size-reverse': {
-                    return parseBlockSizeToBytes(b) - parseBlockSizeToBytes(a);
+                
+                if (value !== null && value !== undefined) {
+                    unique.add(value);
                 }
-                case 'alphabetical': {
-                    return a.localeCompare(b);
+            });
+        });
+        
+        const valuesArray = Array.from(unique);
+        
+        // Sort numerically from small to large
+        return valuesArray.sort((a, b) => {
+            if (columnDimension === 'blockSize') {
+                return parseBlockSizeToBytes(String(a)) - parseBlockSizeToBytes(String(b));
+            } else {
+                // For numeric values (queueDepth, numJobs, iodepth)
+                const numA = typeof a === 'number' ? a : parseFloat(String(a));
+                const numB = typeof b === 'number' ? b : parseFloat(String(b));
+                if (isNaN(numA) || isNaN(numB)) {
+                    return String(a).localeCompare(String(b));
                 }
-                case 'alphabetical-reverse': {
-                    return b.localeCompare(a);
-                }
-                default: {
-                    return parseBlockSizeToBytes(a) - parseBlockSizeToBytes(b);
-                }
+                return numA - numB;
             }
         });
-    }, [drives, columnSort]);
+    }, [drives, columnDimension]);
 
     const allHostnames = [...new Set(drives.map(drive => drive.hostname))].sort();
     // Get patterns from actual data, but map them to our expected format
@@ -137,27 +156,58 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             });
         });
 
+        // Helper function to get pattern sort priority (read patterns come before write patterns)
+        const getPatternSortPriority = (pattern: string): number => {
+            // Read patterns come first (lower number = higher priority)
+            if (pattern.includes('read') && !pattern.includes('write')) return 1;
+            // Write patterns come second
+            if (pattern.includes('write') && !pattern.includes('read')) return 2;
+            // Mixed patterns come last
+            return 3;
+        };
+
         // Sort row definitions based on rowSort option
+        // Secondary sorting is implicit: if primary values are equal, sort by the other field
         return definitions.sort((a, b) => {
             switch (rowSort) {
-                case 'hostname-pattern': {
-                    const hostCompare = a.hostname.localeCompare(b.hostname);
-                    if (hostCompare !== 0) return hostCompare;
-                    return a.pattern.localeCompare(b.pattern);
-                }
-                case 'pattern-hostname': {
-                    const patternCompare = a.pattern.localeCompare(b.pattern);
-                    if (patternCompare !== 0) return patternCompare;
-                    return a.hostname.localeCompare(b.hostname);
-                }
                 case 'hostname': {
-                    return a.hostname.localeCompare(b.hostname);
+                    // Primary sort by hostname
+                    const hostCompare = a.hostname.localeCompare(b.hostname, undefined, { numeric: true, sensitivity: 'base' });
+                    if (hostCompare !== 0) return hostCompare;
+                    // Secondary sort by hostKey (protocol, driveModel, driveType) to group same hostname together
+                    const hostKeyCompare = a.hostKey.localeCompare(b.hostKey, undefined, { numeric: true, sensitivity: 'base' });
+                    if (hostKeyCompare !== 0) return hostKeyCompare;
+                    // Tertiary sort by pattern (read before write)
+                    const aPriority = getPatternSortPriority(a.pattern);
+                    const bPriority = getPatternSortPriority(b.pattern);
+                    if (aPriority !== bPriority) return aPriority - bPriority;
+                    return a.pattern.localeCompare(b.pattern);
                 }
                 case 'pattern': {
-                    return a.pattern.localeCompare(b.pattern);
+                    // Primary sort by pattern (read before write)
+                    const aPriority = getPatternSortPriority(a.pattern);
+                    const bPriority = getPatternSortPriority(b.pattern);
+                    if (aPriority !== bPriority) return aPriority - bPriority;
+                    const patternCompare = a.pattern.localeCompare(b.pattern);
+                    if (patternCompare !== 0) return patternCompare;
+                    // Secondary sort by hostname
+                    const hostCompare = a.hostname.localeCompare(b.hostname, undefined, { numeric: true, sensitivity: 'base' });
+                    if (hostCompare !== 0) return hostCompare;
+                    // Tertiary sort by hostKey
+                    return a.hostKey.localeCompare(b.hostKey, undefined, { numeric: true, sensitivity: 'base' });
                 }
                 default: {
-                    return a.hostname.localeCompare(b.hostname);
+                    // Primary sort by hostname
+                    const hostCompare = a.hostname.localeCompare(b.hostname, undefined, { numeric: true, sensitivity: 'base' });
+                    if (hostCompare !== 0) return hostCompare;
+                    // Secondary sort by hostKey
+                    const hostKeyCompare = a.hostKey.localeCompare(b.hostKey, undefined, { numeric: true, sensitivity: 'base' });
+                    if (hostKeyCompare !== 0) return hostKeyCompare;
+                    // Tertiary sort by pattern (read before write)
+                    const aPriority = getPatternSortPriority(a.pattern);
+                    const bPriority = getPatternSortPriority(b.pattern);
+                    if (aPriority !== bPriority) return aPriority - bPriority;
+                    return a.pattern.localeCompare(b.pattern);
                 }
             }
         });
@@ -228,31 +278,33 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     const responsivenessRange = visibleMaxResponsiveness > 0 ? visibleMaxResponsiveness : 1;
     const latencyRange = visibleMaxLatency > 0 ? visibleMaxLatency : 1;
 
-    console.log('All block sizes:', allBlockSizes);
+    console.log('All column values:', allColumnValues);
     console.log('All hostnames:', allHostnames);
     console.log('All patterns:', allPatterns);
 
-    // Build heatmap data - organized by row definition and block size
+    // Build heatmap data - organized by row definition and column dimension
     // Each row represents a hostname + pattern combination
-    // Each column represents a block size
+    // Each column represents the selected dimension (blockSize, queueDepth, numJobs, or iodepth)
     const heatmapData: HeatmapCell[][] = React.useMemo(() => {
         const data: HeatmapCell[][] = [];
 
-        console.log('Building heatmap data for', rowDefinitions.length, 'rows and', allBlockSizes.length, 'block sizes');
+        console.log('Building heatmap data for', rowDefinitions.length, 'rows and', allColumnValues.length, 'column values');
 
         // Initialize heatmap data structure
         rowDefinitions.forEach((rowDef, rowIndex) => {
             data[rowIndex] = [];
 
-            allBlockSizes.forEach((blockSize, colIndex) => {
+            allColumnValues.forEach((colValue, colIndex) => {
                 data[rowIndex][colIndex] = {
                     iops: 0,
                     normalizedIops: 0,
-                    blockSize,
+                    blockSize: columnDimension === 'blockSize' ? String(colValue) : '',
                     pattern: rowDef.pattern,
                     hostname: rowDef.hostname,
                     driveModel: rowDef.driveModel,
-                    queueDepth: 0,
+                    queueDepth: columnDimension === 'queueDepth' ? (typeof colValue === 'number' ? colValue : parseFloat(String(colValue))) : 0,
+                    numJobs: columnDimension === 'numJobs' ? (typeof colValue === 'number' ? colValue : parseFloat(String(colValue))) : undefined,
+                    iodepth: columnDimension === 'iodepth' ? (typeof colValue === 'number' ? colValue : parseFloat(String(colValue))) : undefined,
                     timestamp: '',
                     avgLatency: undefined,
                     bandwidth: undefined,
@@ -265,7 +317,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         });
 
         return data;
-    }, [rowDefinitions, allBlockSizes]);
+    }, [rowDefinitions, allColumnValues, columnDimension]);
 
     // Calculate statistics for each cell (group by hostname, driveModel, blockSize, pattern)
     const cellStatistics = React.useMemo(() => {
@@ -285,7 +337,23 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             drive.configurations.forEach((config) => {
                 const mappedPattern = patternMapping[config.read_write_pattern] || config.read_write_pattern;
                 const blockSize = config.block_size;
-                const cellKey = `${hostKey}|${mappedPattern}|${blockSize}`;
+                // Get the column dimension value for the cell key
+                let columnValue: string | number;
+                switch (columnDimension) {
+                    case 'blockSize':
+                        columnValue = blockSize;
+                        break;
+                    case 'queueDepth':
+                        columnValue = config.queue_depth;
+                        break;
+                    case 'numJobs':
+                        columnValue = config.num_jobs ?? 'null';
+                        break;
+                    case 'iodepth':
+                        columnValue = config.iodepth ?? config.queue_depth ?? 'null';
+                        break;
+                }
+                const cellKey = `${hostKey}|${mappedPattern}|${columnValue}`;
 
                 if (!statsMap.has(cellKey)) {
                     statsMap.set(cellKey, {
@@ -340,7 +408,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         });
 
         return statsMap;
-    }, [drives, patternMapping]);
+    }, [drives, patternMapping, columnDimension]);
 
     // Fill with actual data
     const filledHeatmapData = React.useMemo(() => {
@@ -378,10 +446,41 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                     return;
                 }
 
-                // Find the column for this block size
-                const colIndex = allBlockSizes.indexOf(blockSize);
+                // Get the column dimension value
+                let columnValue: string | number | null = null;
+                switch (columnDimension) {
+                    case 'blockSize':
+                        columnValue = blockSize;
+                        break;
+                    case 'queueDepth':
+                        columnValue = config.queue_depth;
+                        break;
+                    case 'numJobs':
+                        if (config.num_jobs === null || config.num_jobs === undefined) return; // Skip if null
+                        columnValue = config.num_jobs;
+                        break;
+                    case 'iodepth':
+                        columnValue = config.iodepth ?? config.queue_depth ?? null;
+                        if (columnValue === null) return; // Skip if null
+                        break;
+                }
+                
+                if (columnValue === null) return; // Skip if null
+
+                // Find the column for this dimension value
+                const colIndex = allColumnValues.findIndex(val => {
+                    if (columnDimension === 'blockSize') {
+                        return String(val) === String(columnValue);
+                    } else {
+                        // For numeric values, compare as numbers
+                        const numVal = typeof val === 'number' ? val : parseFloat(String(val));
+                        const numCol = typeof columnValue === 'number' ? columnValue : parseFloat(String(columnValue));
+                        return !isNaN(numVal) && !isNaN(numCol) && numVal === numCol;
+                    }
+                });
+                
                 if (colIndex === -1) {
-                    console.log('Column not found for block size:', blockSize);
+                    console.log('Column not found for dimension value:', columnValue, 'dimension:', columnDimension);
                     return;
                 }
 
@@ -391,11 +490,13 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 data[rowIndex][colIndex] = {
                     iops: iopsValue,
                     normalizedIops,
-                    blockSize,
+                    blockSize: config.block_size,
                     pattern: mappedPattern,
                     hostname,
                     driveModel: drive.drive_model,
                     queueDepth: config.queue_depth,
+                    numJobs: config.num_jobs ?? undefined,
+                    iodepth: config.iodepth ?? undefined,
                     timestamp: config.timestamp,
                     avgLatency: config.avg_latency !== null && config.avg_latency !== undefined ? config.avg_latency : undefined,
                     bandwidth: config.bandwidth !== null && config.bandwidth !== undefined ? config.bandwidth : undefined,
@@ -409,7 +510,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         });
 
         return data;
-    }, [heatmapData, drives, rowDefinitions, allBlockSizes, patternMapping, iopsRange]);
+    }, [heatmapData, drives, rowDefinitions, allColumnValues, patternMapping, iopsRange, columnDimension]);
 
     // Transpose heatmap data when axis is swapped
     const transposedHeatmapData = React.useMemo(() => {
@@ -419,14 +520,14 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         
         // Transpose: rows become columns, columns become rows
         const transposed: HeatmapCell[][] = [];
-        for (let col = 0; col < allBlockSizes.length; col++) {
+        for (let col = 0; col < allColumnValues.length; col++) {
             transposed[col] = [];
             for (let row = 0; row < rowDefinitions.length; row++) {
                 transposed[col][row] = filledHeatmapData[row][col];
             }
         }
         return transposed;
-    }, [filledHeatmapData, allBlockSizes, rowDefinitions, axisOrientation]);
+    }, [filledHeatmapData, allColumnValues, rowDefinitions, axisOrientation]);
 
 
     const getColorForNormalizedIOPS = (normalizedIops: number, isDark: boolean): string => {
@@ -492,6 +593,23 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                     <h5 className="text-sm font-semibold theme-text-primary mb-3">Customization Options</h5>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Column Dimension */}
+                        <div>
+                            <label className="block text-xs font-medium theme-text-secondary mb-2">
+                                X-Axis Dimension
+                            </label>
+                            <select
+                                value={columnDimension}
+                                onChange={(e) => setColumnDimension(e.target.value as ColumnDimension)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="blockSize">Block Size</option>
+                                <option value="queueDepth">Queue Depth (QD)</option>
+                                <option value="numJobs">Jobs</option>
+                                <option value="iodepth">IO Depth</option>
+                            </select>
+                        </div>
+
                         {/* Axis Orientation */}
                         <div>
                             <label className="block text-xs font-medium theme-text-secondary mb-2">
@@ -502,8 +620,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                 onChange={(e) => setAxisOrientation(e.target.value as AxisOrientation)}
                                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                                <option value="normal">Normal (Hosts/Patterns = Rows, Block Sizes = Columns)</option>
-                                <option value="swapped">Swapped (Block Sizes = Rows, Hosts/Patterns = Columns)</option>
+                                <option value="normal">Normal (Hosts/Patterns = Rows, {columnDimension === 'blockSize' ? 'Block Sizes' : columnDimension === 'queueDepth' ? 'Queue Depths' : columnDimension === 'numJobs' ? 'Jobs' : 'IO Depths'} = Columns)</option>
+                                <option value="swapped">Swapped ({columnDimension === 'blockSize' ? 'Block Sizes' : columnDimension === 'queueDepth' ? 'Queue Depths' : columnDimension === 'numJobs' ? 'Jobs' : 'IO Depths'} = Rows, Hosts/Patterns = Columns)</option>
                             </select>
                         </div>
 
@@ -517,27 +635,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                 onChange={(e) => setRowSort(e.target.value as RowSortOption)}
                                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                                <option value="hostname-pattern">Hostname, then Pattern</option>
-                                <option value="pattern-hostname">Pattern, then Hostname</option>
-                                <option value="hostname">Hostname only</option>
-                                <option value="pattern">Pattern only</option>
-                            </select>
-                        </div>
-
-                        {/* Column Sorting */}
-                        <div>
-                            <label className="block text-xs font-medium theme-text-secondary mb-2">
-                                Column Sorting
-                            </label>
-                            <select
-                                value={columnSort}
-                                onChange={(e) => setColumnSort(e.target.value as ColumnSortOption)}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="size-numeric">Size (Numeric - Small to Large)</option>
-                                <option value="size-reverse">Size (Reverse - Large to Small)</option>
-                                <option value="alphabetical">Alphabetical (A-Z)</option>
-                                <option value="alphabetical-reverse">Alphabetical (Z-A)</option>
+                                <option value="hostname">Hostname</option>
+                                <option value="pattern">Pattern</option>
                             </select>
                         </div>
                     </div>
@@ -604,9 +703,9 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                     <th className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary">
                                         Pattern
                                     </th>
-                                    {allBlockSizes.map(blockSize => (
-                                        <th key={blockSize} className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary text-center" style={{ minWidth: '120px' }}>
-                                            {blockSize}
+                                    {allColumnValues.map((colValue, index) => (
+                                        <th key={`${columnDimension}-${colValue}-${index}`} className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary text-center" style={{ minWidth: '120px' }}>
+                                            {columnDimension === 'blockSize' ? colValue : String(colValue)}
                                         </th>
                                     ))}
                                 </tr>
@@ -639,14 +738,14 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                     {rowDef.pattern.replace('_', ' ').toUpperCase()}
                                                 </div>
                                             </td>
-                                            {allBlockSizes.map((blockSize, blockIndex) => {
-                                                const cell = filledHeatmapData[rowIndex][blockIndex];
+                                            {allColumnValues.map((colValue, colIndex) => {
+                                                const cell = filledHeatmapData[rowIndex][colIndex];
                                                 const colorClass = getColorForNormalizedIOPS(cell.normalizedIops, actualTheme === 'dark');
 
 
                                             return (
                                                 <td
-                                                    key={`${rowDef.hostname}-${rowDef.pattern}-${blockSize}`}
+                                                    key={`${rowDef.hostname}-${rowDef.pattern}-${colValue}-${colIndex}`}
                                                     className={`border border-gray-300 dark:border-gray-500 p-2 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${
                                                 isFirstRowOfHost ? 'border-t-4 border-t-blue-500 dark:border-t-blue-400' : ''} ${colorClass}`}
                                                     onMouseEnter={(e) => {
@@ -770,7 +869,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                 <thead>
                                     <tr>
                                         <th className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary">
-                                            Block Size
+                                            {columnDimension === 'blockSize' ? 'Block Size' : columnDimension === 'queueDepth' ? 'Queue Depth' : columnDimension === 'numJobs' ? 'Jobs' : 'IO Depth'}
                                         </th>
                                         {rowDefinitions.map((rowDef) => (
                                             <th key={`${rowDef.hostKey}-${rowDef.pattern}`} className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary text-center" style={{ minWidth: '120px' }}>
@@ -788,23 +887,23 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {allBlockSizes.map((blockSize, blockSizeIndex) => {
-                                        const isFirstBlockSize = blockSizeIndex === 0;
+                                    {allColumnValues.map((colValue, colValueIndex) => {
+                                        const isFirstColValue = colValueIndex === 0;
                                         return (
-                                            <tr key={blockSize} className={isFirstBlockSize ? 'border-t-4 border-t-blue-500' : ''}>
+                                            <tr key={`${columnDimension}-${colValue}-${colValueIndex}`} className={isFirstColValue ? 'border-t-4 border-t-blue-500' : ''}>
                                                 <td className={`border border-gray-300 dark:border-gray-500 p-3 text-sm font-medium theme-text-primary ${
-                                                    isFirstBlockSize ? 'bg-blue-50 dark:bg-blue-950/20' : 'bg-white dark:bg-gray-800'}`}>
-                                                    <div className="font-bold">{blockSize}</div>
+                                                    isFirstColValue ? 'bg-blue-50 dark:bg-blue-950/20' : 'bg-white dark:bg-gray-800'}`}>
+                                                    <div className="font-bold">{String(colValue)}</div>
                                                 </td>
                                                 {rowDefinitions.map((rowDef, rowDefIndex) => {
-                                                    const cell = transposedHeatmapData[blockSizeIndex][rowDefIndex];
+                                                    const cell = transposedHeatmapData[colValueIndex][rowDefIndex];
                                                     const colorClass = getColorForNormalizedIOPS(cell.normalizedIops, actualTheme === 'dark');
 
                                                     return (
                                                         <td
-                                                            key={`${blockSize}-${rowDef.hostKey}-${rowDef.pattern}`}
+                                                            key={`${colValue}-${rowDef.hostKey}-${rowDef.pattern}-${colValueIndex}-${rowDefIndex}`}
                                                             className={`border border-gray-300 dark:border-gray-500 p-2 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${
-                                                                isFirstBlockSize ? 'border-t-4 border-t-blue-500 dark:border-t-blue-400' : ''} ${colorClass}`}
+                                                                isFirstColValue ? 'border-t-4 border-t-blue-500 dark:border-t-blue-400' : ''} ${colorClass}`}
                                                             onMouseEnter={(e) => {
                                                                 const rect = e.currentTarget.getBoundingClientRect();
                                                                 setHoveredCell({
@@ -934,7 +1033,23 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 const protocol = matchingDrive?.protocol || 'unknown';
                 const driveType = matchingDrive?.drive_type || '';
                 const hostKey = `${hoveredCell.cell.hostname}-${protocol}-${hoveredCell.cell.driveModel}-${driveType}`;
-                const cellKey = `${hostKey}|${hoveredCell.cell.pattern}|${hoveredCell.cell.blockSize}`;
+                // Get the column dimension value for the cell key
+                let columnValue: string | number;
+                switch (columnDimension) {
+                    case 'blockSize':
+                        columnValue = hoveredCell.cell.blockSize;
+                        break;
+                    case 'queueDepth':
+                        columnValue = hoveredCell.cell.queueDepth;
+                        break;
+                    case 'numJobs':
+                        columnValue = hoveredCell.cell.numJobs ?? 'null';
+                        break;
+                    case 'iodepth':
+                        columnValue = hoveredCell.cell.iodepth ?? hoveredCell.cell.queueDepth ?? 'null';
+                        break;
+                }
+                const cellKey = `${hostKey}|${hoveredCell.cell.pattern}|${columnValue}`;
                 const stats = cellStatistics.get(cellKey);
 
                 return (
@@ -964,6 +1079,12 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                     <div>Block Size: <span className="font-medium">{hoveredCell.cell.blockSize}</span></div>
                                     <div>Pattern: <span className="font-medium">{hoveredCell.cell.pattern.replace('_', ' ')}</span></div>
                                     <div>Queue Depth: <span className="font-medium">{hoveredCell.cell.queueDepth}</span></div>
+                                    {hoveredCell.cell.numJobs !== null && hoveredCell.cell.numJobs !== undefined && (
+                                        <div>Jobs: <span className="font-medium">{hoveredCell.cell.numJobs}</span></div>
+                                    )}
+                                    {hoveredCell.cell.iodepth !== null && hoveredCell.cell.iodepth !== undefined && (
+                                        <div>IO Depth: <span className="font-medium">{hoveredCell.cell.iodepth}</span></div>
+                                    )}
                                 </div>
                             </div>
 
