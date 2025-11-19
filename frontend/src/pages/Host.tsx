@@ -172,7 +172,7 @@ const Host: React.FC = () => {
                 {/* Host Selector */}
                 <HostSelector
                     availableHosts={availableHosts}
-                    selectedHosts={selectedHosts}
+                    selectedHosts={selectedDataHosts}
                     loadingHosts={loadingHosts}
                     loading={loading}
                     onHostsChange={handleHostsChangeWithReset}
