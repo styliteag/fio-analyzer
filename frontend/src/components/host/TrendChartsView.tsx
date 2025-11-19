@@ -15,6 +15,7 @@ import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useTrendAnalysis } from '../../hooks/useTrendAnalysis';
 import type { MetricType } from '../../hooks/useHeatmapData';
 import { createChartJsColors } from '../../utils/colorMapping';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
@@ -185,7 +186,7 @@ function formatValue(value: number, metric: MetricType): string {
         case 'p90_latency':
         case 'p95_latency':
         case 'p99_latency':
-            return `${value.toFixed(3)}ms`;
+            return formatLatencyMicroseconds(value).text;
         case 'bandwidth':
             if (value >= 1000) {
                 return `${(value / 1000).toFixed(1)} GB/s`;

@@ -12,6 +12,7 @@ import { Scatter } from 'react-chartjs-2';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { generateUniqueColorsForChart } from '../../utils/colorMapping';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend, Title);
 
@@ -197,7 +198,7 @@ const FacetScatterGrid: React.FC<FacetScatterGridProps> = ({ data }) => {
                             return [
                                 '',
                                 `IOPS: ${point.y.toFixed(0)}`,
-                                `Latency: ${point.x.toFixed(2)}ms`,
+                                `Latency: ${formatLatencyMicroseconds(point.x).text}`,
                                 `Pattern: ${point.pattern}`,
                                 `Block Size: ${point.blockSize}`,
                                 `Queue Depth: ${point.queueDepth}`,
@@ -340,8 +341,8 @@ const FacetScatterGrid: React.FC<FacetScatterGridProps> = ({ data }) => {
                     </div>
                     <div>
                         <span className="theme-text-secondary">Avg Latency:</span>
-                        <span className="ml-2 font-medium theme-text-primary">
-                            {(allConfigs.reduce((sum, c) => sum + (c.avg_latency || 0), 0) / allConfigs.length).toFixed(2)}ms
+                        <span className={`ml-2 font-medium ${formatLatencyMicroseconds((allConfigs.reduce((sum, c) => sum + (c.avg_latency || 0), 0) / allConfigs.length)).colorClass}`}>
+                            {formatLatencyMicroseconds((allConfigs.reduce((sum, c) => sum + (c.avg_latency || 0), 0) / allConfigs.length)).text}
                         </span>
                     </div>
                 </div>

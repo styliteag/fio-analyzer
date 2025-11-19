@@ -5,6 +5,7 @@ import { OrbitControls, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { generateUniqueColorsForChart } from '../../utils/colorMapping';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 interface Performance3DChartProps {
     drives: DriveAnalysis[];
@@ -167,7 +168,7 @@ const Axes: React.FC<{
                 anchorX="left"
                 anchorY="middle"
             >
-                Latency ({maxValues.x.toFixed(1)}ms)
+                Latency (ms)
             </Text>
 
             {/* Y Axis - IOPS */}
@@ -667,13 +668,21 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                     <div>
                                         <h6 className="font-medium theme-text-primary text-xs mb-1">Performance Metrics</h6>
                                         <div className="text-xs theme-text-secondary space-y-1">
-                                            <div>Latency: <span className="font-medium">{hoveredPoint.x.toFixed(2)}ms</span></div>
+                                            <div>Latency: <span className={`font-medium ${formatLatencyMicroseconds(hoveredPoint.x).colorClass}`}>{formatLatencyMicroseconds(hoveredPoint.x).text}</span></div>
                                             <div>IOPS: <span className="font-medium">{hoveredPoint.y.toFixed(0)}</span></div>
                                             <div>Bandwidth: <span className="font-medium">{hoveredPoint.z.toFixed(1)} MB/s</span></div>
-                                            <div>70th Percentile: <span className="font-medium">{hoveredPoint.p70_latency !== null && hoveredPoint.p70_latency !== undefined ? hoveredPoint.p70_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
-                                            <div>90th Percentile: <span className="font-medium">{hoveredPoint.p90_latency !== null && hoveredPoint.p90_latency !== undefined ? hoveredPoint.p90_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
-                                            <div>95th Percentile: <span className="font-medium">{hoveredPoint.p95_latency !== null && hoveredPoint.p95_latency !== undefined ? hoveredPoint.p95_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
-                                            <div>99th Percentile: <span className="font-medium">{hoveredPoint.p99_latency !== null && hoveredPoint.p99_latency !== undefined ? hoveredPoint.p99_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                            {hoveredPoint.p70_latency !== null && hoveredPoint.p70_latency !== undefined && (
+                                                <div>70th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredPoint.p70_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredPoint.p70_latency).text}</span></div>
+                                            )}
+                                            {hoveredPoint.p90_latency !== null && hoveredPoint.p90_latency !== undefined && (
+                                                <div>90th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredPoint.p90_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredPoint.p90_latency).text}</span></div>
+                                            )}
+                                            {hoveredPoint.p95_latency !== null && hoveredPoint.p95_latency !== undefined && (
+                                                <div>95th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredPoint.p95_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredPoint.p95_latency).text}</span></div>
+                                            )}
+                                            {hoveredPoint.p99_latency !== null && hoveredPoint.p99_latency !== undefined && (
+                                                <div>99th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredPoint.p99_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredPoint.p99_latency).text}</span></div>
+                                            )}
                                             <div>Score: <span className="font-medium">{hoveredPoint.performanceScore.toFixed(2)}</span></div>
                                         </div>
                                     </div>
@@ -738,7 +747,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                         <h6 className="font-medium theme-text-primary text-sm">{drive.drive_model}</h6>
                                         <div className="mt-2 space-y-1 text-xs theme-text-secondary">
                                             <div>Avg IOPS: <span className="font-medium">{avgIOPS.toFixed(0)}</span></div>
-                                            <div>Avg Latency: <span className="font-medium">{avgLatency.toFixed(2)}ms</span></div>
+                                            <div>Avg Latency: <span className={`font-medium ${formatLatencyMicroseconds(avgLatency).colorClass}`}>{formatLatencyMicroseconds(avgLatency).text}</span></div>
                                             <div>Avg Bandwidth: <span className="font-medium">{avgBandwidth.toFixed(1)} MB/s</span></div>
                                             <div>Score: <span className="font-medium">{performanceScore.toFixed(2)}</span></div>
                                             <div>Configs: <span className="font-medium">{drivePoints.length}</span></div>
@@ -761,7 +770,7 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                                 {point.blockSize} {point.pattern} QD{point.queueDepth}
                                             </div>
                                             <div className="theme-text-secondary">
-                                                {point.x.toFixed(2)}ms, {point.y.toFixed(0)} IOPS, {point.z.toFixed(1)} MB/s
+                                                <span className={formatLatencyMicroseconds(point.x).colorClass}>{formatLatencyMicroseconds(point.x).text}</span>, {point.y.toFixed(0)} IOPS, {point.z.toFixed(1)} MB/s
                                             </div>
                                         </div>
                                     ))}
@@ -925,11 +934,15 @@ const Performance3DChart: React.FC<Performance3DChartProps> = ({ drives, allDriv
                                         <div>
                                             <h6 className="font-medium theme-text-primary text-xs mb-1">Performance Metrics</h6>
                                             <div className="text-xs theme-text-secondary space-y-1">
-                                                <div>Latency: <span className="font-medium">{hoveredPoint.x.toFixed(2)}ms</span></div>
+                                                <div>Latency: <span className={`font-medium ${formatLatencyMicroseconds(hoveredPoint.x).colorClass}`}>{formatLatencyMicroseconds(hoveredPoint.x).text}</span></div>
                                                 <div>IOPS: <span className="font-medium">{hoveredPoint.y.toFixed(0)}</span></div>
                                                 <div>Bandwidth: <span className="font-medium">{hoveredPoint.z.toFixed(1)} MB/s</span></div>
-                                                <div>95th Percentile: <span className="font-medium">{hoveredPoint.p95_latency !== null && hoveredPoint.p95_latency !== undefined ? hoveredPoint.p95_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
-                                                <div>99th Percentile: <span className="font-medium">{hoveredPoint.p99_latency !== null && hoveredPoint.p99_latency !== undefined ? hoveredPoint.p99_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                                {hoveredPoint.p95_latency !== null && hoveredPoint.p95_latency !== undefined && (
+                                                    <div>95th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredPoint.p95_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredPoint.p95_latency).text}</span></div>
+                                                )}
+                                                {hoveredPoint.p99_latency !== null && hoveredPoint.p99_latency !== undefined && (
+                                                    <div>99th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredPoint.p99_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredPoint.p99_latency).text}</span></div>
+                                                )}
                                                 <div>Score: <span className="font-medium">{hoveredPoint.performanceScore.toFixed(2)}</span></div>
                                             </div>
                                         </div>

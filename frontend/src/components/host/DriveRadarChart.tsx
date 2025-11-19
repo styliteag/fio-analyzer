@@ -12,6 +12,7 @@ import { Radar } from 'react-chartjs-2';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { createChartJsColors } from '../../utils/colorMapping';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 ChartJS.register(
     RadialLinearScale,
@@ -196,10 +197,10 @@ const DriveRadarChart: React.FC<DriveRadarChartProps> = ({ drives }) => {
                                 metricDetails.push(`Average IOPS: ${drive.avgIOPS.toFixed(0)}`);
                                 break;
                             case 2: // Low Latency
-                                metricDetails.push(`Lowest Latency: ${drive.minLatency.toFixed(2)}ms`);
+                                metricDetails.push(`Lowest Latency: ${formatLatencyMicroseconds(drive.minLatency).text}`);
                                 break;
                             case 3: // Avg Latency
-                                metricDetails.push(`Average Latency: ${drive.avgLatency.toFixed(2)}ms`);
+                                metricDetails.push(`Average Latency: ${formatLatencyMicroseconds(drive.avgLatency).text}`);
                                 break;
                             case 4: // Peak Bandwidth
                                 metricDetails.push(`Peak Bandwidth: ${drive.maxBandwidth.toFixed(1)} MB/s`);

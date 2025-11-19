@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useHeatmapData, type MetricType } from '../../hooks/useHeatmapData';
 import { useTrendAnalysis } from '../../hooks/useTrendAnalysis';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 interface PerformanceMatrixViewProps {
     drives: DriveAnalysis[];
@@ -46,14 +47,21 @@ const PerformanceMatrixView: React.FC<PerformanceMatrixViewProps> = ({ drives })
         const cell = matrixData.cells.find(c => c.row === row && c.col === col);
         if (!cell || cell.value === null) return '#f3f4f6';
 
-        return getHeatmapColor(cell.value, matrixData.min, matrixData.max);
+        return getHeatmapColor(cell.value, matrixData.min, matrixData.max, selectedMetric);
     };
 
     const isDarkCell = (row: string, col: string): boolean => {
         const cell = matrixData.cells.find(c => c.row === row && c.col === col);
         if (!cell || cell.value === null) return false;
 
-        const normalized = (cell.value - matrixData.min) / (matrixData.max - matrixData.min);
+        const isLatencyMetric = selectedMetric === 'avg_latency' || selectedMetric === 'p70_latency' || selectedMetric === 'p90_latency' || selectedMetric === 'p95_latency' || selectedMetric === 'p99_latency';
+        let normalized = (cell.value - matrixData.min) / (matrixData.max - matrixData.min);
+        
+        // For latency, invert normalized (lower values should have dark text on green background)
+        if (isLatencyMetric) {
+            normalized = 1 - normalized;
+        }
+        
         return normalized > 0.6;
     };
 
@@ -224,7 +232,7 @@ function formatMetricValue(value: number, metric: MetricType): string {
         case 'p90_latency':
         case 'p95_latency':
         case 'p99_latency':
-            return `${value.toFixed(3)}ms`;
+            return formatLatencyMicroseconds(value).text;
         case 'bandwidth':
             return `${Math.round(value)} MB/s`;
         default:

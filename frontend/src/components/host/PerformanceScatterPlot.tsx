@@ -11,6 +11,7 @@ import { Scatter } from 'react-chartjs-2';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useThemeColors } from '../../hooks/useThemeColors';
 import { createChartJsColors } from '../../utils/colorMapping';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -103,10 +104,10 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
                             '',
                             '📈 Performance Metrics:',
                             `   IOPS: ${point.y.toFixed(0)}`,
-                            `   Avg Latency: ${point.x.toFixed(2)}ms`,
+                            `   Avg Latency: ${formatLatencyMicroseconds(point.x).text}`,
                             `   Bandwidth: ${point.bandwidth?.toFixed(1) || 'N/A'} MB/s`,
-                            `   95th Percentile: ${point.p95_latency !== null && point.p95_latency !== undefined ? point.p95_latency.toFixed(2) + 'ms' : 'N/A'}`,
-                            `   99th Percentile: ${point.p99_latency !== null && point.p99_latency !== undefined ? point.p99_latency.toFixed(2) + 'ms' : 'N/A'}`,
+                            `   95th Percentile: ${point.p95_latency !== null && point.p95_latency !== undefined ? formatLatencyMicroseconds(point.p95_latency).text : 'N/A'}`,
+                            `   99th Percentile: ${point.p99_latency !== null && point.p99_latency !== undefined ? formatLatencyMicroseconds(point.p99_latency).text : 'N/A'}`,
                             '',
                             '🕒 Test Date:',
                             `   ${new Date(point.timestamp).toLocaleDateString()} ${new Date(point.timestamp).toLocaleTimeString()}`
@@ -213,7 +214,7 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
                 <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border">
                     <div className="text-xs theme-text-secondary space-y-1">
                         <div>Avg IOPS: <span className="font-medium theme-text-primary">{avgIOPS.toFixed(0)}</span></div>
-                        <div>Avg Latency: <span className="font-medium theme-text-primary">{avgLatency.toFixed(2)}ms</span></div>
+                        <div>Avg Latency: <span className={`font-medium ${formatLatencyMicroseconds(avgLatency).colorClass}`}>{formatLatencyMicroseconds(avgLatency).text}</span></div>
                     </div>
                 </div>
             </div>

@@ -141,13 +141,21 @@ export const useHeatmapData = () => {
     }, [flattenConfigurations]);
 
     // Get color based on value (min-max normalization)
-    const getHeatmapColor = (value: number, min: number, max: number): string => {
+    // For latency metrics: lower is better (green), higher is worse (red) - INVERTED
+    // For other metrics (IOPS, bandwidth): higher is better (green), lower is worse (red) - NORMAL
+    const getHeatmapColor = (value: number, min: number, max: number, metric?: MetricType): string => {
         if (value === null || value === undefined) return '#f3f4f6'; // gray-100
 
         const range = max - min;
         if (range === 0) return '#fbbf24'; // yellow-400
 
-        const normalized = (value - min) / range;
+        let normalized = (value - min) / range;
+        
+        // For latency metrics, invert the normalized value (lower = better = green)
+        const isLatencyMetric = metric && (metric === 'avg_latency' || metric === 'p70_latency' || metric === 'p90_latency' || metric === 'p95_latency' || metric === 'p99_latency');
+        if (isLatencyMetric) {
+            normalized = 1 - normalized; // Invert: low value (0) becomes high normalized (1) = green
+        }
 
         // Color scale: red (0) -> yellow (0.5) -> green (1)
         if (normalized < 0.5) {

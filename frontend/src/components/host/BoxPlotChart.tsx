@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { generateUniqueColorsForChart } from '../../utils/colorMapping';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 export interface BoxPlotChartProps {
   data: DriveAnalysis[];
@@ -345,11 +346,11 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
           
           const formatValue = (val: number) => {
             if (metric === 'iops') return Math.round(val).toLocaleString();
-            if (metric === 'avg_latency') return val.toFixed(3);
+            if (metric === 'avg_latency') return formatLatencyMicroseconds(val).text;
             return val.toFixed(1);
           };
 
-          const unit = metric === 'iops' ? '' : metric === 'avg_latency' ? 'ms' : 'MB/s';
+          const unit = metric === 'iops' ? '' : metric === 'avg_latency' ? '' : 'MB/s';
           
           tooltip.transition().duration(200).style("opacity", .9);
           tooltip.html(`

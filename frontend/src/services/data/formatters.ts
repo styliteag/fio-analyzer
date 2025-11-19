@@ -41,6 +41,34 @@ export const formatLatency = (value: number, precision: number = 2): string => {
     return `${value.toFixed(precision)}ms`;
 };
 
+// Format latency in milliseconds with color coding
+// Returns formatted string and Tailwind color class
+// IMPORTANT: Lower latency = better = green, Higher latency = worse = red
+export const formatLatencyMicroseconds = (valueMs: number): { text: string; colorClass: string } => {
+    // Format in ms with 3 decimal places
+    const formatted = valueMs.toFixed(3) + ' ms';
+    
+    // Color coding: smaller values = green (better), bigger values = red (worse)
+    // Thresholds for storage latency in milliseconds:
+    // < 0.2 ms = green (excellent), 0.2-0.5 ms = light green (good), 0.5-1.0 ms = yellow (moderate), >= 1.0 ms = red (poor)
+    let colorClass: string;
+    if (valueMs < 0.2) {
+        // Excellent - very low latency
+        colorClass = 'text-green-600 dark:text-green-400';
+    } else if (valueMs < 0.5) {
+        // Good - low latency
+        colorClass = 'text-green-500 dark:text-green-500';
+    } else if (valueMs < 1.0) {
+        // Moderate - medium latency
+        colorClass = 'text-yellow-600 dark:text-yellow-400';
+    } else {
+        // Poor - high latency
+        colorClass = 'text-red-600 dark:text-red-400';
+    }
+    
+    return { text: formatted, colorClass };
+};
+
 // Format bandwidth values
 export const formatBandwidth = (value: number, precision: number = 2): string => {
     const units = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s'];

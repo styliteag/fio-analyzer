@@ -11,6 +11,7 @@ import {
 import { Bar } from 'react-chartjs-2';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useThemeColors } from '../../hooks/useThemeColors';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 ChartJS.register(
     CategoryScale,
@@ -635,7 +636,7 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
                         </div>
                         <div className="text-center">
                             <p className="text-xs theme-text-secondary">Avg Latency</p>
-                            <p className="text-sm font-bold text-green-600 dark:text-green-400">{summaryStats.avgLatency.toFixed(2)}ms</p>
+                            <p className={`text-sm font-bold ${formatLatencyMicroseconds(summaryStats.avgLatency).colorClass}`}>{formatLatencyMicroseconds(summaryStats.avgLatency).text}</p>
                         </div>
                         <div className="text-center">
                             <p className="text-xs theme-text-secondary">Total Bandwidth</p>

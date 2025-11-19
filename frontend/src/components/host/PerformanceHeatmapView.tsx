@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useHeatmapData, type MetricType } from '../../hooks/useHeatmapData';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 interface PerformanceHeatmapViewProps {
     drives: DriveAnalysis[];
@@ -25,14 +26,21 @@ const PerformanceHeatmapView: React.FC<PerformanceHeatmapViewProps> = ({ drives 
         const cell = heatmapData.cells.find(c => c.row === row && c.col === col);
         if (!cell || cell.value === null) return '#f3f4f6';
 
-        return getHeatmapColor(cell.value, heatmapData.min, heatmapData.max);
+        return getHeatmapColor(cell.value, heatmapData.min, heatmapData.max, selectedMetric);
     };
 
     const isDarkCell = (row: string, col: string): boolean => {
         const cell = heatmapData.cells.find(c => c.row === row && c.col === col);
         if (!cell || cell.value === null) return false;
 
-        const normalized = (cell.value - heatmapData.min) / (heatmapData.max - heatmapData.min);
+        const isLatencyMetric = selectedMetric === 'avg_latency' || selectedMetric === 'p70_latency' || selectedMetric === 'p90_latency' || selectedMetric === 'p95_latency' || selectedMetric === 'p99_latency';
+        let normalized = (cell.value - heatmapData.min) / (heatmapData.max - heatmapData.min);
+        
+        // For latency, invert normalized (lower values should have dark text on green background)
+        if (isLatencyMetric) {
+            normalized = 1 - normalized;
+        }
+        
         return normalized > 0.6;
     };
 
@@ -141,7 +149,7 @@ function formatMetricValue(value: number, metric: MetricType): string {
         case 'p90_latency':
         case 'p95_latency':
         case 'p99_latency':
-            return `${value.toFixed(3)}ms`;
+            return formatLatencyMicroseconds(value).text;
         case 'bandwidth':
             return `${Math.round(value)} MB/s`;
         default:

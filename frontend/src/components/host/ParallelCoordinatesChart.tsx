@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import { generateUniqueColorsForChart } from '../../utils/colorMapping';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 export interface ParallelCoordinatesChartProps {
   data: any[];
@@ -173,7 +174,7 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
           Block Size: ${d.blockSize} KB<br/>
           Queue Depth: ${d.queueDepth}<br/>
           IOPS: ${d.iops.toFixed(0)}<br/>
-          Latency: ${d.avgLatency.toFixed(2)} ms<br/>
+          Latency: ${formatLatencyMicroseconds(d.avgLatency).text}<br/>
           Bandwidth: ${d.bandwidth.toFixed(1)} MB/s
         `);
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useTheme } from '../../contexts/ThemeContext';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 interface PerformanceFingerprintHeatmapProps {
     drives: DriveAnalysis[];
@@ -534,7 +535,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                 <div>IOPS: <span className="font-bold text-blue-600 dark:text-blue-400">{hoveredCell.cell.iops > 0 ? formatIOPS(hoveredCell.cell.iops) : 'N/A'}</span></div>
                                 <div>Normalized: <span className="font-medium">{hoveredCell.cell.normalizedIops.toFixed(1)}%</span></div>
                                 {hoveredCell.cell.avgLatency && (
-                                    <div>Avg Latency: <span className="font-medium">{(hoveredCell.cell.avgLatency * 1000).toFixed(0)}ns</span></div>
+                                    <div>Avg Latency: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.avgLatency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.avgLatency).text}</span></div>
                                 )}
                                 {hoveredCell.cell.bandwidth && (
                                     <div>Bandwidth: <span className="font-medium">{hoveredCell.cell.bandwidth.toFixed(1)} MB/s</span></div>
@@ -543,16 +544,16 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                     <div>Responsiveness: <span className="font-medium">{(1000 / hoveredCell.cell.avgLatency).toFixed(1)} ops/ms</span></div>
                                 )}
                                 {hoveredCell.cell.p70Latency && (
-                                    <div>70th %ile: <span className="font-medium">{(hoveredCell.cell.p70Latency * 1000).toFixed(0)}ns</span></div>
+                                    <div>70th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p70Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p70Latency).text}</span></div>
                                 )}
                                 {hoveredCell.cell.p90Latency && (
-                                    <div>90th %ile: <span className="font-medium">{(hoveredCell.cell.p90Latency * 1000).toFixed(0)}ns</span></div>
+                                    <div>90th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p90Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p90Latency).text}</span></div>
                                 )}
                                 {hoveredCell.cell.p95Latency && (
-                                    <div>95th %ile: <span className="font-medium">{(hoveredCell.cell.p95Latency * 1000).toFixed(0)}ns</span></div>
+                                    <div>95th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p95Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p95Latency).text}</span></div>
                                 )}
                                 {hoveredCell.cell.p99Latency && (
-                                    <div>99th %ile: <span className="font-medium">{(hoveredCell.cell.p99Latency * 1000).toFixed(0)}ns</span></div>
+                                    <div>99th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p99Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p99Latency).text}</span></div>
                                 )}
                             </div>
                         </div>

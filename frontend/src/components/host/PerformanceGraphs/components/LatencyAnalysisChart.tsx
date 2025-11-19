@@ -19,6 +19,7 @@ import {
 
 import { useChartTheme } from '../hooks/useChartTheme';
 import type { AggregatedData, ChartFilters } from '../types';
+import { formatLatencyMicroseconds } from '../../../../services/data/formatters';
 
 // Register Chart.js components
 ChartJS.register(
@@ -211,7 +212,7 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
           ...chartOptions.plugins.tooltip.callbacks,
           label: (context: any) => {
             const value = context.parsed.y;
-            return `${context.dataset.label}: ${value.toFixed(2)} ms`;
+            return `${context.dataset.label}: ${formatLatencyMicroseconds(value).text}`;
           }
         }
       },
@@ -258,7 +259,7 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
         ticks: {
           ...chartOptions.scales.y.ticks,
           callback: function(value: any) {
-            return typeof value === 'number' ? `${value.toFixed(1)} ms` : value;
+            return typeof value === 'number' ? formatLatencyMicroseconds(value).text : value;
           }
         }
       },
@@ -277,7 +278,7 @@ export const LatencyAnalysisChart: React.FC<LatencyAnalysisChartProps> = ({
         ticks: {
           color: theme.theme.textColor,
           callback: function(value: any) {
-            return typeof value === 'number' ? `${value.toFixed(1)} ms` : value;
+            return typeof value === 'number' ? formatLatencyMicroseconds(value).text : value;
           }
         }
       }

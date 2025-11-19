@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DriveAnalysis } from '../../services/api/hostAnalysis';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 import { extractColorFromName } from '../../utils/colorMapping';
 
 interface PerformanceMatrixProps {
@@ -142,7 +143,7 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
         
         switch (metric) {
             case 'iops': return value.toFixed(0);
-            case 'avg_latency': return value.toFixed(2);
+            case 'avg_latency': return formatLatencyMicroseconds(value).text;
             case 'bandwidth': return value.toFixed(1);
             default: return value.toString();
         }
@@ -295,12 +296,22 @@ const PerformanceMatrix: React.FC<PerformanceMatrixProps> = ({ drives, metric })
                                 <h4 className="font-medium theme-text-primary text-xs mb-1">Performance Metrics</h4>
                                 <div className="text-xs theme-text-secondary space-y-1">
                                     <div>IOPS: <span className="font-medium">{hoveredCell.cell.fullConfig.iops !== null && hoveredCell.cell.fullConfig.iops !== undefined ? hoveredCell.cell.fullConfig.iops.toFixed(0) : 'N/A'}</span></div>
-                                    <div>Avg Latency: <span className="font-medium">{hoveredCell.cell.fullConfig.avg_latency !== null && hoveredCell.cell.fullConfig.avg_latency !== undefined ? hoveredCell.cell.fullConfig.avg_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                    {hoveredCell.cell.fullConfig.avg_latency !== null && hoveredCell.cell.fullConfig.avg_latency !== undefined && (
+                                        <div>Avg Latency: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.fullConfig.avg_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.fullConfig.avg_latency).text}</span></div>
+                                    )}
                                     <div>Bandwidth: <span className="font-medium">{hoveredCell.cell.fullConfig.bandwidth !== null && hoveredCell.cell.fullConfig.bandwidth !== undefined ? hoveredCell.cell.fullConfig.bandwidth.toFixed(1) + ' MB/s' : 'N/A'}</span></div>
-                                    <div>70th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p70_latency !== null && hoveredCell.cell.fullConfig.p70_latency !== undefined ? hoveredCell.cell.fullConfig.p70_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
-                                    <div>90th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p90_latency !== null && hoveredCell.cell.fullConfig.p90_latency !== undefined ? hoveredCell.cell.fullConfig.p90_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
-                                    <div>95th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p95_latency !== null && hoveredCell.cell.fullConfig.p95_latency !== undefined ? hoveredCell.cell.fullConfig.p95_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
-                                    <div>99th Percentile: <span className="font-medium">{hoveredCell.cell.fullConfig.p99_latency !== null && hoveredCell.cell.fullConfig.p99_latency !== undefined ? hoveredCell.cell.fullConfig.p99_latency.toFixed(2) + 'ms' : 'N/A'}</span></div>
+                                    {hoveredCell.cell.fullConfig.p70_latency !== null && hoveredCell.cell.fullConfig.p70_latency !== undefined && (
+                                        <div>70th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.fullConfig.p70_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.fullConfig.p70_latency).text}</span></div>
+                                    )}
+                                    {hoveredCell.cell.fullConfig.p90_latency !== null && hoveredCell.cell.fullConfig.p90_latency !== undefined && (
+                                        <div>90th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.fullConfig.p90_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.fullConfig.p90_latency).text}</span></div>
+                                    )}
+                                    {hoveredCell.cell.fullConfig.p95_latency !== null && hoveredCell.cell.fullConfig.p95_latency !== undefined && (
+                                        <div>95th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.fullConfig.p95_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.fullConfig.p95_latency).text}</span></div>
+                                    )}
+                                    {hoveredCell.cell.fullConfig.p99_latency !== null && hoveredCell.cell.fullConfig.p99_latency !== undefined && (
+                                        <div>99th Percentile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.fullConfig.p99_latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.fullConfig.p99_latency).text}</span></div>
+                                    )}
                                 </div>
                             </div>
                             

@@ -1,5 +1,6 @@
 import React, { memo, useMemo } from 'react';
 import { HardDrive } from 'lucide-react';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 interface DriveConfiguration {
     block_size: string;
@@ -59,8 +60,8 @@ const DriveCard = memo<{
                     </div>
                     <div className="text-center">
                         <p className="theme-text-secondary">Min Latency</p>
-                        <p className="font-bold text-green-600 dark:text-green-400">
-                            {drive.topPerformance.minLatency.toFixed(2)}ms
+                        <p className={`font-bold ${formatLatencyMicroseconds(drive.topPerformance.minLatency).colorClass}`}>
+                            {formatLatencyMicroseconds(drive.topPerformance.minLatency).text}
                         </p>
                     </div>
                     <div className="text-center">
@@ -102,9 +103,13 @@ const ConfigurationCard = memo<{
                 </div>
                 <div className="flex justify-between">
                     <span className="text-xs theme-text-secondary">Latency:</span>
-                    <span className="text-xs font-medium theme-text-primary">
-                        {config.avg_latency?.toFixed(2)}ms
-                    </span>
+                    {config.avg_latency !== null && config.avg_latency !== undefined ? (
+                        <span className={`text-xs font-medium ${formatLatencyMicroseconds(config.avg_latency).colorClass}`}>
+                            {formatLatencyMicroseconds(config.avg_latency).text}
+                        </span>
+                    ) : (
+                        <span className="text-xs font-medium theme-text-primary">N/A</span>
+                    )}
                 </div>
                 <div className="flex justify-between">
                     <span className="text-xs theme-text-secondary">Bandwidth:</span>

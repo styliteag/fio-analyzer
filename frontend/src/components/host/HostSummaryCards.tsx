@@ -2,6 +2,7 @@ import React from 'react';
 import { Server, HardDrive, Zap, Activity } from 'lucide-react';
 import { Card } from '../ui';
 import type { HostAnalysisData } from '../../services/api/hostAnalysis';
+import { formatLatencyMicroseconds } from '../../services/data/formatters';
 
 export interface HostSummaryCardsProps {
     hostData: HostAnalysisData;
@@ -72,8 +73,8 @@ const HostSummaryCards: React.FC<HostSummaryCardsProps> = ({
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="theme-text-secondary text-sm font-medium">Avg Latency</p>
-                            <p className="theme-text-primary text-2xl font-bold">
-                                {hostData.performanceSummary.avgLatency.toFixed(2)}ms
+                            <p className={`text-2xl font-bold ${formatLatencyMicroseconds(hostData.performanceSummary.avgLatency).colorClass}`}>
+                                {formatLatencyMicroseconds(hostData.performanceSummary.avgLatency).text}
                             </p>
                         </div>
                         <Activity className="w-8 h-8 text-purple-600 dark:text-purple-400 opacity-80" />
