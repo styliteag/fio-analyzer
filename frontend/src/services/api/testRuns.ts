@@ -197,7 +197,7 @@ export const bulkUpdateTestRuns = async (
     return apiCall(`/api/test-runs/bulk`, {
         method: "PUT",
         body: JSON.stringify({
-            testRunIds,
+            test_run_ids: testRunIds,
             updates,
         }),
         signal: abortSignal

@@ -26,6 +26,7 @@ import { useUUIDGroupedRuns } from '../hooks/api/useUUIDGroupedRuns';
 import {
 	deleteTestRuns,
 	bulkUpdateTestRunsByUUID,
+	bulkUpdateTestRuns,
 	fetchTestRun,
 	fetchTestRuns,
 	extractTestRuns,
@@ -82,6 +83,15 @@ interface TestRunDetailsState {
 	isLoading: boolean;
 }
 
+interface HierarchyEditState {
+	isOpen: boolean;
+	testRunIds: number[];
+	count: number;
+	level: string; // e.g., "Host: server01", "Host-Protocol: server01-NFS", etc.
+	fields: EditableFields;
+	enabledFields: Record<keyof EditableFields, boolean>;
+}
+
 const Admin: React.FC = () => {
 	const navigate = useNavigate();
 	const [activeTab, setActiveTab] = useState<AdminTab>('by-config');
@@ -134,6 +144,23 @@ const Admin: React.FC = () => {
 		isOpen: false,
 		testRun: null,
 		isLoading: false,
+	});
+
+	// Hierarchy bulk edit state
+	const [hierarchyEditState, setHierarchyEditState] = useState<HierarchyEditState>({
+		isOpen: false,
+		testRunIds: [],
+		count: 0,
+		level: '',
+		fields: {},
+		enabledFields: {
+			hostname: false,
+			protocol: false,
+			description: false,
+			test_name: false,
+			drive_type: false,
+			drive_model: false,
+		},
 	});
 
 	// UUID group runs state - stores fetched runs for each UUID
@@ -697,11 +724,146 @@ const Admin: React.FC = () => {
 		}
 	}, [uuidDeleteState, configGroups, runGroups]);
 
+	// Open hierarchy edit modal
+	const openHierarchyEdit = useCallback(
+		async (testRunIds: number[], level: string) => {
+			// Initialize with empty fields first
+			setHierarchyEditState({
+				isOpen: true,
+				testRunIds,
+				count: testRunIds.length,
+				level,
+				fields: {},
+				enabledFields: {
+					hostname: false,
+					protocol: false,
+					description: false,
+					test_name: false,
+					drive_type: false,
+					drive_model: false,
+				},
+			});
+
+			// Fetch test runs and calculate most common values
+			try {
+				const fetchPromises = testRunIds.map(async (id) => {
+					const result = await fetchTestRun(id);
+					if (result.error) {
+						throw new Error(result.error);
+					}
+					return result.data;
+				});
+
+				const fetchedRuns = await Promise.all(fetchPromises);
+				const validRuns = fetchedRuns.filter((run): run is TestRun => run !== null && run !== undefined);
+
+				const commonFields: EditableFields = {
+					hostname: getMostCommonValue(validRuns.map(r => r.hostname)),
+					protocol: getMostCommonValue(validRuns.map(r => r.protocol)),
+					description: getMostCommonValue(validRuns.map(r => r.description)),
+					test_name: getMostCommonValue(validRuns.map(r => r.test_name)),
+					drive_type: getMostCommonValue(validRuns.map(r => r.drive_type)),
+					drive_model: getMostCommonValue(validRuns.map(r => r.drive_model)),
+				};
+
+				setHierarchyEditState((prev) => ({
+					...prev,
+					fields: commonFields,
+				}));
+			} catch (err) {
+				console.error('Error fetching test runs for pre-fill:', err);
+				// Continue with empty fields if fetch fails
+			}
+		},
+		[getMostCommonValue]
+	);
+
+	// Submit hierarchy bulk edit
+	const handleHierarchyEdit = useCallback(async () => {
+		if (hierarchyEditState.testRunIds.length === 0) return;
+
+		const updates: EditableFields = {};
+		for (const [key, enabled] of Object.entries(hierarchyEditState.enabledFields)) {
+			if (enabled) {
+				updates[key as keyof EditableFields] =
+					hierarchyEditState.fields[key as keyof EditableFields];
+			}
+		}
+
+		if (Object.keys(updates).length === 0) {
+			alert('Please enable and fill at least one field to update');
+			return;
+		}
+
+		try {
+			await bulkUpdateTestRuns(hierarchyEditState.testRunIds, updates);
+			alert(`Successfully updated ${hierarchyEditState.count} test runs`);
+			setHierarchyEditState({ ...hierarchyEditState, isOpen: false });
+
+			// Refresh hierarchical data
+			if (activeTab === 'hierarchy') {
+				const fetchAllTestRuns = async () => {
+					setHierarchicalLoading(true);
+					setHierarchicalError(null);
+					setAllHierarchicalRuns([]);
+					setHierarchicalTotalFetched(0);
+					setHierarchicalHasMore(false);
+
+					try {
+						const allRuns: TestRun[] = [];
+						const chunkSize = 1000;
+						let offset = 0;
+						let hasMore = true;
+
+						while (hasMore) {
+							const response = await fetchTestRuns({
+								limit: chunkSize,
+								offset: offset,
+							});
+
+							if (response.error) {
+								throw new Error(response.error);
+							}
+
+							if (response.data) {
+								const chunk = extractTestRuns(response.data);
+								allRuns.push(...chunk);
+								offset += chunk.length;
+								hasMore = chunk.length === chunkSize;
+								setHierarchicalTotalFetched(allRuns.length);
+								setHierarchicalHasMore(hasMore);
+							} else {
+								hasMore = false;
+							}
+						}
+
+						setAllHierarchicalRuns(allRuns);
+					} catch (err: any) {
+						setHierarchicalError(err.message || 'Failed to fetch all test runs');
+						console.error('Error fetching all test runs:', err);
+					} finally {
+						setHierarchicalLoading(false);
+					}
+				};
+
+				fetchAllTestRuns();
+			}
+		} catch (err) {
+			console.error('Error updating hierarchy test runs:', err);
+			alert('Failed to update test runs');
+		}
+	}, [hierarchyEditState, activeTab]);
+
 	// Format date range
 	const formatDateRange = (firstTest: string, lastTest: string) => {
 		const first = new Date(firstTest).toLocaleDateString();
 		const last = new Date(lastTest).toLocaleDateString();
 		return first === last ? first : `${first} - ${last}`;
+	};
+
+	// Helper to collect all test run IDs from a hierarchy level
+	const collectTestRunIds = (runs: TestRun[]): number[] => {
+		return runs.map(run => run.id);
 	};
 
 	// Open data cleanup modal
@@ -1446,6 +1608,26 @@ const Admin: React.FC = () => {
 															</div>
 														</div>
 													</div>
+													<div className="flex items-center gap-2">
+														<Button
+															variant="outline"
+															size="sm"
+															onClick={() => {
+																const allRuns: TestRun[] = [];
+																Object.values(hostProtocols).forEach((protocolTypes) => {
+																	Object.values(protocolTypes).forEach((types) => {
+																		Object.values(types).forEach((runs) => {
+																			allRuns.push(...runs);
+																		});
+																	});
+																});
+																openHierarchyEdit(collectTestRunIds(allRuns), `Host: ${hostname}`);
+															}}
+														>
+															<Edit2 className="w-4 h-4 mr-1" />
+															Edit All
+														</Button>
+													</div>
 												</div>
 											</div>
 
@@ -1503,6 +1685,24 @@ const Admin: React.FC = () => {
 																				</div>
 																			</div>
 																		</div>
+																		<div className="flex items-center gap-2">
+																			<Button
+																				variant="outline"
+																				size="sm"
+																				onClick={() => {
+																					const allRuns: TestRun[] = [];
+																					Object.values(protocolTypes).forEach((types) => {
+																						Object.values(types).forEach((runs) => {
+																							allRuns.push(...runs);
+																						});
+																					});
+																					openHierarchyEdit(collectTestRunIds(allRuns), `Host-Protocol: ${hostProtocolKey}`);
+																				}}
+																			>
+																				<Edit2 className="w-4 h-4 mr-1" />
+																				Edit All
+																			</Button>
+																		</div>
 																	</div>
 																</div>
 
@@ -1558,6 +1758,22 @@ const Admin: React.FC = () => {
 																									</div>
 																								</div>
 																							</div>
+																							<div className="flex items-center gap-2">
+																								<Button
+																									variant="outline"
+																									size="sm"
+																									onClick={() => {
+																										const allRuns: TestRun[] = [];
+																										Object.values(types).forEach((runs) => {
+																											allRuns.push(...runs);
+																										});
+																										openHierarchyEdit(collectTestRunIds(allRuns), `Host-Protocol-Type: ${hostProtocolTypeKey}`);
+																									}}
+																								>
+																									<Edit2 className="w-4 h-4 mr-1" />
+																									Edit All
+																								</Button>
+																							</div>
 																						</div>
 																					</div>
 
@@ -1607,6 +1823,18 @@ const Admin: React.FC = () => {
 																															{runs.length} test run{runs.length !== 1 ? 's' : ''} • Avg IOPS: {Math.round(modelAvgIops).toLocaleString()}
 																														</div>
 																													</div>
+																												</div>
+																												<div className="flex items-center gap-2">
+																													<Button
+																														variant="outline"
+																														size="sm"
+																														onClick={() => {
+																															openHierarchyEdit(collectTestRunIds(runs), `Host-Protocol-Type-Model: ${hostProtocolTypeModelKey}`);
+																														}}
+																													>
+																														<Edit2 className="w-4 h-4 mr-1" />
+																														Edit All
+																													</Button>
 																												</div>
 																											</div>
 																										</div>
@@ -1882,6 +2110,82 @@ const Admin: React.FC = () => {
 						<Button
 							variant="outline"
 							onClick={() => setUuidEditState({ ...uuidEditState, isOpen: false })}
+						>
+							Cancel
+						</Button>
+					</div>
+				</div>
+			</Modal>
+
+			{/* Hierarchy Edit Modal */}
+			<Modal
+				isOpen={hierarchyEditState.isOpen}
+				onClose={() => setHierarchyEditState({ ...hierarchyEditState, isOpen: false })}
+				title={`Edit All Tests in ${hierarchyEditState.level}`}
+			>
+				<div className="space-y-4">
+					<div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+						<p className="text-sm text-blue-800 dark:text-blue-200">
+							<strong>Warning:</strong> This will update {hierarchyEditState.count} test
+							run{hierarchyEditState.count !== 1 ? 's' : ''} with the same values.
+						</p>
+						<p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+							Level: {hierarchyEditState.level}
+						</p>
+					</div>
+
+					{/* Field toggles and inputs */}
+					{(
+						['hostname', 'protocol', 'drive_type', 'drive_model', 'test_name', 'description'] as Array<
+							keyof EditableFields
+						>
+					).map((field) => (
+						<div key={field} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+							<label className="flex items-center gap-2 mb-2">
+								<input
+									type="checkbox"
+									checked={hierarchyEditState.enabledFields[field]}
+									onChange={(e) =>
+										setHierarchyEditState({
+											...hierarchyEditState,
+											enabledFields: {
+												...hierarchyEditState.enabledFields,
+												[field]: e.target.checked,
+											},
+										})
+									}
+									className="rounded"
+								/>
+								<span className="font-medium text-sm capitalize text-gray-900 dark:text-gray-100">
+									{field.replace('_', ' ')}
+								</span>
+							</label>
+							<input
+								type="text"
+								disabled={!hierarchyEditState.enabledFields[field]}
+								value={hierarchyEditState.fields[field] || ''}
+								onChange={(e) =>
+									setHierarchyEditState({
+										...hierarchyEditState,
+										fields: {
+											...hierarchyEditState.fields,
+											[field]: e.target.value,
+										},
+									})
+								}
+								placeholder={`Enter new ${field.replace('_', ' ')}`}
+								className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+							/>
+						</div>
+					))}
+
+					<div className="flex gap-2 pt-4">
+						<Button onClick={handleHierarchyEdit} className="flex-1">
+							Update {hierarchyEditState.count} Test Runs
+						</Button>
+						<Button
+							variant="outline"
+							onClick={() => setHierarchyEditState({ ...hierarchyEditState, isOpen: false })}
 						>
 							Cancel
 						</Button>
