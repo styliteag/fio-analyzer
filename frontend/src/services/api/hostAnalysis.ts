@@ -1,5 +1,5 @@
 import type { TestRun } from '../../types';
-import { fetchTestRuns } from './testRuns';
+import { fetchTestRuns, fetchFilters } from './testRuns';
 
 export interface HostAnalysisData {
     hostname: string;
@@ -194,13 +194,12 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
 };
 
 export const getHostList = async (): Promise<string[]> => {
-    const response = await fetchTestRuns();
+    // Use the filters endpoint to get all distinct hostnames without pagination limits
+    const response = await fetchFilters();
     
-    if (!response.data) {
-        throw new Error('Failed to fetch test runs');
+    if (!response.data || !response.data.hostnames) {
+        throw new Error('Failed to fetch hostnames from filters');
     }
     
-    const testRuns = response.data;
-    const hostnames = [...new Set(testRuns.map((run: TestRun) => run.hostname).filter(Boolean))] as string[];
-    return hostnames.sort();
+    return response.data.hostnames.sort();
 };

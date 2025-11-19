@@ -25,6 +25,9 @@ export interface TestRunsOptions {
     num_jobs?: number[];
     test_sizes?: string[];
     durations?: number[];
+    // Pagination options
+    limit?: number;
+    offset?: number;
 }
 
 // Fetch test runs with optional historical data and server-side filtering
@@ -41,7 +44,9 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}, abortSignal?:
         directs,
         num_jobs,
         test_sizes,
-        durations
+        durations,
+        limit,
+        offset
     } = options;
     
     // Build query parameters using shared utility
@@ -59,6 +64,14 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}, abortSignal?:
         test_sizes,
         durations
     });
+    
+    // Add pagination parameters if provided
+    if (limit !== undefined) {
+        queryParams.append('limit', limit.toString());
+    }
+    if (offset !== undefined) {
+        queryParams.append('offset', offset.toString());
+    }
     
     const queryString = queryParams.toString();
     const url = `/api/test-runs${queryString ? `?${queryString}` : ''}`;

@@ -37,7 +37,8 @@ export default function HostSelector({ selectedHosts, onHostsChange, className =
         setLoading(true);
         
         // Get all test runs to extract hostname + hardware combinations
-        const res = await fetchTestRuns();
+        // Use a high limit to ensure we get all test runs (backend max is 10000)
+        const res = await fetchTestRuns({ limit: 10000 });
         if (res.data) {
           // Create a map to track unique hostname + hardware combinations
           const hostMap = new Map<string, HostOption>();
