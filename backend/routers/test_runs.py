@@ -129,6 +129,11 @@ async def get_test_runs(
         example=100,
     ),
     offset: int = Query(0, ge=0, description="Number of test runs to skip for pagination", example=0),
+    include_metadata: bool = Query(
+        False,
+        description="Include total count and pagination metadata in response",
+        example=False,
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -286,6 +291,16 @@ async def get_test_runs(
             },
         )
 
+        # Return metadata if requested, otherwise return direct array for backward compatibility
+        if include_metadata:
+            return {
+                "data": test_runs,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "has_more": (offset + len(test_runs)) < total,
+            }
+        
         # Frontend expects direct array of test runs, not wrapped object
         return test_runs
 

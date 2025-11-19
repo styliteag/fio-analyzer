@@ -8,6 +8,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useApiCall } from "../hooks";
 import { Activity, Database, TrendingUp, Upload, Users, Settings, RefreshCw, Zap, History, Microscope, Server } from "lucide-react";
 import { fetchDashboardStats, type DashboardStats } from "../services/api/dashboard";
+import { formatLatencyMicroseconds } from "../services/data/formatters";
 
 
 export default function Home() {
@@ -69,7 +70,7 @@ export default function Home() {
 			metricColors.blue
 		),
 		createMetric(
-			"Active Servers",
+			"Active Configurations",
 			stats?.activeServers || "---",
 			Activity,
 			metricColors.green
@@ -82,7 +83,7 @@ export default function Home() {
 		),
 		createMetric(
 			"Avg Latency",
-			stats?.avgLatency ? `${stats.avgLatency}ms` : "---",
+			stats?.avgLatency ? formatLatencyMicroseconds(stats.avgLatency).text : "---",
 			Activity,
 			metricColors.orange
 		),

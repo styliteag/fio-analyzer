@@ -28,6 +28,16 @@ export interface TestRunsOptions {
     // Pagination options
     limit?: number;
     offset?: number;
+    // Metadata options
+    include_metadata?: boolean;
+}
+
+export interface TestRunsMetadataResponse {
+    data: TestRun[];
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
 }
 
 // Fetch test runs with optional historical data and server-side filtering
@@ -46,7 +56,8 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}, abortSignal?:
         test_sizes,
         durations,
         limit,
-        offset
+        offset,
+        include_metadata
     } = options;
     
     // Build query parameters using shared utility
@@ -72,9 +83,19 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}, abortSignal?:
     if (offset !== undefined) {
         queryParams.append('offset', offset.toString());
     }
+    if (include_metadata) {
+        queryParams.append('include_metadata', 'true');
+    }
     
     const queryString = queryParams.toString();
     const url = `/api/test-runs${queryString ? `?${queryString}` : ''}`;
+    
+    // Return appropriate type based on whether metadata is requested
+    if (include_metadata) {
+        return apiCall<TestRunsMetadataResponse>(url, {
+            signal: abortSignal
+        });
+    }
     
     return apiCall<TestRun[]>(url, {
         signal: abortSignal

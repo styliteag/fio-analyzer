@@ -29,15 +29,17 @@ router = APIRouter()
                     "example": [
                         {
                             "hostname": "server-01",
-                            "config_count": 15,
-                            "total_runs": 342,
+                            "protocol": "Local",
+                            "drive_model": "Samsung SSD 980 PRO",
+                            "test_count": 15,
                             "last_test_time": "2025-06-31T20:00:00",
                             "first_test_time": "2024-01-15T10:30:00",
                         },
                         {
                             "hostname": "server-02",
-                            "config_count": 8,
-                            "total_runs": 156,
+                            "protocol": "iSCSI",
+                            "drive_model": "WD Black SN850",
+                            "test_count": 8,
                             "last_test_time": "2025-06-30T15:45:00",
                             "first_test_time": "2024-03-20T09:15:00",
                         },
@@ -66,8 +68,9 @@ async def get_servers(
 
     **Returned Data:**
     - **hostname**: Server identifier
-    - **config_count**: Number of unique test configurations
-    - **total_runs**: Total number of test executions
+    - **protocol**: Storage protocol (Local, iSCSI, NFS, etc.)
+    - **drive_model**: Drive model identifier
+    - **test_count**: Number of test runs for this hostname-protocol-drive_model combination
     - **last_test_time**: Most recent test timestamp
     - **first_test_time**: Oldest test timestamp
 
@@ -82,40 +85,25 @@ async def get_servers(
     try:
         cursor = db.cursor()
 
-        # Get server information aggregated by hostname (matching Node.js behavior)
+        # Get server information grouped by hostname, protocol, and drive_model
+        # This matches the frontend ServerInfo interface which expects protocol and drive_model
         cursor.execute(
             """
             SELECT
                 hostname,
-                COUNT(*) AS config_count,
-                SUM(run_count) AS total_runs,
-                MAX(last_test_time) AS last_test_time,
-                MIN(first_test_time) AS first_test_time
-            FROM (
-                SELECT
-                    hostname,
-                    COUNT(*) AS run_count,
-                    MAX(timestamp) AS last_test_time,
-                    MIN(timestamp) AS first_test_time
-                FROM test_runs_all
-                WHERE hostname IS NOT NULL
-                  AND protocol IS NOT NULL
-                  AND drive_model IS NOT NULL
-                GROUP BY
-                    hostname,
-                    protocol,
-                    drive_model,
-                    drive_type,
-                    read_write_pattern,
-                    block_size,
-                    queue_depth,
-                    num_jobs,
-                    direct,
-                    test_size,
-                    sync,
-                    iodepth
-            ) AS grouped
-            GROUP BY hostname
+                protocol,
+                drive_model,
+                COUNT(*) AS test_count,
+                MAX(timestamp) AS last_test_time,
+                MIN(timestamp) AS first_test_time
+            FROM test_runs_all
+            WHERE hostname IS NOT NULL
+              AND protocol IS NOT NULL
+              AND drive_model IS NOT NULL
+            GROUP BY
+                hostname,
+                protocol,
+                drive_model
             ORDER BY last_test_time DESC
         """
         )
@@ -125,10 +113,11 @@ async def get_servers(
             servers.append(
                 {
                     "hostname": row[0],
-                    "config_count": row[1],
-                    "total_runs": row[2],
-                    "last_test_time": row[3],
-                    "first_test_time": row[4],
+                    "protocol": row[1],
+                    "drive_model": row[2],
+                    "test_count": row[3],
+                    "last_test_time": row[4],
+                    "first_test_time": row[5],
                 }
             )
 

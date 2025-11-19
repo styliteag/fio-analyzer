@@ -4,7 +4,6 @@ import type { ApiInfoResponse } from '../../types/api';
 import { apiCall } from './base';
 import { fetchTestRuns } from './testRuns';
 import { fetchTimeSeriesServers, fetchTimeSeriesLatest } from './timeSeries';
-import { fetchPerformanceData } from './performance';
 
 export interface DashboardStats {
     totalTestRuns: number;
@@ -116,70 +115,43 @@ const generateRecentActivity = (testRuns: TestRun[], servers: ServerInfo[]): Act
         .slice(0, 5);
 };
 
-// Fallback method to get metrics from recent test run performance data
-const getFallbackMetrics = async (recentTestRuns: TestRun[]): Promise<{avgIOPS: number, avgLatency: number}> => {
+// Fallback method to get metrics directly from test runs
+const getFallbackMetrics = (recentTestRuns: TestRun[]): {avgIOPS: number, avgLatency: number} => {
     if (recentTestRuns.length === 0) {
         return { avgIOPS: 0, avgLatency: 0 };
     }
     
-    try {
-        // Get performance data for the most recent test runs (up to 10)
-        const testRunIds = recentTestRuns.slice(0, 10).map(run => run.id);
-        
-        const perfResult = await fetchPerformanceData({
-            testRunIds: testRunIds,
-            metricTypes: ['iops', 'avg_latency']
-        });
-        
-        if (!perfResult.data || perfResult.data.length === 0) {
-            return { avgIOPS: 0, avgLatency: 0 };
-        }
-        
-        let totalIOPS = 0;
-        let totalLatency = 0;
-        let iopsCount = 0;
-        let latencyCount = 0;
-        
-        // Extract IOPS and latency from performance data
-        perfResult.data.forEach(perfData => {
-            const metrics = (perfData as any).metrics;
-            
-            // Try different metric structure possibilities
-            if (metrics) {
-                // Check for IOPS
-                const iopsValue = metrics.iops?.value || 
-                                 metrics.combined?.iops?.value || 
-                                 metrics.read?.iops?.value || 
-                                 metrics.write?.iops?.value;
-                
-                if (iopsValue && iopsValue > 0) {
-                    totalIOPS += iopsValue;
-                    iopsCount++;
-                }
-                
-                // Check for average latency
-                const latencyValue = metrics.avg_latency?.value || 
-                                    metrics.combined?.avg_latency?.value ||
-                                    metrics.read?.avg_latency?.value ||
-                                    metrics.write?.avg_latency?.value;
-                
-                if (latencyValue && latencyValue > 0) {
-                    totalLatency += latencyValue;
-                    latencyCount++;
-                }
-            }
-        });
-        
-        const avgIOPS = iopsCount > 0 ? Math.round(totalIOPS / iopsCount) : 0;
-        const avgLatency = latencyCount > 0 ? Math.round((totalLatency / latencyCount) * 10) / 10 : 0;
-        
-        
-        return { avgIOPS, avgLatency };
-        
-    } catch (error) {
-        console.error('Error in fallback metrics calculation:', error);
-        return { avgIOPS: 0, avgLatency: 0 };
-    }
+    // Calculate averages directly from test run data
+    const validIOPS = recentTestRuns
+        .map(run => typeof run.iops === 'number' ? run.iops : parseFloat(run.iops as any) || 0)
+        .filter(iops => !isNaN(iops) && iops > 0);
+    
+    const validLatency = recentTestRuns
+        .map(run => typeof run.avg_latency === 'number' ? run.avg_latency : parseFloat(run.avg_latency as any) || 0)
+        .filter(latency => !isNaN(latency) && latency > 0);
+    
+    const avgIOPS = validIOPS.length > 0 
+        ? Math.round(validIOPS.reduce((sum, val) => sum + val, 0) / validIOPS.length)
+        : 0;
+    
+    const latencySum = validLatency.reduce((sum, val) => sum + val, 0);
+    const latencyAvg = validLatency.length > 0 ? latencySum / validLatency.length : 0;
+    const avgLatency = latencyAvg > 0
+        ? Math.round(latencyAvg * 100) / 100  // Round to 2 decimal places
+        : 0;
+    
+    console.log('Fallback metrics calculated:', {
+        testRunsUsed: recentTestRuns.length,
+        validIOPS: validIOPS.length,
+        validLatency: validLatency.length,
+        avgIOPS,
+        avgLatency,
+        latencySample: validLatency.slice(0, 5),
+        latencySum: validLatency.reduce((sum, val) => sum + val, 0),
+        latencyAvg: validLatency.length > 0 ? validLatency.reduce((sum, val) => sum + val, 0) / validLatency.length : 0
+    });
+    
+    return { avgIOPS, avgLatency };
 };
 
 // Check system status
@@ -210,27 +182,62 @@ const checkSystemStatus = async (): Promise<SystemStatus> => {
 // Fetch comprehensive dashboard statistics
 export const fetchDashboardStats = async (): Promise<DashboardStats> => {
     try {
-        // Fetch data in parallel
+        // Fetch data in parallel - use include_metadata to get total count
         const [testRunsResult, serversResult, latestResult] = await Promise.allSettled([
-            fetchTestRuns(),
+            fetchTestRuns({ include_metadata: true }),
             fetchTimeSeriesServers(),
             fetchTimeSeriesLatest()
         ]);
         
         // Extract data from results
-        const testRuns = testRunsResult.status === 'fulfilled' ? testRunsResult.value.data || [] : [];
+        // Handle both metadata response and direct array for backward compatibility
+        let testRuns: any[] = [];
+        let totalTestRuns = 0;
+        
+        if (testRunsResult.status === 'fulfilled' && testRunsResult.value.data) {
+            // Check if response has metadata structure
+            if ('data' in testRunsResult.value.data && 'total' in testRunsResult.value.data) {
+                // Metadata response
+                const metadataResponse = testRunsResult.value.data as { data: any[], total: number };
+                testRuns = metadataResponse.data || [];
+                totalTestRuns = metadataResponse.total || 0;
+            } else {
+                // Direct array response (backward compatibility)
+                testRuns = Array.isArray(testRunsResult.value.data) ? testRunsResult.value.data : [];
+                totalTestRuns = testRuns.length;
+            }
+        }
+        
         const servers = serversResult.status === 'fulfilled' ? serversResult.value.data || [] : [];
         const latestData = latestResult.status === 'fulfilled' ? latestResult.value.data || [] : [];
         
-        // Calculate statistics
-        const totalTestRuns = testRuns.length;
-        const activeServers = servers.filter(s => s.test_count > 0).length;
+        // Debug logging
+        console.log('Dashboard stats - servers:', servers.length, servers);
+        console.log('Dashboard stats - latestData:', latestData.length, latestData.slice(0, 5));
         
+        // Calculate statistics
+        const activeServers = servers.filter(s => s.test_count > 0).length;
+        console.log('Active servers count:', activeServers, 'from', servers.length, 'total servers');
         
         // Calculate average IOPS and latency from latest data
         const iopsData = latestData.filter(d => d.metric_type === 'iops' && d.value > 0);
         const latencyData = latestData.filter(d => d.metric_type === 'avg_latency' && d.value > 0);
         
+        console.log('IOPS data points:', iopsData.length);
+        console.log('Latency data points:', latencyData.length);
+        if (latencyData.length > 0) {
+            const sampleValues = latencyData.slice(0, 5).map(d => d.value);
+            const sum = latencyData.reduce((sum, d) => sum + d.value, 0);
+            const avg = sum / latencyData.length;
+            console.log('Latency calculation details:', {
+                sampleValues,
+                sum,
+                count: latencyData.length,
+                average: avg,
+                min: Math.min(...latencyData.map(d => d.value)),
+                max: Math.max(...latencyData.map(d => d.value))
+            });
+        }
         
         let avgIOPS = 0;
         let avgLatency = 0;
@@ -238,21 +245,51 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
         // Try to get IOPS and latency from time series latest
         if (iopsData.length > 0) {
             avgIOPS = Math.round(iopsData.reduce((sum, d) => sum + d.value, 0) / iopsData.length);
+            console.log('Calculated avgIOPS from time series:', avgIOPS);
         }
         
         if (latencyData.length > 0) {
-            avgLatency = Math.round(latencyData.reduce((sum, d) => sum + d.value, 0) / latencyData.length * 10) / 10;
+            // Ensure values are numbers
+            const numericValues = latencyData.map(d => {
+                const val = typeof d.value === 'number' ? d.value : parseFloat(d.value as any) || 0;
+                return val;
+            }).filter(v => !isNaN(v) && v > 0);
+            
+            if (numericValues.length > 0) {
+                const sum = numericValues.reduce((sum, val) => sum + val, 0);
+                const avg = sum / numericValues.length;
+                avgLatency = Math.round(avg * 100) / 100; // Round to 2 decimal places
+                console.log('Calculated avgLatency from time series:', {
+                    sum,
+                    count: numericValues.length,
+                    avg,
+                    rounded: avgLatency,
+                    sampleValues: numericValues.slice(0, 5),
+                    min: Math.min(...numericValues),
+                    max: Math.max(...numericValues)
+                });
+            } else {
+                console.warn('No valid numeric latency values found in time series data');
+            }
         }
         
-        // If either metric is missing, use fallback method for both
+        // If either metric is missing, use fallback method from test runs
         if (avgIOPS === 0 || avgLatency === 0) {
-            console.log('Missing metrics from time series, trying fallback method...');
-            const fallbackMetrics = await getFallbackMetrics(testRuns.slice(0, 10));
+            console.log('Missing metrics from time series, trying fallback method from test runs...');
+            console.log('Test runs available:', testRuns.length);
+            if (testRuns.length > 0) {
+                console.log('Sample test run latency:', testRuns[0]?.avg_latency, 'IOPS:', testRuns[0]?.iops);
+            }
             
-            if (avgIOPS === 0) {
+            // Use more test runs for better average (up to 50)
+            const fallbackMetrics = getFallbackMetrics(testRuns.slice(0, 50));
+            
+            if (avgIOPS === 0 && fallbackMetrics.avgIOPS > 0) {
+                console.log('Using fallback IOPS:', fallbackMetrics.avgIOPS);
                 avgIOPS = fallbackMetrics.avgIOPS;
             }
-            if (avgLatency === 0) {
+            if (avgLatency === 0 && fallbackMetrics.avgLatency > 0) {
+                console.log('Using fallback latency:', fallbackMetrics.avgLatency);
                 avgLatency = fallbackMetrics.avgLatency;
             }
         }
@@ -336,12 +373,34 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
 // Fetch quick stats for the loading state
 export const fetchQuickStats = async () => {
     try {
-        const result = await fetchTestRuns();
-        const testRuns = result.data || [];
+        const result = await fetchTestRuns({ include_metadata: true });
+        
+        if (!result.data) {
+            return {
+                totalTestRuns: 0,
+                hasData: false
+            };
+        }
+        
+        // Handle both metadata response and direct array for backward compatibility
+        let totalTestRuns = 0;
+        let hasData = false;
+        
+        if ('data' in result.data && 'total' in result.data) {
+            // Metadata response
+            const metadataResponse = result.data as { data: any[], total: number };
+            totalTestRuns = metadataResponse.total || 0;
+            hasData = (metadataResponse.data?.length || 0) > 0;
+        } else {
+            // Direct array response (backward compatibility)
+            const testRuns = Array.isArray(result.data) ? result.data : [];
+            totalTestRuns = testRuns.length;
+            hasData = testRuns.length > 0;
+        }
         
         return {
-            totalTestRuns: testRuns.length,
-            hasData: testRuns.length > 0
+            totalTestRuns,
+            hasData
         };
     } catch (error) {
         console.error('Failed to fetch quick stats:', error);
