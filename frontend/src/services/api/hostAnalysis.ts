@@ -1,5 +1,5 @@
 import type { TestRun } from '../../types';
-import { fetchTestRuns, fetchFilters } from './testRuns';
+import { fetchTestRuns, fetchFilters, extractTestRuns } from './testRuns';
 
 export interface HostAnalysisData {
     hostname: string;
@@ -75,7 +75,7 @@ export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisD
         throw new Error(`Failed to fetch test runs for host: ${hostname}`);
     }
     
-    const testRuns = response.data;
+    const testRuns = extractTestRuns(response.data);
 
     // Filter out test runs with null performance data
     // Note: avg_latency is optional since it may not be available for all test data

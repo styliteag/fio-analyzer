@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { DashboardHeader } from '../components/layout';
-import { fetchTestRuns } from '../services/api/testRuns';
+import { fetchTestRuns, extractTestRuns } from '../services/api/testRuns';
 import { fetchPerformanceData } from '../services/api/performance';
 import { createComparableConfigurations } from '../utils/configurationMatcher';
 import HostSelector from '../components/HostSelector';
@@ -67,7 +67,7 @@ export default function Compare() {
         throw new Error(runsRes.error);
       }
 
-      const runs = runsRes.data || [];
+      const runs = runsRes.data ? extractTestRuns(runsRes.data) : [];
       if (runs.length === 0) {
         setPerformanceData([]);
         setComparisons([]);

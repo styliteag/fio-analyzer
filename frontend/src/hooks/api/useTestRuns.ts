@@ -1,6 +1,6 @@
 // Custom hook for test run operations
 import { useState, useEffect, useCallback } from 'react';
-import { fetchTestRuns, fetchTestRun, updateTestRun, deleteTestRun, deleteTestRuns, bulkUpdateTestRuns, fetchFilters } from '../../services/api';
+import { fetchTestRuns, fetchTestRun, updateTestRun, deleteTestRun, deleteTestRuns, bulkUpdateTestRuns, fetchFilters, extractTestRuns } from '../../services/api';
 import type { TestRun, FilterOptions } from '../../types';
 import type { TestRunUpdateData } from '../../services/api/testRuns';
 
@@ -38,7 +38,8 @@ export const useTestRuns = (options: UseTestRunsOptions = {}): UseTestRunsResult
             
             const response = await fetchTestRuns();
             if (response.data) {
-                setTestRuns(response.data);
+                const runs = extractTestRuns(response.data);
+                setTestRuns(runs);
             } else {
                 throw new Error(response.error || 'Failed to fetch test runs');
             }

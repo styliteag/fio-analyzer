@@ -1,6 +1,6 @@
 // Hook for server-side test run filtering with debouncing
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { fetchTestRuns, convertActiveFiltersToOptions, fetchFilters } from '../services/api';
+import { fetchTestRuns, convertActiveFiltersToOptions, fetchFilters, extractTestRuns } from '../services/api';
 import type { TestRun, FilterOptions } from '../types';
 import type { ActiveFilters } from './useTestRunFilters';
 
@@ -82,7 +82,8 @@ export const useServerSideTestRuns = (
             const response = await fetchTestRuns(fetchOptions);
             
             if (response.data) {
-                setTestRuns(response.data);
+                const runs = extractTestRuns(response.data);
+                setTestRuns(runs);
             } else {
                 throw new Error(response.error || 'Failed to fetch test runs');
             }

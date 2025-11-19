@@ -9,7 +9,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useTestRunFilters } from "../hooks/useTestRunFilters";
 import { usePerformanceData } from "../hooks";
 import { TrendingUp, Activity, Zap, Timer, HardDrive, Server } from "lucide-react";
-import { fetchTestRuns } from "../services/api/testRuns";
+import { fetchTestRuns, extractTestRuns } from "../services/api/testRuns";
 import type { TestRun, ChartTemplate } from "../types";
 
 interface TestRunMetrics {
@@ -129,8 +129,9 @@ export default function Performance() {
 			if (response.error) {
 				setError(response.error);
 			} else if (response.data) {
-				setTestRuns(response.data);
-				calculateTestRunMetrics(response.data);
+				const runs = extractTestRuns(response.data);
+				setTestRuns(runs);
+				calculateTestRunMetrics(runs);
 			}
 
 		} catch (err) {

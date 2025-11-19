@@ -28,6 +28,7 @@ import {
 	bulkUpdateTestRunsByUUID,
 	fetchTestRun,
 	fetchTestRuns,
+	extractTestRuns,
 } from '../services/api/testRuns';
 import {
 	fetchTimeSeriesHistory,
@@ -199,7 +200,7 @@ const Admin: React.FC = () => {
 						}
 
 						if (response.data) {
-							const chunk = response.data;
+							const chunk = extractTestRuns(response.data);
 							allRuns.push(...chunk);
 							offset += chunk.length;
 							hasMore = chunk.length === chunkSize; // If we got a full chunk, there might be more

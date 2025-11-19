@@ -40,6 +40,17 @@ export interface TestRunsMetadataResponse {
     has_more: boolean;
 }
 
+// Helper function to extract test runs array from either response type
+export const extractTestRuns = (response: TestRun[] | TestRunsMetadataResponse): TestRun[] => {
+    if (Array.isArray(response)) {
+        return response;
+    }
+    if ('data' in response) {
+        return response.data;
+    }
+    return [];
+};
+
 // Fetch test runs with optional historical data and server-side filtering
 export const fetchTestRuns = async (options: TestRunsOptions = {}, abortSignal?: AbortSignal) => {
     const { 

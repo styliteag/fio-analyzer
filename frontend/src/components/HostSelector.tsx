@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Select from 'react-select';
-import { fetchTestRuns } from '../services/api/testRuns';
+import { fetchTestRuns, extractTestRuns } from '../services/api/testRuns';
 import Loading from './ui/Loading';
 import { Check, Server, HardDrive } from 'lucide-react';
 
@@ -53,7 +53,7 @@ export default function HostSelector({ selectedHosts, onHostsChange, className =
           }
 
           if (res.data) {
-            const chunk = res.data;
+            const chunk = extractTestRuns(res.data);
             allRuns.push(...chunk);
             offset += chunk.length;
             hasMore = chunk.length === chunkSize; // If we got a full chunk, there might be more
@@ -115,12 +115,13 @@ export default function HostSelector({ selectedHosts, onHostsChange, className =
         });
         
         if (res.data) {
+          const testRuns = extractTestRuns(res.data);
           const preview: Record<string, { count: number; configs: number }> = {};
           
           // Group preview data by unique host-hardware combinations
           for (const uniqueValue of selectedHosts) {
             const hostname = extractHostname(uniqueValue);
-            const hostRuns = res.data.filter(run => run.hostname === hostname);
+            const hostRuns = testRuns.filter(run => run.hostname === hostname);
             preview[uniqueValue] = {
               count: hostRuns.length,
               configs: new Set(hostRuns.map(run => 

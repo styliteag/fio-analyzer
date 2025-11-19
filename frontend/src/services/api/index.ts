@@ -16,6 +16,7 @@ export {
     deleteTestRuns,
     fetchFilters,
     convertActiveFiltersToOptions,
+    extractTestRuns,
 } from './testRuns';
 
 export {
