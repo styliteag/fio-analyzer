@@ -956,17 +956,39 @@ generate_env_file() {
 # INCLUDE=/path/to/base.env
 
 # Host Configuration
+# ⚠️ IMPORTANT: These values create a hierarchical data structure (Host-Protocol-Type-Model)
+# The system organizes and filters data using this 4-level hierarchy:
+#   1. Host (hostname)
+#   2. Host-Protocol (hostname-protocol)
+#   3. Host-Protocol-Type (hostname-protocol-drive_type)
+#   4. Host-Protocol-Type-Model (hostname-protocol-drive_type-drive_model)
+# Choose values that create meaningful groupings for your infrastructure!
+
 # Hostname (default: current hostname)
-# Use -vm if its a virtual machine
+# - Use descriptive server identifiers
+# - Use "-vm" suffix if it's a virtual machine (e.g., "web01-vm", "db01-vm")
+# - Examples: "server01", "web01-vm", "storage-node-01"
 HOSTNAME="${hostname_default}"
-# Protocol (unknown, NFS, iSCSI, Local, etc.)
+
+# Protocol - Storage protocol used
+# - Examples: "NFS", "iSCSI", "Local", "CIFS", "SMB", "FC" (Fibre Channel)
+# - Use consistent naming across all tests from the same storage setup
+# - Examples: "NFS", "iSCSI", "Local", "unknown"
 PROTOCOL="local"
-# Drive type (hdd, ssd, nvme, mirror, raidz1, raidz2, raidz3, etc.)
-# If its a VM use "vm-hdd", "vm-ssd", "vm-nvme", "vm-mirror", "vm-raidz1", "vm-raidz2", "vm-raidz3", etc.
+
+# Drive Type - Type of storage drive/array
+# - Physical drives: "hdd", "ssd", "nvme"
+# - ZFS pools: "mirror", "raidz1", "raidz2", "raidz3", "stripe"
+# - For VMs: prefix with "vm-" (e.g., "vm-hdd", "vm-ssd", "vm-raidz1")
+# - Examples: "hdd", "ssd", "nvme", "mirror", "raidz1", "vm-ssd", "vm-raidz2"
 DRIVE_TYPE="unknown"
-# Drive model (unknown, WD1003FZEX, WD1003FZEX, poolName, poolName-syncoff, poolName-syncall, etc.)
-# If its a VM use the Drive model of the Hypervisor
-# if there are special parameters of the drive model, use them in the format "drive-model-special-parameters"
+
+# Drive Model - Specific drive/pool identifier
+# - Physical drives: model name (e.g., "WD1003FZEX", "Samsung980PRO")
+# - ZFS pools: pool name (e.g., "tank", "storage-pool")
+# - Special parameters: append with dash (e.g., "poolName-syncoff", "poolName-syncall")
+# - For VMs: use the hypervisor's drive model
+# - Examples: "WD1003FZEX", "Samsung980PRO", "tank", "storage-pool-syncoff", "poolName-syncall"
 DRIVE_MODEL="unknown"
 CONFIG_UUID="${config_uuid}"
 

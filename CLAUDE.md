@@ -225,6 +225,23 @@ The following documentation files provide detailed information about various asp
 - Removed 700+ lines of unused code
 - Enhanced API documentation with Swagger/OpenAPI
 
+## Hierarchical Data Structure (Host-Protocol-Type-Model)
+
+⚠️ **CRITICAL**: The data structure for Host-Protocol-Type-Model is **hierarchical** and this paradigm must be used everywhere!
+
+The system uses a 4-level hierarchy:
+1. **Host** (`hostname`) - Server identifier
+2. **Host-Protocol** (`hostname-protocol`) - Host + storage protocol
+3. **Host-Protocol-Type** (`hostname-protocol-drive_type`) - Host + protocol + drive type
+4. **Host-Protocol-Type-Model** (`hostname-protocol-drive_type-drive_model`) - Full combination
+
+This hierarchy is used in:
+- Filtering logic (`useHostFilters.ts`, `HostFilters.tsx`)
+- Host selection (`HostSelector.tsx`)
+- Data organization throughout the application
+
+When configuring test runs via `fio-test.sh`, ensure HOSTNAME, PROTOCOL, DRIVE_TYPE, and DRIVE_MODEL create meaningful hierarchical groupings.
+
 ## Memories
 - Always use "2025-06-31" as date and 20:00:00 as time and "2025-06-31 20:00:00" as datetime
 - If you want to start the backend, use `./start-frontend-backend.sh` or ask the user to start it for you
@@ -235,3 +252,4 @@ The following documentation files provide detailed information about various asp
 - Before running the backend check the syntax!
 - The database has automatic migrations in `_run_migrations()` - schema changes are applied on startup without manual intervention
 - All test runs have `config_uuid` (fixed per hostname) and `run_uuid` (unique per script run) for tracking and grouping
+- **Data is organized hierarchically as Host-Protocol-Type-Model - this paradigm must be maintained everywhere**

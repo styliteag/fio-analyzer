@@ -22,6 +22,7 @@ A full-stack web application that analyzes and visualizes FIO (Flexible I/O Test
 - Track server hostname, storage protocol (NFS, iSCSI, etc.)
 - Custom test descriptions and categorization
 - Filter and organize tests by infrastructure details
+- **Hierarchical Data Structure**: Data is organized in a 4-level hierarchy (Host → Host-Protocol → Host-Protocol-Type → Host-Protocol-Type-Model) for powerful filtering and comparison
 
 ### 🚀 **Automated Testing**
 - Production-ready shell script with .env file configuration
@@ -254,10 +255,16 @@ chmod +x fio-test.sh
 
 #### Configuration with .env File
 Create a `.env` file for persistent configuration:
+
+⚠️ **Important**: The HOSTNAME, PROTOCOL, DRIVE_TYPE, and DRIVE_MODEL values create a **hierarchical data structure** used throughout the application for filtering and organization. Choose values that create meaningful groupings.
+
 ```bash
 # Server Information
-HOSTNAME=myserver
-PROTOCOL=NVMe
+# These values form a 4-level hierarchy: Host → Host-Protocol → Host-Protocol-Type → Host-Protocol-Type-Model
+HOSTNAME=myserver          # Server identifier (use -vm suffix for VMs)
+PROTOCOL=NFS              # Storage protocol (NFS, iSCSI, Local, etc.)
+DRIVE_TYPE=ssd            # Drive type (hdd, ssd, nvme, raidz1, etc.; use vm- prefix for VMs)
+DRIVE_MODEL=Samsung980PRO # Drive model (can include special params like "poolName-syncoff")
 DESCRIPTION=Production performance test
 
 # Test Parameters  
@@ -583,6 +590,7 @@ The application provides comprehensive performance analysis:
 - **Latency Percentiles** - P1, P5, P10, P20, P30, P40, P50, P60, P70, P80, P90, P95, P99, P99.5, P99.9, P99.95, P99.99
 
 ### Filtering and Organization
+- **Hierarchical Filtering**: Filter by Host → Host-Protocol → Host-Protocol-Type → Host-Protocol-Type-Model
 - Filter by drive model, drive type, storage protocol
 - Search by hostname, test description
 - Organize by block size and I/O patterns

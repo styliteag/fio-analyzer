@@ -140,3 +140,57 @@ docker build \
   - `GET /api/users/{username}`, `PUT /api/users/{username}`, `DELETE /api/users/{username}`
 
 For the full, parameterized reference (examples, schemas), use Swagger at `/docs` or ReDoc at `/redoc`. A machine-readable index is at `docs/api/endpoints.json`.
+
+## Hierarchical Data Structure (Host-Protocol-Type-Model)
+
+⚠️ **CRITICAL**: The data structure for Host-Protocol-Type-Model is **hierarchical** and this paradigm must be used everywhere in the codebase!
+
+### Hierarchy Levels
+
+The system uses a 4-level hierarchical structure for organizing and filtering test data:
+
+1. **Level 1: Host** (`hostname`)
+   - The server/host identifier
+   - Example: `"server01"`, `"web01-vm"`
+
+2. **Level 2: Host-Protocol** (`hostname-protocol`)
+   - Combination of hostname and storage protocol
+   - Format: `"${hostname}-${protocol}"`
+   - Example: `"server01-NFS"`, `"web01-iSCSI"`
+
+3. **Level 3: Host-Protocol-Type** (`hostname-protocol-drive_type`)
+   - Combination of hostname, protocol, and drive type
+   - Format: `"${hostname}-${protocol}-${drive_type}"`
+   - Example: `"server01-NFS-ssd"`, `"web01-iSCSI-vm-raidz1"`
+
+4. **Level 4: Host-Protocol-Type-Model** (`hostname-protocol-drive_type-drive_model`)
+   - Full combination of all four attributes
+   - Format: `"${hostname}-${protocol}-${drive_type}-${drive_model}"`
+   - Example: `"server01-NFS-ssd-Samsung980PRO"`, `"web01-iSCSI-vm-raidz1-poolName-syncoff"`
+
+### Implementation Requirements
+
+- **Filtering**: All filters must respect the hierarchical structure (see `frontend/src/components/host/HostFilters.tsx` and `frontend/src/hooks/useHostFilters.ts`)
+- **Data Organization**: Data is organized and grouped by this hierarchy throughout the application
+- **UI Components**: The Host selector and filters use this hierarchical structure (see `frontend/src/components/HostSelector.tsx`)
+- **API Responses**: Backend should structure data to support this hierarchy
+- **Test Data**: When uploading test data via `fio-test.sh`, ensure HOSTNAME, PROTOCOL, DRIVE_TYPE, and DRIVE_MODEL are set correctly to maintain the hierarchy
+
+### Example Usage in Filters
+
+```typescript
+// Hierarchical filtering in useHostFilters.ts
+const hostProtocolKey = `${drive.hostname}-${drive.protocol}`;
+const hostProtocolTypeKey = `${drive.hostname}-${drive.protocol}-${drive.drive_type}`;
+const hostProtocolTypeModelKey = `${drive.hostname}-${drive.protocol}-${drive.drive_type}-${drive.drive_model}`;
+```
+
+### Configuration in fio-test.sh
+
+When configuring test runs, the `.env` file must specify values that create meaningful hierarchical groupings:
+- `HOSTNAME`: Server identifier (use `-vm` suffix for virtual machines)
+- `PROTOCOL`: Storage protocol (NFS, iSCSI, Local, etc.)
+- `DRIVE_TYPE`: Drive type (hdd, ssd, nvme, mirror, raidz1, raidz2, raidz3, etc.; use `vm-` prefix for VMs)
+- `DRIVE_MODEL`: Drive model identifier (can include special parameters like `poolName-syncoff`, `poolName-syncall`)
+
+**This hierarchical paradigm must be maintained consistently across all components, filters, and data structures!**
