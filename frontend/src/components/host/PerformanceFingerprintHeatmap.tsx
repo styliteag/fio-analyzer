@@ -24,30 +24,57 @@ interface HeatmapCell {
     p99Latency?: number;
 }
 
+type AxisOrientation = 'normal' | 'swapped';
+type RowSortOption = 'hostname-pattern' | 'pattern-hostname' | 'hostname' | 'pattern';
+type ColumnSortOption = 'size-numeric' | 'size-reverse' | 'alphabetical' | 'alphabetical-reverse';
+
 const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps> = ({ drives }) => {
     const { actualTheme } = useTheme();
     const [hoveredCell, setHoveredCell] = React.useState<{ cell: HeatmapCell; x: number; y: number } | null>(null);
+    const [axisOrientation, setAxisOrientation] = React.useState<AxisOrientation>('normal');
+    const [rowSort, setRowSort] = React.useState<RowSortOption>('hostname-pattern');
+    const [columnSort, setColumnSort] = React.useState<ColumnSortOption>('size-numeric');
 
 
 
-    // Get all unique block sizes and hostnames
-    const allBlockSizes = [...new Set(
-        drives.flatMap(drive =>
-            drive.configurations.map(config => config.block_size)
-        )
-    )].sort((a, b) => {
-        // Sort by actual size (convert to bytes for comparison)
-        const parseSize = (size: string): number => {
-            const match = size.match(/^(\d+(?:\.\d+)?)([KMGT]?)$/i);
-            if (!match) return 0;
-            const [, num, unit] = match;
-            const value = parseFloat(num);
-            const multipliers: Record<string, number> = { 'K': 1024, 'M': 1024*1024, 'G': 1024*1024*1024, 'T': 1024*1024*1024*1024 };
-            return value * (multipliers[unit.toUpperCase()] || 1);
-        };
+    // Helper function to parse block size to bytes
+    const parseBlockSizeToBytes = (size: string): number => {
+        const match = size.match(/^(\d+(?:\.\d+)?)([KMGT]?)$/i);
+        if (!match) return 0;
+        const [, num, unit] = match;
+        const value = parseFloat(num);
+        const multipliers: Record<string, number> = { 'K': 1024, 'M': 1024*1024, 'G': 1024*1024*1024, 'T': 1024*1024*1024*1024 };
+        return value * (multipliers[unit.toUpperCase()] || 1);
+    };
 
-        return parseSize(a) - parseSize(b);
-    });
+    // Get all unique block sizes and sort based on column sort option
+    const allBlockSizes = React.useMemo(() => {
+        const unique = [...new Set(
+            drives.flatMap(drive =>
+                drive.configurations.map(config => config.block_size)
+            )
+        )];
+        
+        return unique.sort((a, b) => {
+            switch (columnSort) {
+                case 'size-numeric': {
+                    return parseBlockSizeToBytes(a) - parseBlockSizeToBytes(b);
+                }
+                case 'size-reverse': {
+                    return parseBlockSizeToBytes(b) - parseBlockSizeToBytes(a);
+                }
+                case 'alphabetical': {
+                    return a.localeCompare(b);
+                }
+                case 'alphabetical-reverse': {
+                    return b.localeCompare(a);
+                }
+                default: {
+                    return parseBlockSizeToBytes(a) - parseBlockSizeToBytes(b);
+                }
+            }
+        });
+    }, [drives, columnSort]);
 
     const allHostnames = [...new Set(drives.map(drive => drive.hostname))].sort();
     // Get patterns from actual data, but map them to our expected format
@@ -69,45 +96,72 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     console.log('Mapped patterns:', allPatterns);
 
     // Create row definitions - each row is hostname + protocol + driveModel + pattern
-    const rowDefinitions: { hostname: string; pattern: string; driveModel: string; protocol: string; driveType: string; hostKey: string }[] = [];
+    const rowDefinitions = React.useMemo(() => {
+        const definitions: { hostname: string; pattern: string; driveModel: string; protocol: string; driveType: string; hostKey: string }[] = [];
 
-    // Group drives by hostname to handle multiple drive models per host
-    const drivesByHostname = new Map<string, typeof drives>();
-    drives.forEach(drive => {
-        if (!drivesByHostname.has(drive.hostname)) {
-            drivesByHostname.set(drive.hostname, []);
-        }
-        drivesByHostname.get(drive.hostname)!.push(drive);
-    });
-
-    // For each hostname, create separate sections for each unique protocol-driveModel-driveType combination
-    const processedKeys = new Set<string>();
-    drivesByHostname.forEach((hostDrives, hostname) => {
-        hostDrives.forEach((drive) => {
-            const driveModel = drive.drive_model || '';
-            const protocol = drive.protocol || 'unknown';
-            const driveType = drive.drive_type || '';
-            const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
-
-            // Only skip truly identical drives (same hostname, protocol, driveModel, driveType, and configurations)
-            const isDuplicate = processedKeys.has(hostKey) && drive.configurations?.length === 0;
-            if (isDuplicate) {
-                return;
+        // Group drives by hostname to handle multiple drive models per host
+        const drivesByHostname = new Map<string, typeof drives>();
+        drives.forEach(drive => {
+            if (!drivesByHostname.has(drive.hostname)) {
+                drivesByHostname.set(drive.hostname, []);
             }
-            processedKeys.add(hostKey);
+            drivesByHostname.get(drive.hostname)!.push(drive);
+        });
 
-            allPatterns.forEach(pattern => {
-                rowDefinitions.push({
-                    hostname,
-                    pattern,
-                    driveModel,
-                    protocol,
-                    driveType,
-                    hostKey
+        // For each hostname, create separate sections for each unique protocol-driveModel-driveType combination
+        const processedKeys = new Set<string>();
+        drivesByHostname.forEach((hostDrives, hostname) => {
+            hostDrives.forEach((drive) => {
+                const driveModel = drive.drive_model || '';
+                const protocol = drive.protocol || 'unknown';
+                const driveType = drive.drive_type || '';
+                const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
+
+                // Only skip truly identical drives (same hostname, protocol, driveModel, driveType, and configurations)
+                const isDuplicate = processedKeys.has(hostKey) && drive.configurations?.length === 0;
+                if (isDuplicate) {
+                    return;
+                }
+                processedKeys.add(hostKey);
+
+                allPatterns.forEach(pattern => {
+                    definitions.push({
+                        hostname,
+                        pattern,
+                        driveModel,
+                        protocol,
+                        driveType,
+                        hostKey
+                    });
                 });
             });
         });
-    });
+
+        // Sort row definitions based on rowSort option
+        return definitions.sort((a, b) => {
+            switch (rowSort) {
+                case 'hostname-pattern': {
+                    const hostCompare = a.hostname.localeCompare(b.hostname);
+                    if (hostCompare !== 0) return hostCompare;
+                    return a.pattern.localeCompare(b.pattern);
+                }
+                case 'pattern-hostname': {
+                    const patternCompare = a.pattern.localeCompare(b.pattern);
+                    if (patternCompare !== 0) return patternCompare;
+                    return a.hostname.localeCompare(b.hostname);
+                }
+                case 'hostname': {
+                    return a.hostname.localeCompare(b.hostname);
+                }
+                case 'pattern': {
+                    return a.pattern.localeCompare(b.pattern);
+                }
+                default: {
+                    return a.hostname.localeCompare(b.hostname);
+                }
+            }
+        });
+    }, [drives, allPatterns, rowSort]);
 
     // Calculate maximum values from VISIBLE/FILTERED data for normalization
     // This ensures fair comparison within the current filtered dataset
@@ -181,33 +235,37 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     // Build heatmap data - organized by row definition and block size
     // Each row represents a hostname + pattern combination
     // Each column represents a block size
-    const heatmapData: HeatmapCell[][] = [];
+    const heatmapData: HeatmapCell[][] = React.useMemo(() => {
+        const data: HeatmapCell[][] = [];
 
-    console.log('Building heatmap data for', rowDefinitions.length, 'rows and', allBlockSizes.length, 'block sizes');
+        console.log('Building heatmap data for', rowDefinitions.length, 'rows and', allBlockSizes.length, 'block sizes');
 
-    // Initialize heatmap data structure
-    rowDefinitions.forEach((rowDef, rowIndex) => {
-        heatmapData[rowIndex] = [];
+        // Initialize heatmap data structure
+        rowDefinitions.forEach((rowDef, rowIndex) => {
+            data[rowIndex] = [];
 
-        allBlockSizes.forEach((blockSize, colIndex) => {
-            heatmapData[rowIndex][colIndex] = {
-                iops: 0,
-                normalizedIops: 0,
-                blockSize,
-                pattern: rowDef.pattern,
-                hostname: rowDef.hostname,
-                driveModel: rowDef.driveModel,
-                queueDepth: 0,
-                timestamp: '',
-                avgLatency: undefined,
-                bandwidth: undefined,
-                p70Latency: undefined,
-                p90Latency: undefined,
-                p95Latency: undefined,
-                p99Latency: undefined,
-            };
+            allBlockSizes.forEach((blockSize, colIndex) => {
+                data[rowIndex][colIndex] = {
+                    iops: 0,
+                    normalizedIops: 0,
+                    blockSize,
+                    pattern: rowDef.pattern,
+                    hostname: rowDef.hostname,
+                    driveModel: rowDef.driveModel,
+                    queueDepth: 0,
+                    timestamp: '',
+                    avgLatency: undefined,
+                    bandwidth: undefined,
+                    p70Latency: undefined,
+                    p90Latency: undefined,
+                    p95Latency: undefined,
+                    p99Latency: undefined,
+                };
+            });
         });
-    });
+
+        return data;
+    }, [rowDefinitions, allBlockSizes]);
 
     // Calculate statistics for each cell (group by hostname, driveModel, blockSize, pattern)
     const cellStatistics = React.useMemo(() => {
@@ -285,67 +343,90 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     }, [drives, patternMapping]);
 
     // Fill with actual data
-    drives.forEach((drive) => {
-        const hostname = drive.hostname;
+    const filledHeatmapData = React.useMemo(() => {
+        const data = heatmapData.map(row => row.map(cell => ({ ...cell }))); // Deep copy
 
-        drive.configurations.forEach((config) => {
-            // Try to parse IOPS as number if it's a string
-            let iopsValue = config.iops;
-            if (typeof iopsValue === 'string') {
-                iopsValue = parseFloat(iopsValue);
-            }
+        drives.forEach((drive) => {
+            const hostname = drive.hostname;
 
-            if (!iopsValue || iopsValue <= 0) {
-                return;
-            }
+            drive.configurations.forEach((config) => {
+                // Try to parse IOPS as number if it's a string
+                let iopsValue = config.iops;
+                if (typeof iopsValue === 'string') {
+                    iopsValue = parseFloat(iopsValue);
+                }
 
-            // Use the mapped pattern for row lookup
-            const mappedPattern = patternMapping[config.read_write_pattern] || config.read_write_pattern;
-            const blockSize = config.block_size;
-            const driveModel = drive.drive_model || '';
-            const protocol = drive.protocol || 'unknown';
-            const driveType = drive.drive_type || '';
-            const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
+                if (!iopsValue || iopsValue <= 0) {
+                    return;
+                }
 
-            // Find the row for this hostname-protocol-driveModel-driveType + mapped pattern combination
-            const rowIndex = rowDefinitions.findIndex(row =>
-                row.hostKey === hostKey && row.pattern === mappedPattern
-            );
+                // Use the mapped pattern for row lookup
+                const mappedPattern = patternMapping[config.read_write_pattern] || config.read_write_pattern;
+                const blockSize = config.block_size;
+                const driveModel = drive.drive_model || '';
+                const protocol = drive.protocol || 'unknown';
+                const driveType = drive.drive_type || '';
+                const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
 
-            if (rowIndex === -1) {
-                console.log('Row not found for:', hostKey, mappedPattern, 'original pattern:', config.read_write_pattern);
-                return;
-            }
+                // Find the row for this hostname-protocol-driveModel-driveType + mapped pattern combination
+                const rowIndex = rowDefinitions.findIndex(row =>
+                    row.hostKey === hostKey && row.pattern === mappedPattern
+                );
 
-            // Find the column for this block size
-            const colIndex = allBlockSizes.indexOf(blockSize);
-            if (colIndex === -1) {
-                console.log('Column not found for block size:', blockSize);
-                return;
-            }
+                if (rowIndex === -1) {
+                    console.log('Row not found for:', hostKey, mappedPattern, 'original pattern:', config.read_write_pattern);
+                    return;
+                }
 
-            // Normalize IOPS against visible data maximum - ensures max value shows as 100%
-            const normalizedIops = iopsRange > 0 ? Math.min(100, Math.max(0, (iopsValue / iopsRange) * 100)) : 0;
+                // Find the column for this block size
+                const colIndex = allBlockSizes.indexOf(blockSize);
+                if (colIndex === -1) {
+                    console.log('Column not found for block size:', blockSize);
+                    return;
+                }
 
-            heatmapData[rowIndex][colIndex] = {
-                iops: iopsValue,
-                normalizedIops,
-                blockSize,
-                pattern: mappedPattern,
-                hostname,
-                driveModel: drive.drive_model,
-                queueDepth: config.queue_depth,
-                timestamp: config.timestamp,
-                avgLatency: config.avg_latency !== null && config.avg_latency !== undefined ? config.avg_latency : undefined,
-                bandwidth: config.bandwidth !== null && config.bandwidth !== undefined ? config.bandwidth : undefined,
-                p70Latency: config.p70_latency !== null && config.p70_latency !== undefined ? config.p70_latency : undefined,
-                p90Latency: config.p90_latency !== null && config.p90_latency !== undefined ? config.p90_latency : undefined,
-                p95Latency: config.p95_latency !== null && config.p95_latency !== undefined ? config.p95_latency : undefined,
-                p99Latency: config.p99_latency !== null && config.p99_latency !== undefined ? config.p99_latency : undefined,
-            };
+                // Normalize IOPS against visible data maximum - ensures max value shows as 100%
+                const normalizedIops = iopsRange > 0 ? Math.min(100, Math.max(0, (iopsValue / iopsRange) * 100)) : 0;
 
+                data[rowIndex][colIndex] = {
+                    iops: iopsValue,
+                    normalizedIops,
+                    blockSize,
+                    pattern: mappedPattern,
+                    hostname,
+                    driveModel: drive.drive_model,
+                    queueDepth: config.queue_depth,
+                    timestamp: config.timestamp,
+                    avgLatency: config.avg_latency !== null && config.avg_latency !== undefined ? config.avg_latency : undefined,
+                    bandwidth: config.bandwidth !== null && config.bandwidth !== undefined ? config.bandwidth : undefined,
+                    p70Latency: config.p70_latency !== null && config.p70_latency !== undefined ? config.p70_latency : undefined,
+                    p90Latency: config.p90_latency !== null && config.p90_latency !== undefined ? config.p90_latency : undefined,
+                    p95Latency: config.p95_latency !== null && config.p95_latency !== undefined ? config.p95_latency : undefined,
+                    p99Latency: config.p99_latency !== null && config.p99_latency !== undefined ? config.p99_latency : undefined,
+                };
+
+            });
         });
-    });
+
+        return data;
+    }, [heatmapData, drives, rowDefinitions, allBlockSizes, patternMapping, iopsRange]);
+
+    // Transpose heatmap data when axis is swapped
+    const transposedHeatmapData = React.useMemo(() => {
+        if (axisOrientation === 'normal') {
+            return null; // No transpose needed
+        }
+        
+        // Transpose: rows become columns, columns become rows
+        const transposed: HeatmapCell[][] = [];
+        for (let col = 0; col < allBlockSizes.length; col++) {
+            transposed[col] = [];
+            for (let row = 0; row < rowDefinitions.length; row++) {
+                transposed[col][row] = filledHeatmapData[row][col];
+            }
+        }
+        return transposed;
+    }, [filledHeatmapData, allBlockSizes, rowDefinitions, axisOrientation]);
 
 
     const getColorForNormalizedIOPS = (normalizedIops: number, isDark: boolean): string => {
@@ -407,6 +488,61 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                     </p>
                 </div>
 
+                {/* Customization Controls */}
+                <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <h5 className="text-sm font-semibold theme-text-primary mb-3">Customization Options</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Axis Orientation */}
+                        <div>
+                            <label className="block text-xs font-medium theme-text-secondary mb-2">
+                                Axis Orientation
+                            </label>
+                            <select
+                                value={axisOrientation}
+                                onChange={(e) => setAxisOrientation(e.target.value as AxisOrientation)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="normal">Normal (Hosts/Patterns = Rows, Block Sizes = Columns)</option>
+                                <option value="swapped">Swapped (Block Sizes = Rows, Hosts/Patterns = Columns)</option>
+                            </select>
+                        </div>
+
+                        {/* Row Sorting */}
+                        <div>
+                            <label className="block text-xs font-medium theme-text-secondary mb-2">
+                                Row Sorting
+                            </label>
+                            <select
+                                value={rowSort}
+                                onChange={(e) => setRowSort(e.target.value as RowSortOption)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="hostname-pattern">Hostname, then Pattern</option>
+                                <option value="pattern-hostname">Pattern, then Hostname</option>
+                                <option value="hostname">Hostname only</option>
+                                <option value="pattern">Pattern only</option>
+                            </select>
+                        </div>
+
+                        {/* Column Sorting */}
+                        <div>
+                            <label className="block text-xs font-medium theme-text-secondary mb-2">
+                                Column Sorting
+                            </label>
+                            <select
+                                value={columnSort}
+                                onChange={(e) => setColumnSort(e.target.value as ColumnSortOption)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="size-numeric">Size (Numeric - Small to Large)</option>
+                                <option value="size-reverse">Size (Reverse - Large to Small)</option>
+                                <option value="alphabetical">Alphabetical (A-Z)</option>
+                                <option value="alphabetical-reverse">Alphabetical (Z-A)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Legend */}
                 <div className="space-y-2 text-xs theme-text-secondary mb-4">
                     <div className="flex flex-wrap items-center gap-4">
@@ -457,53 +593,55 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
 
             <div className="overflow-x-auto">
                 <div className="inline-block min-w-full">
-                    <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-500" style={{ fontSize: '12px' }}>
-                        <thead>
-                            <tr>
-                                <th className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary">
-                                    Host
-                                </th>
-                                <th className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary">
-                                    Pattern
-                                </th>
-                                {allBlockSizes.map(blockSize => (
-                                    <th key={blockSize} className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary text-center" style={{ minWidth: '120px' }}>
-                                        {blockSize}
+                    {axisOrientation === 'normal' ? (
+                        // Normal orientation: Hosts/Patterns = Rows, Block Sizes = Columns
+                        <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-500" style={{ fontSize: '12px' }}>
+                            <thead>
+                                <tr>
+                                    <th className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary">
+                                        Host
                                     </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rowDefinitions.map((rowDef, rowIndex) => {
-                                const rowKey = `${rowDef.hostKey}-${rowDef.pattern}`;
-                                const isFirstPatternForHost = rowDef.pattern === 'random_read';
-                                const isFirstRowOfHost = rowIndex === 0 || rowDefinitions[rowIndex - 1].hostKey !== rowDef.hostKey;
+                                    <th className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary">
+                                        Pattern
+                                    </th>
+                                    {allBlockSizes.map(blockSize => (
+                                        <th key={blockSize} className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary text-center" style={{ minWidth: '120px' }}>
+                                            {blockSize}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rowDefinitions.map((rowDef, rowIndex) => {
+                                    const rowKey = `${rowDef.hostKey}-${rowDef.pattern}`;
+                                    const isFirstPatternForHost = rowDef.pattern === 'random_read';
+                                    const isFirstRowOfHost = rowIndex === 0 || rowDefinitions[rowIndex - 1].hostKey !== rowDef.hostKey;
 
-                                return (
-                                    <tr key={rowKey} className={isFirstRowOfHost ? 'border-t-4 border-t-blue-500' : ''}>
-                                        <td className={`border border-gray-300 dark:border-gray-500 p-3 text-sm font-medium theme-text-primary ${
-                                            isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-950/20' :
-                                            isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700/50' : 'bg-white dark:bg-gray-800'}`}>
-                                            <div>
-                                                <div className="font-bold">{rowDef.hostname}</div>
-                                                <div className="text-xs theme-text-secondary mt-1">
-                                                    {rowDef.protocol} • {rowDef.driveModel}
+                                    return (
+                                        <tr key={rowKey} className={isFirstRowOfHost ? 'border-t-4 border-t-blue-500' : ''}>
+                                            <td className={`border border-gray-300 dark:border-gray-500 p-3 text-sm font-medium theme-text-primary ${
+                                                isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-950/20' :
+                                                isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700/50' : 'bg-white dark:bg-gray-800'}`}>
+                                                <div>
+                                                    <div className="font-bold">{rowDef.hostname}</div>
+                                                    <div className="text-xs theme-text-secondary mt-1">
+                                                        {rowDef.protocol} • {rowDef.driveModel}
+                                                    </div>
+                                                    <div className="text-xs theme-text-secondary">
+                                                        {rowDef.driveType}
+                                                    </div>
                                                 </div>
+                                            </td>
+                                            <td className={`border border-gray-300 dark:border-gray-500 p-3 text-sm theme-text-primary ${
+                                                isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-950/20' :
+                                                isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700/50' : 'bg-white dark:bg-gray-800'}`}>
                                                 <div className="text-xs theme-text-secondary">
-                                                    {rowDef.driveType}
+                                                    {rowDef.pattern.replace('_', ' ').toUpperCase()}
                                                 </div>
-                                            </div>
-                                        </td>
-                                        <td className={`border border-gray-300 dark:border-gray-500 p-3 text-sm theme-text-primary ${
-                                            isFirstRowOfHost ? 'bg-blue-50 dark:bg-blue-950/20' :
-                                            isFirstPatternForHost ? 'bg-gray-50 dark:bg-gray-700/50' : 'bg-white dark:bg-gray-800'}`}>
-                                            <div className="text-xs theme-text-secondary">
-                                                {rowDef.pattern.replace('_', ' ').toUpperCase()}
-                                            </div>
-                                        </td>
-                                        {allBlockSizes.map((blockSize, blockIndex) => {
-                                            const cell = heatmapData[rowIndex][blockIndex];
-                                            const colorClass = getColorForNormalizedIOPS(cell.normalizedIops, actualTheme === 'dark');
+                                            </td>
+                                            {allBlockSizes.map((blockSize, blockIndex) => {
+                                                const cell = filledHeatmapData[rowIndex][blockIndex];
+                                                const colorClass = getColorForNormalizedIOPS(cell.normalizedIops, actualTheme === 'dark');
 
 
                                             return (
@@ -625,6 +763,164 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                             })}
                         </tbody>
                     </table>
+                    ) : (
+                        // Swapped orientation: Block Sizes = Rows, Hosts/Patterns = Columns
+                        transposedHeatmapData && (
+                            <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-500" style={{ fontSize: '12px' }}>
+                                <thead>
+                                    <tr>
+                                        <th className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary">
+                                            Block Size
+                                        </th>
+                                        {rowDefinitions.map((rowDef) => (
+                                            <th key={`${rowDef.hostKey}-${rowDef.pattern}`} className="border border-gray-300 dark:border-gray-500 p-3 bg-gray-50 dark:bg-gray-800 text-sm font-semibold theme-text-primary text-center" style={{ minWidth: '120px' }}>
+                                                <div>
+                                                    <div className="font-bold">{rowDef.hostname}</div>
+                                                    <div className="text-xs theme-text-secondary mt-1">
+                                                        {rowDef.pattern.replace('_', ' ').toUpperCase()}
+                                                    </div>
+                                                    <div className="text-xs theme-text-secondary">
+                                                        {rowDef.protocol} • {rowDef.driveModel}
+                                                    </div>
+                                                </div>
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {allBlockSizes.map((blockSize, blockSizeIndex) => {
+                                        const isFirstBlockSize = blockSizeIndex === 0;
+                                        return (
+                                            <tr key={blockSize} className={isFirstBlockSize ? 'border-t-4 border-t-blue-500' : ''}>
+                                                <td className={`border border-gray-300 dark:border-gray-500 p-3 text-sm font-medium theme-text-primary ${
+                                                    isFirstBlockSize ? 'bg-blue-50 dark:bg-blue-950/20' : 'bg-white dark:bg-gray-800'}`}>
+                                                    <div className="font-bold">{blockSize}</div>
+                                                </td>
+                                                {rowDefinitions.map((rowDef, rowDefIndex) => {
+                                                    const cell = transposedHeatmapData[blockSizeIndex][rowDefIndex];
+                                                    const colorClass = getColorForNormalizedIOPS(cell.normalizedIops, actualTheme === 'dark');
+
+                                                    return (
+                                                        <td
+                                                            key={`${blockSize}-${rowDef.hostKey}-${rowDef.pattern}`}
+                                                            className={`border border-gray-300 dark:border-gray-500 p-2 text-center cursor-pointer transition-all hover:scale-105 hover:shadow-lg ${
+                                                                isFirstBlockSize ? 'border-t-4 border-t-blue-500 dark:border-t-blue-400' : ''} ${colorClass}`}
+                                                            onMouseEnter={(e) => {
+                                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                                setHoveredCell({
+                                                                    cell,
+                                                                    x: rect.left + rect.width / 2,
+                                                                    y: rect.top
+                                                                });
+                                                            }}
+                                                            onMouseLeave={() => setHoveredCell(null)}
+                                                            style={{
+                                                                minWidth: '120px',
+                                                                height: '80px',
+                                                                backgroundColor: (cell.iops !== undefined && cell.iops !== null && cell.iops > 0) ? undefined : (actualTheme === 'dark' ? '#374151' : '#f3f4f6')
+                                                            }}
+                                                        >
+                                                            {/* Always show bars if cell has any data (IOPS can be 0 but still show configuration exists) */}
+                                                            {cell.iops !== undefined && cell.iops !== null ? (
+                                                                <div className="space-y-1">
+                                                                    {/* IOPS Number Display */}
+                                                                    <div className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">
+                                                                        IOPS: {cell.iops > 0 ? formatIOPS(cell.iops) : '0'}
+                                                                    </div>
+                                                                    {/* IOPS Bar - Always show, 0% for empty, 100% for max */}
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-xs text-blue-600 dark:text-blue-300 font-medium w-8">IOPS</span>
+                                                                        <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                                            <div
+                                                                                className="bg-blue-500 dark:bg-blue-500/40 h-2 rounded-full"
+                                                                                style={{
+                                                                                    width: cell.iops > 0 ? `${Math.max(0, Math.min(100, cell.normalizedIops))}%` : '0%',
+                                                                                    minWidth: cell.iops > 0 ? '2px' : '0px'
+                                                                                }}
+                                                                            ></div>
+                                                                        </div>
+                                                                        <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
+                                                                            {cell.iops > 0 ? `${Math.min(100, Math.max(0, (cell.iops / iopsRange) * 100)).toFixed(0)}%` : '0%'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Bandwidth Bar - Always show, 0% for empty, 100% for max */}
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-xs text-green-600 dark:text-green-300 font-medium w-8">BW</span>
+                                                                        <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                                            <div
+                                                                                className="bg-green-500 dark:bg-green-500/40 h-2 rounded-full"
+                                                                                style={{
+                                                                                    width: cell.bandwidth !== undefined && cell.bandwidth !== null && cell.bandwidth > 0 
+                                                                                        ? `${Math.max(0, Math.min(100, (cell.bandwidth / bandwidthRange) * 100))}%` 
+                                                                                        : '0%',
+                                                                                    minWidth: cell.bandwidth !== undefined && cell.bandwidth !== null && cell.bandwidth > 0 ? '2px' : '0px'
+                                                                                }}
+                                                                            ></div>
+                                                                        </div>
+                                                                        <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
+                                                                            {cell.bandwidth !== undefined && cell.bandwidth !== null && cell.bandwidth > 0 
+                                                                                ? `${Math.min(100, Math.max(0, (cell.bandwidth / bandwidthRange) * 100)).toFixed(0)}%` 
+                                                                                : '0%'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Latency Bar (1000/Latency for responsiveness) - Always show, 0% for empty, 100% for max */}
+                                                                    {/* RESP = 1000 ÷ Latency (operations per millisecond) - Higher = Better performance */}
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-xs text-red-600 dark:text-red-300 font-medium w-8">RESP</span>
+                                                                        <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                                            <div
+                                                                                className="bg-red-500 dark:bg-red-500/40 h-2 rounded-full"
+                                                                                style={{
+                                                                                    width: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0
+                                                                                        ? `${Math.max(0, Math.min(100, ((1000 / cell.avgLatency) / responsivenessRange) * 100))}%`
+                                                                                        : '0%',
+                                                                                    minWidth: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? '2px' : '0px'
+                                                                                }}
+                                                                            ></div>
+                                                                        </div>
+                                                                        <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
+                                                                            {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0
+                                                                                ? `${Math.min(100, Math.max(0, ((1000 / cell.avgLatency) / responsivenessRange) * 100)).toFixed(0)}%`
+                                                                                : '0%'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Latency Bar - Always show, 0% for empty, 100% for max */}
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-xs text-purple-600 dark:text-purple-300 font-medium w-8">LAT</span>
+                                                                        <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                                            <div
+                                                                                className="bg-purple-500 dark:bg-purple-500/40 h-2 rounded-full"
+                                                                                style={{
+                                                                                    width: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 
+                                                                                        ? `${Math.max(0, Math.min(100, (cell.avgLatency / latencyRange) * 100))}%` 
+                                                                                        : '0%',
+                                                                                    minWidth: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? '2px' : '0px'
+                                                                                }}
+                                                                            ></div>
+                                                                        </div>
+                                                                        <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
+                                                                            {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 
+                                                                                ? `${Math.min(100, Math.max(0, (cell.avgLatency / latencyRange) * 100)).toFixed(0)}%` 
+                                                                                : '0%'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-sm font-bold text-gray-400 dark:text-gray-500">—</div>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )
+                    )}
                 </div>
             </div>
 
