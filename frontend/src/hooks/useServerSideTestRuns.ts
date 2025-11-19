@@ -92,7 +92,7 @@ export const useServerSideTestRuns = (
         } finally {
             setLoading(false);
         }
-    }, [debouncedFilters]);
+    }, [debouncedFilters, limit]);
 
     // Fetch filter options
     const fetchFiltersData = useCallback(async () => {

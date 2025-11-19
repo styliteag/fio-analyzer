@@ -37,7 +37,7 @@ const PerformanceHeatmapView: React.FC<PerformanceHeatmapViewProps> = ({ drives 
         });
         
         // Calculate averages
-        statsMap.forEach((stats, key) => {
+        statsMap.forEach((stats) => {
             if (stats.values.length > 0) {
                 stats.average = stats.values.reduce((sum, val) => sum + val, 0) / stats.values.length;
             }
