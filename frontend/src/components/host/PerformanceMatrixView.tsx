@@ -3,6 +3,7 @@ import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useHeatmapData, type MetricType } from '../../hooks/useHeatmapData';
 import { useTrendAnalysis } from '../../hooks/useTrendAnalysis';
 import { formatLatencyMicroseconds } from '../../services/data/formatters';
+import StatisticsTooltip from '../shared/StatisticsTooltip';
 
 interface PerformanceMatrixViewProps {
     drives: DriveAnalysis[];
@@ -15,6 +16,7 @@ const PerformanceMatrixView: React.FC<PerformanceMatrixViewProps> = ({ drives })
     const [selectedMetric, setSelectedMetric] = useState<MetricType>('iops');
     const [rowDimension, setRowDimension] = useState<RowDimension>('block_size');
     const [colDimension, setColDimension] = useState<ColDimension>('read_write_pattern');
+    const [hoveredCell, setHoveredCell] = useState<{ row: string; col: string; x: number; y: number } | null>(null);
 
     const { createMatrixHeatmap, getHeatmapColor } = useHeatmapData();
     const { calculateSummary } = useTrendAnalysis();
@@ -154,21 +156,36 @@ const PerformanceMatrixView: React.FC<PerformanceMatrixViewProps> = ({ drives })
                                 <td className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium bg-gray-50 dark:bg-gray-900 text-gray-700 dark:text-gray-300">
                                     {row}
                                 </td>
-                                {matrixData.cols.map(col => (
-                                    <td
-                                        key={`${row}-${col}`}
-                                        style={{ backgroundColor: getCellColor(row, col) }}
-                                        className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-center text-sm cursor-pointer hover:opacity-80 transition-opacity"
-                                    >
-                                        <span
-                                            className={`font-semibold ${
-                                                isDarkCell(row, col) ? 'text-white' : 'text-gray-900'
-                                            }`}
+                                {matrixData.cols.map(col => {
+                                    const cell = matrixData.cells.find(c => c.row === row && c.col === col);
+                                    return (
+                                        <td
+                                            key={`${row}-${col}`}
+                                            style={{ backgroundColor: getCellColor(row, col) }}
+                                            className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-center text-sm cursor-pointer hover:opacity-80 transition-opacity relative"
+                                            onMouseEnter={(e) => {
+                                                if (cell && cell.value !== null) {
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    setHoveredCell({
+                                                        row,
+                                                        col,
+                                                        x: rect.left + rect.width / 2,
+                                                        y: rect.top + rect.height / 2
+                                                    });
+                                                }
+                                            }}
+                                            onMouseLeave={() => setHoveredCell(null)}
                                         >
-                                            {getCellValue(row, col)}
-                                        </span>
-                                    </td>
-                                ))}
+                                            <span
+                                                className={`font-semibold ${
+                                                    isDarkCell(row, col) ? 'text-white' : 'text-gray-900'
+                                                }`}
+                                            >
+                                                {getCellValue(row, col)}
+                                            </span>
+                                        </td>
+                                    );
+                                })}
                             </tr>
                         ))}
                     </tbody>
@@ -219,6 +236,24 @@ const PerformanceMatrixView: React.FC<PerformanceMatrixViewProps> = ({ drives })
                     <span>High</span>
                 </div>
             </div>
+
+            {/* Hover Tooltip */}
+            {hoveredCell && (() => {
+                const cell = matrixData.cells.find(c => c.row === hoveredCell.row && c.col === hoveredCell.col);
+                if (!cell || cell.value === null || !cell.count) return null;
+                
+                return (
+                    <StatisticsTooltip
+                        count={cell.count}
+                        average={cell.value}
+                        min={cell.min}
+                        max={cell.max}
+                        metric={selectedMetric}
+                        position={{ x: hoveredCell.x, y: hoveredCell.y }}
+                        title="Cell Statistics"
+                    />
+                );
+            })()}
         </div>
     );
 };

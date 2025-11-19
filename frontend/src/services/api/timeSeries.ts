@@ -97,12 +97,12 @@ export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions =
     }
 
     // Add limit parameter support for pagination
+    // If no limit is specified, use backend default (10000) instead of hardcoding 5000
     if (options.limit !== undefined) {
         params.append("limit", options.limit.toString());
-    } else {
-        // TEST: Using limited batch size to verify truncation behavior  
-        params.append("limit", "5000");
     }
+    // Note: Backend default is 10000, so we don't need to set it explicitly
+    // This allows the backend to use its default limit when not specified
 
     return apiCall<any>(`/api/time-series/history?${params}`, {
         signal: abortSignal

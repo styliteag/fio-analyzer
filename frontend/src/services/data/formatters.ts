@@ -41,24 +41,38 @@ export const formatLatency = (value: number, precision: number = 2): string => {
     return `${value.toFixed(precision)}ms`;
 };
 
-// Format latency in milliseconds with color coding
+// Format latency in microseconds with color coding
 // Returns formatted string and Tailwind color class
 // IMPORTANT: Lower latency = better = green, Higher latency = worse = red
+// Input valueMs is in milliseconds, output is in microseconds (µs)
 export const formatLatencyMicroseconds = (valueMs: number): { text: string; colorClass: string } => {
-    // Format in ms with 3 decimal places
-    const formatted = valueMs.toFixed(3) + ' ms';
+    // Convert milliseconds to microseconds (1 ms = 1000 µs)
+    const valueUs = valueMs * 1000;
+    
+    // Format in µs with appropriate precision
+    let formatted: string;
+    if (valueUs >= 1000000) {
+        // For very large values, show in ms
+        formatted = (valueUs / 1000).toFixed(2) + ' ms';
+    } else if (valueUs >= 1000) {
+        // For values >= 1000 µs, show in ms with 2 decimals
+        formatted = (valueUs / 1000).toFixed(2) + ' ms';
+    } else {
+        // For smaller values, show in µs with 1 decimal
+        formatted = valueUs.toFixed(1) + ' µs';
+    }
     
     // Color coding: smaller values = green (better), bigger values = red (worse)
-    // Thresholds for storage latency in milliseconds:
-    // < 0.2 ms = green (excellent), 0.2-0.5 ms = light green (good), 0.5-1.0 ms = yellow (moderate), >= 1.0 ms = red (poor)
+    // Thresholds for storage latency in microseconds (converted from ms thresholds):
+    // < 200 µs = green (excellent), 200-500 µs = light green (good), 500-1000 µs = yellow (moderate), >= 1000 µs = red (poor)
     let colorClass: string;
-    if (valueMs < 0.2) {
+    if (valueUs < 200) {
         // Excellent - very low latency
         colorClass = 'text-green-600 dark:text-green-400';
-    } else if (valueMs < 0.5) {
+    } else if (valueUs < 500) {
         // Good - low latency
         colorClass = 'text-green-500 dark:text-green-500';
-    } else if (valueMs < 1.0) {
+    } else if (valueUs < 1000) {
         // Moderate - medium latency
         colorClass = 'text-yellow-600 dark:text-yellow-400';
     } else {

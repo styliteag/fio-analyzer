@@ -111,29 +111,69 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
 
     // Calculate maximum values from VISIBLE/FILTERED data for normalization
     // This ensures fair comparison within the current filtered dataset
+    // We ensure at least one cell will show 100% and empty cells will show 0%
     let visibleMaxIOPS = 0;
     let visibleMaxBandwidth = 0;
     let visibleMaxResponsiveness = 0;
+    let visibleMaxLatency = 0;
+    let visibleMinIOPS = Infinity;
+    let visibleMinBandwidth = Infinity;
+    let visibleMinResponsiveness = Infinity;
+    let visibleMinLatency = Infinity;
 
     drives.forEach((drive) => {
-        // For each drive, find the maximum values across all its configurations
+        // For each drive, find the maximum and minimum values across all its configurations
         drive.configurations.forEach(config => {
-            if (config.iops && config.iops > visibleMaxIOPS) {
-                visibleMaxIOPS = config.iops;
+            // IOPS
+            if (config.iops !== null && config.iops !== undefined) {
+                const iopsValue = typeof config.iops === 'string' ? parseFloat(config.iops) : config.iops;
+                if (!isNaN(iopsValue) && iopsValue > 0) {
+                    if (iopsValue > visibleMaxIOPS) {
+                        visibleMaxIOPS = iopsValue;
+                    }
+                    if (iopsValue < visibleMinIOPS) {
+                        visibleMinIOPS = iopsValue;
+                    }
+                }
             }
-            if (config.bandwidth && config.bandwidth > visibleMaxBandwidth) {
-                visibleMaxBandwidth = config.bandwidth;
+            // Bandwidth
+            if (config.bandwidth !== null && config.bandwidth !== undefined && config.bandwidth > 0) {
+                if (config.bandwidth > visibleMaxBandwidth) {
+                    visibleMaxBandwidth = config.bandwidth;
+                }
+                if (config.bandwidth < visibleMinBandwidth) {
+                    visibleMinBandwidth = config.bandwidth;
+                }
             }
             // Calculate responsiveness: 1000 ÷ latency = operations per millisecond
             // Higher responsiveness values indicate better performance
-            if (config.avg_latency && config.avg_latency > 0) {
+            if (config.avg_latency !== null && config.avg_latency !== undefined && config.avg_latency > 0) {
                 const responsiveness = 1000 / config.avg_latency;
                 if (responsiveness > visibleMaxResponsiveness) {
                     visibleMaxResponsiveness = responsiveness;
                 }
+                if (responsiveness < visibleMinResponsiveness) {
+                    visibleMinResponsiveness = responsiveness;
+                }
+                // Track latency directly (lower is better, so we'll invert the scale)
+                if (config.avg_latency > visibleMaxLatency) {
+                    visibleMaxLatency = config.avg_latency;
+                }
+                if (config.avg_latency < visibleMinLatency) {
+                    visibleMinLatency = config.avg_latency;
+                }
             }
         });
     });
+
+    // Ensure we have valid ranges (if all values are the same, max = min, so we need to handle that)
+    // For normalization: we want max to always be 100%, so we use max as the denominator
+    // Empty/zero cells will naturally be 0%
+    // For latency: lower is better, so we invert (min latency = 100%, max latency = 0%)
+    const iopsRange = visibleMaxIOPS > 0 ? visibleMaxIOPS : 1;
+    const bandwidthRange = visibleMaxBandwidth > 0 ? visibleMaxBandwidth : 1;
+    const responsivenessRange = visibleMaxResponsiveness > 0 ? visibleMaxResponsiveness : 1;
+    const latencyRange = visibleMaxLatency > visibleMinLatency ? (visibleMaxLatency - visibleMinLatency) : (visibleMaxLatency > 0 ? visibleMaxLatency : 1);
 
     console.log('All block sizes:', allBlockSizes);
     console.log('All hostnames:', allHostnames);
@@ -169,6 +209,81 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             };
         });
     });
+
+    // Calculate statistics for each cell (group by hostname, driveModel, blockSize, pattern)
+    const cellStatistics = React.useMemo(() => {
+        const statsMap = new Map<string, {
+            iops: { count: number; values: number[]; min: number; max: number; average: number };
+            bandwidth: { count: number; values: number[]; min: number; max: number; average: number };
+            latency: { count: number; values: number[]; min: number; max: number; average: number };
+        }>();
+
+        drives.forEach((drive) => {
+            const hostname = drive.hostname;
+            const driveModel = drive.drive_model || '';
+            const protocol = drive.protocol || 'unknown';
+            const driveType = drive.drive_type || '';
+            const hostKey = `${hostname}-${protocol}-${driveModel}-${driveType}`;
+
+            drive.configurations.forEach((config) => {
+                const mappedPattern = patternMapping[config.read_write_pattern] || config.read_write_pattern;
+                const blockSize = config.block_size;
+                const cellKey = `${hostKey}|${mappedPattern}|${blockSize}`;
+
+                if (!statsMap.has(cellKey)) {
+                    statsMap.set(cellKey, {
+                        iops: { count: 0, values: [], min: Infinity, max: -Infinity, average: 0 },
+                        bandwidth: { count: 0, values: [], min: Infinity, max: -Infinity, average: 0 },
+                        latency: { count: 0, values: [], min: Infinity, max: -Infinity, average: 0 }
+                    });
+                }
+
+                const stats = statsMap.get(cellKey)!;
+
+                // IOPS
+                if (config.iops !== null && config.iops !== undefined) {
+                    const iopsValue = typeof config.iops === 'string' ? parseFloat(config.iops) : config.iops;
+                    if (!isNaN(iopsValue) && iopsValue > 0) {
+                        stats.iops.count++;
+                        stats.iops.values.push(iopsValue);
+                        if (iopsValue < stats.iops.min) stats.iops.min = iopsValue;
+                        if (iopsValue > stats.iops.max) stats.iops.max = iopsValue;
+                    }
+                }
+
+                // Bandwidth
+                if (config.bandwidth !== null && config.bandwidth !== undefined) {
+                    stats.bandwidth.count++;
+                    stats.bandwidth.values.push(config.bandwidth);
+                    if (config.bandwidth < stats.bandwidth.min) stats.bandwidth.min = config.bandwidth;
+                    if (config.bandwidth > stats.bandwidth.max) stats.bandwidth.max = config.bandwidth;
+                }
+
+                // Latency
+                if (config.avg_latency !== null && config.avg_latency !== undefined) {
+                    stats.latency.count++;
+                    stats.latency.values.push(config.avg_latency);
+                    if (config.avg_latency < stats.latency.min) stats.latency.min = config.avg_latency;
+                    if (config.avg_latency > stats.latency.max) stats.latency.max = config.avg_latency;
+                }
+            });
+        });
+
+        // Calculate averages
+        statsMap.forEach((stats) => {
+            if (stats.iops.values.length > 0) {
+                stats.iops.average = stats.iops.values.reduce((sum, val) => sum + val, 0) / stats.iops.values.length;
+            }
+            if (stats.bandwidth.values.length > 0) {
+                stats.bandwidth.average = stats.bandwidth.values.reduce((sum, val) => sum + val, 0) / stats.bandwidth.values.length;
+            }
+            if (stats.latency.values.length > 0) {
+                stats.latency.average = stats.latency.values.reduce((sum, val) => sum + val, 0) / stats.latency.values.length;
+            }
+        });
+
+        return statsMap;
+    }, [drives]);
 
     // Fill with actual data
     drives.forEach((drive) => {
@@ -210,8 +325,8 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 return;
             }
 
-            // Normalize IOPS against visible data maximum for fair comparison
-            const normalizedIops = visibleMaxIOPS > 0 ? (iopsValue / visibleMaxIOPS) * 100 : 0;
+            // Normalize IOPS against visible data maximum - ensures max value shows as 100%
+            const normalizedIops = iopsRange > 0 ? Math.min(100, Math.max(0, (iopsValue / iopsRange) * 100)) : 0;
 
 
             heatmapData[rowIndex][colIndex] = {
@@ -283,7 +398,7 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 </h4>
                 <p className="text-sm theme-text-secondary mb-4">
                     Multi-dimensional performance visualization across block sizes and test patterns.
-                    Each cell shows three normalized metrics: IOPS, Bandwidth, and Responsiveness.
+                    Each cell shows four normalized metrics: IOPS, Bandwidth, Responsiveness, and Latency.
                 </p>
                 <p className="text-xs theme-text-secondary mb-4">
                     <strong>Responsiveness</strong> = 1000 ÷ Latency (ops/ms) • Higher values = Better performance
@@ -303,6 +418,10 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                         <div className="flex items-center gap-2">
                             <div className="w-3 h-2 bg-red-500 dark:bg-red-400 rounded"></div>
                             <span>Responsiveness</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-2 bg-purple-500 dark:bg-purple-400 rounded"></div>
+                            <span>Latency (inverted - lower is better)</span>
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
@@ -411,77 +530,95 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                                                             <div className="text-sm font-bold text-center text-gray-900 dark:text-gray-100">
                                                                 IOPS: {cell.iops > 0 ? formatIOPS(cell.iops) : '0'}
                                                             </div>
-                                                            {/* IOPS Bar - Always show, even if 0 */}
+                                                            {/* IOPS Bar - Always show, 0% for empty, 100% for max */}
                                                             <div className="flex items-center gap-1">
                                                                 <span className="text-xs text-blue-600 dark:text-blue-300 font-medium w-8">IOPS</span>
                                                                 <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
                                                                     <div
                                                                         className="bg-blue-500 dark:bg-blue-500/40 h-2 rounded-full"
                                                                         style={{
-                                                                            width: cell.iops > 0 ? `${Math.max(5, cell.normalizedIops)}%` : '3px',
-                                                                            minWidth: cell.iops > 0 ? 'auto' : '3px'
+                                                                            width: cell.iops > 0 ? `${Math.max(0, Math.min(100, cell.normalizedIops))}%` : '0%',
+                                                                            minWidth: cell.iops > 0 ? '2px' : '0px'
                                                                         }}
                                                                     ></div>
                                                                 </div>
                                                                 <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
-                                                                    {cell.iops > 0 ? `${(cell.iops / visibleMaxIOPS * 100).toFixed(0)}%` : '—'}
+                                                                    {cell.iops > 0 ? `${Math.min(100, Math.max(0, (cell.iops / iopsRange) * 100)).toFixed(0)}%` : '0%'}
                                                                 </span>
                                                             </div>
 
-                                                            {/* Bandwidth Bar - Show if data exists */}
-                                                            {cell.bandwidth !== undefined && cell.bandwidth !== null ? (
-                                                                <div className="flex items-center gap-1">
-                                                                    <span className="text-xs text-green-600 dark:text-green-300 font-medium w-8">BW</span>
-                                                                    <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                                                        <div
-                                                                            className="bg-green-500 dark:bg-green-500/40 h-2 rounded-full"
-                                                                            style={{
-                                                                                width: cell.bandwidth > 0 ? `${Math.max(5, (cell.bandwidth / visibleMaxBandwidth) * 100)}%` : '3px',
-                                                                                minWidth: cell.bandwidth > 0 ? 'auto' : '3px'
-                                                                            }}
-                                                                        ></div>
-                                                                    </div>
-                                                                    <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
-                                                                        {cell.bandwidth > 0 ? `${(cell.bandwidth / visibleMaxBandwidth * 100).toFixed(0)}%` : '—'}
-                                                                    </span>
+                                                            {/* Bandwidth Bar - Always show, 0% for empty, 100% for max */}
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-xs text-green-600 dark:text-green-300 font-medium w-8">BW</span>
+                                                                <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                                    <div
+                                                                        className="bg-green-500 dark:bg-green-500/40 h-2 rounded-full"
+                                                                        style={{
+                                                                            width: cell.bandwidth !== undefined && cell.bandwidth !== null && cell.bandwidth > 0 
+                                                                                ? `${Math.max(0, Math.min(100, (cell.bandwidth / bandwidthRange) * 100))}%` 
+                                                                                : '0%',
+                                                                            minWidth: cell.bandwidth !== undefined && cell.bandwidth !== null && cell.bandwidth > 0 ? '2px' : '0px'
+                                                                        }}
+                                                                    ></div>
                                                                 </div>
-                                                            ) : (
-                                                                <div className="flex items-center gap-1">
-                                                                    <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-8">BW</span>
-                                                                    <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
-                                                                        <div className="bg-gray-300 dark:bg-gray-600 h-2 rounded-full" style={{ width: '0%' }}></div>
-                                                                    </div>
-                                                                    <span className="text-xs text-gray-400 dark:text-gray-500 w-10 text-right">—</span>
-                                                                </div>
-                                                            )}
+                                                                <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
+                                                                    {cell.bandwidth !== undefined && cell.bandwidth !== null && cell.bandwidth > 0 
+                                                                        ? `${Math.min(100, Math.max(0, (cell.bandwidth / bandwidthRange) * 100)).toFixed(0)}%` 
+                                                                        : '0%'}
+                                                                </span>
+                                                            </div>
 
-                                                            {/* Latency Bar (1000/Latency for responsiveness) - Show if data exists */}
+                                                            {/* Latency Bar (1000/Latency for responsiveness) - Always show, 0% for empty, 100% for max */}
                                                             {/* RESP = 1000 ÷ Latency (operations per millisecond) - Higher = Better performance */}
-                                                            {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? (
-                                                                <div className="flex items-center gap-1">
-                                                                    <span className="text-xs text-red-600 dark:text-red-300 font-medium w-8">RESP</span>
-                                                                    <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                                                        <div
-                                                                            className="bg-red-500 dark:bg-red-500/40 h-2 rounded-full"
-                                                                            style={{
-                                                                                width: `${Math.min(100, Math.max(5, ((1000 / cell.avgLatency) / visibleMaxResponsiveness) * 100))}%`,
-                                                                                minWidth: 'auto'
-                                                                            }}
-                                                                        ></div>
-                                                                    </div>
-                                                                    <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
-                                                                        {cell.avgLatency > 0 ? `${(((1000 / cell.avgLatency) / visibleMaxResponsiveness) * 100).toFixed(0)}%` : '—'}
-                                                                    </span>
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-xs text-red-600 dark:text-red-300 font-medium w-8">RESP</span>
+                                                                <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                                    <div
+                                                                        className="bg-red-500 dark:bg-red-500/40 h-2 rounded-full"
+                                                                        style={{
+                                                                            width: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0
+                                                                                ? `${Math.max(0, Math.min(100, ((1000 / cell.avgLatency) / responsivenessRange) * 100))}%`
+                                                                                : '0%',
+                                                                            minWidth: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? '2px' : '0px'
+                                                                        }}
+                                                                    ></div>
                                                                 </div>
-                                                            ) : (
-                                                                <div className="flex items-center gap-1">
-                                                                    <span className="text-xs text-gray-400 dark:text-gray-500 font-medium w-8">RESP</span>
-                                                                    <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-2">
-                                                                        <div className="bg-gray-300 dark:bg-gray-600 h-2 rounded-full" style={{ width: '0%' }}></div>
+                                                                <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
+                                                                    {cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0
+                                                                        ? `${Math.min(100, Math.max(0, ((1000 / cell.avgLatency) / responsivenessRange) * 100)).toFixed(0)}%`
+                                                                        : '0%'}
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Latency Bar - Always show, inverted (lower latency = 100%, higher latency = 0%) */}
+                                                            {/* Latency: Lower is better, so we invert the scale */}
+                                                            {(() => {
+                                                                // Calculate normalized latency (inverted: min = 100%, max = 0%)
+                                                                const normalizedLatency = cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0
+                                                                    ? (latencyRange > 0 
+                                                                        ? 100 - (((cell.avgLatency - visibleMinLatency) / latencyRange) * 100)
+                                                                        : 100) // If all same, show 100%
+                                                                    : 0;
+                                                                const latencyWidth = Math.max(0, Math.min(100, normalizedLatency));
+                                                                
+                                                                return (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="text-xs text-purple-600 dark:text-purple-300 font-medium w-8">LAT</span>
+                                                                        <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                                            <div
+                                                                                className="bg-purple-500 dark:bg-purple-500/40 h-2 rounded-full"
+                                                                                style={{
+                                                                                    width: `${latencyWidth}%`,
+                                                                                    minWidth: cell.avgLatency !== undefined && cell.avgLatency !== null && cell.avgLatency > 0 ? '2px' : '0px'
+                                                                                }}
+                                                                            ></div>
+                                                                        </div>
+                                                                        <span className="text-xs text-gray-600 dark:text-gray-300 w-10 text-right">
+                                                                            {latencyWidth.toFixed(0)}%
+                                                                        </span>
                                                                     </div>
-                                                                    <span className="text-xs text-gray-400 dark:text-gray-500 w-10 text-right">—</span>
-                                                                </div>
-                                                            )}
+                                                                );
+                                                            })()}
                                                         </div>
                                                     ) : (
                                                         <div className="text-sm font-bold text-gray-400 dark:text-gray-500">—</div>
@@ -498,78 +635,181 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
             </div>
 
             {/* Custom Hover Popup */}
-            {hoveredCell && (
-                <div
-                    className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl p-4 z-50 max-w-sm"
-                    style={{
-                        left: hoveredCell.x - 150, // Center the popup horizontally
-                        top: hoveredCell.y - 10,   // Position above the cell
-                        transform: 'translateY(-100%)'
-                    }}
-                >
-                    <div className="space-y-3">
-                        {/* Header */}
-                        <div>
-                            <h3 className="font-bold theme-text-primary text-sm">
-                                {hoveredCell.cell.hostname}
-                            </h3>
-                            <p className="text-xs theme-text-secondary">
-                                {hoveredCell.cell.driveModel}
-                            </p>
-                        </div>
+            {hoveredCell && (() => {
+                // Find matching drive to get hostKey
+                const matchingDrive = drives.find(d => 
+                    d.hostname === hoveredCell.cell.hostname && 
+                    d.drive_model === hoveredCell.cell.driveModel
+                );
+                const protocol = matchingDrive?.protocol || 'unknown';
+                const driveType = matchingDrive?.drive_type || '';
+                const hostKey = `${hoveredCell.cell.hostname}-${protocol}-${hoveredCell.cell.driveModel}-${driveType}`;
+                const cellKey = `${hostKey}|${hoveredCell.cell.pattern}|${hoveredCell.cell.blockSize}`;
+                const stats = cellStatistics.get(cellKey);
 
-                        {/* Test Configuration */}
-                        <div>
-                            <h4 className="font-semibold theme-text-primary text-xs mb-2">Test Configuration</h4>
-                            <div className="text-xs theme-text-secondary space-y-1">
-                                <div>Block Size: <span className="font-medium">{hoveredCell.cell.blockSize}</span></div>
-                                <div>Pattern: <span className="font-medium">{hoveredCell.cell.pattern.replace('_', ' ')}</span></div>
-                                <div>Queue Depth: <span className="font-medium">{hoveredCell.cell.queueDepth}</span></div>
-                            </div>
-                        </div>
-
-                        {/* Performance Metrics */}
-                        <div>
-                            <h4 className="font-semibold theme-text-primary text-xs mb-2">Performance Metrics</h4>
-                            <div className="text-xs theme-text-secondary space-y-1">
-                                <div>IOPS: <span className="font-bold text-blue-600 dark:text-blue-400">{hoveredCell.cell.iops > 0 ? formatIOPS(hoveredCell.cell.iops) : 'N/A'}</span></div>
-                                <div>Normalized: <span className="font-medium">{hoveredCell.cell.normalizedIops.toFixed(1)}%</span></div>
-                                {hoveredCell.cell.avgLatency && (
-                                    <div>Avg Latency: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.avgLatency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.avgLatency).text}</span></div>
-                                )}
-                                {hoveredCell.cell.bandwidth && (
-                                    <div>Bandwidth: <span className="font-medium">{hoveredCell.cell.bandwidth.toFixed(1)} MB/s</span></div>
-                                )}
-                                {hoveredCell.cell.avgLatency && hoveredCell.cell.avgLatency > 0 && (
-                                    <div>Responsiveness: <span className="font-medium">{(1000 / hoveredCell.cell.avgLatency).toFixed(1)} ops/ms</span></div>
-                                )}
-                                {hoveredCell.cell.p70Latency && (
-                                    <div>70th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p70Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p70Latency).text}</span></div>
-                                )}
-                                {hoveredCell.cell.p90Latency && (
-                                    <div>90th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p90Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p90Latency).text}</span></div>
-                                )}
-                                {hoveredCell.cell.p95Latency && (
-                                    <div>95th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p95Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p95Latency).text}</span></div>
-                                )}
-                                {hoveredCell.cell.p99Latency && (
-                                    <div>99th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p99Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p99Latency).text}</span></div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Test Date */}
-                        {hoveredCell.cell.timestamp && (
+                return (
+                    <div
+                        className="fixed bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl p-4 z-50 max-w-sm"
+                        style={{
+                            left: hoveredCell.x - 150, // Center the popup horizontally
+                            top: hoveredCell.y - 10,   // Position above the cell
+                            transform: 'translateY(-100%)'
+                        }}
+                    >
+                        <div className="space-y-3">
+                            {/* Header */}
                             <div>
-                                <h4 className="font-semibold theme-text-primary text-xs mb-2">Test Date</h4>
-                                <div className="text-xs theme-text-secondary">
-                                    {new Date(hoveredCell.cell.timestamp).toLocaleDateString()} {new Date(hoveredCell.cell.timestamp).toLocaleTimeString()}
+                                <h3 className="font-bold theme-text-primary text-sm">
+                                    {hoveredCell.cell.hostname}
+                                </h3>
+                                <p className="text-xs theme-text-secondary">
+                                    {hoveredCell.cell.driveModel}
+                                </p>
+                            </div>
+
+                            {/* Test Configuration */}
+                            <div>
+                                <h4 className="font-semibold theme-text-primary text-xs mb-2">Test Configuration</h4>
+                                <div className="text-xs theme-text-secondary space-y-1">
+                                    <div>Block Size: <span className="font-medium">{hoveredCell.cell.blockSize}</span></div>
+                                    <div>Pattern: <span className="font-medium">{hoveredCell.cell.pattern.replace('_', ' ')}</span></div>
+                                    <div>Queue Depth: <span className="font-medium">{hoveredCell.cell.queueDepth}</span></div>
                                 </div>
                             </div>
-                        )}
+
+                            {/* Performance Metrics */}
+                            <div>
+                                <h4 className="font-semibold theme-text-primary text-xs mb-2">Performance Metrics</h4>
+                                <div className="text-xs theme-text-secondary space-y-1">
+                                    <div>IOPS: <span className="font-bold text-blue-600 dark:text-blue-400">{hoveredCell.cell.iops > 0 ? formatIOPS(hoveredCell.cell.iops) : 'N/A'}</span></div>
+                                    <div>Normalized: <span className="font-medium">{hoveredCell.cell.normalizedIops.toFixed(1)}%</span></div>
+                                    {hoveredCell.cell.avgLatency && (
+                                        <div>Avg Latency: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.avgLatency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.avgLatency).text}</span></div>
+                                    )}
+                                    {hoveredCell.cell.bandwidth && (
+                                        <div>Bandwidth: <span className="font-medium">{hoveredCell.cell.bandwidth.toFixed(1)} MB/s</span></div>
+                                    )}
+                                    {hoveredCell.cell.avgLatency && hoveredCell.cell.avgLatency > 0 && (
+                                        <div>Responsiveness: <span className="font-medium">{(1000 / hoveredCell.cell.avgLatency).toFixed(1)} ops/ms</span></div>
+                                    )}
+                                    {hoveredCell.cell.p70Latency && (
+                                        <div>70th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p70Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p70Latency).text}</span></div>
+                                    )}
+                                    {hoveredCell.cell.p90Latency && (
+                                        <div>90th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p90Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p90Latency).text}</span></div>
+                                    )}
+                                    {hoveredCell.cell.p95Latency && (
+                                        <div>95th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p95Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p95Latency).text}</span></div>
+                                    )}
+                                    {hoveredCell.cell.p99Latency && (
+                                        <div>99th %ile: <span className={`font-medium ${formatLatencyMicroseconds(hoveredCell.cell.p99Latency).colorClass}`}>{formatLatencyMicroseconds(hoveredCell.cell.p99Latency).text}</span></div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Statistics Section */}
+                            {stats && (stats.iops.count > 0 || stats.bandwidth.count > 0 || stats.latency.count > 0) && (
+                                <div>
+                                    <h4 className="font-semibold theme-text-primary text-xs mb-2 border-t border-gray-200 dark:border-gray-700 pt-2">Statistics</h4>
+                                    <div className="text-xs theme-text-secondary space-y-2">
+                                        {stats.iops.count > 0 && (
+                                            <div>
+                                                <div className="font-medium text-blue-600 dark:text-blue-400 mb-1">IOPS:</div>
+                                                <div className="pl-2 space-y-0.5">
+                                                    <div className="flex justify-between">
+                                                        <span>Records:</span>
+                                                        <span className="font-medium">{stats.iops.count}</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span>Average:</span>
+                                                        <span className="font-medium">{formatIOPS(stats.iops.average)}</span>
+                                                    </div>
+                                                    {stats.iops.min !== Infinity && (
+                                                        <div className="flex justify-between">
+                                                            <span>Min:</span>
+                                                            <span className="font-medium">{formatIOPS(stats.iops.min)}</span>
+                                                        </div>
+                                                    )}
+                                                    {stats.iops.max !== -Infinity && (
+                                                        <div className="flex justify-between">
+                                                            <span>Max:</span>
+                                                            <span className="font-medium">{formatIOPS(stats.iops.max)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {stats.bandwidth.count > 0 && (
+                                            <div>
+                                                <div className="font-medium text-green-600 dark:text-green-400 mb-1">Bandwidth:</div>
+                                                <div className="pl-2 space-y-0.5">
+                                                    <div className="flex justify-between">
+                                                        <span>Records:</span>
+                                                        <span className="font-medium">{stats.bandwidth.count}</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span>Average:</span>
+                                                        <span className="font-medium">{stats.bandwidth.average.toFixed(1)} MB/s</span>
+                                                    </div>
+                                                    {stats.bandwidth.min !== Infinity && (
+                                                        <div className="flex justify-between">
+                                                            <span>Min:</span>
+                                                            <span className="font-medium">{stats.bandwidth.min.toFixed(1)} MB/s</span>
+                                                        </div>
+                                                    )}
+                                                    {stats.bandwidth.max !== -Infinity && (
+                                                        <div className="flex justify-between">
+                                                            <span>Max:</span>
+                                                            <span className="font-medium">{stats.bandwidth.max.toFixed(1)} MB/s</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {stats.latency.count > 0 && (
+                                            <div>
+                                                <div className="font-medium text-red-600 dark:text-red-400 mb-1">Latency:</div>
+                                                <div className="pl-2 space-y-0.5">
+                                                    <div className="flex justify-between">
+                                                        <span>Records:</span>
+                                                        <span className="font-medium">{stats.latency.count}</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
+                                                        <span>Average:</span>
+                                                        <span className={`font-medium ${formatLatencyMicroseconds(stats.latency.average).colorClass}`}>{formatLatencyMicroseconds(stats.latency.average).text}</span>
+                                                    </div>
+                                                    {stats.latency.min !== Infinity && (
+                                                        <div className="flex justify-between">
+                                                            <span>Min:</span>
+                                                            <span className={`font-medium ${formatLatencyMicroseconds(stats.latency.min).colorClass}`}>{formatLatencyMicroseconds(stats.latency.min).text}</span>
+                                                        </div>
+                                                    )}
+                                                    {stats.latency.max !== -Infinity && (
+                                                        <div className="flex justify-between">
+                                                            <span>Max:</span>
+                                                            <span className={`font-medium ${formatLatencyMicroseconds(stats.latency.max).colorClass}`}>{formatLatencyMicroseconds(stats.latency.max).text}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Test Date */}
+                            {hoveredCell.cell.timestamp && (
+                                <div>
+                                    <h4 className="font-semibold theme-text-primary text-xs mb-2">Test Date</h4>
+                                    <div className="text-xs theme-text-secondary">
+                                        {new Date(hoveredCell.cell.timestamp).toLocaleDateString()} {new Date(hoveredCell.cell.timestamp).toLocaleTimeString()}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
     );
 };

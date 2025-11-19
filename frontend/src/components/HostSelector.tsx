@@ -36,37 +36,58 @@ export default function HostSelector({ selectedHosts, onHostsChange, className =
       try {
         setLoading(true);
         
-        // Get all test runs to extract hostname + hardware combinations
-        // Use a high limit to ensure we get all test runs (backend max is 10000)
-        const res = await fetchTestRuns({ limit: 10000 });
-        if (res.data) {
-          // Create a map to track unique hostname + hardware combinations
-          const hostMap = new Map<string, HostOption>();
+        // Fetch all test runs using pagination to ensure we get all hosts
+        const allRuns: any[] = [];
+        const chunkSize = 1000; // Backend max is 10000, but use smaller chunks for better UX
+        let offset = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const res = await fetchTestRuns({ 
+            limit: chunkSize,
+            offset: offset 
+          });
           
-          for (const run of res.data) {
-            const hostname = run.hostname || 'unknown';
-            const protocol = run.protocol || 'unknown';
-            const driveType = run.drive_type || 'unknown';
-            const driveModel = run.drive_model || 'unknown';
-            
-            // Create a unique key for this hostname + hardware combination
-            const hostKey = `${hostname}|${protocol}|${driveType}|${driveModel}`;
-            
-            if (!hostMap.has(hostKey)) {
-              hostMap.set(hostKey, {
-                value: hostKey, // Use unique hostKey as value
-                label: `${hostname} - ${protocol} - ${driveType} - ${driveModel}`,
-                hostname,
-                protocol,
-                driveType,
-                driveModel
-              });
-            }
+          if (res.error) {
+            throw new Error(res.error);
           }
-          
-          const options = Array.from(hostMap.values()).sort((a, b) => a.label.localeCompare(b.label));
-          setHostOptions(options);
+
+          if (res.data) {
+            const chunk = res.data;
+            allRuns.push(...chunk);
+            offset += chunk.length;
+            hasMore = chunk.length === chunkSize; // If we got a full chunk, there might be more
+          } else {
+            hasMore = false;
+          }
         }
+
+        // Create a map to track unique hostname + hardware combinations
+        const hostMap = new Map<string, HostOption>();
+        
+        for (const run of allRuns) {
+          const hostname = run.hostname || 'unknown';
+          const protocol = run.protocol || 'unknown';
+          const driveType = run.drive_type || 'unknown';
+          const driveModel = run.drive_model || 'unknown';
+          
+          // Create a unique key for this hostname + hardware combination
+          const hostKey = `${hostname}|${protocol}|${driveType}|${driveModel}`;
+          
+          if (!hostMap.has(hostKey)) {
+            hostMap.set(hostKey, {
+              value: hostKey, // Use unique hostKey as value
+              label: `${hostname} - ${protocol} - ${driveType} - ${driveModel}`,
+              hostname,
+              protocol,
+              driveType,
+              driveModel
+            });
+          }
+        }
+        
+        const options = Array.from(hostMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+        setHostOptions(options);
       } catch (error) {
         console.error('Failed to load host options:', error);
       } finally {

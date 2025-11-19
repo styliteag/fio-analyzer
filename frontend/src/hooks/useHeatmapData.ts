@@ -9,6 +9,9 @@ export interface HeatmapCell {
     value: number | null;
     rawConfig: TestConfiguration;
     hostname: string;
+    count?: number;
+    min?: number;
+    max?: number;
 }
 
 export interface HeatmapData {
@@ -117,13 +120,21 @@ export const useHeatmapData = () => {
             cellMap.forEach((data, key) => {
                 const [row, col] = key.split('|');
                 const avgValue = data.value / data.count;
+                
+                // Calculate min and max for this cell
+                const values = data.configs.map(config => config[metric]).filter((v): v is number => v !== null && v !== undefined);
+                const cellMin = values.length > 0 ? Math.min(...values) : undefined;
+                const cellMax = values.length > 0 ? Math.max(...values) : undefined;
 
                 cells.push({
                     row,
                     col,
                     value: avgValue,
                     rawConfig: data.configs[0],
-                    hostname: data.configs[0].hostname
+                    hostname: data.configs[0].hostname,
+                    count: data.count,
+                    min: cellMin,
+                    max: cellMax
                 });
 
                 if (avgValue < min) min = avgValue;
