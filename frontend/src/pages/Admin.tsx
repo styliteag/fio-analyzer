@@ -27,6 +27,7 @@ import {
 	deleteTestRuns,
 	bulkUpdateTestRunsByUUID,
 	fetchTestRun,
+	fetchTestRuns,
 } from '../services/api/testRuns';
 import {
 	fetchTimeSeriesHistory,
@@ -37,7 +38,7 @@ import { useNavigate } from 'react-router-dom';
 import type { TestRun, UUIDGroup } from '../types';
 
 // Tab types
-type AdminTab = 'by-config' | 'by-run' | 'latest' | 'history';
+type AdminTab = 'by-config' | 'by-run' | 'latest' | 'history' | 'hierarchy';
 
 interface EditableFields {
 	hostname?: string;
@@ -88,6 +89,12 @@ const Admin: React.FC = () => {
 
 	// UUID Grouping States
 	const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+	
+	// Hierarchical view states
+	const [expandedHosts, setExpandedHosts] = useState<Set<string>>(new Set());
+	const [expandedHostProtocols, setExpandedHostProtocols] = useState<Set<string>>(new Set());
+	const [expandedHostProtocolTypes, setExpandedHostProtocolTypes] = useState<Set<string>>(new Set());
+	const [expandedHostProtocolTypeModels, setExpandedHostProtocolTypeModels] = useState<Set<string>>(new Set());
 	const [uuidEditState, setUuidEditState] = useState<UUIDEditState>({
 		isOpen: false,
 		uuid: null,
@@ -153,8 +160,73 @@ const Admin: React.FC = () => {
 		loading: latestLoading,
 		error: latestError,
 	} = useServerSideTestRuns({
-		autoFetch: activeTab === 'latest',
+		autoFetch: activeTab === 'latest' || activeTab === 'hierarchy',
+		// For hierarchical view, fetch all test runs (max limit is 10000)
+		limit: activeTab === 'hierarchy' ? 10000 : undefined,
 	});
+
+	// For hierarchical view, fetch ALL test runs using pagination
+	const [allHierarchicalRuns, setAllHierarchicalRuns] = useState<TestRun[]>([]);
+	const [hierarchicalLoading, setHierarchicalLoading] = useState(false);
+	const [hierarchicalError, setHierarchicalError] = useState<string | null>(null);
+	const [hierarchicalTotalFetched, setHierarchicalTotalFetched] = useState(0);
+	const [hierarchicalHasMore, setHierarchicalHasMore] = useState(false);
+
+	// Fetch all test runs with pagination for hierarchical view
+	useEffect(() => {
+		if (activeTab === 'hierarchy') {
+			const fetchAllTestRuns = async () => {
+				setHierarchicalLoading(true);
+				setHierarchicalError(null);
+				setAllHierarchicalRuns([]);
+				setHierarchicalTotalFetched(0);
+				setHierarchicalHasMore(false);
+
+				try {
+					const allRuns: TestRun[] = [];
+					const chunkSize = 10000; // Backend max limit
+					let offset = 0;
+					let hasMore = true;
+
+					while (hasMore) {
+						const response = await fetchTestRuns({
+							limit: chunkSize,
+							offset: offset,
+						});
+
+						if (response.error) {
+							throw new Error(response.error);
+						}
+
+						if (response.data) {
+							const chunk = response.data;
+							allRuns.push(...chunk);
+							offset += chunk.length;
+							hasMore = chunk.length === chunkSize; // If we got a full chunk, there might be more
+							setHierarchicalTotalFetched(allRuns.length);
+							setHierarchicalHasMore(hasMore);
+						} else {
+							hasMore = false;
+						}
+					}
+
+					setAllHierarchicalRuns(allRuns);
+				} catch (err: any) {
+					setHierarchicalError(err.message || 'Failed to fetch all test runs');
+					console.error('Error fetching all test runs:', err);
+				} finally {
+					setHierarchicalLoading(false);
+				}
+			};
+
+			fetchAllTestRuns();
+		} else {
+			// Clear hierarchical data when switching away from hierarchy tab
+			setAllHierarchicalRuns([]);
+			setHierarchicalTotalFetched(0);
+			setHierarchicalHasMore(false);
+		}
+	}, [activeTab]);
 
 	// Fetch history data
 	useEffect(() => {
@@ -281,6 +353,105 @@ const Admin: React.FC = () => {
 			}))
 			.sort((a, b) => b.latestTimestamp - a.latestTimestamp);
 	}, [filteredLatestRuns]);
+
+	// Hierarchical grouping: Host → Host-Protocol → Host-Protocol-Type → Host-Protocol-Type-Model
+	// Use allHierarchicalRuns for hierarchy tab, filteredLatestRuns for other tabs
+	const hierarchicalData = useMemo(() => {
+		const runsToUse = activeTab === 'hierarchy' ? allHierarchicalRuns : filteredLatestRuns;
+		
+		if (!Array.isArray(runsToUse) || runsToUse.length === 0) {
+			return {};
+		}
+
+		// Apply search filter if active
+		let filteredRuns = runsToUse;
+		if (searchTerm && activeTab === 'hierarchy') {
+			const lowerSearch = searchTerm.toLowerCase();
+			filteredRuns = runsToUse.filter((run) => {
+				const blockSizeStr = typeof run.block_size === 'string' ? run.block_size : String(run.block_size);
+				return (
+					run.hostname?.toLowerCase().includes(lowerSearch) ||
+					run.protocol?.toLowerCase().includes(lowerSearch) ||
+					run.drive_model?.toLowerCase().includes(lowerSearch) ||
+					run.drive_type?.toLowerCase().includes(lowerSearch) ||
+					run.test_name?.toLowerCase().includes(lowerSearch) ||
+					run.description?.toLowerCase().includes(lowerSearch) ||
+					run.read_write_pattern?.toLowerCase().includes(lowerSearch) ||
+					blockSizeStr.toLowerCase().includes(lowerSearch) ||
+					run.config_uuid?.toLowerCase().includes(lowerSearch) ||
+					run.run_uuid?.toLowerCase().includes(lowerSearch)
+				);
+			});
+		}
+
+		// Level 1: Group by Host
+		const hostGroups = new Map<string, TestRun[]>();
+		filteredRuns.forEach((run) => {
+			const hostname = run.hostname || 'unknown';
+			if (!hostGroups.has(hostname)) {
+				hostGroups.set(hostname, []);
+			}
+			hostGroups.get(hostname)!.push(run);
+		});
+
+		// Build hierarchical structure
+		const hierarchy: Record<string, Record<string, Record<string, Record<string, TestRun[]>>>> = {};
+
+		hostGroups.forEach((runs, hostname) => {
+			// Level 2: Group by Host-Protocol
+			const hostProtocolGroups = new Map<string, TestRun[]>();
+			runs.forEach((run) => {
+				const protocol = run.protocol || 'unknown';
+				const hostProtocolKey = `${hostname}-${protocol}`;
+				if (!hostProtocolGroups.has(hostProtocolKey)) {
+					hostProtocolGroups.set(hostProtocolKey, []);
+				}
+				hostProtocolGroups.get(hostProtocolKey)!.push(run);
+			});
+
+			hierarchy[hostname] = {};
+
+			hostProtocolGroups.forEach((protocolRuns, hostProtocolKey) => {
+				const protocol = protocolRuns[0]?.protocol || 'unknown';
+				
+				// Level 3: Group by Host-Protocol-Type
+				const hostProtocolTypeGroups = new Map<string, TestRun[]>();
+				protocolRuns.forEach((run) => {
+					const driveType = run.drive_type || 'unknown';
+					const hostProtocolTypeKey = `${hostname}-${protocol}-${driveType}`;
+					if (!hostProtocolTypeGroups.has(hostProtocolTypeKey)) {
+						hostProtocolTypeGroups.set(hostProtocolTypeKey, []);
+					}
+					hostProtocolTypeGroups.get(hostProtocolTypeKey)!.push(run);
+				});
+
+				hierarchy[hostname][hostProtocolKey] = {};
+
+				hostProtocolTypeGroups.forEach((typeRuns, hostProtocolTypeKey) => {
+					const driveType = typeRuns[0]?.drive_type || 'unknown';
+					
+					// Level 4: Group by Host-Protocol-Type-Model
+					const hostProtocolTypeModelGroups = new Map<string, TestRun[]>();
+					typeRuns.forEach((run) => {
+						const driveModel = run.drive_model || 'unknown';
+						const hostProtocolTypeModelKey = `${hostname}-${protocol}-${driveType}-${driveModel}`;
+						if (!hostProtocolTypeModelGroups.has(hostProtocolTypeModelKey)) {
+							hostProtocolTypeModelGroups.set(hostProtocolTypeModelKey, []);
+						}
+						hostProtocolTypeModelGroups.get(hostProtocolTypeModelKey)!.push(run);
+					});
+
+					hierarchy[hostname][hostProtocolKey][hostProtocolTypeKey] = {};
+
+					hostProtocolTypeModelGroups.forEach((modelRuns, hostProtocolTypeModelKey) => {
+						hierarchy[hostname][hostProtocolKey][hostProtocolTypeKey][hostProtocolTypeModelKey] = modelRuns;
+					});
+				});
+			});
+		});
+
+				return hierarchy;
+			}, [allHierarchicalRuns, filteredLatestRuns, activeTab, searchTerm]);
 
 	// Copy UUID to clipboard
 	const copyUUID = useCallback((uuid: string) => {
@@ -982,6 +1153,17 @@ const Admin: React.FC = () => {
 							<History className="w-4 h-4" />
 							History
 						</button>
+						<button
+							onClick={() => setActiveTab('hierarchy')}
+							className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
+								activeTab === 'hierarchy'
+									? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
+									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+							}`}
+						>
+							<Server className="w-4 h-4" />
+							By Hierarchy
+						</button>
 					</div>
 				</div>
 			</div>
@@ -1169,6 +1351,354 @@ const Admin: React.FC = () => {
 															))}
 														</tbody>
 													</table>
+												</div>
+											)}
+										</div>
+									);
+								})}
+							</div>
+						)}
+					</div>
+				)}
+
+				{activeTab === 'hierarchy' && (
+					<div>
+						<div className="mb-6 flex items-center justify-between">
+							<div className="flex items-center gap-2">
+								<Server className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+								<h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Hierarchical View</h2>
+							</div>
+							<div className="text-sm text-gray-600 dark:text-gray-400">
+								{Object.keys(hierarchicalData).length} host{Object.keys(hierarchicalData).length !== 1 ? 's' : ''}
+								{hierarchicalTotalFetched > 0 && (
+									<span className="ml-2">
+										• {hierarchicalTotalFetched.toLocaleString()} test run{hierarchicalTotalFetched !== 1 ? 's' : ''} loaded
+									</span>
+								)}
+							</div>
+						</div>
+
+						{(hierarchicalLoading || latestLoading) ? (
+							<div>
+								<Loading message={hierarchicalLoading ? `Loading all test runs... (${hierarchicalTotalFetched.toLocaleString()} fetched)` : "Loading hierarchical data..."} />
+								{hierarchicalHasMore && (
+									<div className="mt-2 text-sm text-gray-600 dark:text-gray-400 text-center">
+										Fetching more data... This may take a moment for large datasets.
+									</div>
+								)}
+							</div>
+						) : (hierarchicalError || latestError) ? (
+							<ErrorDisplay error={hierarchicalError || latestError || 'Unknown error'} />
+						) : Object.keys(hierarchicalData).length === 0 ? (
+							<div className="text-center py-12 text-gray-500 dark:text-gray-400">
+								{searchTerm ? `No test runs found matching "${searchTerm}"` : 'No test runs found'}
+							</div>
+						) : (
+							<div className="space-y-4">
+								{Object.entries(hierarchicalData).map(([hostname, hostProtocols]) => {
+									const isHostExpanded = expandedHosts.has(hostname);
+									
+									// Calculate totals for this host
+									let totalRuns = 0;
+									let totalAvgIops = 0;
+									Object.values(hostProtocols).forEach((protocolTypes) => {
+										Object.values(protocolTypes).forEach((types) => {
+											Object.values(types).forEach((runs) => {
+												totalRuns += runs.length;
+												totalAvgIops += runs.reduce((sum, r) => sum + (r.iops || 0), 0);
+											});
+										});
+									});
+									const avgIops = totalRuns > 0 ? totalAvgIops / totalRuns : 0;
+
+									return (
+										<div key={hostname} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+											{/* Level 1: Host */}
+											<div className="p-4 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
+												<div className="flex items-center justify-between">
+													<div className="flex items-center gap-3 flex-1">
+														<button
+															onClick={() => {
+																setExpandedHosts(prev => {
+																	const next = new Set(prev);
+																	if (next.has(hostname)) {
+																		next.delete(hostname);
+																	} else {
+																		next.add(hostname);
+																	}
+																	return next;
+																});
+															}}
+															className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+														>
+															{isHostExpanded ? (
+																<ChevronUp className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+															) : (
+																<ChevronDown className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+															)}
+														</button>
+														<Server className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+														<div>
+															<h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{hostname}</h3>
+															<div className="text-sm text-gray-600 dark:text-gray-400">
+																{totalRuns} test run{totalRuns !== 1 ? 's' : ''} • Avg IOPS: {Math.round(avgIops).toLocaleString()}
+															</div>
+														</div>
+													</div>
+												</div>
+											</div>
+
+											{/* Level 2: Host-Protocol */}
+											{isHostExpanded && (
+												<div className="bg-white dark:bg-gray-800">
+											{Object.entries(hostProtocols).map(([hostProtocolKey, protocolTypes]) => {
+												// Extract protocol from key: "hostname-protocol" -> "protocol"
+												const protocolParts = hostProtocolKey.split('-');
+												const protocol = protocolParts.slice(1).join('-');
+												const isProtocolExpanded = expandedHostProtocols.has(hostProtocolKey);
+														
+														// Calculate totals for this host-protocol
+														let protocolRuns = 0;
+														let protocolAvgIops = 0;
+														Object.values(protocolTypes).forEach((types) => {
+															Object.values(types).forEach((runs) => {
+																protocolRuns += runs.length;
+																protocolAvgIops += runs.reduce((sum, r) => sum + (r.iops || 0), 0);
+															});
+														});
+														const protocolIops = protocolRuns > 0 ? protocolAvgIops / protocolRuns : 0;
+
+														return (
+															<div key={hostProtocolKey} className="border-t border-gray-200 dark:border-gray-700">
+																<div className="p-3 bg-gray-50 dark:bg-gray-750 pl-12">
+																	<div className="flex items-center justify-between">
+																		<div className="flex items-center gap-3 flex-1">
+																			<button
+																				onClick={() => {
+																					setExpandedHostProtocols(prev => {
+																						const next = new Set(prev);
+																						if (next.has(hostProtocolKey)) {
+																							next.delete(hostProtocolKey);
+																						} else {
+																							next.add(hostProtocolKey);
+																						}
+																						return next;
+																					});
+																				}}
+																				className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+																			>
+																				{isProtocolExpanded ? (
+																					<ChevronUp className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+																				) : (
+																					<ChevronDown className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+																				)}
+																			</button>
+																			<div>
+																				<h4 className="text-md font-medium text-gray-900 dark:text-gray-100">
+																					Protocol: {protocol}
+																				</h4>
+																				<div className="text-xs text-gray-600 dark:text-gray-400">
+																					{protocolRuns} test run{protocolRuns !== 1 ? 's' : ''} • Avg IOPS: {Math.round(protocolIops).toLocaleString()}
+																				</div>
+																			</div>
+																		</div>
+																	</div>
+																</div>
+
+																{/* Level 3: Host-Protocol-Type */}
+																{isProtocolExpanded && (
+																	<div>
+																		{Object.entries(protocolTypes).map(([hostProtocolTypeKey, types]) => {
+											// Extract drive type from key: "hostname-protocol-drive_type" -> "drive_type"
+											const typeParts = hostProtocolTypeKey.split('-');
+											const driveType = typeParts.slice(2).join('-');
+											const isTypeExpanded = expandedHostProtocolTypes.has(hostProtocolTypeKey);
+																			
+																			// Calculate totals for this host-protocol-type
+																			let typeRuns = 0;
+																			let typeAvgIops = 0;
+																			Object.values(types).forEach((runs) => {
+																				typeRuns += runs.length;
+																				typeAvgIops += runs.reduce((sum, r) => sum + (r.iops || 0), 0);
+																			});
+																			const typeIops = typeRuns > 0 ? typeAvgIops / typeRuns : 0;
+
+																			return (
+																				<div key={hostProtocolTypeKey} className="border-t border-gray-200 dark:border-gray-700">
+																					<div className="p-3 bg-gray-50 dark:bg-gray-800 pl-20">
+																						<div className="flex items-center justify-between">
+																							<div className="flex items-center gap-3 flex-1">
+																								<button
+																									onClick={() => {
+																										setExpandedHostProtocolTypes(prev => {
+																											const next = new Set(prev);
+																											if (next.has(hostProtocolTypeKey)) {
+																												next.delete(hostProtocolTypeKey);
+																											} else {
+																												next.add(hostProtocolTypeKey);
+																											}
+																											return next;
+																										});
+																									}}
+																									className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+																								>
+																									{isTypeExpanded ? (
+																										<ChevronUp className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+																									) : (
+																										<ChevronDown className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+																									)}
+																								</button>
+																								<div>
+																									<h5 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+																										Drive Type: {driveType}
+																									</h5>
+																									<div className="text-xs text-gray-600 dark:text-gray-400">
+																										{typeRuns} test run{typeRuns !== 1 ? 's' : ''} • Avg IOPS: {Math.round(typeIops).toLocaleString()}
+																									</div>
+																								</div>
+																							</div>
+																						</div>
+																					</div>
+
+																					{/* Level 4: Host-Protocol-Type-Model */}
+																					{isTypeExpanded && (
+																						<div>
+																							{Object.entries(types).map(([hostProtocolTypeModelKey, runs]) => {
+																								// Extract drive model from key: "hostname-protocol-drive_type-drive_model" -> "drive_model"
+																								const modelParts = hostProtocolTypeModelKey.split('-');
+																								const driveModel = modelParts.slice(3).join('-');
+																								const isModelExpanded = expandedHostProtocolTypeModels.has(hostProtocolTypeModelKey);
+																								
+																								const modelAvgIops = runs.length > 0 
+																									? runs.reduce((sum, r) => sum + (r.iops || 0), 0) / runs.length 
+																									: 0;
+
+																								return (
+																									<div key={hostProtocolTypeModelKey} className="border-t border-gray-200 dark:border-gray-700">
+																										<div className="p-3 bg-gray-50 dark:bg-gray-800 pl-28">
+																											<div className="flex items-center justify-between">
+																												<div className="flex items-center gap-3 flex-1">
+																													<button
+																														onClick={() => {
+																															setExpandedHostProtocolTypeModels(prev => {
+																																const next = new Set(prev);
+																																if (next.has(hostProtocolTypeModelKey)) {
+																																	next.delete(hostProtocolTypeModelKey);
+																																} else {
+																																	next.add(hostProtocolTypeModelKey);
+																																}
+																																return next;
+																															});
+																														}}
+																														className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
+																													>
+																														{isModelExpanded ? (
+																															<ChevronUp className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+																														) : (
+																															<ChevronDown className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+																														)}
+																													</button>
+																													<div>
+																														<h6 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+																															Drive Model: {driveModel}
+																														</h6>
+																														<div className="text-xs text-gray-600 dark:text-gray-400">
+																															{runs.length} test run{runs.length !== 1 ? 's' : ''} • Avg IOPS: {Math.round(modelAvgIops).toLocaleString()}
+																														</div>
+																													</div>
+																												</div>
+																											</div>
+																										</div>
+
+																										{/* Test Runs Table */}
+																										{isModelExpanded && (
+																											<div className="overflow-x-auto bg-white dark:bg-gray-800">
+																												<table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+																													<thead className="bg-gray-100 dark:bg-gray-700">
+																														<tr>
+																															<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Test Run</th>
+																															<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Configuration</th>
+																															<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Performance</th>
+																															<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">UUIDs</th>
+																														</tr>
+																													</thead>
+																													<tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+																														{runs.map((run) => (
+																															<tr
+																																key={run.id}
+																																onClick={() => openTestRunDetails(run.id)}
+																																className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+																															>
+																																<td className="px-4 py-3">
+																																	<div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+																																		Test Run #{run.id}
+																																	</div>
+																																	<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+																																		{new Date(run.timestamp).toLocaleString()}
+																																	</div>
+																																	<div className="text-xs text-gray-600 dark:text-gray-400 mt-1" title={run.test_name || 'Unnamed Test'}>
+																																		{run.test_name && run.test_name.length > 40
+																																			? `${run.test_name.substring(0, 40)}...`
+																																			: run.test_name || 'Unnamed Test'}
+																																	</div>
+																																</td>
+																																<td className="px-4 py-3">
+																																	<div className="text-sm text-gray-900 dark:text-gray-100">
+																																		<span className="font-medium">{run.protocol}</span> • {run.read_write_pattern}
+																																	</div>
+																																	<div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+																																		{run.drive_type} - {run.drive_model}
+																																	</div>
+																																	<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+																																		Block: {run.block_size} • QD: {run.queue_depth} • Jobs: {run.num_jobs || 1}
+																																	</div>
+																																</td>
+																																<td className="px-4 py-3">
+																																	<div className="text-sm font-bold text-gray-900 dark:text-gray-100">
+																																		{run.iops ? Math.round(run.iops).toLocaleString() : 'N/A'} IOPS
+																																	</div>
+																																	{run.bandwidth && (
+																																		<div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+																																			BW: {run.bandwidth.toFixed(2)} MB/s
+																																		</div>
+																																	)}
+																																	{run.avg_latency && (
+																																		<div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+																																			Latency: {run.avg_latency.toFixed(3)} ms
+																																		</div>
+																																	)}
+																																</td>
+																																<td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+																																	{run.config_uuid && (
+																																		<div title={run.config_uuid} className="mb-1">
+																																			C: {run.config_uuid.slice(0, 8)}...
+																																		</div>
+																																	)}
+																																	{run.run_uuid && (
+																																		<div title={run.run_uuid}>
+																																			R: {run.run_uuid.slice(0, 8)}...
+																																		</div>
+																																	)}
+																																</td>
+																															</tr>
+																														))}
+																													</tbody>
+																												</table>
+																											</div>
+																										)}
+																									</div>
+																								);
+																							})}
+																						</div>
+																					)}
+																				</div>
+																			);
+																		})}
+																	</div>
+																)}
+															</div>
+														);
+													})}
 												</div>
 											)}
 										</div>

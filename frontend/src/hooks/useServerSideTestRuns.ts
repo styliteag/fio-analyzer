@@ -7,6 +7,7 @@ import type { ActiveFilters } from './useTestRunFilters';
 export interface UseServerSideTestRunsOptions {
     debounceMs?: number;
     autoFetch?: boolean;
+    limit?: number; // Maximum number of test runs to fetch
 }
 
 export interface UseServerSideTestRunsResult {
@@ -42,7 +43,8 @@ export const useServerSideTestRuns = (
 ): UseServerSideTestRunsResult => {
     const { 
         debounceMs = 300,
-        autoFetch = true 
+        autoFetch = true,
+        limit
     } = options;
 
     const [testRuns, setTestRuns] = useState<TestRun[]>([]);
@@ -72,8 +74,12 @@ export const useServerSideTestRuns = (
             setLoading(true);
             setError(null);
 
-            const options = convertActiveFiltersToOptions(debouncedFilters);
-            const response = await fetchTestRuns(options);
+            const fetchOptions = convertActiveFiltersToOptions(debouncedFilters);
+            // Add limit if provided
+            if (limit !== undefined) {
+                fetchOptions.limit = limit;
+            }
+            const response = await fetchTestRuns(fetchOptions);
             
             if (response.data) {
                 setTestRuns(response.data);
