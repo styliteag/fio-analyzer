@@ -1,6 +1,6 @@
 // API hooks barrel export
 export * from './useTestRuns';
-export * from './usePerformanceData';
+
 export * from './useTimeSeries';
 export * from './useUpload';
 export * from './useUUIDGroupedRuns';
@@ -13,14 +13,7 @@ export {
     type UseTestRunsOptions,
 } from './useTestRuns';
 
-export {
-    usePerformanceData,
-    useSinglePerformanceData,
-    useFilteredPerformanceData,
-    usePerformanceMetrics,
-    type UsePerformanceDataResult,
-    type UsePerformanceDataOptions,
-} from './usePerformanceData';
+
 
 export {
     useTimeSeriesServers,

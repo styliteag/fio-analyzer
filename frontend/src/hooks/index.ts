@@ -29,8 +29,7 @@ export { useFilteredData, useFilteredDataWithStats } from './useFilteredData';
 export {
     useTestRuns,
     useTestRun,
-    usePerformanceData,
-    useSinglePerformanceData,
+
     useTimeSeriesServers,
     useTimeSeriesLatest,
     useTimeSeriesHistory,

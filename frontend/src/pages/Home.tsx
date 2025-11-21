@@ -6,7 +6,7 @@ import Button from "../components/ui/Button";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import { useAuth } from "../contexts/AuthContext";
 import { useApiCall } from "../hooks";
-import { Activity, Database, TrendingUp, Upload, Users, Settings, RefreshCw, Zap, History, Microscope, Server } from "lucide-react";
+import { Activity, Database, TrendingUp, Upload, Users, Settings, RefreshCw, History, Server } from "lucide-react";
 import { fetchDashboardStats, type DashboardStats } from "../services/api/dashboard";
 import { formatLatencyMicroseconds } from "../services/data/formatters";
 
@@ -120,13 +120,14 @@ export default function Home() {
 				{/* Quick Actions */}
 				<div className="mb-8">
 					<div className="flex flex-wrap gap-4">
+
 						<Button
 							variant="outline"
-							onClick={() => window.location.href = "/performance"}
+							onClick={() => window.location.href = "/host"}
 							className="flex items-center gap-2"
 						>
-							<Zap className="w-4 h-4" />
-							Performance Analytics
+							<Server className="w-4 h-4" />
+							Host Analysis
 						</Button>
 						<Button
 							variant="outline"
@@ -135,22 +136,6 @@ export default function Home() {
 						>
 							<History className="w-4 h-4" />
 							Test History
-						</Button>
-						<Button
-							variant="outline"
-							onClick={() => window.location.href = "/compare"}
-							className="flex items-center gap-2"
-						>
-							<Microscope className="w-4 h-4" />
-							Advanced Host Comparison
-						</Button>
-						<Button
-							variant="outline"
-							onClick={() => window.location.href = "/host"}
-							className="flex items-center gap-2"
-						>
-							<Server className="w-4 h-4" />
-							Host Analysis
 						</Button>
 						<Button
 							onClick={handleRefreshStats}
@@ -300,18 +285,7 @@ export default function Home() {
 							Quick Links
 						</h2>
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-							<a
-								href="/performance"
-								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-							>
-								<div className="flex items-center gap-2 mb-2">
-									<Zap className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-									<h3 className="font-medium theme-text-primary">Performance Analytics</h3>
-								</div>
-								<p className="theme-text-secondary text-sm">
-									Real-time metrics and system performance
-								</p>
-							</a>
+
 							<a
 								href="/history"
 								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
