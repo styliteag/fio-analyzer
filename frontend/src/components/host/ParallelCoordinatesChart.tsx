@@ -13,14 +13,14 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
   // Flatten data per configuration with enhanced processing
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
-    
+
     const flattenedData = data.flatMap((drive: any) =>
       drive.configurations
         .filter((cfg: any) => cfg.iops && cfg.avg_latency && cfg.bandwidth) // Only include complete data
         .map((cfg: any) => {
           const rawBlock = cfg.block_size;
           let blockSize = 0;
-          
+
           // Enhanced block size parsing
           if (typeof rawBlock === 'string') {
             if (rawBlock.includes('K')) {
@@ -33,7 +33,7 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
           } else {
             blockSize = rawBlock || 0;
           }
-          
+
           return {
             blockSize,
             queueDepth: cfg.queue_depth || 0,
@@ -47,7 +47,7 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
           };
         })
     );
-    
+
     return flattenedData;
   }, [data]);
 
@@ -70,14 +70,29 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
       }),
       'primary'
     );
-    
+
     const mapping = new Map<string, string>();
     uniqueDrives.forEach((combo, index) => {
       mapping.set(combo, uniqueColors[index]);
     });
-    
+
     return mapping;
   }, [chartData]);
+
+  // State to track hidden drive models
+  const [hiddenModels, setHiddenModels] = React.useState<Set<string>>(new Set());
+
+  const toggleModel = (model: string) => {
+    setHiddenModels(prev => {
+      const next = new Set(prev);
+      if (next.has(model)) {
+        next.delete(model);
+      } else {
+        next.add(model);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!svgRef.current || !chartData.length) return;
@@ -85,12 +100,15 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove(); // Clear previous render
 
-    const margin = { top: 50, right: 80, bottom: 50, left: 80 };
+    const margin = { top: 50, right: 120, bottom: 50, left: 80 }; // Increased right margin for legend
     const width = 900 - margin.left - margin.right;
     const height = 500 - margin.top - margin.bottom;
 
     const g = svg.append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Filter data based on hidden models
+    const visibleData = chartData.filter(d => !hiddenModels.has(d.driveModel));
 
     // Create scales for each dimension
     const scales: { [key: string]: d3.ScaleLinear<number, number> } = {};
@@ -132,7 +150,7 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
 
     // Draw lines
     const lines = g.selectAll(".line")
-      .data(chartData)
+      .data(visibleData)
       .enter().append("path")
       .attr("class", "line")
       .attr("d", (d: any) => {
@@ -149,11 +167,11 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
 
     // Add hover effects
     lines
-      .on("mouseover", function(this: SVGPathElement, event: any, d: any) {
+      .on("mouseover", function (this: SVGPathElement, event: any, d: any) {
         d3.select(this)
-          .style("stroke-width", 3)
+          .style("stroke-width", 6)
           .style("stroke-opacity", 1);
-        
+
         // Create tooltip
         const tooltip = d3.select("body").append("div")
           .attr("class", "tooltip")
@@ -182,43 +200,51 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
           .style("left", (event.pageX + 10) + "px")
           .style("top", (event.pageY - 10) + "px");
       })
-      .on("mouseout", function(this: SVGPathElement) {
+      .on("mouseout", function (this: SVGPathElement) {
         d3.select(this)
           .style("stroke-width", 1.5)
           .style("stroke-opacity", 0.6);
-        
+
         d3.selectAll(".tooltip").remove();
       });
 
     // Add legend
     const legend = g.append("g")
       .attr("class", "legend")
-      .attr("transform", `translate(${width + 10}, 20)`);
+      .attr("transform", `translate(${width + 20}, 20)`);
 
     const driveModels = [...new Set(chartData.map(d => d.driveModel))];
     const legendItems = legend.selectAll(".legend-item")
       .data(driveModels)
       .enter().append("g")
       .attr("class", "legend-item")
-      .attr("transform", (_d: any, i: number) => `translate(0, ${i * 20})`);
+      .attr("transform", (_d: any, i: number) => `translate(0, ${i * 25})`)
+      .style("cursor", "pointer")
+      .on("click", (_event: any, d: string) => toggleModel(d));
 
-    legendItems.append("line")
-      .attr("x1", 0)
-      .attr("x2", 15)
-      .attr("y1", 0)
-      .attr("y2", 0)
-      .style("stroke", (d: any) => colorMapping.get(d) || '#888')
-      .style("stroke-width", 2);
+    // Legend color box/line
+    legendItems.append("rect")
+      .attr("width", 15)
+      .attr("height", 15)
+      .attr("rx", 3)
+      .style("fill", (d: any) => {
+        // Find a matching color from the mapping (using the first match found in data)
+        const match = chartData.find(item => item.driveModel === d);
+        return match ? (colorMapping.get(`${match.hostname}_${match.driveModel}`) || '#888') : '#888';
+      })
+      .style("opacity", (d: string) => hiddenModels.has(d) ? 0.3 : 1);
 
+    // Legend text
     legendItems.append("text")
-      .attr("x", 20)
-      .attr("y", 0)
-      .attr("dy", "0.35em")
+      .attr("x", 25)
+      .attr("y", 12)
       .style("font-size", "11px")
       .style("fill", "currentColor")
+      .style("opacity", (d: string) => hiddenModels.has(d) ? 0.5 : 1)
+      .style("text-decoration", (d: string) => hiddenModels.has(d) ? "line-through" : "none")
       .text((d: any) => d);
 
-  }, [chartData, colorMapping, dimensions]);
+  }, [chartData, colorMapping, dimensions, hiddenModels]);
 
   if (!chartData || chartData.length === 0) {
     return (
@@ -243,9 +269,9 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
           Data points: {chartData.length} test configurations
         </p>
       </div>
-      
+
       <div className="overflow-x-auto">
-        <svg 
+        <svg
           ref={svgRef}
           width={900}
           height={500}
@@ -253,7 +279,7 @@ const ParallelCoordinatesChart: React.FC<ParallelCoordinatesChartProps> = ({ dat
           style={{ background: 'transparent' }}
         />
       </div>
-      
+
       <div className="mt-4 text-xs theme-text-secondary">
         <p><strong>How to read:</strong> Each line represents one test configuration. Patterns show correlations between dimensions.</p>
         <p><strong>Outliers:</strong> Lines that deviate significantly from the general pattern indicate exceptional performance or issues.</p>

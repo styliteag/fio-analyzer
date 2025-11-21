@@ -52,6 +52,21 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
   const [metric, setMetric] = useState<'iops' | 'avg_latency' | 'bandwidth'>('iops');
   const [hoveredBox, setHoveredBox] = useState<string | null>(null);
 
+  // State to track hidden drive models
+  const [hiddenModels, setHiddenModels] = useState<Set<string>>(new Set());
+
+  const toggleModel = (model: string) => {
+    setHiddenModels(prev => {
+      const next = new Set(prev);
+      if (next.has(model)) {
+        next.delete(model);
+      } else {
+        next.add(model);
+      }
+      return next;
+    });
+  };
+
   const calculateBoxplotStats = (values: number[]): Omit<BoxplotData, 'blockSize'> => {
     if (values.length === 0) {
       return { q1: 0, median: 0, q3: 0, min: 0, max: 0, outliers: [], values: [], interquartileRange: 0 };
@@ -59,18 +74,18 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
 
     const sorted = [...values].sort((a, b) => a - b);
     const n = sorted.length;
-    
+
     const q1 = d3.quantile(sorted, 0.25) || 0;
     const median = d3.quantile(sorted, 0.5) || 0;
     const q3 = d3.quantile(sorted, 0.75) || 0;
     const iqr = q3 - q1;
-    
+
     const lowerBound = q1 - 1.5 * iqr;
     const upperBound = q3 + 1.5 * iqr;
-    
+
     const outliers = sorted.filter(v => v < lowerBound || v > upperBound);
     const nonOutliers = sorted.filter(v => v >= lowerBound && v <= upperBound);
-    
+
     const min = nonOutliers.length > 0 ? Math.min(...nonOutliers) : sorted[0];
     const max = nonOutliers.length > 0 ? Math.max(...nonOutliers) : sorted[n - 1];
 
@@ -87,8 +102,11 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
   };
 
   const processData = useCallback((): BoxplotData[] => {
-    // Flatten all configurations from all drives
-    const allConfigurations = data.flatMap(drive => 
+    // Filter out hidden models first
+    const visibleDrives = data.filter(d => !hiddenModels.has(d.drive_model));
+
+    // Flatten all configurations from visible drives
+    const allConfigurations = visibleDrives.flatMap(drive =>
       drive.configurations.filter(config => {
         const value = config[metric];
         return value !== null && value !== undefined && !isNaN(value);
@@ -97,13 +115,13 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
 
     // Group by block size
     const groupedByBlockSize = d3.group(allConfigurations, d => d.block_size);
-    
+
     // Calculate boxplot statistics for each block size
     const boxplotData: BoxplotData[] = [];
-    
+
     groupedByBlockSize.forEach((configs, blockSize) => {
       const values = configs.map(config => config[metric] as number).filter(v => !isNaN(v));
-      
+
       if (values.length > 0) {
         const stats = calculateBoxplotStats(values);
         boxplotData.push({
@@ -118,10 +136,10 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
       const extractSize = (size: string): number => {
         const match = size.match(/(\d+)([kmg]?)/i);
         if (!match) return 0;
-        
+
         const value = parseInt(match[1]);
         const unit = match[2]?.toLowerCase();
-        
+
         switch (unit) {
           case 'k': return value * 1024;
           case 'm': return value * 1024 * 1024;
@@ -129,25 +147,41 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
           default: return value;
         }
       };
-      
+
       return extractSize(a.blockSize) - extractSize(b.blockSize);
     });
-  }, [data, metric]);
+  }, [data, metric, hiddenModels]);
+
+  // Create color mapping for drive models
+  const colorMapping = React.useMemo(() => {
+    const uniqueDrives = [...new Set(data.map(d => `${d.hostname}_${d.drive_model}`))];
+    const uniqueColors = generateUniqueColorsForChart(
+      uniqueDrives.map(combo => {
+        const [hostname, driveModel] = combo.split('_');
+        return { hostname, driveModel };
+      }),
+      'primary'
+    );
+
+    const mapping = new Map<string, string>();
+    uniqueDrives.forEach((combo, index) => {
+      mapping.set(combo, uniqueColors[index]);
+    });
+
+    return mapping;
+  }, [data]);
 
   useEffect(() => {
-    if (!svgRef.current || data.length === 0) return;
+    if (!svgRef.current) return;
 
-    const boxplotData = processData();
-    if (boxplotData.length === 0) return;
-
-    // Clear previous content
+    // Always clear previous content first
     d3.select(svgRef.current).selectAll("*").remove();
 
     // Set up dimensions
     const containerRect = svgRef.current.parentElement?.getBoundingClientRect();
-    const width = (containerRect?.width || 800) - 80;
+    const width = (containerRect?.width || 800);
     const height = 400;
-    const margin = { top: 20, right: 30, bottom: 60, left: 80 };
+    const margin = { top: 20, right: 150, bottom: 60, left: 80 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
 
@@ -157,6 +191,60 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
 
     const g = svg.append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Add interactive legend (Always render this)
+    const legend = g.append("g")
+      .attr("class", "legend")
+      .attr("transform", `translate(${chartWidth + 20}, 0)`);
+
+    const driveModels = [...new Set(data.map(d => d.drive_model))];
+
+    const legendItems = legend.selectAll(".legend-item")
+      .data(driveModels)
+      .enter().append("g")
+      .attr("class", "legend-item")
+      .attr("transform", (_d, i) => `translate(0, ${i * 25})`)
+      .style("cursor", "pointer")
+      .on("click", (_event, d) => toggleModel(d));
+
+    // Define theme-aware colors
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    const textColor = isDarkMode ? "#e5e7eb" : "#374151";
+    const axisColor = isDarkMode ? "#e5e7eb" : "#374151";
+
+    legendItems.append("rect")
+      .attr("width", 12)
+      .attr("height", 12)
+      .attr("rx", 2)
+      .style("fill", d => {
+        const match = data.find(item => item.drive_model === d);
+        return match ? (colorMapping.get(`${match.hostname}_${match.drive_model}`) || '#888') : '#888';
+      })
+      .style("opacity", d => hiddenModels.has(d) ? 0.3 : 1);
+
+    legendItems.append("text")
+      .attr("x", 20)
+      .attr("y", 10)
+      .style("font-size", "11px")
+      .style("fill", textColor)
+      .style("opacity", d => hiddenModels.has(d) ? 0.5 : 1)
+      .style("text-decoration", d => hiddenModels.has(d) ? "line-through" : "none")
+      .text(d => d);
+
+    // Process data
+    const boxplotData = processData();
+
+    // If no data (e.g. all deselected), show a message but keep legend
+    if (boxplotData.length === 0) {
+      g.append("text")
+        .attr("x", chartWidth / 2)
+        .attr("y", chartHeight / 2)
+        .attr("text-anchor", "middle")
+        .style("fill", textColor)
+        .style("font-size", "14px")
+        .text("Select drives from the legend to view data");
+      return;
+    }
 
     // Set up scales
     const xScale = d3.scaleBand()
@@ -170,16 +258,11 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
       .nice()
       .range([chartHeight, 0]);
 
-    // Define theme-aware colors for axes
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    const axisColor = isDarkMode ? "#e5e7eb" : "#374151";
-    const textColor = isDarkMode ? "#e5e7eb" : "#374151";
-
     // Add axes
     const xAxis = g.append("g")
       .attr("transform", `translate(0,${chartHeight})`)
       .call(d3.axisBottom(xScale));
-    
+
     // Style x-axis
     xAxis.selectAll("text")
       .style("text-anchor", "end")
@@ -188,22 +271,22 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
       .attr("transform", "rotate(-45)")
       .style("fill", textColor)
       .style("font-size", "12px");
-    
+
     xAxis.selectAll("line, path")
       .style("stroke", axisColor);
 
     const yAxis = g.append("g")
       .call(d3.axisLeft(yScale));
-    
+
     // Style y-axis
     yAxis.selectAll("text")
       .style("fill", textColor)
       .style("font-size", "12px");
-    
+
     yAxis.selectAll("line, path")
       .style("stroke", axisColor);
 
-    // Add axis labels with proper colors
+    // Add axis labels
     g.append("text")
       .attr("transform", "rotate(-90)")
       .attr("y", 0 - margin.left)
@@ -230,48 +313,27 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
 
     // Draw boxplots
     const boxWidth = xScale.bandwidth() * 0.6;
-    
+
     boxplotData.forEach(d => {
       const x = xScale(d.blockSize)! + xScale.bandwidth() / 2;
       const isHovered = hoveredBox === d.blockSize;
-      
+
       // Box group
       const boxGroup = g.append("g")
         .attr("class", `box-${d.blockSize}`)
         .style("cursor", "pointer");
 
-      // Define colors based on hostname/drive names from the data for this block size
-      const isDarkMode = document.documentElement.classList.contains('dark');
-      
-      // Get all drives that have data for this block size
-      const relevantDrives = data.filter(drive => 
-        drive.configurations.some(config => config.block_size === d.blockSize)
-      );
-      
-      // Generate colors for these drives and use the primary one
-      const driveColors = generateUniqueColorsForChart(
-        relevantDrives.map(drive => ({
-          hostname: drive.hostname,
-          driveModel: drive.drive_model
-        })),
-        'primary'
-      );
-      
-      // Use the first drive's color as the primary color, or fallback to blue
-      const primaryColor = driveColors.length > 0 ? driveColors[0] : 'rgba(59, 130, 246, 0.8)';
-      const baseColor = primaryColor.includes('rgba') ? 
-        primaryColor.match(/rgba?\(([^)]+)\)/)?.[1]?.split(',').slice(0, 3).join(',') || '59, 130, 246' :
-        '59, 130, 246';
-      
+      const baseColor = '107, 114, 128'; // Gray base for boxplot structure
+
       const colors = {
         whiskers: isHovered ? `rgb(${baseColor})` : (isDarkMode ? "#e5e7eb" : "#374151"),
         box: {
-          fill: isHovered ? `rgba(${baseColor}, 0.6)` : `rgba(${baseColor}, 0.3)`,
-          stroke: isHovered ? `rgb(${baseColor})` : `rgba(${baseColor}, 0.7)`
+          fill: isHovered ? `rgba(${baseColor}, 0.2)` : `rgba(${baseColor}, 0.1)`,
+          stroke: isHovered ? `rgb(${baseColor})` : `rgba(${baseColor}, 0.5)`
         },
         median: isHovered ? "#fbbf24" : (isDarkMode ? "#fbbf24" : "#f59e0b"),
         outliers: {
-          fill: isHovered ? "#f87171" : `rgba(${baseColor}, 0.8)`,
+          fill: isHovered ? "#f87171" : `rgba(239, 68, 68, 0.8)`, // Red for outliers
           stroke: isDarkMode ? "#ffffff" : "#ffffff"
         }
       };
@@ -321,18 +383,35 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
         .attr("stroke", colors.median)
         .attr("stroke-width", 3);
 
-      // Outliers
-      boxGroup.selectAll(".outlier")
-        .data(d.outliers)
+      // Render all data points with jitter (Jitter Plot)
+      // We need to find which drive each value belongs to for coloring
+      const pointsData = data
+        .filter(drive => !hiddenModels.has(drive.drive_model))
+        .flatMap(drive =>
+          drive.configurations
+            .filter(config => config.block_size === d.blockSize && config[metric] !== null && config[metric] !== undefined)
+            .map(config => ({
+              value: config[metric] as number,
+              driveModel: drive.drive_model,
+              hostname: drive.hostname
+            }))
+        );
+
+      boxGroup.selectAll(".point")
+        .data(pointsData)
         .enter()
         .append("circle")
-        .attr("class", "outlier")
-        .attr("cx", x)
-        .attr("cy", y => yScale(y))
-        .attr("r", 4)
-        .attr("fill", colors.outliers.fill)
-        .attr("stroke", colors.outliers.stroke)
-        .attr("stroke-width", 2);
+        .attr("class", "point")
+        .attr("cx", () => {
+          const jitter = (Math.random() - 0.5) * boxWidth;
+          return x + jitter;
+        })
+        .attr("cy", point => yScale(point.value))
+        .attr("r", 3.5)
+        .attr("fill", point => colorMapping.get(`${point.hostname}_${point.driveModel}`) || '#888')
+        .attr("fill-opacity", 0.7)
+        .attr("stroke", "white")
+        .attr("stroke-width", 0.5);
 
       // Invisible interaction area
       boxGroup.append("rect")
@@ -343,7 +422,7 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
         .attr("fill", "transparent")
         .on("mouseenter", (event) => {
           setHoveredBox(d.blockSize);
-          
+
           const formatValue = (val: number) => {
             if (metric === 'iops') return Math.round(val).toLocaleString();
             if (metric === 'avg_latency') return formatLatencyMicroseconds(val).text;
@@ -351,7 +430,7 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
           };
 
           const unit = metric === 'iops' ? '' : metric === 'avg_latency' ? '' : 'MB/s';
-          
+
           tooltip.transition().duration(200).style("opacity", .9);
           tooltip.html(`
             <div class="text-sm">
@@ -365,8 +444,8 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
               ${d.outliers.length > 0 ? `<div>Outliers: ${d.outliers.length}</div>` : ''}
             </div>
           `)
-          .style("left", (event.pageX + 10) + "px")
-          .style("top", (event.pageY - 10) + "px");
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px");
         })
         .on("mouseleave", () => {
           setHoveredBox(null);
@@ -378,7 +457,7 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
     return () => {
       tooltip.remove();
     };
-  }, [data, metric, hoveredBox, processData]);
+  }, [data, metric, hoveredBox, processData, colorMapping, hiddenModels]);
 
   if (data.length === 0) {
     return (
@@ -399,35 +478,32 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
             Distribution of {metric === 'iops' ? 'IOPS' : metric === 'avg_latency' ? 'latency' : 'bandwidth'} across different block sizes
           </p>
         </div>
-        
+
         <div className="flex gap-2 mt-4 sm:mt-0">
           <button
             onClick={() => setMetric('iops')}
-            className={`px-3 py-1 text-sm rounded ${
-              metric === 'iops'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 theme-text-secondary hover:bg-gray-300 dark:hover:bg-gray-600'
-            }`}
+            className={`px-3 py-1 text-sm rounded ${metric === 'iops'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 dark:bg-gray-700 theme-text-secondary hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
           >
             IOPS
           </button>
           <button
             onClick={() => setMetric('avg_latency')}
-            className={`px-3 py-1 text-sm rounded ${
-              metric === 'avg_latency'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 theme-text-secondary hover:bg-gray-300 dark:hover:bg-gray-600'
-            }`}
+            className={`px-3 py-1 text-sm rounded ${metric === 'avg_latency'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 dark:bg-gray-700 theme-text-secondary hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
           >
             Latency
           </button>
           <button
             onClick={() => setMetric('bandwidth')}
-            className={`px-3 py-1 text-sm rounded ${
-              metric === 'bandwidth'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 theme-text-secondary hover:bg-gray-300 dark:hover:bg-gray-600'
-            }`}
+            className={`px-3 py-1 text-sm rounded ${metric === 'bandwidth'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 dark:bg-gray-700 theme-text-secondary hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
           >
             Bandwidth
           </button>
@@ -441,20 +517,20 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
       <div className="mt-4 text-xs theme-text-secondary">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-2 bg-blue-700 dark:bg-blue-600 border-2 border-blue-500 dark:border-blue-400"></div>
-            <span>Interquartile Range (IQR)</span>
+            <div className="w-4 h-2 bg-gray-500 dark:bg-gray-400 border border-gray-300"></div>
+            <span>Box (IQR) & Whiskers</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-1 bg-yellow-500 dark:bg-yellow-400"></div>
             <span>Median</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-1 h-4 bg-gray-300 dark:bg-gray-300"></div>
-            <span>Min/Max (within 1.5×IQR)</span>
+            <div className="w-2 h-2 rounded-full bg-red-500 dark:bg-red-400"></div>
+            <span>Outliers</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full border-2 border-white"></div>
-            <span>Outliers</span>
+            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+            <span>Individual Runs (Color by Drive)</span>
           </div>
         </div>
       </div>
