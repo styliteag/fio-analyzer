@@ -43,9 +43,18 @@ ENV UV_LINK_MODE=copy
 # Set the virtual environment path
 ENV VIRTUAL_ENV=/app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
+# Install build dependencies temporarily for compiling C extensions
+RUN apk add --no-cache --virtual .build-deps \
+    gcc \
+    musl-dev \
+    python3-dev
+
 # Create virtual environment and install dependencies
 RUN uv venv && \
     uv sync --frozen --no-dev
+
+# Remove build dependencies to reduce image size
+RUN apk del .build-deps
 
 # Copy backend source
 COPY backend/ ./
