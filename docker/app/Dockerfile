@@ -47,7 +47,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 RUN apk add --no-cache --virtual .build-deps \
     gcc \
     musl-dev \
-    python3-dev
+    python3-dev \
+    libffi-dev
 
 # Create virtual environment and install dependencies
 RUN uv venv && \
