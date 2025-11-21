@@ -21,7 +21,7 @@ const BASE_COLORS = {
 };
 
 // Generate color palette with opacity variations
-const generateColorVariation = (baseColor: string, opacity: number): string => 
+const generateColorVariation = (baseColor: string, opacity: number): string =>
     baseColor.replace('VAR', opacity.toString());
 
 const COLOR_PALETTE = Object.fromEntries(
@@ -38,30 +38,29 @@ const COLOR_PALETTE = Object.fromEntries(
 // Add grey as alias for gray
 COLOR_PALETTE.grey = COLOR_PALETTE.gray;
 
-// Fallback colors for non-color names
-const FALLBACK_COLORS = [
-    'rgba(107, 114, 128, 0.8)',   // gray-500
-    'rgba(156, 163, 175, 0.8)',   // gray-400
-    'rgba(75, 85, 99, 0.8)',      // gray-600
-    'rgba(55, 65, 81, 0.8)',      // gray-700
-    'rgba(17, 24, 39, 0.8)',      // gray-900
+// Keys for vibrant colors (excluding greys/blacks/whites)
+const VIBRANT_KEYS = [
+    'blue', 'green', 'purple', 'orange', 'cyan', 'indigo', 'pink', 'teal', 'red', 'yellow'
 ];
+
+// Fallback colors using vibrant palette
+const FALLBACK_COLORS = VIBRANT_KEYS.map(key => COLOR_PALETTE[key].primary);
 
 /**
  * Extract color name from a string (hostname or drive name)
  */
 export function extractColorFromName(name: string): string | null {
     if (!name) return null;
-    
+
     const lowerName = name.toLowerCase();
-    
+
     // Try to find color names in the string
     for (const colorName of Object.keys(COLOR_PALETTE)) {
         if (lowerName.includes(colorName)) {
             return colorName;
         }
     }
-    
+
     return null;
 }
 
@@ -81,12 +80,12 @@ export interface ColorConfig {
 export function getColorForIdentifier(hostname: string, driveModel?: string): ColorConfig {
     // Try to extract color from hostname first
     let colorName = extractColorFromName(hostname);
-    
+
     // If no color in hostname, try drive model
     if (!colorName && driveModel) {
         colorName = extractColorFromName(driveModel);
     }
-    
+
     // If we found a color name, use it
     if (colorName && COLOR_PALETTE[colorName as keyof typeof COLOR_PALETTE]) {
         const colors = COLOR_PALETTE[colorName as keyof typeof COLOR_PALETTE];
@@ -97,17 +96,19 @@ export function getColorForIdentifier(hostname: string, driveModel?: string): Co
             name: colorName,
         };
     }
-    
-    // Fallback: generate a consistent color based on the identifier string
+
+    // Fallback: generate a consistent vibrant color based on the identifier string
     const identifier = `${hostname}_${driveModel || ''}`;
     const hash = simpleStringHash(identifier);
-    const colorIndex = Math.abs(hash) % FALLBACK_COLORS.length;
-    
+    const colorIndex = Math.abs(hash) % VIBRANT_KEYS.length;
+    const selectedColorKey = VIBRANT_KEYS[colorIndex];
+    const colors = COLOR_PALETTE[selectedColorKey];
+
     return {
-        primary: FALLBACK_COLORS[colorIndex],
-        light: FALLBACK_COLORS[colorIndex].replace('0.8', '0.2'),
-        dark: FALLBACK_COLORS[colorIndex].replace('0.8', '1.0'),
-        name: 'fallback',
+        primary: colors.primary,
+        light: colors.light,
+        dark: colors.dark,
+        name: selectedColorKey,
     };
 }
 
@@ -134,29 +135,29 @@ export function generateUniqueColorsForChart(
     const usedColors = new Set<string>();
     const colors: string[] = [];
     const colorMapping = new Map<string, ColorConfig>();
-    
+
     // First pass: try to assign colors based on names
     for (const item of items) {
         const key = item.identifier || `${item.hostname}_${item.driveModel || ''}`;
-        
+
         if (!colorMapping.has(key)) {
             const colorConfig = getColorForIdentifier(item.hostname, item.driveModel);
             colorMapping.set(key, colorConfig);
         }
     }
-    
+
     // Second pass: resolve conflicts and assign final colors
     for (const item of items) {
         const key = item.identifier || `${item.hostname}_${item.driveModel || ''}`;
         const colorConfig = colorMapping.get(key)!;
         let finalColor = colorConfig[chartType];
-        
+
         // If color is already used, try variations
         if (usedColors.has(finalColor)) {
             // Try other variants
             const variants = [colorConfig.primary, colorConfig.dark, colorConfig.light];
             let found = false;
-            
+
             for (const variant of variants) {
                 if (!usedColors.has(variant)) {
                     finalColor = variant;
@@ -164,12 +165,12 @@ export function generateUniqueColorsForChart(
                     break;
                 }
             }
-            
+
             // If still conflicts, generate a unique color
             if (!found) {
                 const fallbackIndex = colors.length % FALLBACK_COLORS.length;
                 finalColor = FALLBACK_COLORS[fallbackIndex];
-                
+
                 // Ensure even fallback colors are unique
                 let attempt = 0;
                 while (usedColors.has(finalColor) && attempt < 10) {
@@ -179,11 +180,11 @@ export function generateUniqueColorsForChart(
                 }
             }
         }
-        
+
         usedColors.add(finalColor);
         colors.push(finalColor);
     }
-    
+
     return colors;
 }
 
@@ -191,8 +192,8 @@ export function generateUniqueColorsForChart(
  * Get a consistent color for a specific hostname/drive combination across all charts
  */
 export function getConsistentColor(
-    hostname: string, 
-    driveModel?: string, 
+    hostname: string,
+    driveModel?: string,
     chartType: 'primary' | 'light' | 'dark' = 'primary'
 ): string {
     const colorConfig = getColorForIdentifier(hostname, driveModel);
@@ -207,7 +208,7 @@ export function createChartJsColors(
 ): Array<{ backgroundColor: string; borderColor: string; pointBackgroundColor: string }> {
     const primaryColors = generateUniqueColorsForChart(items, 'primary');
     const lightColors = generateUniqueColorsForChart(items, 'light');
-    
+
     return primaryColors.map((primary, index) => ({
         backgroundColor: lightColors[index],
         borderColor: primary,

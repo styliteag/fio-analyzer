@@ -78,26 +78,30 @@ const DriveRadarChart: React.FC<DriveRadarChartProps> = ({ drives }) => {
         };
     });
 
-    // Normalize scores to 0-100 scale
-    const allMaxIOPS = driveScores.map(d => d.maxIOPS);
-    const allMinLatency = driveScores.map(d => d.minLatency).filter(l => l > 0);
+    // Fixed scales as per requirements
+    const FIXED_MAX_IOPS = 100000; // 100k IOPS
+    const FIXED_MAX_LATENCY_US = 100000; // 100ms = 100,000us
+    
+    // For bandwidth, we'll keep using the max from data or a reasonable default if 0
     const allMaxBandwidth = driveScores.map(d => d.maxBandwidth);
-
-    const maxIOPSOverall = Math.max(...allMaxIOPS);
-    const minLatencyOverall = Math.min(...allMinLatency);
-    const maxLatencyOverall = Math.max(...allMinLatency);
     const maxBandwidthOverall = Math.max(...allMaxBandwidth);
 
     const normalizedData = driveScores.map(drive => ({
         drive_model: drive.drive_model,
-        maxIOPS: maxIOPSOverall > 0 ? (drive.maxIOPS / maxIOPSOverall) * 100 : 0,
-        avgIOPS: maxIOPSOverall > 0 ? (drive.avgIOPS / maxIOPSOverall) * 100 : 0,
-        latencyScore: allMinLatency.length > 0 ? 
-            100 - ((drive.minLatency - minLatencyOverall) / (maxLatencyOverall - minLatencyOverall)) * 100 : 0,
-        avgLatencyScore: allMinLatency.length > 0 ? 
-            100 - ((drive.avgLatency - minLatencyOverall) / (maxLatencyOverall - minLatencyOverall)) * 100 : 0,
+        // IOPS: 0 to 100k
+        maxIOPS: Math.min(100, (drive.maxIOPS / FIXED_MAX_IOPS) * 100),
+        avgIOPS: Math.min(100, (drive.avgIOPS / FIXED_MAX_IOPS) * 100),
+        
+        // Latency: 0 to 100ms. Lower is better, so we invert the score.
+        // If latency > 100ms, score is 0. If latency is 0, score is 100.
+        // Formula: 100 - (latency / max_latency * 100)
+        latencyScore: Math.max(0, 100 - (drive.minLatency / FIXED_MAX_LATENCY_US) * 100),
+        avgLatencyScore: Math.max(0, 100 - (drive.avgLatency / FIXED_MAX_LATENCY_US) * 100),
+        
+        // Bandwidth: Relative to max in dataset (unchanged logic, or could be fixed if requested)
         maxBandwidth: maxBandwidthOverall > 0 ? (drive.maxBandwidth / maxBandwidthOverall) * 100 : 0,
         avgBandwidth: maxBandwidthOverall > 0 ? (drive.avgBandwidth / maxBandwidthOverall) * 100 : 0,
+        
         consistency: drive.consistency * 100
     }));
 

@@ -33,8 +33,8 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
 
     // Create datasets for each drive
     const datasets = drives.map((drive, index) => {
-        const validConfigs = drive.configurations.filter(c => 
-            c.iops !== null && c.avg_latency !== null && 
+        const validConfigs = drive.configurations.filter(c =>
+            c.iops !== null && c.avg_latency !== null &&
             c.iops !== undefined && c.avg_latency !== undefined &&
             c.iops > 0 && c.avg_latency > 0
         );
@@ -57,7 +57,7 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
         return {
             label: drive.drive_model,
             data,
-            backgroundColor: colors.backgroundColor,
+            backgroundColor: colors.pointBackgroundColor,
             borderColor: colors.borderColor,
             pointRadius: 6,
             pointHoverRadius: 8,
@@ -165,11 +165,11 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
     };
 
     // Calculate efficiency zones
-    const allPoints = drives.flatMap(drive => 
+    const allPoints = drives.flatMap(drive =>
         drive.configurations
-            .filter(c => c.iops !== null && c.avg_latency !== null && 
-                       c.iops !== undefined && c.avg_latency !== undefined &&
-                       c.iops > 0 && c.avg_latency > 0)
+            .filter(c => c.iops !== null && c.avg_latency !== null &&
+                c.iops !== undefined && c.avg_latency !== undefined &&
+                c.iops > 0 && c.avg_latency > 0)
             .map(c => ({ iops: c.iops || 0, latency: c.avg_latency || 0 }))
     );
 
@@ -185,7 +185,7 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
                 <p className="text-sm theme-text-secondary mb-4">
                     Performance efficiency scatter plot - closer to top-left is better (high IOPS, low latency)
                 </p>
-                
+
                 {/* Performance zones legend */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-xs">
                     <div className="flex items-center gap-2">
@@ -206,10 +206,10 @@ const PerformanceScatterPlot: React.FC<PerformanceScatterPlotProps> = ({ drives 
                     </div>
                 </div>
             </div>
-            
+
             <div className="h-[500px] relative">
                 <Scatter data={chartData} options={options} />
-                
+
                 {/* Performance zone indicators */}
                 <div className="absolute top-4 right-4 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border">
                     <div className="text-xs theme-text-secondary space-y-1">
