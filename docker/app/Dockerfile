@@ -48,7 +48,9 @@ RUN apk add --no-cache --virtual .build-deps \
     gcc \
     musl-dev \
     python3-dev \
-    libffi-dev
+    libffi-dev \
+    make \
+    libuv-dev
 
 # Create virtual environment and install dependencies
 RUN uv venv && \
