@@ -16,6 +16,7 @@ import FacetScatterGrid from '../components/host/FacetScatterGrid';
 import StackedBarChart from '../components/host/StackedBarChart';
 import Performance3DChart from '../components/host/Performance3DChart';
 import PerformanceFingerprintHeatmap from '../components/host/PerformanceFingerprintHeatmap';
+import PerformanceCharts from '../components/host/PerformanceCharts';
 import PerformanceGraphs from '../components/host/PerformanceGraphs';
 import PerformanceHeatmapView from '../components/host/PerformanceHeatmapView';
 import TrendChartsView from '../components/host/TrendChartsView';
@@ -285,6 +286,10 @@ const Host: React.FC = () => {
 
                                     {activeView === 'heatmap' && (
                                         <PerformanceFingerprintHeatmap drives={filteredDrives} />
+                                    )}
+
+                                    {activeView === 'charts' && (
+                                        <PerformanceCharts drives={filteredDrives} />
                                     )}
 
                                     {activeView === 'graphs' && (

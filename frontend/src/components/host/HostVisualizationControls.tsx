@@ -2,7 +2,7 @@ import React from 'react';
 import { HardDrive, BarChart, Radar, TrendingUp, Activity, Box, Zap, Grid3X3, BarChart3, Table2, LineChart } from 'lucide-react';
 import { Button } from '../ui';
 
-export type VisualizationView = 'overview' | 'heatmap' | 'graphs' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | 'advancedHeatmap' | 'trends' | 'matrix' | '3d';
+export type VisualizationView = 'overview' | 'heatmap' | 'charts' | 'graphs' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | 'advancedHeatmap' | 'trends' | 'matrix' | '3d';
 
 export interface HostVisualizationControlsProps {
     activeView: VisualizationView;
@@ -32,6 +32,14 @@ const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
                 >
                     <Grid3X3 className="w-4 h-4" />
                     Performance Heatmap
+                </Button>
+                <Button
+                    variant={activeView === 'charts' ? 'primary' : 'outline'}
+                    onClick={() => onViewChange('charts')}
+                    className="flex items-center gap-2"
+                >
+                    <BarChart className="w-4 h-4" />
+                    Performance Charts
                 </Button>
                 <Button
                     variant={activeView === 'graphs' ? 'primary' : 'outline'}
