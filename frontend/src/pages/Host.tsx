@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DashboardHeader, DashboardFooter } from '../components/layout';
 import { Card, Loading, ErrorDisplay } from '../components/ui';
 import { useHostData } from '../hooks/useHostData';
@@ -75,6 +75,34 @@ const Host: React.FC = () => {
         handleHostsChange(newHosts);
         resetFilters();
     };
+
+    // Calculate filtered summary data
+    const filteredHostData = useMemo(() => {
+        if (!combinedHostData) return null;
+
+        const allConfigs = filteredDrives.flatMap(d => d.configurations);
+        const validIopsConfigs = allConfigs.filter(c => c.iops !== null && c.iops !== undefined && c.iops > 0);
+        const validLatencyConfigs = allConfigs.filter(c => c.avg_latency !== null && c.avg_latency !== undefined && c.avg_latency > 0);
+
+        const totalTests = validIopsConfigs.length;
+        const avgIOPS = validIopsConfigs.length > 0
+            ? validIopsConfigs.reduce((sum, c) => sum + (c.iops || 0), 0) / validIopsConfigs.length
+            : 0;
+        const avgLatency = validLatencyConfigs.length > 0
+            ? validLatencyConfigs.reduce((sum, c) => sum + (c.avg_latency || 0), 0) / validLatencyConfigs.length
+            : 0;
+
+        return {
+            ...combinedHostData,
+            drives: filteredDrives,
+            totalTests,
+            performanceSummary: {
+                ...combinedHostData.performanceSummary,
+                avgIOPS,
+                avgLatency
+            }
+        };
+    }, [combinedHostData, filteredDrives]);
 
     if (loadingHosts) {
         return (
@@ -188,11 +216,11 @@ const Host: React.FC = () => {
                 )}
 
                 {/* Content when host data is available */}
-                {!loading && combinedHostData && (
+                {!loading && combinedHostData && filteredHostData && (
                     <>
                         {/* Summary Cards */}
                         <HostSummaryCards
-                            hostData={combinedHostData}
+                            hostData={filteredHostData}
                             selectedHostsCount={selectedDataHosts.length}
                         />
 
