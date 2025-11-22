@@ -171,33 +171,27 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
 
             let data: number[];
             let label: string;
-            let color: string;
 
             switch (selectedMetric) {
                 case 'iops':
                     data = displayData.map(d => d.iops);
                     label = 'IOPS';
-                    color = stackColors[0];
                     break;
                 case 'bandwidth':
                     data = displayData.map(d => d.bandwidth);
                     label = 'Bandwidth (MB/s)';
-                    color = stackColors[1];
                     break;
                 case 'latency_score':
                     data = displayData.map(d => 1000 / (d.latency || 1));
                     label = 'Performance Score (1000/latency)';
-                    color = stackColors[2];
                     break;
                 case 'latency':
                     data = displayData.map(d => d.latency);
                     label = 'Latency (μs)';
-                    color = stackColors[3];
                     break;
                 default:
                     data = [];
                     label = '';
-                    color = stackColors[0];
             }
 
             // Generate colors based on drive model for individual runs
@@ -866,7 +860,7 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
                             Test Series (Click to filter):
                         </h6>
                         <div className="flex flex-wrap gap-3">
-                            {Array.from(new Set((chartData as any).rawData?.map((d: any) => d.driveModel) || [])).map((model: any, index: number) => {
+                            {Array.from(new Set((chartData as any).rawData?.map((d: any) => d.driveModel) || [])).map((model: any) => {
                                 // Calculate color for this model
                                 let hash = 0;
                                 for (let i = 0; i < model.length; i++) {
