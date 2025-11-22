@@ -212,10 +212,10 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
     const textColor = isDarkMode ? "#e5e7eb" : "#374151";
     const axisColor = isDarkMode ? "#e5e7eb" : "#374151";
 
-    legendItems.append("rect")
-      .attr("width", 12)
-      .attr("height", 12)
-      .attr("rx", 2)
+    legendItems.append("circle")
+      .attr("r", 6)
+      .attr("cx", 6)
+      .attr("cy", 6)
       .style("fill", d => {
         const match = data.find(item => item.drive_model === d);
         return match ? (colorMapping.get(`${match.hostname}_${match.drive_model}`) || '#888') : '#888';
@@ -393,19 +393,50 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
             .map(config => ({
               value: config[metric] as number,
               driveModel: drive.drive_model,
-              hostname: drive.hostname
+              hostname: drive.hostname,
+              p95: config.p95_latency,
+              p99: config.p99_latency,
+              // Store jitter position so we can align error bars
+              jitter: (Math.random() - 0.5) * boxWidth
             }))
         );
+
+      // Draw error bars first (so they are behind the points)
+      if (metric === 'avg_latency') {
+        boxGroup.selectAll(".error-bar")
+          .data(pointsData)
+          .enter()
+          .append("line")
+          .attr("class", "error-bar")
+          .attr("x1", point => x + point.jitter)
+          .attr("x2", point => x + point.jitter)
+          .attr("y1", point => yScale(point.value))
+          .attr("y2", point => yScale(point.p99 || point.p95 || point.value))
+          .attr("stroke", point => colorMapping.get(`${point.hostname}_${point.driveModel}`) || '#888')
+          .attr("stroke-width", 1)
+          .attr("opacity", 0.6);
+
+        // Add top cap for error bar
+        boxGroup.selectAll(".error-cap")
+          .data(pointsData)
+          .enter()
+          .append("line")
+          .attr("class", "error-cap")
+          .attr("x1", point => x + point.jitter - 3)
+          .attr("x2", point => x + point.jitter + 3)
+          .attr("y1", point => yScale(point.p99 || point.p95 || point.value))
+          .attr("y2", point => yScale(point.p99 || point.p95 || point.value))
+          .attr("stroke", point => colorMapping.get(`${point.hostname}_${point.driveModel}`) || '#888')
+          .attr("stroke-width", 1)
+          .attr("opacity", 0.8);
+      }
 
       boxGroup.selectAll(".point")
         .data(pointsData)
         .enter()
         .append("circle")
         .attr("class", "point")
-        .attr("cx", () => {
-          const jitter = (Math.random() - 0.5) * boxWidth;
-          return x + jitter;
-        })
+        .attr("cx", point => x + point.jitter)
         .attr("cy", point => yScale(point.value))
         .attr("r", 3.5)
         .attr("fill", point => colorMapping.get(`${point.hostname}_${point.driveModel}`) || '#888')
@@ -475,7 +506,8 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
             Box-and-Whisker Plot by Block Size
           </h3>
           <p className="theme-text-secondary text-sm">
-            Distribution of {metric === 'iops' ? 'IOPS' : metric === 'avg_latency' ? 'latency' : 'bandwidth'} across different block sizes
+            Distribution of {metric === 'iops' ? 'IOPS' : metric === 'avg_latency' ? 'latency' : 'bandwidth'} across different block sizes.
+            {metric === 'avg_latency' && ' Individual runs show error bars extending to p99 latency.'}
           </p>
         </div>
 
@@ -515,7 +547,7 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
       </div>
 
       <div className="mt-4 text-xs theme-text-secondary">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="flex items-center gap-2">
             <div className="w-4 h-2 bg-gray-500 dark:bg-gray-400 border border-gray-300"></div>
             <span>Box (IQR) & Whiskers</span>
@@ -530,8 +562,17 @@ const BoxPlotChart: React.FC<BoxPlotChartProps> = ({ data }) => {
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-            <span>Individual Runs (Color by Drive)</span>
+            <span>Individual Runs</span>
           </div>
+          {metric === 'avg_latency' && (
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col items-center justify-center h-4 w-4">
+                <div className="w-2 h-px bg-gray-500 dark:bg-gray-400"></div>
+                <div className="w-px h-3 bg-gray-500 dark:bg-gray-400"></div>
+              </div>
+              <span>Error Bar (p99)</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
