@@ -26,7 +26,7 @@ interface StackedBarChartProps {
     filteredDrives: DriveAnalysis[];
 }
 
-type MetricType = 'iops' | 'bandwidth' | 'latency_score';
+type MetricType = 'iops' | 'bandwidth' | 'latency_score' | 'latency';
 type StackingOption = 'pattern' | 'queueDepth' | 'protocol' | 'blockSize' | 'driveType';
 
 interface StackedDataPoint {
@@ -58,6 +58,15 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
 
     // State for maximize functionality  
     const [isMaximized, setIsMaximized] = React.useState<boolean>(false);
+
+    // State for sorting (in individual mode)
+    const [sortBy, setSortBy] = React.useState<'name' | 'performance'>('name');
+
+    // State for drill-down (focusing on a specific drive)
+    const [focusedDrive, setFocusedDrive] = React.useState<string | null>(null);
+
+    // State for selected runs (in individual mode)
+    const [selectedRuns, setSelectedRuns] = React.useState<Set<string>>(new Set());
 
     // Color palette for stack segments
     const stackColors = useMemo(() => [
@@ -113,14 +122,49 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
 
         if (stackingOption === 'individual') {
             // Individual tests mode - no stacking
-            const processedData = allDataPoints.sort((a, b) => {
-                if (a.driveModel !== b.driveModel) {
-                    return a.driveModel.localeCompare(b.driveModel);
+
+            // Filter by focused drive if set
+            let filteredData = allDataPoints;
+            if (focusedDrive) {
+                filteredData = allDataPoints.filter(d => d.driveModel === focusedDrive);
+            }
+
+            // Sort based on sortBy option
+            const processedData = filteredData.sort((a, b) => {
+                if (sortBy === 'performance') {
+                    // Sort by the selected metric (descending - best first)
+                    let aValue = 0, bValue = 0;
+                    switch (selectedMetric) {
+                        case 'iops':
+                            aValue = a.iops;
+                            bValue = b.iops;
+                            break;
+                        case 'bandwidth':
+                            aValue = a.bandwidth;
+                            bValue = b.bandwidth;
+                            break;
+                        case 'latency_score':
+                            aValue = 1000 / (a.latency || 1);
+                            bValue = 1000 / (b.latency || 1);
+                            break;
+                    }
+                    return bValue - aValue; // Descending
+                } else {
+                    // Sort by name (drive model, then test label)
+                    if (a.driveModel !== b.driveModel) {
+                        return a.driveModel.localeCompare(b.driveModel);
+                    }
+                    return a.testLabel.localeCompare(b.testLabel);
                 }
-                return a.testLabel.localeCompare(b.testLabel);
             });
 
-            const labels = processedData.map(d => {
+            // Filter data if there are selected runs
+            let displayData = processedData;
+            if (selectedRuns.size > 0) {
+                displayData = processedData.filter(d => selectedRuns.has(d.testLabel));
+            }
+
+            const displayLabels = displayData.map(d => {
                 const configShort = `${d.blockSize}/${d.readWritePattern}/QD${d.queueDepth}`;
                 return `${d.driveModel}\n${configShort}`;
             });
@@ -131,19 +175,24 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
 
             switch (selectedMetric) {
                 case 'iops':
-                    data = processedData.map(d => d.iops);
+                    data = displayData.map(d => d.iops);
                     label = 'IOPS';
                     color = stackColors[0];
                     break;
                 case 'bandwidth':
-                    data = processedData.map(d => d.bandwidth);
+                    data = displayData.map(d => d.bandwidth);
                     label = 'Bandwidth (MB/s)';
                     color = stackColors[1];
                     break;
                 case 'latency_score':
-                    data = processedData.map(d => 1000 / (d.latency || 1));
+                    data = displayData.map(d => 1000 / (d.latency || 1));
                     label = 'Performance Score (1000/latency)';
                     color = stackColors[2];
+                    break;
+                case 'latency':
+                    data = displayData.map(d => d.latency);
+                    label = 'Latency (μs)';
+                    color = stackColors[3];
                     break;
                 default:
                     data = [];
@@ -151,18 +200,36 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
                     color = stackColors[0];
             }
 
+            // Generate colors based on drive model for individual runs
+            const backgroundColors = displayData.map(d => {
+                // Use the color mapping utility or generate consistent colors
+                // For now, we'll use a hash of the drive model to pick a color from stackColors
+                const model = d.driveModel;
+                let hash = 0;
+                for (let i = 0; i < model.length; i++) {
+                    hash = model.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const index = Math.abs(hash) % stackColors.length;
+
+                // If selected runs are active, dim unselected ones (though we filter them out now)
+                // But we can use this for hover effects or if we change back to dimming
+                return stackColors[index];
+            });
+
+            const borderColors = backgroundColors.map(c => c.replace('0.8)', '1)'));
+
             return {
-                labels,
-                datasets: [{
-                    label,
-                    data,
-                    backgroundColor: color,
-                    borderColor: color.replace('0.8', '1'),
-                    borderWidth: 1,
-                    stack: 'main'
-                }],
-                rawData: processedData,
-                stackSegments: []
+                labels: displayLabels,
+                datasets: [
+                    {
+                        label: label,
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        borderColor: borderColors,
+                        borderWidth: 1,
+                    },
+                ],
+                rawData: displayData // Expose raw data for click handlers
             };
         }
 
@@ -284,7 +351,7 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
             rawData,
             stackSegments: sortedSegments
         };
-    }, [filteredDrives, stackingOption, selectedMetric, stackColors, stackBorderColors]);
+    }, [filteredDrives, stackingOption, selectedMetric, stackColors, stackBorderColors, sortBy, focusedDrive, selectedRuns]);
 
     const options = useMemo(() => ({
         responsive: true,
@@ -436,6 +503,35 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
                 },
             },
         },
+        onClick: (_event: any, elements: any[]) => {
+            if (elements.length > 0) {
+                const index = elements[0].index;
+
+                if (stackingOption === 'individual') {
+                    // In individual mode, toggle selection of the run
+                    const testLabel = (chartData as any).rawData[index].testLabel;
+                    setSelectedRuns(prev => {
+                        const next = new Set(prev);
+                        if (next.has(testLabel)) {
+                            next.delete(testLabel);
+                        } else {
+                            next.add(testLabel);
+                        }
+                        return next;
+                    });
+                } else {
+                    // In stacked mode, drill down to the drive
+                    const driveLabel = chartData.labels[index];
+                    // Find the drive model from the label (it might be just the model name)
+                    // In stacked mode, labels are just drive models (or whatever we grouped by)
+                    // But here we are grouping by drive, so label is drive model
+                    if (typeof driveLabel === 'string') {
+                        setFocusedDrive(driveLabel);
+                        setStackingOption('individual');
+                    }
+                }
+            }
+        },
         interaction: {
             mode: 'index' as const,
             intersect: false,
@@ -510,10 +606,70 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
             </div>
 
             <div className="mb-6">
+                {/* Drill-down Banner */}
+                {focusedDrive && (
+                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium theme-text-primary">Filtered by Drive:</span>
+                            <span className="text-sm font-bold theme-text-primary">{focusedDrive}</span>
+                        </div>
+                        <button
+                            onClick={() => setFocusedDrive(null)}
+                            className="text-xs px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 theme-text-primary transition-colors"
+                        >
+                            Clear Filter
+                        </button>
+                    </div>
+                )}
+
+                {/* Selection Banner */}
+                {selectedRuns.size > 0 && (
+                    <div className="mb-4 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium theme-text-primary">Selected Runs:</span>
+                            <span className="text-sm font-bold theme-text-primary">{selectedRuns.size}</span>
+                        </div>
+                        <button
+                            onClick={() => setSelectedRuns(new Set())}
+                            className="text-xs px-2 py-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 theme-text-primary transition-colors"
+                        >
+                            Clear Selection
+                        </button>
+                    </div>
+                )}
 
                 {/* Stacking Controls */}
                 <div className="mb-4">
-                    <h5 className="text-sm font-medium theme-text-primary mb-2">Stack Data By:</h5>
+                    <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
+                        <h5 className="text-sm font-medium theme-text-primary">Stack Data By:</h5>
+
+                        {/* Sort Controls (only visible in individual mode) */}
+                        {stackingOption === 'individual' && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs theme-text-secondary">Sort by:</span>
+                                <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                                    <button
+                                        onClick={() => setSortBy('name')}
+                                        className={`px-2 py-1 text-xs rounded-md transition-colors ${sortBy === 'name'
+                                            ? 'bg-white dark:bg-gray-700 shadow-sm theme-text-primary font-medium'
+                                            : 'theme-text-secondary hover:theme-text-primary'
+                                            }`}
+                                    >
+                                        Name
+                                    </button>
+                                    <button
+                                        onClick={() => setSortBy('performance')}
+                                        className={`px-2 py-1 text-xs rounded-md transition-colors ${sortBy === 'performance'
+                                            ? 'bg-white dark:bg-gray-700 shadow-sm theme-text-primary font-medium'
+                                            : 'theme-text-secondary hover:theme-text-primary'
+                                            }`}
+                                    >
+                                        Performance
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                         <button
                             onClick={() => setStackingOption('individual')}
@@ -619,6 +775,27 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
                             {selectedMetric === 'bandwidth' && <span className="text-xs text-blue-600 dark:text-blue-400">✓</span>}
                         </button>
                         <button
+                            onClick={() => handleMetricChange('latency')}
+                            className={`
+                                flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors text-sm
+                                ${selectedMetric === 'latency'
+                                    ? 'bg-blue-50 border-blue-300 theme-text-primary dark:bg-blue-900/20 dark:border-blue-600'
+                                    : 'bg-gray-50 border-gray-300 theme-text-secondary dark:bg-gray-800 dark:border-gray-600'
+                                }
+                                hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:border-blue-400
+                            `}
+                        >
+                            <div
+                                className="w-4 h-4 rounded border-2"
+                                style={{
+                                    backgroundColor: selectedMetric === 'latency' ? stackColors[3] : 'transparent',
+                                    borderColor: stackBorderColors[3]
+                                }}
+                            />
+                            <span>Latency (μs)</span>
+                            {selectedMetric === 'latency' && <span className="text-xs text-blue-600 dark:text-blue-400">✓</span>}
+                        </button>
+                        <button
                             onClick={() => handleMetricChange('latency_score')}
                             className={`
                                 flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors text-sm
@@ -682,6 +859,67 @@ const StackedBarChart: React.FC<StackedBarChartProps> = ({ filteredDrives }) => 
 
             {/* Legend and Notes */}
             <div className="mt-4 space-y-2">
+                {/* Interactive Legend for Individual Tests */}
+                {stackingOption === 'individual' && (
+                    <div className="mb-4">
+                        <h6 className="text-sm font-medium theme-text-primary mb-2">
+                            Test Series (Click to filter):
+                        </h6>
+                        <div className="flex flex-wrap gap-3">
+                            {Array.from(new Set((chartData as any).rawData?.map((d: any) => d.driveModel) || [])).map((model: any, index: number) => {
+                                // Calculate color for this model
+                                let hash = 0;
+                                for (let i = 0; i < model.length; i++) {
+                                    hash = model.charCodeAt(i) + ((hash << 5) - hash);
+                                }
+                                const colorIndex = Math.abs(hash) % stackColors.length;
+                                const color = stackColors[colorIndex];
+
+                                // Check if any runs for this model are selected
+                                const modelRuns = (chartData as any).rawData?.filter((d: any) => d.driveModel === model) || [];
+                                const allSelected = modelRuns.every((d: any) => selectedRuns.has(d.testLabel));
+                                const someSelected = modelRuns.some((d: any) => selectedRuns.has(d.testLabel));
+                                const isDimmed = selectedRuns.size > 0 && !someSelected;
+
+                                return (
+                                    <button
+                                        key={model}
+                                        className={`flex items-center gap-2 text-xs p-1 rounded transition-opacity ${isDimmed ? 'opacity-40' : 'opacity-100 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        onClick={() => {
+                                            // Toggle all runs for this model
+                                            const runs = (chartData as any).rawData
+                                                .filter((d: any) => d.driveModel === model)
+                                                .map((d: any) => d.testLabel);
+
+                                            setSelectedRuns(prev => {
+                                                const next = new Set(prev);
+                                                const allIn = runs.every((r: string) => prev.has(r));
+
+                                                if (allIn) {
+                                                    runs.forEach((r: string) => next.delete(r));
+                                                } else {
+                                                    runs.forEach((r: string) => next.add(r));
+                                                }
+                                                return next;
+                                            });
+                                        }}
+                                    >
+                                        <div
+                                            className="w-4 h-4 rounded-full border"
+                                            style={{
+                                                backgroundColor: color,
+                                                borderColor: color.replace('0.8)', '1)')
+                                            }}
+                                        >
+                                            {allSelected && <span className="flex items-center justify-center text-[10px] text-white">✓</span>}
+                                        </div>
+                                        <span className="theme-text-secondary font-medium">{model}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
                 {stackingOption !== 'individual' && (chartData as any).stackSegments?.length > 0 && (
                     <div className="mb-4">
                         <h6 className="text-sm font-medium theme-text-primary mb-2">
