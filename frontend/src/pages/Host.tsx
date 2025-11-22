@@ -23,7 +23,7 @@ import TrendChartsView from '../components/host/TrendChartsView';
 import PerformanceMatrixView from '../components/host/PerformanceMatrixView';
 
 const Host: React.FC = () => {
-    
+
     // Visualization states
     const [activeView, setActiveView] = useState<VisualizationView>('overview');
 
@@ -93,7 +93,7 @@ const Host: React.FC = () => {
             <div className="min-h-screen theme-bg-secondary">
                 <DashboardHeader />
                 <main className="container mx-auto px-4 py-8">
-                    <ErrorDisplay 
+                    <ErrorDisplay
                         error={error}
                         onRetry={refreshData}
                         showRetry={true}
@@ -129,13 +129,13 @@ const Host: React.FC = () => {
                             <h1 className="text-3xl font-bold theme-text-primary mb-2">Host Analysis</h1>
                             <p className="theme-text-secondary">Select one or more hosts to analyze their storage performance</p>
                         </div>
-                        
+
                         <Card className="p-6">
                             <div className="mb-4">
                                 <h2 className="text-xl font-semibold theme-text-primary mb-2">Available Hosts</h2>
                                 <p className="theme-text-secondary text-sm">Choose hosts to analyze their performance data</p>
                             </div>
-                            
+
                             <HostSelector
                                 selectedHosts={selectedDataHosts}
                                 onHostsChange={handleHostsChangeWithReset}
@@ -168,7 +168,7 @@ const Host: React.FC = () => {
     return (
         <div className="min-h-screen theme-bg-secondary">
             <DashboardHeader />
-            
+
             <main className="container mx-auto px-4 py-8">
                 {/* Host Selector */}
                 <HostSelector
@@ -191,7 +191,7 @@ const Host: React.FC = () => {
                 {!loading && combinedHostData && (
                     <>
                         {/* Summary Cards */}
-                        <HostSummaryCards 
+                        <HostSummaryCards
                             hostData={combinedHostData}
                             selectedHostsCount={selectedDataHosts.length}
                         />
@@ -301,7 +301,7 @@ const Host: React.FC = () => {
                     </>
                 )}
             </main>
-            
+
             <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
         </div>
     );
