@@ -355,10 +355,10 @@ validate_test_config() {
                 fi
                 
                 # Critical warning for very high job counts
-                if [ "$num_jobs" -ge 32 ]; then
+                if [ "$num_jobs" -ge 129 ]; then
                     print_warning "High job count detected: ${num_jobs} jobs"
                     print_warning "  → May exceed system shared memory limits"
-                    print_warning "  → Recommended: NUM_JOBS=16 or less for stability"
+                    print_warning "  → Recommended: NUM_JOBS=128 or less for stability"
                     print_warning "  → If you must use ${num_jobs} jobs, ensure TEST_SIZE is at least $((num_jobs * 10))M"
                     warnings=$((warnings + 1))
                 fi
