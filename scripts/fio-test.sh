@@ -276,23 +276,49 @@ check_curl() {
     fi
 }
 
-# Function to check if libaio is available
-check_libaio() {
-    print_status "Checking for libaio availability..."
-    
-    # Test if libaio engine can actually be loaded by running a minimal test
+# Function to test if a specific I/O engine is available
+test_ioengine() {
+    local engine=$1
     local test_output
-    test_output=$(fio --name=test --ioengine=libaio --rw=read --bs=4k --size=1M --filename=/dev/null --runtime=1 --time_based 2>&1)
+    test_output=$(fio --name=test --ioengine="$engine" --rw=read --bs=4k --size=1M --filename=/dev/null --runtime=1 --time_based 2>&1)
     
-    if echo "$test_output" | grep -q "engine libaio not loadable"; then
-        print_warning "libaio engine not available - using psync engine"
-        IOENGINE="psync"
-        # Psync is a sync engine that uses the POSIX pwrite() function to write data to the file.
-        # It can only have a iodepth of 1.
-        #IODEPTH=1
+    if echo "$test_output" | grep -q "engine.*not loadable\|engine.*not available\|unknown ioengine"; then
+        return 1  # Engine not available
     else
-        print_success "libaio engine is available - will use for better performance"
+        return 0  # Engine available
+    fi
+}
+
+# Function to detect the best available I/O engine
+detect_ioengine() {
+    # If IOENGINE is already set (from env or command line), validate it
+    if [ -n "$IOENGINE" ]; then
+        print_status "Testing specified I/O engine: $IOENGINE"
+        if test_ioengine "$IOENGINE"; then
+            print_success "I/O engine '$IOENGINE' is available"
+            return 0
+        else
+            print_error "Specified I/O engine '$IOENGINE' is not available"
+            exit 1
+        fi
+    fi
+    
+    print_status "Auto-detecting best available I/O engine..."
+    
+    # Test engines in order of preference: io_uring > libaio > psync
+    if test_ioengine "io_uring"; then
+        IOENGINE="io_uring"
+        print_success "io_uring engine is available - using for best performance"
+        print_status "io_uring provides the best performance on modern Linux kernels (5.1+)"
+    elif test_ioengine "libaio"; then
         IOENGINE="libaio"
+        print_success "libaio engine is available - using for good async I/O"
+        print_status "libaio is the standard Linux async I/O engine"
+    else
+        IOENGINE="psync"
+        IODEPTH="1"
+        print_warning "No async I/O engines available - falling back to psync"
+        print_status "psync uses POSIX pwrite() - synchronous I/O only"
     fi
 }
 
@@ -820,6 +846,14 @@ main() {
                 env_files+=("$2")
                 shift 2
                 ;;
+            -i|--engine)
+                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
+                    print_error "Option $1 requires an engine name (io_uring, aio, libaio, psync)"
+                    exit 1
+                fi
+                IOENGINE="$2"
+                shift 2
+                ;;
             *)
                 args+=("$1")
                 shift
@@ -837,7 +871,7 @@ main() {
     # Check prerequisites
     check_fio
     check_curl
-    check_libaio
+    detect_ioengine
     
     # Show configuration
     show_config
@@ -956,7 +990,7 @@ generate_env_file() {
 # INCLUDE=/path/to/base.env
 
 # Host Configuration
-# ⚠️ IMPORTANT: These values create a hierarchical data structure (Host-Protocol-Type-Model)
+# IMPORTANT: These values create a hierarchical data structure (Host-Protocol-Type-Model)
 # The system organizes and filters data using this 4-level hierarchy:
 #   1. Host (hostname)
 #   2. Host-Protocol (hostname-protocol)
@@ -1000,8 +1034,16 @@ BLOCK_SIZES="4k,64k,128k,1M"
 # Test patterns to run (comma-separated: read, write, randread, randwrite, rw, randrw)
 TEST_PATTERNS="read,write,randread,randwrite,rw,randrw"
 
-# Number of parallel jobs (comma-separated for multiple values)
+
+# I/O Depth (comma-separated for multiple values) Depth per job
+# !! psync, sync, vsync → iodepth is always 1 !!
+IODEPTH="16"
+
+# Number of parallel jobs (comma-separated for multiple values) Parallel jobs
 NUM_JOBS="4"
+
+# Queue depth (QD) will be NUM_JOBS * IODEPTH
+# So on FreeBSD (TrueNAS Core) use a IODEPTH of 1 and NUM_JOBS of 64
 
 # Direct I/O mode (1 = enabled, 0 = disabled, comma-separated for multiple values)
 # it is the opposite of the buffered I/O mode
@@ -1014,8 +1056,6 @@ TEST_SIZE="10G"
 # Sync mode (1 = enabled, 0 = disabled, comma-separated for multiple values)
 SYNC="1"
 
-# I/O Depth (comma-separated for multiple values)
-IODEPTH="1"
 
 # Test runtime in seconds (comma-separated for multiple values)
 RUNTIME="60"
@@ -1095,6 +1135,9 @@ Options:
   -e, --env-file     Specify a custom .env file path (can be used multiple times)
                      Files are loaded in order, with later files overriding earlier ones.
                      Default: .env if no -e options are specified.
+  -i, --engine       Specify I/O engine to use (io_uring, libaio, psync, aio)
+                     Default: auto-detect (io_uring > libaio > psync)
+                     Example: $0 --engine io_uring
 
 Configuration:
   The script loads configuration from a .env file in the current directory.
@@ -1117,7 +1160,7 @@ Configuration:
 Pre-flight Checks:
   The script performs the following checks before starting tests:
   1. Verifies FIO and curl are installed
-  2. Checks for libaio availability (uses libaio if available for better performance)
+  2. Auto-detects best I/O engine (io_uring > libaio > psync) or validates specified engine
   3. Tests API connectivity to the backend server
   4. Validates authentication credentials
   5. Confirms test configuration with user (unless --yes is used)
