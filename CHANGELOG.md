@@ -9,16 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Saturation Test Mode** (`fio-test.sh --saturation`): Integrated mode to find maximum IOPS while keeping P95 completion latency below a configurable threshold
-  - Alternating iodepth/numjobs doubling algorithm for systematic queue depth escalation
-  - Separate randread and randwrite tests with independent saturation detection
+  - Configurable patterns via `SAT_PATTERNS` (default: randread, randwrite, randrw) — each escalates QD independently
+  - Multiple block sizes via `SAT_BLOCK_SIZES` (comma-separated, e.g., `4k,64k,128k`) — each block size gets its own `run_uuid` and runs a full independent saturation loop
+  - Independent saturation detection per pattern — read typically sustains higher QD before saturating
+  - iodepth-biased QD escalation (3:1 ratio iodepth:numjobs) — avoids shm exhaustion at high job counts
+  - `MAX_TOTAL_QD` safety cap (default: 4096) configurable via `.env` or `--max-qd`
   - P95 clat extraction from FIO JSON output using grep/awk (no jq dependency)
   - Sweet spot detection (best performance within SLA threshold)
+  - Color-coded P95 display: green (<70%), yellow (70-100%), bold red (>100% of threshold) with `>>>` markers
   - Colorized summary table with sweet spot and saturation markers
-  - CLI options: `--saturation`, `--threshold`, `--block-size`, `--initial-iodepth`, `--initial-numjobs`
+  - CLI options: `--saturation`, `--threshold`, `--block-size`, `--sat-patterns`, `--initial-iodepth`, `--initial-numjobs`
   - `.env` configuration with `--generate-env` support
 - **Backend API**: Two new endpoints for saturation test data
-  - `GET /api/test-runs/saturation-runs` - List all saturation test runs with summary
-  - `GET /api/test-runs/saturation-data?run_uuid=...` - Detailed step-by-step data with sweet spot/saturation point calculation
+  - `GET /api/test-runs/saturation-runs` - List all saturation test runs with summary (includes `block_size`)
+  - `GET /api/test-runs/saturation-data?run_uuid=...` - Detailed step-by-step data with sweet spot/saturation point calculation (includes `block_size`)
   - Database index on `run_uuid` for query performance
 - **Frontend**: Saturation Test visualization view
   - New "Saturation Test" button in Host visualization controls
@@ -27,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Sweet spot markers (larger points) on chart
   - Run selector dropdown filtered by selected hosts
   - Summary table with green (sweet spot) and red (saturation) row highlighting
+- **Enhanced Test Output**: Rich latency and performance metrics displayed after every FIO test
+  - Normal mode: IOPS, avg/P70/P95/P99 latency, and bandwidth shown after each test
+  - Saturation mode: Per-step output with threshold usage percentage, best-so-far IOPS tracking with ★ marker, avg/P70/P95/P99 latency breakdown
+  - Saturation loop uses P95 for threshold decision, outputs P70 and P95 for visibility
+  - New helper functions: `extract_avg_clat_ms()`, `extract_p70_clat_ms()`, `extract_p99_clat_ms()` for additional latency metrics
 - `fio-test.sh`: Support for testing directly on block devices (e.g., `/dev/sda`, `/dev/nvme0n1`)
   - Auto-detects if TARGET_DIR is a block device
   - Verifies device is not mounted before testing
@@ -37,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Script: Separate `config_uuid` for saturation mode (derived via md5 hash of normal config-uuid)
   - Script: Scalar `SAT_DIRECT`/`SAT_SYNC`/`SAT_RUNTIME`/`SAT_TEST_SIZE` variables instead of array expansion
   - Script: Extraction functions (`extract_p95_clat_ms`, `extract_iops_value`, `extract_bw_mbs`) return "ERR" on failure instead of silent "0"
+  - Script: `sanitize_fio_json()` strips non-JSON prefix lines (FIO `note:` warnings) from output before upload and extraction
   - Script: Fixed sweet spot off-by-one (was step-2, now correctly step-1)
   - Script: Numeric validation on `--threshold`, `--initial-iodepth`, `--initial-numjobs` CLI args
   - Script: Upload failures logged with warning instead of silently ignored

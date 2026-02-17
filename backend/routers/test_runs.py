@@ -802,6 +802,7 @@ async def get_saturation_runs(
 
         query = f"""
             SELECT run_uuid, hostname, protocol, drive_type, drive_model,
+                   block_size,
                    MIN(timestamp) as started, COUNT(*) as step_count
             FROM test_runs_all
             WHERE {where_clause} AND run_uuid IS NOT NULL
@@ -822,6 +823,7 @@ async def get_saturation_runs(
                 "protocol": row_dict["protocol"],
                 "drive_type": row_dict["drive_type"],
                 "drive_model": row_dict["drive_model"],
+                "block_size": row_dict.get("block_size"),
                 "started": row_dict["started"],
                 "step_count": row_dict["step_count"],
             })
@@ -909,6 +911,7 @@ async def get_saturation_data(
         protocol = None
         drive_type = None
         drive_model = None
+        block_size = None
 
         for row in rows:
             row_dict = dict(row)
@@ -917,6 +920,7 @@ async def get_saturation_data(
                 protocol = row_dict["protocol"]
                 drive_type = row_dict["drive_type"]
                 drive_model = row_dict["drive_model"]
+                block_size = row_dict.get("block_size")
 
             pattern = row_dict["read_write_pattern"]
             if pattern not in patterns:
@@ -974,6 +978,7 @@ async def get_saturation_data(
             "protocol": protocol,
             "drive_type": drive_type,
             "drive_model": drive_model,
+            "block_size": block_size,
             "threshold_ms": threshold_ms,
             "patterns": patterns,
         }

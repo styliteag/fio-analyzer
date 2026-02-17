@@ -65,8 +65,9 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
         const patternColors: Record<string, { iops: string; latency: string }> = {
             randread: { iops: 'rgb(59, 130, 246)', latency: 'rgb(239, 68, 68)' },
             randwrite: { iops: 'rgb(34, 197, 94)', latency: 'rgb(249, 115, 22)' },
+            randrw: { iops: 'rgb(168, 85, 247)', latency: 'rgb(234, 179, 8)' },
             read: { iops: 'rgb(99, 102, 241)', latency: 'rgb(236, 72, 153)' },
-            write: { iops: 'rgb(20, 184, 166)', latency: 'rgb(234, 179, 8)' },
+            write: { iops: 'rgb(20, 184, 166)', latency: 'rgb(245, 158, 11)' },
         };
 
         for (const pName of patternNames) {
@@ -293,7 +294,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
                     <option value="">-- Select a run --</option>
                     {saturationRuns.map((run) => (
                         <option key={run.run_uuid} value={run.run_uuid}>
-                            {run.hostname} - {run.drive_model} ({run.protocol}/{run.drive_type}) - {new Date(run.started).toLocaleDateString()} ({run.step_count} steps)
+                            {run.hostname} - {run.drive_model} ({run.protocol}/{run.drive_type}){run.block_size ? ` [${run.block_size}]` : ''} - {new Date(run.started).toLocaleDateString()} ({run.step_count} steps)
                         </option>
                     ))}
                 </select>
@@ -308,7 +309,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
             {chartData && saturationData && (
                 <div className="mb-8">
                     <div className="mb-2 text-sm theme-text-secondary">
-                        Threshold: {saturationData.threshold_ms}ms P95 Latency | Block Size: 4k | {saturationData.hostname} - {saturationData.drive_model}
+                        Threshold: {saturationData.threshold_ms}ms P95 Latency | Block Size: {saturationData.block_size || 'N/A'} | {saturationData.hostname} - {saturationData.drive_model}
                     </div>
                     <div style={{ height: '450px' }}>
                         <Line

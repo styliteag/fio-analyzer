@@ -245,6 +245,7 @@ export interface SaturationRun {
     protocol: string;
     drive_type: string;
     drive_model: string;
+    block_size: string | null;
     started: string;
     step_count: number;
 }
@@ -274,6 +275,7 @@ export interface SaturationData {
     protocol: string;
     drive_type: string;
     drive_model: string;
+    block_size: string | null;
     threshold_ms: number;
     patterns: Record<string, SaturationPatternData>;
 }
