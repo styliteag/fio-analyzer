@@ -61,27 +61,28 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
 
         const datasets = [];
 
-        // Color map for patterns
-        const patternColors: Record<string, { iops: string; latency: string }> = {
-            randread: { iops: 'rgb(59, 130, 246)', latency: 'rgb(239, 68, 68)' },
-            randwrite: { iops: 'rgb(34, 197, 94)', latency: 'rgb(249, 115, 22)' },
-            randrw: { iops: 'rgb(168, 85, 247)', latency: 'rgb(234, 179, 8)' },
-            read: { iops: 'rgb(99, 102, 241)', latency: 'rgb(236, 72, 153)' },
-            write: { iops: 'rgb(20, 184, 166)', latency: 'rgb(245, 158, 11)' },
+        // One color per pattern — solid for IOPS, dashed+lighter for latency
+        // Same hue makes it obvious which IOPS/latency pair belongs together
+        const patternColors: Record<string, { solid: string; light: string }> = {
+            randread:  { solid: 'rgb(59, 130, 246)',  light: 'rgba(59, 130, 246, 0.5)' },   // blue
+            randwrite: { solid: 'rgb(34, 197, 94)',   light: 'rgba(34, 197, 94, 0.5)' },    // green
+            randrw:    { solid: 'rgb(168, 85, 247)',  light: 'rgba(168, 85, 247, 0.5)' },   // purple
+            read:      { solid: 'rgb(59, 130, 246)',  light: 'rgba(59, 130, 246, 0.5)' },   // blue
+            write:     { solid: 'rgb(34, 197, 94)',   light: 'rgba(34, 197, 94, 0.5)' },    // green
+            rw:        { solid: 'rgb(168, 85, 247)',  light: 'rgba(168, 85, 247, 0.5)' },   // purple
         };
 
         for (const pName of patternNames) {
             const steps = patterns[pName].steps;
             const sweetSpot = patterns[pName].sweet_spot;
-            const colors = patternColors[pName] || { iops: 'rgb(107, 114, 128)', latency: 'rgb(156, 163, 175)' };
+            const colors = patternColors[pName] || { solid: 'rgb(107, 114, 128)', light: 'rgba(107, 114, 128, 0.5)' };
 
-            // IOPS line
+            // IOPS line — solid, thicker
             const iopsData = sortedQDs.map(qd => {
                 const step = steps.find(s => s.total_qd === qd);
                 return step?.iops ?? null;
             });
 
-            // Point sizes: larger for sweet spot
             const iopsPointRadius = sortedQDs.map(qd => {
                 if (sweetSpot && qd === sweetSpot.total_qd) return 8;
                 return 4;
@@ -90,16 +91,17 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
             datasets.push({
                 label: `${pName} IOPS`,
                 data: iopsData,
-                borderColor: colors.iops,
-                backgroundColor: colors.iops,
-                borderWidth: 2,
+                borderColor: colors.solid,
+                backgroundColor: colors.solid,
+                borderWidth: 3,
                 pointRadius: iopsPointRadius,
                 pointHoverRadius: 8,
+                pointStyle: 'circle' as const,
                 tension: 0.3,
                 yAxisID: 'y-iops',
             });
 
-            // P95 Latency line
+            // P95 Latency line — dashed, thinner, lighter shade of same color
             const latencyData = sortedQDs.map(qd => {
                 const step = steps.find(s => s.total_qd === qd);
                 return step?.p95_latency_ms ?? null;
@@ -107,18 +109,19 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
 
             const latencyPointRadius = sortedQDs.map(qd => {
                 if (sweetSpot && qd === sweetSpot.total_qd) return 8;
-                return 4;
+                return 3;
             });
 
             datasets.push({
                 label: `${pName} P95 Latency`,
                 data: latencyData,
-                borderColor: colors.latency,
-                backgroundColor: colors.latency,
+                borderColor: colors.light,
+                backgroundColor: colors.light,
                 borderWidth: 2,
-                borderDash: [5, 5],
+                borderDash: [6, 4],
                 pointRadius: latencyPointRadius,
                 pointHoverRadius: 8,
+                pointStyle: 'triangle' as const,
                 tension: 0.3,
                 yAxisID: 'y-latency',
             });
@@ -287,7 +290,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
                 </label>
                 <select
                     aria-label="Select saturation test run"
-                    className="w-full max-w-lg px-3 py-2 border rounded-lg theme-bg-primary theme-text-primary theme-border"
+                    className="w-full max-w-lg px-3 py-2 border rounded-lg theme-bg-primary theme-text-primary theme-border-primary"
                     value={selectedRunUuid || ''}
                     onChange={(e) => setSelectedRunUuid(e.target.value || null)}
                 >
@@ -324,48 +327,48 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
             {/* Summary Table */}
             {tableRows.length > 0 && saturationData && (
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
+                    <table className="w-full text-sm border-collapse theme-text-primary">
                         <thead>
-                            <tr className="theme-bg-secondary">
-                                <th className="px-3 py-2 text-left border theme-border">Step</th>
-                                <th className="px-3 py-2 text-left border theme-border">IO Depth</th>
-                                <th className="px-3 py-2 text-left border theme-border">Num Jobs</th>
-                                <th className="px-3 py-2 text-left border theme-border">Total QD</th>
+                            <tr className="theme-bg-tertiary">
+                                <th className="px-3 py-2 text-left border theme-border-primary theme-text-secondary">Step</th>
+                                <th className="px-3 py-2 text-left border theme-border-primary theme-text-secondary">IO Depth</th>
+                                <th className="px-3 py-2 text-left border theme-border-primary theme-text-secondary">Num Jobs</th>
+                                <th className="px-3 py-2 text-left border theme-border-primary theme-text-secondary">Total QD</th>
                                 {Object.keys(saturationData.patterns).map(pattern => (
                                     <React.Fragment key={pattern}>
-                                        <th className="px-3 py-2 text-right border theme-border">{pattern} IOPS</th>
-                                        <th className="px-3 py-2 text-right border theme-border">{pattern} P95 (ms)</th>
-                                        <th className="px-3 py-2 text-right border theme-border">{pattern} BW (MB/s)</th>
+                                        <th className="px-3 py-2 text-right border theme-border-primary theme-text-secondary">{pattern} IOPS</th>
+                                        <th className="px-3 py-2 text-right border theme-border-primary theme-text-secondary">{pattern} P95 (ms)</th>
+                                        <th className="px-3 py-2 text-right border theme-border-primary theme-text-secondary">{pattern} BW (MB/s)</th>
                                     </React.Fragment>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
                             {tableRows.map((row) => {
-                                let rowClass = '';
-                                if (row.highlight === 'sweet') rowClass = 'bg-green-50 dark:bg-green-900/20';
-                                if (row.highlight === 'saturated') rowClass = 'bg-red-50 dark:bg-red-900/20';
+                                let rowClass = 'theme-bg-primary';
+                                if (row.highlight === 'sweet') rowClass = 'bg-green-50 dark:bg-green-900/30';
+                                if (row.highlight === 'saturated') rowClass = 'bg-red-50 dark:bg-red-900/30';
 
                                 return (
                                     <tr key={row.total_qd} className={rowClass}>
-                                        <td className="px-3 py-2 border theme-border">{row.step}</td>
-                                        <td className="px-3 py-2 border theme-border">{row.iodepth}</td>
-                                        <td className="px-3 py-2 border theme-border">{row.num_jobs}</td>
-                                        <td className="px-3 py-2 border theme-border font-medium">{row.total_qd}</td>
+                                        <td className="px-3 py-2 border theme-border-primary">{row.step}</td>
+                                        <td className="px-3 py-2 border theme-border-primary">{row.iodepth}</td>
+                                        <td className="px-3 py-2 border theme-border-primary">{row.num_jobs}</td>
+                                        <td className="px-3 py-2 border theme-border-primary font-medium">{row.total_qd}</td>
                                         {Object.keys(saturationData.patterns).map(pattern => {
                                             const step = row.patterns[pattern];
                                             return (
                                                 <React.Fragment key={pattern}>
-                                                    <td className="px-3 py-2 text-right border theme-border">
+                                                    <td className="px-3 py-2 text-right border theme-border-primary">
                                                         {step?.iops != null ? step.iops.toLocaleString() : '-'}
                                                     </td>
-                                                    <td className={`px-3 py-2 text-right border theme-border ${
+                                                    <td className={`px-3 py-2 text-right border theme-border-primary ${
                                                         step?.p95_latency_ms != null && step.p95_latency_ms > saturationData.threshold_ms
-                                                            ? 'text-red-600 font-semibold' : ''
+                                                            ? 'text-red-600 dark:text-red-400 font-semibold' : ''
                                                     }`}>
                                                         {step?.p95_latency_ms != null ? step.p95_latency_ms.toFixed(2) : '-'}
                                                     </td>
-                                                    <td className="px-3 py-2 text-right border theme-border">
+                                                    <td className="px-3 py-2 text-right border theme-border-primary">
                                                         {step?.bandwidth_mbs != null ? step.bandwidth_mbs.toFixed(1) : '-'}
                                                     </td>
                                                 </React.Fragment>
@@ -379,8 +382,8 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
 
                     {/* Legend */}
                     <div className="mt-3 flex gap-6 text-sm theme-text-secondary">
-                        <span><span className="inline-block w-4 h-4 bg-green-100 dark:bg-green-900/40 border border-green-300 rounded mr-1 align-text-bottom" /> Sweet Spot (best within SLA)</span>
-                        <span><span className="inline-block w-4 h-4 bg-red-100 dark:bg-red-900/40 border border-red-300 rounded mr-1 align-text-bottom" /> Saturation Point (P95 &gt; {saturationData.threshold_ms}ms)</span>
+                        <span><span className="inline-block w-4 h-4 bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-700 rounded mr-1 align-text-bottom" /> Sweet Spot (best within SLA)</span>
+                        <span><span className="inline-block w-4 h-4 bg-red-100 dark:bg-red-900/40 border border-red-300 dark:border-red-700 rounded mr-1 align-text-bottom" /> Saturation Point (P95 &gt; {saturationData.threshold_ms}ms)</span>
                     </div>
                 </div>
             )}

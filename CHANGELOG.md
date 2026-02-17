@@ -8,7 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **Saturation Test**: All 6 valid FIO patterns supported (`randread`, `randwrite`, `randrw`, `read`, `write`, `rw`) with slot-based validation
+- **Saturation Test**: Default block size changed to 64k (from 4k) for more realistic saturation testing
+- **Saturation Test**: `--max-qd` CLI option and `MAX_TOTAL_QD` default raised to 16384
+- **Saturation Test**: Progress summary table printed after each step (live results during test)
+- **Saturation Test**: Accepts both `SAT_BLOCK_SIZE` (singular) and `SAT_BLOCK_SIZES` (plural) in `.env`
+
+### Changed
+- **Saturation Test**: Summary table redesigned — single QD column, P95 before IOPS, only enabled pattern columns shown, BW column removed
+- **Saturation Test**: FIO JSON extraction rewritten with jq for reliable parsing (jq now required for saturation mode)
+- **Frontend**: Saturation chart uses same color per pattern for IOPS/latency pairing (solid=IOPS, dashed=latency) for clarity
+
+### Fixed
+- **Saturation Test**: Write IOPS/BW incorrectly read as 0 — `tail -1` was hitting FIO's trim section instead of write section; fixed with jq
+- **Saturation Test**: `.env` inline comments now stripped correctly (e.g., `IODEPTH=16 # comment` parses as `16`)
+- **Saturation Test**: Pattern validation rejects invalid patterns and duplicate slots (e.g., both `read` and `randread`)
+- **Saturation Test**: "Never saturated" fallback uses dynamic pattern names instead of hardcoded `randread`/`randwrite`/`randrw`
+- **Frontend**: Fixed dark mode colors in saturation summary table (borders, text, row highlights, P95 threshold color)
+- **Frontend**: Fixed `theme-border` (non-existent class) → `theme-border-primary` on table and select dropdown
 
 ## [0.10.0] - 2026-02-17
 

@@ -1556,6 +1556,9 @@ saturation_loop() {
                 echo -e "  ${mrw_pattern}: ${YELLOW}done${NC} (saturated at QD=${mrw_best_qd})"
             fi
         fi
+
+        # Print progress table after each step
+        print_saturation_summary "$block_size"
     done
 
     if [ $step -ge $MAX_STEPS ]; then
