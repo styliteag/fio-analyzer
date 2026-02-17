@@ -237,6 +237,68 @@ export const fetchTestRunsGroupedByUUID = async (
     });
 };
 
+// --- Saturation Test API ---
+
+export interface SaturationRun {
+    run_uuid: string;
+    hostname: string;
+    protocol: string;
+    drive_type: string;
+    drive_model: string;
+    started: string;
+    step_count: number;
+}
+
+export interface SaturationStep {
+    id: number;
+    iodepth: number;
+    num_jobs: number;
+    total_qd: number;
+    iops: number | null;
+    avg_latency_ms: number | null;
+    p95_latency_ms: number | null;
+    p99_latency_ms: number | null;
+    bandwidth_mbs: number | null;
+    timestamp: string;
+}
+
+export interface SaturationPatternData {
+    steps: SaturationStep[];
+    sweet_spot: SaturationStep | null;
+    saturation_point: SaturationStep | null;
+}
+
+export interface SaturationData {
+    run_uuid: string;
+    hostname: string;
+    protocol: string;
+    drive_type: string;
+    drive_model: string;
+    threshold_ms: number;
+    patterns: Record<string, SaturationPatternData>;
+}
+
+// Fetch list of saturation test runs
+export const fetchSaturationRuns = async (hostname?: string, abortSignal?: AbortSignal) => {
+    const params = new URLSearchParams();
+    if (hostname) {
+        params.append('hostname', hostname);
+    }
+    const queryString = params.toString();
+    const url = `/api/test-runs/saturation-runs${queryString ? `?${queryString}` : ''}`;
+    return apiCall<SaturationRun[]>(url, { signal: abortSignal });
+};
+
+// Fetch detailed saturation data for a specific run
+export const fetchSaturationData = async (runUuid: string, thresholdMs?: number, abortSignal?: AbortSignal) => {
+    const params = new URLSearchParams();
+    params.append('run_uuid', runUuid);
+    if (thresholdMs !== undefined) {
+        params.append('threshold_ms', thresholdMs.toString());
+    }
+    return apiCall<SaturationData>(`/api/test-runs/saturation-data?${params.toString()}`, { signal: abortSignal });
+};
+
 // Bulk update test runs by UUID
 export const bulkUpdateTestRunsByUUID = async (
     uuid: string,

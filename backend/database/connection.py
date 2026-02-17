@@ -358,6 +358,16 @@ class DatabaseManager:
                     log_info(f"Adding {col_name} column to {table_name}")
                     cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_name} REAL")
 
+        # Migration 3: Add index on run_uuid for saturation test queries
+        for table_name in ['test_runs_all', 'test_runs']:
+            cursor.execute(f"""
+                SELECT name FROM sqlite_master
+                WHERE type='index' AND name='idx_{table_name}_run_uuid'
+            """)
+            if not cursor.fetchone():
+                log_info(f"Creating index idx_{table_name}_run_uuid")
+                cursor.execute(f"CREATE INDEX idx_{table_name}_run_uuid ON {table_name}(run_uuid)")
+
         self.connection.commit()
 
     async def _populate_sample_data(self, cursor: sqlite3.Cursor):

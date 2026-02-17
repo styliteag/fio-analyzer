@@ -8,10 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Saturation Test Script** (`scripts/fio-saturation-test.sh`): New standalone script to find maximum IOPS while keeping P95 completion latency below a configurable threshold
+  - Alternating iodepth/numjobs doubling algorithm for systematic queue depth escalation
+  - Separate randread and randwrite tests with independent saturation detection
+  - Real-time P95 clat extraction from FIO JSON output and automatic upload to backend
+  - Sweet spot detection (best performance within SLA threshold)
+  - Colorized summary table with sweet spot and saturation markers
+  - CLI options: `--threshold`, `--block-size`, `--initial-iodepth`, `--initial-numjobs`, `--engine`
+  - `.env` configuration with `--generate-env` support
+  - Block device support with safety checks
+- **Backend API**: Two new endpoints for saturation test data
+  - `GET /api/test-runs/saturation-runs` - List all saturation test runs with summary
+  - `GET /api/test-runs/saturation-data?run_uuid=...` - Detailed step-by-step data with sweet spot/saturation point calculation
+  - Database index on `run_uuid` for query performance
+- **Frontend**: Saturation Test visualization view
+  - New "Saturation Test" button in Host visualization controls
+  - Dual Y-axis line chart (IOPS + P95 Latency) with logarithmic X-axis for Total Outstanding I/O
+  - Horizontal threshold line at configurable latency limit
+  - Sweet spot markers (larger points) on chart
+  - Run selector dropdown filtered by selected hosts
+  - Summary table with green (sweet spot) and red (saturation) row highlighting
 - `fio-test.sh`: Support for testing directly on block devices (e.g., `/dev/sda`, `/dev/nvme0n1`)
   - Auto-detects if TARGET_DIR is a block device
   - Verifies device is not mounted before testing
-  - Requires explicit "yes" confirmation for destructive operations 
+  - Requires explicit "yes" confirmation for destructive operations
 
 ## [0.9.0] - 2025-11-22
 

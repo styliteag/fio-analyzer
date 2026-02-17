@@ -1,8 +1,8 @@
 import React from 'react';
-import { HardDrive, BarChart, Radar, TrendingUp, Activity, Box, Zap, Grid3X3, BarChart3, Table2, LineChart } from 'lucide-react';
+import { HardDrive, BarChart, Radar, TrendingUp, Activity, Box, Zap, Grid3X3, BarChart3, Table2, LineChart, Gauge } from 'lucide-react';
 import { Button } from '../ui';
 
-export type VisualizationView = 'overview' | 'heatmap' | 'charts' | 'graphs' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | 'advancedHeatmap' | 'trends' | 'matrix' | '3d';
+export type VisualizationView = 'overview' | 'heatmap' | 'charts' | 'graphs' | 'radar' | 'scatter' | 'parallel' | 'boxplot' | 'facets' | 'stacked' | 'advancedHeatmap' | 'trends' | 'matrix' | '3d' | 'saturation';
 
 export interface HostVisualizationControlsProps {
     activeView: VisualizationView;
@@ -128,6 +128,14 @@ const HostVisualizationControls: React.FC<HostVisualizationControlsProps> = ({
                 >
                     <Box className="w-4 h-4" />
                     3D Performance
+                </Button>
+                <Button
+                    variant={activeView === 'saturation' ? 'primary' : 'outline'}
+                    onClick={() => onViewChange('saturation')}
+                    className="flex items-center gap-2"
+                >
+                    <Gauge className="w-4 h-4" />
+                    Saturation Test
                 </Button>
             </div>
 

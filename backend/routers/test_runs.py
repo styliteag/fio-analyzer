@@ -731,6 +731,255 @@ async def get_performance_data(
 
 
 @router.get(
+    "/saturation-runs",
+    summary="List Saturation Test Runs",
+    description="List all saturation test runs with summary information",
+    response_description="List of saturation runs grouped by run_uuid",
+    responses={
+        200: {
+            "description": "Saturation runs retrieved successfully",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "run_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                            "hostname": "server-01",
+                            "protocol": "Local",
+                            "drive_type": "NVMe",
+                            "drive_model": "Samsung 980 PRO",
+                            "started": "2025-06-31T20:00:00",
+                            "step_count": 8,
+                        }
+                    ]
+                }
+            },
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def get_saturation_runs(
+    request: Request,
+    hostname: Optional[str] = Query(
+        None,
+        description="Filter by hostname",
+        example="server-01",
+    ),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    List all saturation test runs.
+
+    Identifies saturation tests by the 'saturation-test' prefix in the description field.
+    Returns summary information for each run grouped by run_uuid.
+
+    **Authentication Required:** Admin access
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    try:
+        cursor = db.cursor()
+
+        where_clause = "description LIKE 'saturation-test%'"
+        params = []
+
+        if hostname:
+            where_clause += " AND hostname = ?"
+            params.append(hostname)
+
+        query = f"""
+            SELECT run_uuid, hostname, protocol, drive_type, drive_model,
+                   MIN(timestamp) as started, COUNT(*) as step_count
+            FROM test_runs_all
+            WHERE {where_clause} AND run_uuid IS NOT NULL
+            GROUP BY run_uuid
+            ORDER BY MIN(timestamp) DESC
+        """
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+        results = []
+        for row in rows:
+            row_dict = dict(row)
+            results.append({
+                "run_uuid": row_dict["run_uuid"],
+                "hostname": row_dict["hostname"],
+                "protocol": row_dict["protocol"],
+                "drive_type": row_dict["drive_type"],
+                "drive_model": row_dict["drive_model"],
+                "started": row_dict["started"],
+                "step_count": row_dict["step_count"],
+            })
+
+        log_info(
+            "Saturation runs retrieved",
+            {"request_id": request_id, "count": len(results)},
+        )
+
+        return results
+
+    except Exception as e:
+        log_error("Error retrieving saturation runs", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to retrieve saturation runs")
+
+
+@router.get(
+    "/saturation-data",
+    summary="Get Saturation Test Data",
+    description="Get detailed step-by-step data for a specific saturation test run",
+    response_description="Saturation test data with steps grouped by pattern",
+    responses={
+        200: {
+            "description": "Saturation data retrieved successfully",
+        },
+        400: {"description": "Missing run_uuid parameter"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        404: {"description": "No saturation data found for this run_uuid"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def get_saturation_data(
+    request: Request,
+    run_uuid: str = Query(
+        ...,
+        description="The run_uuid of the saturation test run",
+        example="550e8400-e29b-41d4-a716-446655440000",
+    ),
+    threshold_ms: float = Query(
+        100.0,
+        description="P95 latency threshold in milliseconds for sweet spot calculation",
+        example=100.0,
+    ),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Get detailed saturation test data for a specific run.
+
+    Returns all steps sorted by total outstanding I/O (iodepth * num_jobs),
+    grouped by read/write pattern. Calculates sweet spot and saturation point
+    for each pattern based on the P95 latency threshold.
+
+    **Authentication Required:** Admin access
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    try:
+        cursor = db.cursor()
+
+        query = """
+            SELECT id, timestamp, hostname, protocol, drive_type, drive_model,
+                   block_size, read_write_pattern, iodepth, num_jobs,
+                   iops, avg_latency, bandwidth, p95_latency, p99_latency,
+                   config_uuid, run_uuid, description
+            FROM test_runs_all
+            WHERE run_uuid = ? AND description LIKE 'saturation-test%'
+            ORDER BY (iodepth * num_jobs) ASC
+        """
+        cursor.execute(query, (run_uuid,))
+        rows = cursor.fetchall()
+
+        if not rows:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No saturation data found for run_uuid: {run_uuid}"
+            )
+
+        # Group by pattern
+        patterns: dict = {}
+        hostname = None
+        protocol = None
+        drive_type = None
+        drive_model = None
+
+        for row in rows:
+            row_dict = dict(row)
+            if hostname is None:
+                hostname = row_dict["hostname"]
+                protocol = row_dict["protocol"]
+                drive_type = row_dict["drive_type"]
+                drive_model = row_dict["drive_model"]
+
+            pattern = row_dict["read_write_pattern"]
+            if pattern not in patterns:
+                patterns[pattern] = {"steps": []}
+
+            iodepth = row_dict["iodepth"] or 1
+            num_jobs_val = row_dict["num_jobs"] or 1
+            total_qd = iodepth * num_jobs_val
+
+            step = {
+                "id": row_dict["id"],
+                "iodepth": iodepth,
+                "num_jobs": num_jobs_val,
+                "total_qd": total_qd,
+                "iops": row_dict["iops"],
+                "avg_latency_ms": row_dict["avg_latency"],
+                "p95_latency_ms": row_dict["p95_latency"],
+                "p99_latency_ms": row_dict["p99_latency"],
+                "bandwidth_mbs": row_dict["bandwidth"],
+                "timestamp": row_dict["timestamp"],
+            }
+            patterns[pattern]["steps"].append(step)
+
+        # Calculate sweet spot and saturation point per pattern
+        for pattern_name, pattern_data in patterns.items():
+            steps = pattern_data["steps"]
+            sweet_spot = None
+            saturation_point = None
+            prev_step = None
+
+            for step in steps:
+                p95 = step.get("p95_latency_ms")
+                if p95 is not None and p95 > threshold_ms:
+                    saturation_point = step
+                    if prev_step is not None:
+                        sweet_spot = prev_step
+                    elif len(steps) > 0:
+                        sweet_spot = steps[0]
+                    break
+                prev_step = step
+
+            # If never saturated, the last step is the sweet spot
+            if saturation_point is None and steps:
+                sweet_spot = steps[-1]
+
+            pattern_data["sweet_spot"] = sweet_spot
+            pattern_data["saturation_point"] = saturation_point
+
+        result = {
+            "run_uuid": run_uuid,
+            "hostname": hostname,
+            "protocol": protocol,
+            "drive_type": drive_type,
+            "drive_model": drive_model,
+            "threshold_ms": threshold_ms,
+            "patterns": patterns,
+        }
+
+        log_info(
+            "Saturation data retrieved",
+            {
+                "request_id": request_id,
+                "run_uuid": run_uuid,
+                "patterns": list(patterns.keys()),
+                "total_steps": sum(len(p["steps"]) for p in patterns.values()),
+            },
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error retrieving saturation data", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to retrieve saturation data")
+
+
+@router.get(
     "/grouped-by-uuid",
     summary="Get Test Runs Grouped by UUID",
     description="Retrieve test runs grouped by config_uuid or run_uuid with statistics",
