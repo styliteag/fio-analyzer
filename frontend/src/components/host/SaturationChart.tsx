@@ -137,23 +137,29 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
             const yPixel = yAxis.getPixelForValue(threshold);
             if (yPixel < chart.chartArea.top || yPixel > chart.chartArea.bottom) return;
 
+            // Detect dark mode from document
+            const isDark = document.documentElement.classList.contains('dark');
+
             const ctx = chart.ctx;
             ctx.save();
             ctx.beginPath();
             ctx.setLineDash([10, 5]);
-            ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+            ctx.strokeStyle = isDark ? 'rgba(252, 129, 129, 0.7)' : 'rgba(239, 68, 68, 0.6)';
             ctx.lineWidth = 2;
             ctx.moveTo(chart.chartArea.left, yPixel);
             ctx.lineTo(chart.chartArea.right, yPixel);
             ctx.stroke();
 
-            ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+            ctx.fillStyle = isDark ? 'rgba(252, 165, 165, 0.9)' : 'rgba(239, 68, 68, 0.8)';
             ctx.font = '12px sans-serif';
             ctx.textAlign = 'right';
             ctx.fillText(`Threshold: ${threshold}ms`, chart.chartArea.right - 5, yPixel - 5);
             ctx.restore();
         },
     }), [saturationData]);
+
+    // Use linear scale if only 1 data point (log scale needs >= 2)
+    const useLogScale = chartData ? chartData.labels.length >= 2 : true;
 
     const chartOptions = useMemo(() => ({
         responsive: true,
@@ -180,7 +186,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
                     display: true,
                     text: 'Total Outstanding I/O (iodepth x numjobs)',
                 },
-                type: 'logarithmic' as const,
+                type: (useLogScale ? 'logarithmic' : 'linear') as 'logarithmic' | 'linear',
                 ticks: {
                     callback: function (tickValue: string | number) {
                         return String(tickValue);
@@ -209,7 +215,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
                 },
             },
         },
-    }), []);
+    }), [useLogScale]);
 
     // Build summary table rows from all patterns
     const tableRows = useMemo(() => {
@@ -263,7 +269,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
             <div className="text-center py-12">
                 <p className="theme-text-secondary text-lg mb-2">No Saturation Test Data</p>
                 <p className="theme-text-secondary text-sm">
-                    Run the saturation test script (<code>fio-saturation-test.sh</code>) to generate data.
+                    Run <code>fio-test.sh --saturation</code> to generate data.
                 </p>
             </div>
         );
@@ -279,6 +285,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
                     Select Saturation Run
                 </label>
                 <select
+                    aria-label="Select saturation test run"
                     className="w-full max-w-lg px-3 py-2 border rounded-lg theme-bg-primary theme-text-primary theme-border"
                     value={selectedRunUuid || ''}
                     onChange={(e) => setSelectedRunUuid(e.target.value || null)}

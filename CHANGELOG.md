@@ -32,6 +32,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Verifies device is not mounted before testing
   - Requires explicit "yes" confirmation for destructive operations
 
+### Fixed
+- **Saturation Mode**: Production hardening across script, backend, and frontend
+  - Script: Separate `config_uuid` for saturation mode (derived via md5 hash of normal config-uuid)
+  - Script: Scalar `SAT_DIRECT`/`SAT_SYNC`/`SAT_RUNTIME`/`SAT_TEST_SIZE` variables instead of array expansion
+  - Script: Extraction functions (`extract_p95_clat_ms`, `extract_iops_value`, `extract_bw_mbs`) return "ERR" on failure instead of silent "0"
+  - Script: Fixed sweet spot off-by-one (was step-2, now correctly step-1)
+  - Script: Numeric validation on `--threshold`, `--initial-iodepth`, `--initial-numjobs` CLI args
+  - Script: Upload failures logged with warning instead of silently ignored
+  - Backend: Fixed `iodepth or 1` falsiness bug (0 was treated as falsy, replaced with `is not None`)
+  - Backend: Improved sweet spot calculation — skips steps with missing/invalid P95, tracks last-within-SLA correctly
+  - Backend: Added `threshold_ms` bounds validation (0.01–100000ms)
+  - Backend: Added pagination (`limit`/`offset`) to `GET /api/test-runs/saturation-runs`
+  - Frontend: Added AbortController cleanup to `useSaturationData` hook (prevents memory leaks)
+  - Frontend: Fixed `chartOptions` stale dependency array — now updates when scale type changes
+  - Frontend: Graceful fallback to linear X-axis when only 1 data point (logarithmic needs >= 2)
+  - Frontend: Dark mode support for threshold line label
+  - Frontend: Added `aria-label` to run selector dropdown
+  - Frontend: Updated empty state to reference `fio-test.sh --saturation`
+
 ## [0.9.0] - 2025-11-22
 
 ### Added

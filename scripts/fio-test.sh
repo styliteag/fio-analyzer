@@ -203,6 +203,12 @@ set_defaults() {
     print_status "Generated RUN_UUID for this script run: $RUN_UUID"
 
 
+    # In saturation mode, derive a separate config_uuid from the normal one
+    if [ "$SATURATION_MODE" = true ]; then
+        CONFIG_UUID=$(generate_uuid_from_hash "saturation-${CONFIG_UUID}")
+        print_status "Derived saturation CONFIG_UUID: $CONFIG_UUID"
+    fi
+
     # Build description with saturation-test prefix if in saturation mode
     if [ "$SATURATION_MODE" = true ]; then
         DESCRIPTION="saturation-test,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -211,6 +217,14 @@ set_defaults() {
     fi
     # Sanitize the description change " " to "_" and remove any special charaters
     DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
+
+    # In saturation mode, freeze scalar values before array parsing overwrites them
+    if [ "$SATURATION_MODE" = true ]; then
+        SAT_DIRECT="${DIRECT}"
+        SAT_SYNC="${SYNC}"
+        SAT_RUNTIME="${RUNTIME}"
+        SAT_TEST_SIZE="${TEST_SIZE}"
+    fi
 
     # Parse BLOCK_SIZES from comma-separated string if provided
     if [ -n "$BLOCK_SIZES" ] && [ "$BLOCK_SIZES" != "4k,64k,1M" ]; then
@@ -766,14 +780,14 @@ run_fio_step() {
         --description="${DESCRIPTION}" \
         --rw="$pattern" \
         --bs="$SAT_BLOCK_SIZE" \
-        --size="$TEST_SIZE" \
+        --size="$SAT_TEST_SIZE" \
         --numjobs="$num_jobs" \
-        --runtime="$RUNTIME" \
+        --runtime="$SAT_RUNTIME" \
         --time_based \
         --group_reporting \
         --iodepth="$iodepth" \
-        --direct="$DIRECT" \
-        --sync="$SYNC" \
+        --direct="$SAT_DIRECT" \
+        --sync="$SAT_SYNC" \
         --filename="$fio_filename" \
         --output-format=json \
         --output="$output_file" \
@@ -808,6 +822,11 @@ extract_p95_clat_ms() {
     local json_file=$1
     local pattern=$2
 
+    if [ ! -f "$json_file" ]; then
+        echo "ERR"
+        return 1
+    fi
+
     # FIO JSON always outputs read section before write section
     # Extract P95 percentile value using grep/awk (no jq needed)
     local p95_ns
@@ -817,7 +836,13 @@ extract_p95_clat_ms() {
         p95_ns=$(grep '"95.000000"' "$json_file" 2>/dev/null | tail -1 | awk -F: '{print $2}' | tr -d ' ,')
     fi
 
-    if [ -z "$p95_ns" ] || [ "$p95_ns" = "null" ] || [ "$p95_ns" = "0" ]; then
+    # Validate: must be a non-empty positive integer
+    if [ -z "$p95_ns" ] || [ "$p95_ns" = "null" ] || ! [[ "$p95_ns" =~ ^[0-9]+$ ]]; then
+        echo "ERR"
+        return 1
+    fi
+
+    if [ "$p95_ns" = "0" ]; then
         echo "0"
         return 1
     fi
@@ -831,6 +856,11 @@ extract_iops_value() {
     local json_file=$1
     local pattern=$2
 
+    if [ ! -f "$json_file" ]; then
+        echo "ERR"
+        return 1
+    fi
+
     # FIO JSON: "iops" appears in read and write sections (read first, write second)
     local iops
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then
@@ -839,13 +869,24 @@ extract_iops_value() {
         iops=$(grep -E '"iops"\s*:' "$json_file" 2>/dev/null | tail -1 | awk -F: '{print $2}' | tr -d ' ,')
     fi
 
-    printf "%.0f" "${iops:-0}" 2>/dev/null || echo "0"
+    # Validate numeric (integer or float)
+    if [ -z "$iops" ] || [ "$iops" = "null" ] || ! [[ "$iops" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+        echo "ERR"
+        return 1
+    fi
+
+    printf "%.0f" "$iops" 2>/dev/null || echo "ERR"
 }
 
 # Function to extract bandwidth from FIO JSON (bytes/s -> MB/s)
 extract_bw_mbs() {
     local json_file=$1
     local pattern=$2
+
+    if [ ! -f "$json_file" ]; then
+        echo "ERR"
+        return 1
+    fi
 
     # FIO JSON: "bw_bytes" appears in read and write sections (read first, write second)
     local bw_bytes
@@ -855,7 +896,13 @@ extract_bw_mbs() {
         bw_bytes=$(grep -E '"bw_bytes"\s*:' "$json_file" 2>/dev/null | tail -1 | awk -F: '{print $2}' | tr -d ' ,')
     fi
 
-    awk "BEGIN {printf \"%.2f\", ${bw_bytes:-0} / 1048576}" 2>/dev/null || echo "0"
+    # Validate numeric
+    if [ -z "$bw_bytes" ] || [ "$bw_bytes" = "null" ] || ! [[ "$bw_bytes" =~ ^[0-9]+$ ]]; then
+        echo "ERR"
+        return 1
+    fi
+
+    awk "BEGIN {printf \"%.2f\", $bw_bytes / 1048576}" 2>/dev/null || echo "ERR"
 }
 
 # Saturation result arrays (global)
@@ -913,24 +960,33 @@ saturation_loop() {
                 local rr_p95=$(extract_p95_clat_ms "$output_file" "randread")
                 local rr_bw=$(extract_bw_mbs "$output_file" "randread")
 
-                SAT_RESULTS_RANDREAD_IOPS+=("$rr_iops")
-                SAT_RESULTS_RANDREAD_P95+=("$rr_p95")
-                SAT_RESULTS_RANDREAD_BW+=("$rr_bw")
+                # Check for extraction errors
+                if [ "$rr_p95" = "ERR" ] || [ "$rr_iops" = "ERR" ]; then
+                    print_warning "  randread: Failed to parse FIO JSON at step $step, skipping"
+                    SAT_RESULTS_RANDREAD_IOPS+=("-")
+                    SAT_RESULTS_RANDREAD_P95+=("-")
+                    SAT_RESULTS_RANDREAD_BW+=("-")
+                else
+                    SAT_RESULTS_RANDREAD_IOPS+=("$rr_iops")
+                    SAT_RESULTS_RANDREAD_P95+=("$rr_p95")
+                    SAT_RESULTS_RANDREAD_BW+=("$rr_bw")
 
-                print_success "  randread: IOPS=${rr_iops}, P95=${rr_p95}ms, BW=${rr_bw}MB/s"
+                    print_success "  randread: IOPS=${rr_iops}, P95=${rr_p95}ms, BW=${rr_bw}MB/s"
 
-                upload_results "$output_file" "saturation_randread_step${step}_qd${total_qd}"
+                    upload_results "$output_file" "saturation_randread_step${step}_qd${total_qd}" || \
+                        print_warning "  randread: Upload failed for step $step (continuing)"
 
-                local threshold_exceeded
-                threshold_exceeded=$(awk "BEGIN {print ($rr_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
-                if [ "$threshold_exceeded" = "1" ]; then
-                    print_warning "  randread SATURATED at step $step (P95: ${rr_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
-                    randread_saturated=true
-                    SAT_RANDREAD_SATURATION_STEP=$((step - 1))
-                    if [ $step -gt 1 ]; then
-                        SAT_RANDREAD_SWEET_SPOT_STEP=$((step - 2))
-                    else
-                        SAT_RANDREAD_SWEET_SPOT_STEP=0
+                    local threshold_exceeded
+                    threshold_exceeded=$(awk "BEGIN {print ($rr_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
+                    if [ "$threshold_exceeded" = "1" ]; then
+                        print_warning "  randread SATURATED at step $step (P95: ${rr_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
+                        randread_saturated=true
+                        # Current step array index is (step-1), sweet spot is the previous step
+                        SAT_RANDREAD_SATURATION_STEP=$((step - 1))
+                        if [ $step -gt 1 ]; then
+                            SAT_RANDREAD_SWEET_SPOT_STEP=$((step - 2))
+                        fi
+                        # If step==1, no sweet spot exists (saturated immediately)
                     fi
                 fi
             else
@@ -955,24 +1011,32 @@ saturation_loop() {
                 local rw_p95=$(extract_p95_clat_ms "$output_file" "randwrite")
                 local rw_bw=$(extract_bw_mbs "$output_file" "randwrite")
 
-                SAT_RESULTS_RANDWRITE_IOPS+=("$rw_iops")
-                SAT_RESULTS_RANDWRITE_P95+=("$rw_p95")
-                SAT_RESULTS_RANDWRITE_BW+=("$rw_bw")
+                # Check for extraction errors
+                if [ "$rw_p95" = "ERR" ] || [ "$rw_iops" = "ERR" ]; then
+                    print_warning "  randwrite: Failed to parse FIO JSON at step $step, skipping"
+                    SAT_RESULTS_RANDWRITE_IOPS+=("-")
+                    SAT_RESULTS_RANDWRITE_P95+=("-")
+                    SAT_RESULTS_RANDWRITE_BW+=("-")
+                else
+                    SAT_RESULTS_RANDWRITE_IOPS+=("$rw_iops")
+                    SAT_RESULTS_RANDWRITE_P95+=("$rw_p95")
+                    SAT_RESULTS_RANDWRITE_BW+=("$rw_bw")
 
-                print_success "  randwrite: IOPS=${rw_iops}, P95=${rw_p95}ms, BW=${rw_bw}MB/s"
+                    print_success "  randwrite: IOPS=${rw_iops}, P95=${rw_p95}ms, BW=${rw_bw}MB/s"
 
-                upload_results "$output_file" "saturation_randwrite_step${step}_qd${total_qd}"
+                    upload_results "$output_file" "saturation_randwrite_step${step}_qd${total_qd}" || \
+                        print_warning "  randwrite: Upload failed for step $step (continuing)"
 
-                local threshold_exceeded
-                threshold_exceeded=$(awk "BEGIN {print ($rw_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
-                if [ "$threshold_exceeded" = "1" ]; then
-                    print_warning "  randwrite SATURATED at step $step (P95: ${rw_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
-                    randwrite_saturated=true
-                    SAT_RANDWRITE_SATURATION_STEP=$((step - 1))
-                    if [ $step -gt 1 ]; then
-                        SAT_RANDWRITE_SWEET_SPOT_STEP=$((step - 2))
-                    else
-                        SAT_RANDWRITE_SWEET_SPOT_STEP=0
+                    local threshold_exceeded
+                    threshold_exceeded=$(awk "BEGIN {print ($rw_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
+                    if [ "$threshold_exceeded" = "1" ]; then
+                        print_warning "  randwrite SATURATED at step $step (P95: ${rw_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
+                        randwrite_saturated=true
+                        SAT_RANDWRITE_SATURATION_STEP=$((step - 1))
+                        if [ $step -gt 1 ]; then
+                            SAT_RANDWRITE_SWEET_SPOT_STEP=$((step - 2))
+                        fi
+                        # If step==1, no sweet spot exists (saturated immediately)
                     fi
                 fi
             else
@@ -1300,7 +1364,11 @@ main() {
                 ;;
             --threshold)
                 if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
-                    print_error "Option --threshold requires a value in ms"
+                    print_error "Option --threshold requires a positive number (ms)"
+                    exit 1
+                fi
+                if ! [[ "$2" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+                    print_error "Option --threshold must be a positive number, got: $2"
                     exit 1
                 fi
                 LATENCY_THRESHOLD_MS="$2"
@@ -1315,16 +1383,16 @@ main() {
                 shift 2
                 ;;
             --initial-iodepth)
-                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
-                    print_error "Option --initial-iodepth requires a number"
+                if [ -z "$2" ] || ! [[ "$2" =~ ^[0-9]+$ ]] || [ "$2" -eq 0 ]; then
+                    print_error "Option --initial-iodepth requires a positive integer, got: ${2:-empty}"
                     exit 1
                 fi
                 INITIAL_IODEPTH="$2"
                 shift 2
                 ;;
             --initial-numjobs)
-                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
-                    print_error "Option --initial-numjobs requires a number"
+                if [ -z "$2" ] || ! [[ "$2" =~ ^[0-9]+$ ]] || [ "$2" -eq 0 ]; then
+                    print_error "Option --initial-numjobs requires a positive integer, got: ${2:-empty}"
                     exit 1
                 fi
                 INITIAL_NUMJOBS="$2"
@@ -1376,12 +1444,12 @@ main() {
         # Saturation mode confirmation
         local initial_qd=$((INITIAL_IODEPTH * INITIAL_NUMJOBS))
         local est_tests=$((MAX_STEPS * 2))
-        local est_minutes=$((est_tests * RUNTIME / 60))
+        local est_minutes=$((est_tests * SAT_RUNTIME / 60))
         print_status "Starting saturation test:"
         print_status "  Block size: $SAT_BLOCK_SIZE"
         print_status "  Initial QD: $initial_qd (iodepth=$INITIAL_IODEPTH x numjobs=$INITIAL_NUMJOBS)"
         print_status "  P95 threshold: ${LATENCY_THRESHOLD_MS}ms"
-        print_status "  Runtime per step: ${RUNTIME}s"
+        print_status "  Runtime per step: ${SAT_RUNTIME}s"
         print_status "  Max estimated time: ~${est_minutes} minutes (if all $MAX_STEPS steps run)"
     else
         # Standard mode confirmation

@@ -766,6 +766,17 @@ async def get_saturation_runs(
         description="Filter by hostname",
         example="server-01",
     ),
+    limit: int = Query(
+        100,
+        ge=1,
+        le=1000,
+        description="Maximum number of runs to return",
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        description="Number of runs to skip",
+    ),
     user: User = Depends(require_admin),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -796,7 +807,9 @@ async def get_saturation_runs(
             WHERE {where_clause} AND run_uuid IS NOT NULL
             GROUP BY run_uuid
             ORDER BY MIN(timestamp) DESC
+            LIMIT ? OFFSET ?
         """
+        params.extend([limit, offset])
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
@@ -850,6 +863,8 @@ async def get_saturation_data(
     ),
     threshold_ms: float = Query(
         100.0,
+        ge=0.01,
+        le=100000.0,
         description="P95 latency threshold in milliseconds for sweet spot calculation",
         example=100.0,
     ),
@@ -907,8 +922,8 @@ async def get_saturation_data(
             if pattern not in patterns:
                 patterns[pattern] = {"steps": []}
 
-            iodepth = row_dict["iodepth"] or 1
-            num_jobs_val = row_dict["num_jobs"] or 1
+            iodepth = row_dict["iodepth"] if row_dict["iodepth"] is not None else 1
+            num_jobs_val = row_dict["num_jobs"] if row_dict["num_jobs"] is not None else 1
             total_qd = iodepth * num_jobs_val
 
             step = {
@@ -930,22 +945,25 @@ async def get_saturation_data(
             steps = pattern_data["steps"]
             sweet_spot = None
             saturation_point = None
-            prev_step = None
 
             for step in steps:
                 p95 = step.get("p95_latency_ms")
-                if p95 is not None and p95 > threshold_ms:
-                    saturation_point = step
-                    if prev_step is not None:
-                        sweet_spot = prev_step
-                    elif len(steps) > 0:
-                        sweet_spot = steps[0]
-                    break
-                prev_step = step
 
-            # If never saturated, the last step is the sweet spot
-            if saturation_point is None and steps:
-                sweet_spot = steps[-1]
+                # Skip steps with missing/invalid p95 data
+                if p95 is None or not isinstance(p95, (int, float)) or p95 < 0:
+                    continue
+
+                if p95 > threshold_ms:
+                    saturation_point = step
+                    # Sweet spot is the last step BEFORE saturation
+                    # (already set by the loop below)
+                    break
+
+                # Keep updating sweet_spot to the last step within SLA
+                sweet_spot = step
+
+            # If no saturation found and we had valid steps, sweet_spot
+            # is already set to the last valid step by the loop above.
 
             pattern_data["sweet_spot"] = sweet_spot
             pattern_data["saturation_point"] = saturation_point
