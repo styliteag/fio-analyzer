@@ -476,14 +476,73 @@ check_credentials() {
     esac
 }
 
-# Function to create target directory
+# Function to check if target is a block device
+is_block_device() {
+    local target="$1"
+    [ -b "$target" ]
+}
+
+# Function to check if a device is mounted
+is_device_mounted() {
+    local device="$1"
+    # Resolve the device path (handle symlinks like /dev/disk/by-id/*)
+    local resolved_device
+    resolved_device=$(readlink -f "$device" 2>/dev/null || echo "$device")
+    
+    # Check if device or any partition is mounted
+    if mount | grep -q "^${resolved_device}"; then
+        return 0  # Device is mounted
+    fi
+    
+    # Also check /proc/mounts for more reliable detection on Linux
+    if [ -f /proc/mounts ] && grep -q "^${resolved_device}" /proc/mounts; then
+        return 0
+    fi
+    
+    return 1  # Device is not mounted
+}
+
+# Function to setup target (directory or device)
 setup_target_dir() {
-    if [ ! -d "$TARGET_DIR" ]; then
-        print_status "Creating target directory: $TARGET_DIR"
-        mkdir -p "$TARGET_DIR" || {
-            print_error "Failed to create target directory: $TARGET_DIR"
+    if is_block_device "$TARGET_DIR"; then
+        print_status "TARGET_DIR is a block device: $TARGET_DIR"
+        
+        # Check if device is mounted
+        if is_device_mounted "$TARGET_DIR"; then
+            print_error "Device $TARGET_DIR is mounted!"
+            print_error "Cannot run fio directly on a mounted device."
+            print_error "Either unmount the device or use a directory path instead."
             exit 1
-        }
+        fi
+        
+        # Warn about destructive operation
+        echo
+        print_warning "⚠️  WARNING: Running fio directly on a block device!"
+        print_warning "   Device: $TARGET_DIR"
+        print_warning "   This will DESTROY ALL DATA on the device!"
+        echo
+        
+        # Set flag for device mode
+        TARGET_IS_DEVICE=true
+        
+        # Verify device is accessible
+        if [ ! -r "$TARGET_DIR" ] || [ ! -w "$TARGET_DIR" ]; then
+            print_error "Cannot read/write to device $TARGET_DIR"
+            print_error "You may need root privileges to access this device."
+            exit 1
+        fi
+        
+        print_success "Device $TARGET_DIR is accessible and not mounted"
+    else
+        # Regular directory mode
+        TARGET_IS_DEVICE=false
+        if [ ! -d "$TARGET_DIR" ]; then
+            print_status "Creating target directory: $TARGET_DIR"
+            mkdir -p "$TARGET_DIR" || {
+                print_error "Failed to create target directory: $TARGET_DIR"
+                exit 1
+            }
+        fi
     fi
 }
 
@@ -506,6 +565,14 @@ run_fio_test() {
     # Capture stderr to detect specific errors
     local error_file="/tmp/fio_error_$$_$(date +%s).txt"
     
+    # Determine filename based on target type (device vs directory)
+    local fio_filename
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        fio_filename="$TARGET_DIR"
+    else
+        fio_filename="${TARGET_DIR}/fio_test_${pattern}_${block_size}"
+    fi
+    
     fio --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
         --description="${DESCRIPTION}" \
         --rw="$pattern" \
@@ -518,7 +585,7 @@ run_fio_test() {
         --iodepth="$iodepth" \
         --direct="$direct" \
         --sync="$sync" \
-        --filename="${TARGET_DIR}/fio_test_${pattern}_${block_size}" \
+        --filename="$fio_filename" \
         --output-format=json \
         --output="$output_file" \
         --ioengine="$IOENGINE" \
@@ -528,8 +595,10 @@ run_fio_test() {
     
     local fio_exit_code=$?
     
-    # Clean up test file
-    rm -f "${TARGET_DIR}/fio_test_${pattern}_${block_size}" 2>/dev/null || true
+    # Clean up test file (only for directory mode, not device mode)
+    if [ "$TARGET_IS_DEVICE" != true ]; then
+        rm -f "${TARGET_DIR}/fio_test_${pattern}_${block_size}" 2>/dev/null || true
+    fi
 
     if [ $fio_exit_code -eq 0 ]; then
         print_success "FIO test completed: ${pattern} with ${block_size}, ${num_jobs} jobs"
@@ -668,7 +737,10 @@ upload_results() {
 # Function to cleanup test files
 cleanup() {
     print_status "Cleaning up test files..."
-    rm -f "${TARGET_DIR}/fio_test_"*
+    # Only clean up test files if using directory mode
+    if [ "$TARGET_IS_DEVICE" != true ]; then
+        rm -f "${TARGET_DIR}/fio_test_"*
+    fi
     rm -f /tmp/fio_results_*.json
 }
 
@@ -717,7 +789,11 @@ show_config() {
     echo "I/O Engine:   $IOENGINE"
     echo "I/O Depth:    $IODEPTH"
     echo "Backend URL:  $BACKEND_URL"
-    echo "Target Dir:   $TARGET_DIR"
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        echo "Target:       $TARGET_DIR (BLOCK DEVICE - DESTRUCTIVE!)"
+    else
+        echo "Target Dir:   $TARGET_DIR"
+    fi
     echo "Username:     $USERNAME"
     echo "Block Sizes:  ${BLOCK_SIZES[*]}"
     echo "Patterns:     ${TEST_PATTERNS[*]}"
@@ -873,6 +949,9 @@ main() {
     check_curl
     detect_ioengine
     
+    # Setup target (detect device vs directory mode)
+    setup_target_dir
+    
     # Show configuration
     show_config
     
@@ -916,25 +995,41 @@ main() {
         print_warning "⚠️  Configuration issues detected - some tests may fail!"
         print_warning "   See warnings above for details and suggestions."
     fi
+    
+    # Extra warning for device mode
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        echo
+        print_error "⚠️  DESTRUCTIVE OPERATION WARNING!"
+        print_error "   Target device: $TARGET_DIR"
+        print_error "   ALL DATA ON THIS DEVICE WILL BE DESTROYED!"
+    fi
     echo
     
     if [ "$skip_confirmation" = false ]; then
-        if [ "$config_warnings" -ne 0 ]; then
+        if [ "$TARGET_IS_DEVICE" = true ]; then
+            read -p "DESTRUCTIVE: Type 'yes' to confirm testing on device $TARGET_DIR: " -r
+            if [ "$REPLY" != "yes" ]; then
+                print_warning "Test cancelled by user (must type 'yes' for device mode)"
+                exit 0
+            fi
+        elif [ "$config_warnings" -ne 0 ]; then
             read -p "Configuration warnings detected. Do you still want to proceed? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_warning "Test cancelled by user"
+                exit 0
+            fi
         else
             read -p "Do you want to proceed? (y/N): " -n 1 -r
-        fi
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            print_warning "Test cancelled by user"
-            exit 0
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_warning "Test cancelled by user"
+                exit 0
+            fi
         fi
     else
         print_status "Auto-confirmed with --yes flag"
     fi
-    
-    # Setup
-    setup_target_dir
     
     # Run tests
     if run_all_tests; then
@@ -1176,7 +1271,10 @@ Configuration Variables:
   RUNTIME        - Test runtime in seconds (default: 30)
   DIRECT         - Direct I/O mode (default: 1)
   BACKEND_URL    - Backend API URL (default: http://localhost:8000)
-  TARGET_DIR     - Directory for test files (default: ./tmp/fio_test)
+  TARGET_DIR     - Directory for test files OR block device (default: ./fio_tmp/)
+                   If set to a block device (e.g., /dev/sda), tests run directly
+                   on the device. DESTRUCTIVE: all data will be lost!
+                   Device must not be mounted.
   USERNAME       - Authentication username (default: admin)
   PASSWORD       - Authentication password (default: admin)
   BLOCK_SIZES    - Comma-separated block sizes (default: 4k,64k,1M)
@@ -1221,6 +1319,11 @@ Examples:
   
   # Large test with custom patterns
   TEST_SIZE="10G" RUNTIME="300" DIRECT="1" NUM_JOBS="8" TEST_PATTERNS="read,write" $0
+  
+  # Test directly on a block device (DESTRUCTIVE - destroys all data!)
+  # Device must not be mounted
+  TARGET_DIR="/dev/sdb" $0
+  TARGET_DIR="/dev/nvme0n1" DIRECT="1" $0
 
 EOF
     exit 0

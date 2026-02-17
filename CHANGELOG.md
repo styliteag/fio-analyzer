@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- `fio-test.sh`: Support for testing directly on block devices (e.g., `/dev/sda`, `/dev/nvme0n1`)
+  - Auto-detects if TARGET_DIR is a block device
+  - Verifies device is not mounted before testing
+  - Requires explicit "yes" confirmation for destructive operations 
 
 ## [0.9.0] - 2025-11-22
 
