@@ -8,6 +8,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Function to print colored output
@@ -25,6 +26,10 @@ print_warning() {
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_step() {
+    echo -e "${CYAN}[STEP]${NC} $1"
 }
 
 # Function to load .env file with support for INCLUDE directive
@@ -170,6 +175,14 @@ set_defaults() {
     USERNAME="${USERNAME:-uploader}"
     PASSWORD="${PASSWORD:-uploader}"
 
+    # Saturation test mode defaults
+    SATURATION_MODE="${SATURATION_MODE:-false}"
+    SAT_BLOCK_SIZE="${SAT_BLOCK_SIZE:-4k}"
+    LATENCY_THRESHOLD_MS="${LATENCY_THRESHOLD_MS:-100}"
+    INITIAL_IODEPTH="${INITIAL_IODEPTH:-16}"
+    INITIAL_NUMJOBS="${INITIAL_NUMJOBS:-4}"
+    MAX_STEPS="${MAX_STEPS:-20}"
+
     # UUID Generation
     # config_uuid: Fixed per host-config (from .env or generated from hostname)
     if [ -n "$CONFIG_UUID" ]; then
@@ -190,7 +203,12 @@ set_defaults() {
     print_status "Generated RUN_UUID for this script run: $RUN_UUID"
 
 
-    DESCRIPTION="$DESCRIPTION,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    # Build description with saturation-test prefix if in saturation mode
+    if [ "$SATURATION_MODE" = true ]; then
+        DESCRIPTION="saturation-test,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    else
+        DESCRIPTION="$DESCRIPTION,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    fi
     # Sanitize the description change " " to "_" and remove any special charaters
     DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
 
@@ -641,42 +659,17 @@ run_fio_test() {
 # Function to extract IOPS from FIO JSON output
 extract_iops() {
     local json_file=$1
-    
-    # Try using jq if available (most reliable)
-    if command -v jq &> /dev/null; then
-        local read_iops=$(jq -r '.jobs[0].read.iops // 0' "$json_file" 2>/dev/null || echo "0")
-        local write_iops=$(jq -r '.jobs[0].write.iops // 0' "$json_file" 2>/dev/null || echo "0")
-        
-        # Calculate total IOPS (use awk if bc not available)
-        local total_iops="0"
-        if command -v bc &> /dev/null; then
-            total_iops=$(echo "$read_iops + $write_iops" | bc 2>/dev/null || echo "0")
-        else
-            total_iops=$(awk "BEGIN {printf \"%.0f\", $read_iops + $write_iops}" 2>/dev/null || echo "0")
-        fi
-        
-        # Format IOPS values (remove decimals if whole number)
-        read_iops=$(printf "%.0f" "$read_iops" 2>/dev/null || echo "$read_iops")
-        write_iops=$(printf "%.0f" "$write_iops" 2>/dev/null || echo "$write_iops")
-        total_iops=$(printf "%.0f" "$total_iops" 2>/dev/null || echo "$total_iops")
-        
-        echo "$read_iops|$write_iops|$total_iops"
-        return 0
-    fi
-    
-    # Fallback: use grep/awk to extract IOPS (less reliable but works without jq)
-    local read_iops=$(grep -o '"iops"[[:space:]]*:[[:space:]]*[0-9.]*' "$json_file" 2>/dev/null | head -1 | grep -o '[0-9.]*' || echo "0")
-    local write_iops=$(grep -o '"iops"[[:space:]]*:[[:space:]]*[0-9.]*' "$json_file" 2>/dev/null | tail -1 | grep -o '[0-9.]*' || echo "0")
-    
-    # Simple addition without bc
-    local total_iops="0"
-    if [ -n "$read_iops" ] && [ -n "$write_iops" ]; then
-        total_iops=$(awk "BEGIN {printf \"%.0f\", $read_iops + $write_iops}" 2>/dev/null || echo "0")
-    fi
-    
-    read_iops=$(printf "%.0f" "$read_iops" 2>/dev/null || echo "$read_iops")
-    write_iops=$(printf "%.0f" "$write_iops" 2>/dev/null || echo "$write_iops")
-    
+
+    # FIO JSON: "iops" appears in read section (first) and write section (second)
+    local read_iops=$(grep -E '"iops"\s*:' "$json_file" 2>/dev/null | head -1 | awk -F: '{print $2}' | tr -d ' ,' || echo "0")
+    local write_iops=$(grep -E '"iops"\s*:' "$json_file" 2>/dev/null | tail -1 | awk -F: '{print $2}' | tr -d ' ,' || echo "0")
+
+    local total_iops
+    total_iops=$(awk "BEGIN {printf \"%.0f\", ${read_iops:-0} + ${write_iops:-0}}" 2>/dev/null || echo "0")
+
+    read_iops=$(printf "%.0f" "${read_iops:-0}" 2>/dev/null || echo "0")
+    write_iops=$(printf "%.0f" "${write_iops:-0}" 2>/dev/null || echo "0")
+
     echo "$read_iops|$write_iops|$total_iops"
 }
 
@@ -740,9 +733,369 @@ cleanup() {
     # Only clean up test files if using directory mode
     if [ "$TARGET_IS_DEVICE" != true ]; then
         rm -f "${TARGET_DIR}/fio_test_"*
+        rm -f "${TARGET_DIR}/fio_saturation_"* 2>/dev/null || true
     fi
     rm -f /tmp/fio_results_*.json
+    rm -f /tmp/fio_sat_*.json 2>/dev/null || true
 }
+
+# ============================================================
+# Saturation Test Functions (used with --saturation flag)
+# ============================================================
+
+# Function to run a single FIO saturation step
+run_fio_step() {
+    local pattern=$1
+    local iodepth=$2
+    local num_jobs=$3
+    local output_file=$4
+
+    local total_qd=$((iodepth * num_jobs))
+    print_step "Running ${pattern} | iodepth=${iodepth} numjobs=${num_jobs} (Total QD: ${total_qd})"
+
+    local error_file="/tmp/fio_sat_error_$$_$(date +%s).txt"
+
+    local fio_filename
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        fio_filename="$TARGET_DIR"
+    else
+        fio_filename="${TARGET_DIR}/fio_saturation_${pattern}_${iodepth}_${num_jobs}"
+    fi
+
+    fio --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
+        --description="${DESCRIPTION}" \
+        --rw="$pattern" \
+        --bs="$SAT_BLOCK_SIZE" \
+        --size="$TEST_SIZE" \
+        --numjobs="$num_jobs" \
+        --runtime="$RUNTIME" \
+        --time_based \
+        --group_reporting \
+        --iodepth="$iodepth" \
+        --direct="$DIRECT" \
+        --sync="$SYNC" \
+        --filename="$fio_filename" \
+        --output-format=json \
+        --output="$output_file" \
+        --ioengine="$IOENGINE" \
+        --norandommap \
+        --randrepeat=0 \
+        --thread 2>"$error_file"
+
+    local fio_exit_code=$?
+
+    if [ "$TARGET_IS_DEVICE" != true ]; then
+        rm -f "${TARGET_DIR}/fio_saturation_${pattern}_${iodepth}_${num_jobs}" 2>/dev/null || true
+    fi
+
+    if [ $fio_exit_code -eq 0 ]; then
+        rm -f "$error_file"
+        return 0
+    else
+        print_error "FIO test failed for ${pattern} iodepth=${iodepth} numjobs=${num_jobs}"
+        if [ -f "$error_file" ]; then
+            head -5 "$error_file" | while IFS= read -r line; do
+                print_error "    $line"
+            done
+            rm -f "$error_file"
+        fi
+        return 1
+    fi
+}
+
+# Function to extract P95 completion latency from FIO JSON (ns -> ms)
+extract_p95_clat_ms() {
+    local json_file=$1
+    local pattern=$2
+
+    # FIO JSON always outputs read section before write section
+    # Extract P95 percentile value using grep/awk (no jq needed)
+    local p95_ns
+    if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then
+        p95_ns=$(grep '"95.000000"' "$json_file" 2>/dev/null | head -1 | awk -F: '{print $2}' | tr -d ' ,')
+    else
+        p95_ns=$(grep '"95.000000"' "$json_file" 2>/dev/null | tail -1 | awk -F: '{print $2}' | tr -d ' ,')
+    fi
+
+    if [ -z "$p95_ns" ] || [ "$p95_ns" = "null" ] || [ "$p95_ns" = "0" ]; then
+        echo "0"
+        return 1
+    fi
+
+    awk "BEGIN {printf \"%.2f\", $p95_ns / 1000000}"
+    return 0
+}
+
+# Function to extract IOPS from FIO JSON for a specific pattern
+extract_iops_value() {
+    local json_file=$1
+    local pattern=$2
+
+    # FIO JSON: "iops" appears in read and write sections (read first, write second)
+    local iops
+    if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then
+        iops=$(grep -E '"iops"\s*:' "$json_file" 2>/dev/null | head -1 | awk -F: '{print $2}' | tr -d ' ,')
+    else
+        iops=$(grep -E '"iops"\s*:' "$json_file" 2>/dev/null | tail -1 | awk -F: '{print $2}' | tr -d ' ,')
+    fi
+
+    printf "%.0f" "${iops:-0}" 2>/dev/null || echo "0"
+}
+
+# Function to extract bandwidth from FIO JSON (bytes/s -> MB/s)
+extract_bw_mbs() {
+    local json_file=$1
+    local pattern=$2
+
+    # FIO JSON: "bw_bytes" appears in read and write sections (read first, write second)
+    local bw_bytes
+    if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then
+        bw_bytes=$(grep -E '"bw_bytes"\s*:' "$json_file" 2>/dev/null | head -1 | awk -F: '{print $2}' | tr -d ' ,')
+    else
+        bw_bytes=$(grep -E '"bw_bytes"\s*:' "$json_file" 2>/dev/null | tail -1 | awk -F: '{print $2}' | tr -d ' ,')
+    fi
+
+    awk "BEGIN {printf \"%.2f\", ${bw_bytes:-0} / 1048576}" 2>/dev/null || echo "0"
+}
+
+# Saturation result arrays (global)
+declare -a SAT_RESULTS_STEP
+declare -a SAT_RESULTS_IODEPTH
+declare -a SAT_RESULTS_NUMJOBS
+declare -a SAT_RESULTS_TOTALQD
+declare -a SAT_RESULTS_RANDREAD_IOPS
+declare -a SAT_RESULTS_RANDREAD_P95
+declare -a SAT_RESULTS_RANDREAD_BW
+declare -a SAT_RESULTS_RANDWRITE_IOPS
+declare -a SAT_RESULTS_RANDWRITE_P95
+declare -a SAT_RESULTS_RANDWRITE_BW
+
+SAT_RANDREAD_SWEET_SPOT_STEP=-1
+SAT_RANDWRITE_SWEET_SPOT_STEP=-1
+SAT_RANDREAD_SATURATION_STEP=-1
+SAT_RANDWRITE_SATURATION_STEP=-1
+
+# Main saturation loop
+saturation_loop() {
+    local iodepth=$INITIAL_IODEPTH
+    local num_jobs=$INITIAL_NUMJOBS
+    local step=0
+    local double_target="iodepth"
+
+    local randread_saturated=false
+    local randwrite_saturated=false
+
+    echo
+    print_status "Starting saturation test loop..."
+    print_status "Patterns: randread, randwrite"
+    print_status "Will stop each pattern when P95 clat > ${LATENCY_THRESHOLD_MS}ms"
+    echo
+
+    while [ $step -lt $MAX_STEPS ]; do
+        local total_qd=$((iodepth * num_jobs))
+        step=$((step + 1))
+
+        echo
+        echo "========================================="
+        print_step "STEP $step: iodepth=$iodepth, numjobs=$num_jobs (Total QD: $total_qd)"
+        echo "========================================="
+
+        SAT_RESULTS_STEP+=("$step")
+        SAT_RESULTS_IODEPTH+=("$iodepth")
+        SAT_RESULTS_NUMJOBS+=("$num_jobs")
+        SAT_RESULTS_TOTALQD+=("$total_qd")
+
+        # --- randread ---
+        if [ "$randread_saturated" = false ]; then
+            local output_file="/tmp/fio_sat_randread_step${step}_$$.json"
+            if run_fio_step "randread" "$iodepth" "$num_jobs" "$output_file"; then
+                local rr_iops=$(extract_iops_value "$output_file" "randread")
+                local rr_p95=$(extract_p95_clat_ms "$output_file" "randread")
+                local rr_bw=$(extract_bw_mbs "$output_file" "randread")
+
+                SAT_RESULTS_RANDREAD_IOPS+=("$rr_iops")
+                SAT_RESULTS_RANDREAD_P95+=("$rr_p95")
+                SAT_RESULTS_RANDREAD_BW+=("$rr_bw")
+
+                print_success "  randread: IOPS=${rr_iops}, P95=${rr_p95}ms, BW=${rr_bw}MB/s"
+
+                upload_results "$output_file" "saturation_randread_step${step}_qd${total_qd}"
+
+                local threshold_exceeded
+                threshold_exceeded=$(awk "BEGIN {print ($rr_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
+                if [ "$threshold_exceeded" = "1" ]; then
+                    print_warning "  randread SATURATED at step $step (P95: ${rr_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
+                    randread_saturated=true
+                    SAT_RANDREAD_SATURATION_STEP=$((step - 1))
+                    if [ $step -gt 1 ]; then
+                        SAT_RANDREAD_SWEET_SPOT_STEP=$((step - 2))
+                    else
+                        SAT_RANDREAD_SWEET_SPOT_STEP=0
+                    fi
+                fi
+            else
+                SAT_RESULTS_RANDREAD_IOPS+=("-")
+                SAT_RESULTS_RANDREAD_P95+=("-")
+                SAT_RESULTS_RANDREAD_BW+=("-")
+                print_error "  randread test failed at step $step"
+            fi
+            rm -f "$output_file"
+        else
+            SAT_RESULTS_RANDREAD_IOPS+=("-")
+            SAT_RESULTS_RANDREAD_P95+=("-")
+            SAT_RESULTS_RANDREAD_BW+=("-")
+            print_status "  randread: skipped (already saturated)"
+        fi
+
+        # --- randwrite ---
+        if [ "$randwrite_saturated" = false ]; then
+            local output_file="/tmp/fio_sat_randwrite_step${step}_$$.json"
+            if run_fio_step "randwrite" "$iodepth" "$num_jobs" "$output_file"; then
+                local rw_iops=$(extract_iops_value "$output_file" "randwrite")
+                local rw_p95=$(extract_p95_clat_ms "$output_file" "randwrite")
+                local rw_bw=$(extract_bw_mbs "$output_file" "randwrite")
+
+                SAT_RESULTS_RANDWRITE_IOPS+=("$rw_iops")
+                SAT_RESULTS_RANDWRITE_P95+=("$rw_p95")
+                SAT_RESULTS_RANDWRITE_BW+=("$rw_bw")
+
+                print_success "  randwrite: IOPS=${rw_iops}, P95=${rw_p95}ms, BW=${rw_bw}MB/s"
+
+                upload_results "$output_file" "saturation_randwrite_step${step}_qd${total_qd}"
+
+                local threshold_exceeded
+                threshold_exceeded=$(awk "BEGIN {print ($rw_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
+                if [ "$threshold_exceeded" = "1" ]; then
+                    print_warning "  randwrite SATURATED at step $step (P95: ${rw_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
+                    randwrite_saturated=true
+                    SAT_RANDWRITE_SATURATION_STEP=$((step - 1))
+                    if [ $step -gt 1 ]; then
+                        SAT_RANDWRITE_SWEET_SPOT_STEP=$((step - 2))
+                    else
+                        SAT_RANDWRITE_SWEET_SPOT_STEP=0
+                    fi
+                fi
+            else
+                SAT_RESULTS_RANDWRITE_IOPS+=("-")
+                SAT_RESULTS_RANDWRITE_P95+=("-")
+                SAT_RESULTS_RANDWRITE_BW+=("-")
+                print_error "  randwrite test failed at step $step"
+            fi
+            rm -f "$output_file"
+        else
+            SAT_RESULTS_RANDWRITE_IOPS+=("-")
+            SAT_RESULTS_RANDWRITE_P95+=("-")
+            SAT_RESULTS_RANDWRITE_BW+=("-")
+            print_status "  randwrite: skipped (already saturated)"
+        fi
+
+        # Check if both patterns are saturated
+        if [ "$randread_saturated" = true ] && [ "$randwrite_saturated" = true ]; then
+            echo
+            print_success "Both patterns have reached saturation. Stopping."
+            break
+        fi
+
+        # Alternate doubling: iodepth -> numjobs -> iodepth -> numjobs ...
+        if [ "$double_target" = "iodepth" ]; then
+            iodepth=$((iodepth * 2))
+            double_target="numjobs"
+        else
+            num_jobs=$((num_jobs * 2))
+            double_target="iodepth"
+        fi
+    done
+
+    if [ $step -ge $MAX_STEPS ]; then
+        print_warning "Reached maximum steps ($MAX_STEPS) without full saturation."
+    fi
+
+    # If a pattern never saturated, mark the last step as its sweet spot
+    if [ "$randread_saturated" = false ] && [ ${#SAT_RESULTS_RANDREAD_IOPS[@]} -gt 0 ]; then
+        SAT_RANDREAD_SWEET_SPOT_STEP=$((${#SAT_RESULTS_STEP[@]} - 1))
+        print_status "randread did not saturate - last step is the best observed"
+    fi
+    if [ "$randwrite_saturated" = false ] && [ ${#SAT_RESULTS_RANDWRITE_IOPS[@]} -gt 0 ]; then
+        SAT_RANDWRITE_SWEET_SPOT_STEP=$((${#SAT_RESULTS_STEP[@]} - 1))
+        print_status "randwrite did not saturate - last step is the best observed"
+    fi
+}
+
+# Function to print saturation summary table
+print_saturation_summary() {
+    echo
+    echo "========================================================================================================================="
+    echo "                                         SATURATION TEST RESULTS"
+    echo "========================================================================================================================="
+    printf "%-6s | %-8s | %-8s | %-8s | %-12s %-10s %-10s | %-12s %-10s %-10s\n" \
+        "Step" "IODepth" "NumJobs" "TotalQD" "RR IOPS" "RR P95ms" "RR BW" "RW IOPS" "RW P95ms" "RW BW"
+    echo "-------------------------------------------------------------------------------------------------------------------------"
+
+    local total_steps=${#SAT_RESULTS_STEP[@]}
+    for ((i=0; i<total_steps; i++)); do
+        local is_rr_sweet=false
+        local is_rw_sweet=false
+        local is_rr_sat=false
+        local is_rw_sat=false
+
+        if [ "$SAT_RANDREAD_SWEET_SPOT_STEP" -eq "$i" ] 2>/dev/null; then is_rr_sweet=true; fi
+        if [ "$SAT_RANDWRITE_SWEET_SPOT_STEP" -eq "$i" ] 2>/dev/null; then is_rw_sweet=true; fi
+        if [ "$SAT_RANDREAD_SATURATION_STEP" -eq "$i" ] 2>/dev/null; then is_rr_sat=true; fi
+        if [ "$SAT_RANDWRITE_SATURATION_STEP" -eq "$i" ] 2>/dev/null; then is_rw_sat=true; fi
+
+        local marker=""
+        if [ "$is_rr_sweet" = true ] || [ "$is_rw_sweet" = true ]; then
+            marker="${GREEN}*SWEET*${NC}"
+        fi
+        if [ "$is_rr_sat" = true ] || [ "$is_rw_sat" = true ]; then
+            marker="${RED}!SAT!${NC}"
+        fi
+
+        local row_color=""
+        if [ "$is_rr_sweet" = true ] || [ "$is_rw_sweet" = true ]; then
+            row_color="${GREEN}"
+        elif [ "$is_rr_sat" = true ] || [ "$is_rw_sat" = true ]; then
+            row_color="${RED}"
+        fi
+
+        printf "${row_color}%-6s | %-8s | %-8s | %-8s | %-12s %-10s %-10s | %-12s %-10s %-10s${NC} %s\n" \
+            "${SAT_RESULTS_STEP[$i]}" \
+            "${SAT_RESULTS_IODEPTH[$i]}" \
+            "${SAT_RESULTS_NUMJOBS[$i]}" \
+            "${SAT_RESULTS_TOTALQD[$i]}" \
+            "${SAT_RESULTS_RANDREAD_IOPS[$i]}" \
+            "${SAT_RESULTS_RANDREAD_P95[$i]}" \
+            "${SAT_RESULTS_RANDREAD_BW[$i]}" \
+            "${SAT_RESULTS_RANDWRITE_IOPS[$i]}" \
+            "${SAT_RESULTS_RANDWRITE_P95[$i]}" \
+            "${SAT_RESULTS_RANDWRITE_BW[$i]}" \
+            "$marker"
+    done
+
+    echo "========================================================================================================================="
+    echo
+    echo "Legend: ${GREEN}*SWEET*${NC} = Sweet Spot (best performance within SLA)  ${RED}!SAT!${NC} = Saturation Point (P95 > ${LATENCY_THRESHOLD_MS}ms)"
+    echo
+
+    echo "--- Sweet Spot Summary ---"
+    if [ "$SAT_RANDREAD_SWEET_SPOT_STEP" -ge 0 ] 2>/dev/null; then
+        local idx=$SAT_RANDREAD_SWEET_SPOT_STEP
+        echo -e "${GREEN}randread:  Step ${SAT_RESULTS_STEP[$idx]} | QD=${SAT_RESULTS_TOTALQD[$idx]} (iodepth=${SAT_RESULTS_IODEPTH[$idx]} x numjobs=${SAT_RESULTS_NUMJOBS[$idx]}) | IOPS=${SAT_RESULTS_RANDREAD_IOPS[$idx]} | P95=${SAT_RESULTS_RANDREAD_P95[$idx]}ms${NC}"
+    else
+        echo "randread:  No sweet spot found"
+    fi
+    if [ "$SAT_RANDWRITE_SWEET_SPOT_STEP" -ge 0 ] 2>/dev/null; then
+        local idx=$SAT_RANDWRITE_SWEET_SPOT_STEP
+        echo -e "${GREEN}randwrite: Step ${SAT_RESULTS_STEP[$idx]} | QD=${SAT_RESULTS_TOTALQD[$idx]} (iodepth=${SAT_RESULTS_IODEPTH[$idx]} x numjobs=${SAT_RESULTS_NUMJOBS[$idx]}) | IOPS=${SAT_RESULTS_RANDWRITE_IOPS[$idx]} | P95=${SAT_RESULTS_RANDWRITE_P95[$idx]}ms${NC}"
+    else
+        echo "randwrite: No sweet spot found"
+    fi
+    echo
+}
+
+# ============================================================
+# End of Saturation Test Functions
+# ============================================================
 
 # Function to get maximum value from an array
 get_max_value() {
@@ -795,8 +1148,19 @@ show_config() {
         echo "Target Dir:   $TARGET_DIR"
     fi
     echo "Username:     $USERNAME"
-    echo "Block Sizes:  ${BLOCK_SIZES[*]}"
-    echo "Patterns:     ${TEST_PATTERNS[*]}"
+    if [ "$SATURATION_MODE" = true ]; then
+        echo "-----------------------------------------"
+        echo "Mode:         SATURATION TEST"
+        echo "Block Size:   $SAT_BLOCK_SIZE"
+        echo "P95 Threshold:${LATENCY_THRESHOLD_MS}ms"
+        echo "Init IODepth: $INITIAL_IODEPTH"
+        echo "Init NumJobs: $INITIAL_NUMJOBS"
+        echo "Init Total QD:$((INITIAL_IODEPTH * INITIAL_NUMJOBS))"
+        echo "Max Steps:    $MAX_STEPS"
+    else
+        echo "Block Sizes:  ${BLOCK_SIZES[*]}"
+        echo "Patterns:     ${TEST_PATTERNS[*]}"
+    fi
     echo "========================================="
     echo
 }
@@ -930,6 +1294,42 @@ main() {
                 IOENGINE="$2"
                 shift 2
                 ;;
+            -s|--saturation)
+                SATURATION_MODE=true
+                shift
+                ;;
+            --threshold)
+                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
+                    print_error "Option --threshold requires a value in ms"
+                    exit 1
+                fi
+                LATENCY_THRESHOLD_MS="$2"
+                shift 2
+                ;;
+            --block-size)
+                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
+                    print_error "Option --block-size requires a size value"
+                    exit 1
+                fi
+                SAT_BLOCK_SIZE="$2"
+                shift 2
+                ;;
+            --initial-iodepth)
+                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
+                    print_error "Option --initial-iodepth requires a number"
+                    exit 1
+                fi
+                INITIAL_IODEPTH="$2"
+                shift 2
+                ;;
+            --initial-numjobs)
+                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
+                    print_error "Option --initial-numjobs requires a number"
+                    exit 1
+                fi
+                INITIAL_NUMJOBS="$2"
+                shift 2
+                ;;
             *)
                 args+=("$1")
                 shift
@@ -955,10 +1355,13 @@ main() {
     # Show configuration
     show_config
     
-    # Validate test configuration for potential issues
-    validate_test_config
-    local config_warnings=$?
-    
+    # Validate test configuration for potential issues (skip in saturation mode)
+    local config_warnings=0
+    if [ "$SATURATION_MODE" != true ]; then
+        validate_test_config
+        config_warnings=$?
+    fi
+
     # Validate API connectivity and credentials (skip if --yes flag is used)
     if [ "$skip_confirmation" = false ]; then
         check_api_connectivity
@@ -966,36 +1369,50 @@ main() {
     else
         print_status "Skipping server connectivity checks due to --yes flag"
     fi
-    
+
     # Confirm before starting tests (unless --yes flag is used)
     echo
-    if [ "$config_warnings" -eq 0 ]; then
-        print_status "All checks passed! Ready to start FIO performance testing."
+    if [ "$SATURATION_MODE" = true ]; then
+        # Saturation mode confirmation
+        local initial_qd=$((INITIAL_IODEPTH * INITIAL_NUMJOBS))
+        local est_tests=$((MAX_STEPS * 2))
+        local est_minutes=$((est_tests * RUNTIME / 60))
+        print_status "Starting saturation test:"
+        print_status "  Block size: $SAT_BLOCK_SIZE"
+        print_status "  Initial QD: $initial_qd (iodepth=$INITIAL_IODEPTH x numjobs=$INITIAL_NUMJOBS)"
+        print_status "  P95 threshold: ${LATENCY_THRESHOLD_MS}ms"
+        print_status "  Runtime per step: ${RUNTIME}s"
+        print_status "  Max estimated time: ~${est_minutes} minutes (if all $MAX_STEPS steps run)"
     else
-        print_warning "Configuration warnings detected! Tests may fail."
-    fi
-    
-    local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]} * ${#NUM_JOBS[@]} * ${#DIRECT[@]} * ${#TEST_SIZE[@]} * ${#SYNC[@]} * ${#IODEPTH[@]} * ${#RUNTIME[@]}))
-    print_status "  Block sizes: ${BLOCK_SIZES[*]}"
-    print_status "  Direct: ${DIRECT[*]}"
-    print_status "  Test size: ${TEST_SIZE[*]}"
-    print_status "  Sync: ${SYNC[*]}"
-    print_status "  I/O Depth: ${IODEPTH[*]}"
-    print_status "  Runtime: ${RUNTIME[*]}"
-    print_status "  Number of jobs: ${NUM_JOBS[*]}"
-    local max_runtime=$(get_max_value "${RUNTIME[@]}")
-    print_status "  Test patterns: ${TEST_PATTERNS[*]}"
-    print_status "  Test duration: ${RUNTIME[*]} (max: ${max_runtime}s) per test"
-    print_status "  Estimated total time: $((total_tests * max_runtime / 60)) minutes"
-    echo
-    print_status "This will run $total_tests tests with the listed configurations!"
-    
-    if [ "$config_warnings" -ne 0 ]; then
+        # Standard mode confirmation
+        if [ "$config_warnings" -eq 0 ]; then
+            print_status "All checks passed! Ready to start FIO performance testing."
+        else
+            print_warning "Configuration warnings detected! Tests may fail."
+        fi
+
+        local total_tests=$((${#BLOCK_SIZES[@]} * ${#TEST_PATTERNS[@]} * ${#NUM_JOBS[@]} * ${#DIRECT[@]} * ${#TEST_SIZE[@]} * ${#SYNC[@]} * ${#IODEPTH[@]} * ${#RUNTIME[@]}))
+        print_status "  Block sizes: ${BLOCK_SIZES[*]}"
+        print_status "  Direct: ${DIRECT[*]}"
+        print_status "  Test size: ${TEST_SIZE[*]}"
+        print_status "  Sync: ${SYNC[*]}"
+        print_status "  I/O Depth: ${IODEPTH[*]}"
+        print_status "  Runtime: ${RUNTIME[*]}"
+        print_status "  Number of jobs: ${NUM_JOBS[*]}"
+        local max_runtime=$(get_max_value "${RUNTIME[@]}")
+        print_status "  Test patterns: ${TEST_PATTERNS[*]}"
+        print_status "  Test duration: ${RUNTIME[*]} (max: ${max_runtime}s) per test"
+        print_status "  Estimated total time: $((total_tests * max_runtime / 60)) minutes"
         echo
-        print_warning "⚠️  Configuration issues detected - some tests may fail!"
-        print_warning "   See warnings above for details and suggestions."
+        print_status "This will run $total_tests tests with the listed configurations!"
+
+        if [ "$config_warnings" -ne 0 ]; then
+            echo
+            print_warning "⚠️  Configuration issues detected - some tests may fail!"
+            print_warning "   See warnings above for details and suggestions."
+        fi
     fi
-    
+
     # Extra warning for device mode
     if [ "$TARGET_IS_DEVICE" = true ]; then
         echo
@@ -1004,7 +1421,7 @@ main() {
         print_error "   ALL DATA ON THIS DEVICE WILL BE DESTROYED!"
     fi
     echo
-    
+
     if [ "$skip_confirmation" = false ]; then
         if [ "$TARGET_IS_DEVICE" = true ]; then
             read -p "DESTRUCTIVE: Type 'yes' to confirm testing on device $TARGET_DIR: " -r
@@ -1030,13 +1447,18 @@ main() {
     else
         print_status "Auto-confirmed with --yes flag"
     fi
-    
-    # Run tests
-    if run_all_tests; then
-        print_success "Performance testing completed successfully!"
+
+    # Run tests based on mode
+    if [ "$SATURATION_MODE" = true ]; then
+        saturation_loop
+        print_saturation_summary
     else
-        print_error "Performance testing completed with errors."
-        exit 1
+        if run_all_tests; then
+            print_success "Performance testing completed successfully!"
+        else
+            print_error "Performance testing completed with errors."
+            exit 1
+        fi
     fi
     
     # Cleanup
@@ -1162,6 +1584,19 @@ RUNTIME="60"
 BACKEND_URL=https://fio-analyzer.stylite-live.net
 USERNAME=xxxxxxx
 PASSWORD=xxxxxxx
+
+# ============================================================
+# Saturation Test Mode (use with --saturation flag)
+# ============================================================
+# Finds max IOPS while keeping P95 completion latency below threshold.
+# Systematically increases iodepth and numjobs until saturation is reached.
+# Usage: ./fio-test.sh --saturation
+#
+# SAT_BLOCK_SIZE=4k              # Block size for saturation test
+# LATENCY_THRESHOLD_MS=100       # P95 completion latency threshold (ms)
+# INITIAL_IODEPTH=16             # Starting iodepth
+# INITIAL_NUMJOBS=4              # Starting number of jobs
+# MAX_STEPS=20                   # Safety limit for maximum steps
 EOF
     
     if [ $? -eq 0 ]; then
@@ -1233,6 +1668,12 @@ Options:
   -i, --engine       Specify I/O engine to use (io_uring, libaio, psync, aio)
                      Default: auto-detect (io_uring > libaio > psync)
                      Example: $0 --engine io_uring
+  -s, --saturation   Enable saturation test mode
+                     Finds max IOPS while keeping P95 latency below threshold
+  --threshold MS     P95 latency threshold in ms (default: 100, saturation only)
+  --block-size SIZE  Block size for saturation test (default: 4k)
+  --initial-iodepth N  Starting iodepth for saturation (default: 16)
+  --initial-numjobs N  Starting numjobs for saturation (default: 4)
 
 Configuration:
   The script loads configuration from a .env file in the current directory.
@@ -1286,6 +1727,13 @@ Configuration Variables:
   IODEPTH        - I/O Depth (default: 1)
   RUNTIME        - Test runtime in seconds (default: 30)
 
+Saturation Mode Variables (used with --saturation):
+  SAT_BLOCK_SIZE       - Block size (default: 4k)
+  LATENCY_THRESHOLD_MS - P95 latency threshold in ms (default: 100)
+  INITIAL_IODEPTH      - Starting iodepth (default: 16)
+  INITIAL_NUMJOBS      - Starting number of jobs (default: 4)
+  MAX_STEPS            - Safety limit for steps (default: 20)
+
 Examples:
   # Generate configuration file (default: .env)
   $0 --generate-env
@@ -1324,6 +1772,15 @@ Examples:
   # Device must not be mounted
   TARGET_DIR="/dev/sdb" $0
   TARGET_DIR="/dev/nvme0n1" DIRECT="1" $0
+
+  # Saturation test (find max IOPS within 100ms P95 latency SLA)
+  $0 --saturation
+
+  # Saturation with custom threshold
+  $0 --saturation --threshold 50
+
+  # Saturation with custom starting point and env file
+  $0 -e production.env --saturation --initial-iodepth 32 --initial-numjobs 8
 
 EOF
     exit 0

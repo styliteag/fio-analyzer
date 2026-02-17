@@ -32,6 +32,14 @@ A full-stack web application that analyzes and visualizes FIO (Flexible I/O Test
 - Environment variable override support
 - Direct download from application server
 
+### 📈 **Saturation Testing**
+- Built-in saturation test mode (`--saturation` flag) in the testing script
+- Finds maximum IOPS while keeping P95 completion latency below a configurable threshold
+- Alternating iodepth/numjobs doubling algorithm for systematic queue depth escalation
+- Separate randread and randwrite tests with independent saturation detection
+- Sweet spot detection (best performance within SLA)
+- Interactive visualization with dual Y-axis chart (IOPS + P95 Latency) in the frontend
+
 ### 🗄️ **Data Management**
 - SQLite database with comprehensive schema
 - Test run management with edit/delete capabilities
@@ -293,6 +301,12 @@ TEST_SIZE="1M" RUNTIME="5" ./fio-test.sh
 # Custom configuration with environment variables
 HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" ./fio-test.sh
 
+# Saturation test mode - find max IOPS within P95 latency SLA
+./fio-test.sh --saturation
+
+# Saturation test with custom threshold and starting parameters
+./fio-test.sh --saturation --threshold 50 --block-size 4k --initial-iodepth 8 --initial-numjobs 2
+
 # View help and all configuration options
 ./fio-test.sh --help
 ```
@@ -309,11 +323,29 @@ HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" ./fio-test.sh
 | `BACKEND_URL` | Backend API URL | `http://localhost:8000` |
 | `TARGET_DIR` | Directory for test files | `./fio_tmp/` |
 
+#### Saturation Mode Variables (used with `--saturation`)
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `SAT_BLOCK_SIZE` | Block size for saturation test | `4k` |
+| `LATENCY_THRESHOLD_MS` | P95 latency threshold in ms | `100` |
+| `INITIAL_IODEPTH` | Starting I/O depth | `16` |
+| `INITIAL_NUMJOBS` | Starting number of jobs | `4` |
+| `MAX_STEPS` | Maximum escalation steps | `20` |
+
 #### What the Script Tests
 The script automatically tests **12 combinations**:
 - **Block Sizes**: 4k, 64k, 1M
 - **I/O Patterns**: read, write, randread, randwrite  
 - **Total Tests**: 3 × 4 = 12 tests per execution
+
+#### What the Saturation Test Does
+When run with `--saturation`, the script systematically escalates queue depth:
+1. **Starts** at the configured iodepth and numjobs (default: 16 x 4 = 64 total QD)
+2. **Alternates** doubling iodepth then numjobs each step
+3. **Runs** randread then randwrite at each step, extracting IOPS, P95 latency, and bandwidth
+4. **Stops** when P95 completion latency exceeds the threshold (default: 100ms)
+5. **Reports** the sweet spot (best IOPS within SLA) and saturation point
+6. **Uploads** each step to the backend for visualization in the Saturation Test chart
 
 #### Script Output
 The script provides colored progress output showing:

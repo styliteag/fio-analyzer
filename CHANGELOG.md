@@ -8,15 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Saturation Test Script** (`scripts/fio-saturation-test.sh`): New standalone script to find maximum IOPS while keeping P95 completion latency below a configurable threshold
+- **Saturation Test Mode** (`fio-test.sh --saturation`): Integrated mode to find maximum IOPS while keeping P95 completion latency below a configurable threshold
   - Alternating iodepth/numjobs doubling algorithm for systematic queue depth escalation
   - Separate randread and randwrite tests with independent saturation detection
-  - Real-time P95 clat extraction from FIO JSON output and automatic upload to backend
+  - P95 clat extraction from FIO JSON output using grep/awk (no jq dependency)
   - Sweet spot detection (best performance within SLA threshold)
   - Colorized summary table with sweet spot and saturation markers
-  - CLI options: `--threshold`, `--block-size`, `--initial-iodepth`, `--initial-numjobs`, `--engine`
+  - CLI options: `--saturation`, `--threshold`, `--block-size`, `--initial-iodepth`, `--initial-numjobs`
   - `.env` configuration with `--generate-env` support
-  - Block device support with safety checks
 - **Backend API**: Two new endpoints for saturation test data
   - `GET /api/test-runs/saturation-runs` - List all saturation test runs with summary
   - `GET /api/test-runs/saturation-data?run_uuid=...` - Detailed step-by-step data with sweet spot/saturation point calculation
