@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.10.1] - 2026-02-17
+
+### Added
 - **Saturation Test**: All 6 valid FIO patterns supported (`randread`, `randwrite`, `randrw`, `read`, `write`, `rw`) with slot-based validation
 - **Saturation Test**: Default block size changed to 64k (from 4k) for more realistic saturation testing
 - **Saturation Test**: `--max-qd` CLI option and `MAX_TOTAL_QD` default raised to 16384
