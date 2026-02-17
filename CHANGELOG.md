@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.10.0] - 2026-02-17
+
+### Added
 - **Saturation Test Mode** (`fio-test.sh --saturation`): Integrated mode to find maximum IOPS while keeping P95 completion latency below a configurable threshold
   - Configurable patterns via `SAT_PATTERNS` (default: randread, randwrite, randrw) — each escalates QD independently
   - Multiple block sizes via `SAT_BLOCK_SIZES` (comma-separated, e.g., `4k,64k,128k`) — each block size gets its own `run_uuid` and runs a full independent saturation loop
