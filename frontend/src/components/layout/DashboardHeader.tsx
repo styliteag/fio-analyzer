@@ -1,5 +1,5 @@
 // Dashboard header component with navigation and user controls
-import { Activity, Database, LogOut, Upload, Settings, Users } from 'lucide-react';
+import { Activity, Database, Gauge, LogOut, Upload, Settings, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import ThemeToggle from '../ThemeToggle';
@@ -40,6 +40,14 @@ export const DashboardHeader: React.FC = () => {
                         >
                             <Upload className="h-4 w-4 mr-2" />
                             Upload
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => navigate("/saturation")}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md theme-btn-secondary transition-colors"
+                        >
+                            <Gauge className="h-4 w-4 mr-2" />
+                            Saturation
                         </button>
                         <button
                             type="button"

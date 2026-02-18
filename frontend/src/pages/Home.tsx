@@ -6,7 +6,7 @@ import Button from "../components/ui/Button";
 import ErrorDisplay from "../components/ui/ErrorDisplay";
 import { useAuth } from "../contexts/AuthContext";
 import { useApiCall } from "../hooks";
-import { Activity, Database, TrendingUp, Upload, Users, Settings, RefreshCw, History, Server } from "lucide-react";
+import { Activity, Database, Gauge, TrendingUp, Upload, Users, Settings, RefreshCw, History, Server } from "lucide-react";
 import { fetchDashboardStats, type DashboardStats } from "../services/api/dashboard";
 import { formatLatencyMicroseconds } from "../services/data/formatters";
 
@@ -128,6 +128,14 @@ export default function Home() {
 						>
 							<Server className="w-4 h-4" />
 							Host Analysis
+						</Button>
+						<Button
+							variant="outline"
+							onClick={() => window.location.href = "/saturation"}
+							className="flex items-center gap-2"
+						>
+							<Gauge className="w-4 h-4" />
+							Saturation Analysis
 						</Button>
 						<Button
 							variant="outline"
@@ -332,6 +340,18 @@ export default function Home() {
 								</div>
 								<p className="theme-text-secondary text-sm">
 									Deep dive into individual host performance
+								</p>
+							</a>
+							<a
+								href="/saturation"
+								className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+							>
+								<div className="flex items-center gap-2 mb-2">
+									<Gauge className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+									<h3 className="font-medium theme-text-primary">Saturation Analysis</h3>
+								</div>
+								<p className="theme-text-secondary text-sm">
+									IOPS saturation and latency threshold analysis
 								</p>
 							</a>
 							<a

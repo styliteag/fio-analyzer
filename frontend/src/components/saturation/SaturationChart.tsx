@@ -11,7 +11,6 @@ import {
 } from 'chart.js';
 import type { Plugin } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import type { DriveAnalysis } from '../../services/api/hostAnalysis';
 import { useSaturationData } from '../../hooks/useSaturationData';
 import { Loading } from '../ui';
 import type { SaturationStep } from '../../services/api/testRuns';
@@ -27,10 +26,10 @@ ChartJS.register(
 );
 
 interface SaturationChartProps {
-    drives: DriveAnalysis[];
+    hostname?: string | null;
 }
 
-const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
+const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
     const {
         saturationRuns,
         loadingRuns,
@@ -40,7 +39,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
         saturationData,
         loadingData,
         dataError,
-    } = useSaturationData(drives);
+    } = useSaturationData(hostname);
 
     // Build chart data from saturation data
     const chartData = useMemo(() => {
@@ -281,8 +280,6 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ drives }) => {
 
     return (
         <div>
-            <h2 className="text-xl font-semibold theme-text-primary mb-4">Saturation Test Analysis</h2>
-
             {/* Run Selector */}
             <div className="mb-6">
                 <label className="block text-sm font-medium theme-text-secondary mb-1">

@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { SaturationRun, SaturationData } from '../services/api/testRuns';
 import { fetchSaturationRuns, fetchSaturationData } from '../services/api/testRuns';
-import type { DriveAnalysis } from '../services/api/hostAnalysis';
 
 export interface UseSaturationDataReturn {
     // Run list
@@ -17,7 +16,7 @@ export interface UseSaturationDataReturn {
     dataError: string | null;
 }
 
-export const useSaturationData = (drives: DriveAnalysis[]): UseSaturationDataReturn => {
+export const useSaturationData = (hostname?: string | null): UseSaturationDataReturn => {
     const [saturationRuns, setSaturationRuns] = useState<SaturationRun[]>([]);
     const [loadingRuns, setLoadingRuns] = useState(false);
     const [runsError, setRunsError] = useState<string | null>(null);
@@ -30,19 +29,8 @@ export const useSaturationData = (drives: DriveAnalysis[]): UseSaturationDataRet
     const runsAbortRef = useRef<AbortController | null>(null);
     const dataAbortRef = useRef<AbortController | null>(null);
 
-    // Stable hostname key to avoid re-renders
-    const hostnameKey = useMemo(
-        () => Array.from(new Set(drives.map(d => d.hostname).filter(Boolean))).sort().join(','),
-        [drives]
-    );
-
-    // Load saturation runs when hostnames change
+    // Load saturation runs
     const loadRuns = useCallback(async () => {
-        if (!hostnameKey) {
-            setSaturationRuns([]);
-            return;
-        }
-
         // Cancel previous request
         runsAbortRef.current?.abort();
         const controller = new AbortController();
@@ -52,33 +40,22 @@ export const useSaturationData = (drives: DriveAnalysis[]): UseSaturationDataRet
         setRunsError(null);
 
         try {
-            const hostnames = hostnameKey.split(',');
-            const allRuns: SaturationRun[] = [];
-            for (const hostname of hostnames) {
-                const response = await fetchSaturationRuns(hostname, controller.signal);
-                if (controller.signal.aborted) return;
-                if (response.data) {
-                    allRuns.push(...response.data);
-                } else if (response.error) {
-                    console.warn(`Failed to load saturation runs for ${hostname}: ${response.error}`);
-                }
-            }
-
+            const response = await fetchSaturationRuns(hostname || undefined, controller.signal);
             if (controller.signal.aborted) return;
 
-            // Deduplicate by run_uuid
-            const uniqueRuns = Array.from(
-                new Map(allRuns.map(r => [r.run_uuid, r])).values()
-            );
+            if (response.data) {
+                const runs = response.data;
+                // Sort by started date descending
+                runs.sort((a, b) => new Date(b.started).getTime() - new Date(a.started).getTime());
 
-            // Sort by started date descending
-            uniqueRuns.sort((a, b) => new Date(b.started).getTime() - new Date(a.started).getTime());
+                setSaturationRuns(runs);
 
-            setSaturationRuns(uniqueRuns);
-
-            // Auto-select first run if none selected
-            if (!selectedRunUuid && uniqueRuns.length > 0) {
-                setSelectedRunUuid(uniqueRuns[0].run_uuid);
+                // Auto-select first run if none selected
+                if (!selectedRunUuid && runs.length > 0) {
+                    setSelectedRunUuid(runs[0].run_uuid);
+                }
+            } else if (response.error) {
+                setRunsError(response.error);
             }
         } catch {
             if (controller.signal.aborted) return;
@@ -88,7 +65,7 @@ export const useSaturationData = (drives: DriveAnalysis[]): UseSaturationDataRet
                 setLoadingRuns(false);
             }
         }
-    }, [hostnameKey, selectedRunUuid]);
+    }, [hostname, selectedRunUuid]);
 
     useEffect(() => {
         loadRuns();

@@ -9,6 +9,7 @@ import Admin from "./pages/Admin";
 import UserManager from "./pages/UserManager";
 
 import Host from "./pages/Host";
+import Saturation from "./pages/Saturation";
 
 const ProtectedApp = () => {
 	const { isAuthenticated, login, loading, error } = useAuth();
@@ -34,6 +35,7 @@ const ProtectedApp = () => {
 			<Route path="/history" element={<History />} />
 
 			<Route path="/host" element={<Host />} />
+			<Route path="/saturation" element={<Saturation />} />
 			<Route path="/upload" element={<Upload />} />
 			<Route path="/admin" element={<Admin />} />
 			<Route path="/users" element={<UserManager />} />

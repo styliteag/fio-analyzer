@@ -21,7 +21,7 @@ import PerformanceGraphs from '../components/host/PerformanceGraphs';
 import PerformanceHeatmapView from '../components/host/PerformanceHeatmapView';
 import TrendChartsView from '../components/host/TrendChartsView';
 import PerformanceMatrixView from '../components/host/PerformanceMatrixView';
-import SaturationChart from '../components/host/SaturationChart';
+
 
 const Host: React.FC = () => {
 
@@ -325,9 +325,6 @@ const Host: React.FC = () => {
                                         <PerformanceGraphs drives={filteredDrives} />
                                     )}
 
-                                    {activeView === 'saturation' && (
-                                        <SaturationChart drives={filteredDrives} />
-                                    )}
                                 </Card>
                             </div>
                         </div>
