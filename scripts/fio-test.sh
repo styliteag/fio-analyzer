@@ -168,16 +168,38 @@ generate_uuid_from_hash() {
     echo "$uuid"
 }
 
-# Configuration Variables with defaults
-set_defaults() {
+# Helper: Parse comma-separated string into a bash array
+parse_csv_to_array() {
+    local var_name="$1" csv_value="$2"
+    local -a arr
+    IFS=',' read -ra arr <<< "$csv_value"
+    eval "${var_name}=(\"\${arr[@]}\")"
+}
+
+# ============================================================
+# Configuration Functions
+# ============================================================
+
+# Single source of truth for ALL default values
+define_defaults() {
+    # Host metadata
     HOSTNAME="${HOSTNAME:-$(hostname -s)}"
     PROTOCOL="${PROTOCOL:-unknown}"
     DRIVE_TYPE="${DRIVE_TYPE:-unknown}"
     DRIVE_MODEL="${DRIVE_MODEL:-unknown}"
-    TEST_SIZE="${TEST_SIZE:-100M}"
+    DESCRIPTION="${DESCRIPTION:-}"
+
+    # Test parameters (scalar form, converted to arrays later)
+    TEST_SIZE="${TEST_SIZE:-10M}"
     NUM_JOBS="${NUM_JOBS:-4}"
     DIRECT="${DIRECT:-1}"
-    RUNTIME="${RUNTIME:-20}"
+    RUNTIME="${RUNTIME:-30}"
+    SYNC="${SYNC:-1}"
+    IODEPTH="${IODEPTH:-1}"
+    BLOCK_SIZES="${BLOCK_SIZES:-4k,64k,1M}"
+    TEST_PATTERNS="${TEST_PATTERNS:-read,write,randread,randwrite}"
+
+    # Infrastructure
     BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
     TARGET_DIR="${TARGET_DIR:-./fio_tmp/}"
     USERNAME="${USERNAME:-uploader}"
@@ -185,7 +207,6 @@ set_defaults() {
 
     # Saturation test mode defaults
     SATURATION_MODE="${SATURATION_MODE:-false}"
-    # Accept both SAT_BLOCK_SIZE (singular) and SAT_BLOCK_SIZES (plural)
     SAT_BLOCK_SIZES="${SAT_BLOCK_SIZES:-${SAT_BLOCK_SIZE:-64k}}"
     SAT_PATTERNS="${SAT_PATTERNS:-randread,randwrite,randrw}"
     LATENCY_THRESHOLD_MS="${LATENCY_THRESHOLD_MS:-100}"
@@ -193,14 +214,53 @@ set_defaults() {
     INITIAL_NUMJOBS="${INITIAL_NUMJOBS:-4}"
     MAX_STEPS="${MAX_STEPS:-20}"
     MAX_TOTAL_QD="${MAX_TOTAL_QD:-16384}"
+}
 
-    # UUID Generation
+# Apply CLI overrides (CLI flags take highest priority over env/.env/defaults)
+apply_cli_overrides() {
+    [ -n "${CLI_HOSTNAME+set}" ]             && HOSTNAME="$CLI_HOSTNAME"
+    [ -n "${CLI_PROTOCOL+set}" ]             && PROTOCOL="$CLI_PROTOCOL"
+    [ -n "${CLI_DRIVE_TYPE+set}" ]           && DRIVE_TYPE="$CLI_DRIVE_TYPE"
+    [ -n "${CLI_DRIVE_MODEL+set}" ]          && DRIVE_MODEL="$CLI_DRIVE_MODEL"
+    [ -n "${CLI_DESCRIPTION+set}" ]          && DESCRIPTION="$CLI_DESCRIPTION"
+    [ -n "${CLI_TEST_SIZE+set}" ]            && TEST_SIZE="$CLI_TEST_SIZE"
+    [ -n "${CLI_NUM_JOBS+set}" ]             && NUM_JOBS="$CLI_NUM_JOBS"
+    [ -n "${CLI_DIRECT+set}" ]               && DIRECT="$CLI_DIRECT"
+    [ -n "${CLI_RUNTIME+set}" ]              && RUNTIME="$CLI_RUNTIME"
+    [ -n "${CLI_SYNC+set}" ]                 && SYNC="$CLI_SYNC"
+    [ -n "${CLI_IODEPTH+set}" ]              && IODEPTH="$CLI_IODEPTH"
+    [ -n "${CLI_BLOCK_SIZES+set}" ]          && BLOCK_SIZES="$CLI_BLOCK_SIZES"
+    [ -n "${CLI_TEST_PATTERNS+set}" ]        && TEST_PATTERNS="$CLI_TEST_PATTERNS"
+    [ -n "${CLI_BACKEND_URL+set}" ]          && BACKEND_URL="$CLI_BACKEND_URL"
+    [ -n "${CLI_TARGET_DIR+set}" ]           && TARGET_DIR="$CLI_TARGET_DIR"
+    [ -n "${CLI_USERNAME+set}" ]             && USERNAME="$CLI_USERNAME"
+    [ -n "${CLI_PASSWORD+set}" ]             && PASSWORD="$CLI_PASSWORD"
+    [ -n "${CLI_CONFIG_UUID+set}" ]          && CONFIG_UUID="$CLI_CONFIG_UUID"
+    [ -n "${CLI_IOENGINE+set}" ]             && IOENGINE="$CLI_IOENGINE"
+    [ -n "${CLI_SATURATION_MODE+set}" ]      && SATURATION_MODE="$CLI_SATURATION_MODE"
+    [ -n "${CLI_SAT_BLOCK_SIZES+set}" ]      && SAT_BLOCK_SIZES="$CLI_SAT_BLOCK_SIZES"
+    [ -n "${CLI_SAT_PATTERNS+set}" ]         && SAT_PATTERNS="$CLI_SAT_PATTERNS"
+    [ -n "${CLI_LATENCY_THRESHOLD_MS+set}" ] && LATENCY_THRESHOLD_MS="$CLI_LATENCY_THRESHOLD_MS"
+    [ -n "${CLI_INITIAL_IODEPTH+set}" ]      && INITIAL_IODEPTH="$CLI_INITIAL_IODEPTH"
+    [ -n "${CLI_INITIAL_NUMJOBS+set}" ]      && INITIAL_NUMJOBS="$CLI_INITIAL_NUMJOBS"
+    [ -n "${CLI_MAX_STEPS+set}" ]            && MAX_STEPS="$CLI_MAX_STEPS"
+    [ -n "${CLI_MAX_TOTAL_QD+set}" ]         && MAX_TOTAL_QD="$CLI_MAX_TOTAL_QD"
+}
+
+# Generate UUIDs for tracking
+generate_uuids() {
     # config_uuid: Fixed per host-config (from .env or generated from hostname)
     if [ -n "$CONFIG_UUID" ]; then
-        print_status "Using CONFIG_UUID from .env: $CONFIG_UUID"
+        print_status "Using CONFIG_UUID: $CONFIG_UUID"
     else
         CONFIG_UUID=$(generate_uuid_from_hash "$HOSTNAME")
         print_status "Generated CONFIG_UUID from hostname: $CONFIG_UUID"
+    fi
+
+    # In saturation mode, derive a separate config_uuid
+    if [ "$SATURATION_MODE" = true ]; then
+        CONFIG_UUID=$(generate_uuid_from_hash "saturation-${CONFIG_UUID}")
+        print_status "Derived saturation CONFIG_UUID: $CONFIG_UUID"
     fi
 
     # run_uuid: Unique per script run (random UUID4)
@@ -212,123 +272,98 @@ set_defaults() {
         RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_${current_date}")
     fi
     print_status "Generated RUN_UUID for this script run: $RUN_UUID"
+}
 
-
-    # In saturation mode, derive a separate config_uuid from the normal one
+# Build description string (single location, no duplication)
+build_description() {
+    local prefix=""
     if [ "$SATURATION_MODE" = true ]; then
-        CONFIG_UUID=$(generate_uuid_from_hash "saturation-${CONFIG_UUID}")
-        print_status "Derived saturation CONFIG_UUID: $CONFIG_UUID"
+        prefix="saturation-test"
+    elif [ -n "$DESCRIPTION" ]; then
+        prefix="$DESCRIPTION"
     fi
 
-    # Build description with saturation-test prefix if in saturation mode
-    if [ "$SATURATION_MODE" = true ]; then
-        DESCRIPTION="saturation-test,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    else
-        DESCRIPTION="$DESCRIPTION,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    fi
-    # Sanitize the description change " " to "_" and remove any special charaters
+    DESCRIPTION="${prefix:+${prefix},}hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    # Sanitize: spaces to underscores, remove special chars
     DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
+}
 
-    # In saturation mode, freeze scalar values before array parsing overwrites them
+# Validate saturation-specific configuration
+validate_saturation_config() {
+    # Parse SAT_BLOCK_SIZES into array
+    IFS=',' read -ra SAT_BLOCK_SIZES_ARR <<< "$SAT_BLOCK_SIZES"
+
+    # Parse SAT_PATTERNS into array
+    IFS=',' read -ra SAT_PATTERNS_ARR <<< "$SAT_PATTERNS"
+
+    # Validate patterns — only these are supported by FIO
+    local valid_patterns="randread randwrite randrw read write rw"
+    for p in "${SAT_PATTERNS_ARR[@]}"; do
+        if ! echo "$valid_patterns" | grep -qw "$p"; then
+            print_error "Invalid saturation pattern: '$p'"
+            print_error "Valid patterns: randread, randwrite, randrw, read, write, rw"
+            exit 1
+        fi
+    done
+
+    # Check for duplicate patterns (exact duplicates only)
+    local seen_patterns=""
+    for p in "${SAT_PATTERNS_ARR[@]}"; do
+        if echo "$seen_patterns" | grep -qw "$p"; then
+            print_error "Duplicate pattern: '$p' specified more than once"
+            exit 1
+        fi
+        seen_patterns="$seen_patterns $p"
+    done
+}
+
+# Convert scalar values to arrays for multi-value iteration
+convert_scalars_to_arrays() {
+    # Freeze scalar values for saturation mode BEFORE array conversion
     if [ "$SATURATION_MODE" = true ]; then
         SAT_DIRECT="${DIRECT}"
         SAT_SYNC="${SYNC}"
         SAT_RUNTIME="${RUNTIME}"
         SAT_TEST_SIZE="${TEST_SIZE}"
-
-        # Parse SAT_BLOCK_SIZES into array
-        IFS=',' read -ra SAT_BLOCK_SIZES_ARR <<< "$SAT_BLOCK_SIZES"
-
-        # Parse SAT_PATTERNS into array
-        IFS=',' read -ra SAT_PATTERNS_ARR <<< "$SAT_PATTERNS"
-
-        # Validate patterns — only these are supported by FIO
-        local valid_patterns="randread randwrite randrw read write rw"
-        for p in "${SAT_PATTERNS_ARR[@]}"; do
-            if ! echo "$valid_patterns" | grep -qw "$p"; then
-                print_error "Invalid saturation pattern: '$p'"
-                print_error "Valid patterns: randread, randwrite, randrw, read, write, rw"
-                exit 1
-            fi
-        done
-
-        # Check for duplicate slots (e.g. both read and randread)
-        local seen_slots=""
-        for p in "${SAT_PATTERNS_ARR[@]}"; do
-            local slot=$(sat_pattern_slot "$p")
-            if echo "$seen_slots" | grep -qw "$slot"; then
-                print_error "Duplicate slot: '$p' conflicts with another pattern in the same category ($slot)"
-                print_error "Only one pattern per category: read-type (read/randread), write-type (write/randwrite), mixed-type (rw/randrw)"
-                exit 1
-            fi
-            seen_slots="$seen_slots $slot"
-        done
     fi
 
-    # Parse BLOCK_SIZES from comma-separated string if provided
-    if [ -n "$BLOCK_SIZES" ] && [ "$BLOCK_SIZES" != "4k,64k,1M" ]; then
-        IFS=',' read -ra BLOCK_SIZES_ARRAY <<< "$BLOCK_SIZES"
-        BLOCK_SIZES=("${BLOCK_SIZES_ARRAY[@]}")
-    else
-        BLOCK_SIZES=("4k" "64k" "1M")
-    fi
-    
-    # Parse TEST_PATTERNS from comma-separated string if provided
-    if [ -n "$TEST_PATTERNS" ] && [ "$TEST_PATTERNS" != "read,write,randread,randwrite" ]; then
-        IFS=',' read -ra TEST_PATTERNS_ARRAY <<< "$TEST_PATTERNS"
-        TEST_PATTERNS=("${TEST_PATTERNS_ARRAY[@]}")
-    else
-        TEST_PATTERNS=("read" "write" "randread" "randwrite")
+    # Convert all comma-separated scalars to arrays unconditionally
+    parse_csv_to_array BLOCK_SIZES   "$BLOCK_SIZES"
+    parse_csv_to_array TEST_PATTERNS "$TEST_PATTERNS"
+    parse_csv_to_array NUM_JOBS      "$NUM_JOBS"
+    parse_csv_to_array DIRECT        "$DIRECT"
+    parse_csv_to_array TEST_SIZE     "$TEST_SIZE"
+    parse_csv_to_array SYNC          "$SYNC"
+    parse_csv_to_array IODEPTH       "$IODEPTH"
+    parse_csv_to_array RUNTIME       "$RUNTIME"
+}
+
+# Master configuration orchestrator
+# Precedence: CLI flags > env vars / .env file > hardcoded defaults
+init_config() {
+    # Step 1: Apply defaults for anything not already set (env/.env values survive)
+    define_defaults
+
+    # Step 2: Override with CLI flags (highest priority)
+    apply_cli_overrides
+
+    # Step 3: Detect I/O engine (before array conversion so psync fallback works)
+    detect_ioengine
+
+    # Step 4: Generate UUIDs
+    generate_uuids
+
+    # Step 5: Build description string
+    build_description
+
+    # Step 6: Validate saturation config if applicable
+    if [ "$SATURATION_MODE" = true ]; then
+        validate_saturation_config
     fi
 
-    # Parse NUM_JOBS from comma-separated string if provided
-    if [ -n "$NUM_JOBS" ] && [ "$NUM_JOBS" != "4" ]; then
-        IFS=',' read -ra NUM_JOBS_ARRAY <<< "$NUM_JOBS"
-        NUM_JOBS=("${NUM_JOBS_ARRAY[@]}")
-    else
-        NUM_JOBS=("4")
-    fi
-    
-    # Parse DIRECT from comma-separated string if provided
-    if [ -n "$DIRECT" ] && [ "$DIRECT" != "1" ]; then
-        IFS=',' read -ra DIRECT_ARRAY <<< "$DIRECT"
-        DIRECT=("${DIRECT_ARRAY[@]}")
-    else
-        DIRECT=("1")
-    fi
-
-    # Parse TEST_SIZE from comma-separated string if provided
-    if [ -n "$TEST_SIZE" ] && [ "$TEST_SIZE" != "10M" ]; then
-        IFS=',' read -ra TEST_SIZE_ARRAY <<< "$TEST_SIZE"
-        TEST_SIZE=("${TEST_SIZE_ARRAY[@]}")
-    else
-        TEST_SIZE=("10M")
-    fi
-
-    # Parse SYNC from comma-separated string if provided
-    if [ -n "$SYNC" ] && [ "$SYNC" != "1" ]; then
-        IFS=',' read -ra SYNC_ARRAY <<< "$SYNC"
-        SYNC=("${SYNC_ARRAY[@]}")
-    else
-        SYNC=("1")
-    fi
-
-    # Parse IODEPTH from comma-separated string if provided
-    if [ -n "$IODEPTH" ] && [ "$IODEPTH" != "1" ]; then
-        IFS=',' read -ra IODEPTH_ARRAY <<< "$IODEPTH"
-        IODEPTH=("${IODEPTH_ARRAY[@]}")
-    else
-        IODEPTH=("1")
-    fi
-
-    # Parse RUNTIME from comma-separated string if provided
-    if [ -n "$RUNTIME" ] && [ "$RUNTIME" != "30" ]; then
-        IFS=',' read -ra RUNTIME_ARRAY <<< "$RUNTIME"
-        RUNTIME=("${RUNTIME_ARRAY[@]}")
-    else
-        RUNTIME=("30")
-    fi
-
+    # Step 7: Convert scalar values to arrays (last step)
+    convert_scalars_to_arrays
 }
 
 # Function to check if fio is installed
@@ -1060,48 +1095,19 @@ extract_bw_mbs() {
     awk "BEGIN {printf \"%.2f\", $bw_bytes / 1048576}" 2>/dev/null || echo "ERR"
 }
 
-# Saturation result arrays (global) — per-pattern with independent QD
+# Saturation result arrays (global) — generic for any number of patterns
 declare -a SAT_RESULTS_STEP
 
-declare -a SAT_RESULTS_RANDREAD_QD SAT_RESULTS_RANDREAD_IOPS SAT_RESULTS_RANDREAD_P95 SAT_RESULTS_RANDREAD_BW
-declare -a SAT_RESULTS_RANDWRITE_QD SAT_RESULTS_RANDWRITE_IOPS SAT_RESULTS_RANDWRITE_P95 SAT_RESULTS_RANDWRITE_BW
-declare -a SAT_RESULTS_RANDRW_QD SAT_RESULTS_RANDRW_IOPS SAT_RESULTS_RANDRW_P95 SAT_RESULTS_RANDRW_BW
-
-SAT_RANDREAD_SWEET_SPOT_STEP=-1
-SAT_RANDWRITE_SWEET_SPOT_STEP=-1
-SAT_RANDRW_SWEET_SPOT_STEP=-1
-SAT_RANDREAD_SATURATION_STEP=-1
-SAT_RANDWRITE_SATURATION_STEP=-1
-SAT_RANDRW_SATURATION_STEP=-1
-
-# Classify a FIO pattern into a slot: "read", "write", or "mixed"
-# Returns empty string if unknown
-sat_pattern_slot() {
-    case "$1" in
-        read|randread)   echo "read" ;;
-        write|randwrite) echo "write" ;;
-        rw|randrw)       echo "mixed" ;;
-        *)               echo "" ;;
-    esac
-}
-
-# Find which user-specified pattern occupies a given slot
-# Returns the pattern name or empty string
-sat_slot_pattern() {
-    local slot=$1
-    for p in "${SAT_PATTERNS_ARR[@]}"; do
-        if [ "$(sat_pattern_slot "$p")" = "$slot" ]; then
-            echo "$p"
-            return 0
-        fi
-    done
-    echo ""
-    return 1
-}
+# Per-pattern state arrays (indexed by position in SAT_PATTERNS_ARR)
+declare -a SAT_P_IODEPTH SAT_P_NUMJOBS SAT_P_ESC_COUNT
+declare -a SAT_P_SATURATED SAT_P_STEP SAT_P_FAIL_COUNT
+declare -a SAT_P_BEST_IOPS SAT_P_BEST_QD
+declare -a SAT_P_SAT_STEP
+# Per-pattern result arrays created dynamically via sat_r_init()
 
 # Determine JSON section for extraction: "read" or "write"
-# read/randread -> "read" section (head -1 in FIO JSON)
-# write/randwrite -> "write" section (tail -1 in FIO JSON)
+# read/randread -> "read" section
+# write/randwrite -> "write" section
 # rw/randrw -> both sections (caller handles read+write separately)
 sat_extract_key() {
     case "$1" in
@@ -1111,88 +1117,75 @@ sat_extract_key() {
     esac
 }
 
-# Check if a saturation pattern slot is enabled
-sat_slot_enabled() {
-    local slot=$1
-    for p in "${SAT_PATTERNS_ARR[@]}"; do
-        if [ "$(sat_pattern_slot "$p")" = "$slot" ]; then return 0; fi
-    done
-    return 1
+# Check if a pattern is mixed (rw/randrw) — produces both read and write in FIO output
+sat_is_mixed() {
+    case "$1" in
+        rw|randrw) return 0 ;;
+        *)         return 1 ;;
+    esac
+}
+
+# --- Result array helpers (eval-based, safe: pi is always 0-5) ---
+
+# Initialize result arrays for pattern index pi
+sat_r_init() {
+    local pi=$1
+    eval "SAT_R${pi}_QD=()"
+    eval "SAT_R${pi}_IOPS=()"
+    eval "SAT_R${pi}_P95=()"
+    eval "SAT_R${pi}_BW=()"
+}
+
+# Append a value to a result array: sat_r_append <pi> <field> <value>
+sat_r_append() {
+    local pi=$1 field=$2 value=$3
+    eval "SAT_R${pi}_${field}+=(\"\$value\")"
+}
+
+# Get a value from a result array: sat_r_get <pi> <field> <index>
+sat_r_get() {
+    local pi=$1 field=$2 idx=$3
+    eval "echo \"\${SAT_R${pi}_${field}[\$idx]}\""
+}
+
+# Get length of a result array: sat_r_len <pi> <field>
+sat_r_len() {
+    local pi=$1 field=$2
+    eval "echo \${#SAT_R${pi}_${field}[@]}"
 }
 
 # Reset saturation result arrays (called between block size runs)
 reset_sat_results() {
     SAT_RESULTS_STEP=()
-    SAT_RESULTS_RANDREAD_QD=()
-    SAT_RESULTS_RANDREAD_IOPS=()
-    SAT_RESULTS_RANDREAD_P95=()
-    SAT_RESULTS_RANDREAD_BW=()
-    SAT_RESULTS_RANDWRITE_QD=()
-    SAT_RESULTS_RANDWRITE_IOPS=()
-    SAT_RESULTS_RANDWRITE_P95=()
-    SAT_RESULTS_RANDWRITE_BW=()
-    SAT_RESULTS_RANDRW_QD=()
-    SAT_RESULTS_RANDRW_IOPS=()
-    SAT_RESULTS_RANDRW_P95=()
-    SAT_RESULTS_RANDRW_BW=()
-    SAT_RANDREAD_SWEET_SPOT_STEP=-1
-    SAT_RANDWRITE_SWEET_SPOT_STEP=-1
-    SAT_RANDRW_SWEET_SPOT_STEP=-1
-    SAT_RANDREAD_SATURATION_STEP=-1
-    SAT_RANDWRITE_SATURATION_STEP=-1
-    SAT_RANDRW_SATURATION_STEP=-1
+    local n=${#SAT_PATTERNS_ARR[@]}
+    for ((pi=0; pi<n; pi++)); do
+        sat_r_init "$pi"
+        SAT_P_SAT_STEP[$pi]=-1
+    done
 }
 
 # Main saturation loop — each pattern escalates independently
+# Supports any combination of patterns: read, randread, write, randwrite, rw, randrw
 saturation_loop() {
     local block_size=${1:-4k}
     SAT_CURRENT_BS="$block_size"
     local step=0
+    local n=${#SAT_PATTERNS_ARR[@]}
+    local MAX_CONSECUTIVE_FAILURES=3
 
-    # Independent QD tracking per pattern
+    # Initialize per-pattern state arrays
     # Escalation strategy: prefer iodepth over numjobs (3:1 ratio)
     # iodepth is cheap (just queue depth per job), numjobs is expensive (processes/shm)
-    local rr_iodepth=$INITIAL_IODEPTH
-    local rr_numjobs=$INITIAL_NUMJOBS
-    local rr_escalation_count=0
-    local rr_saturated=false
-    local rr_step=0
-
-    local rw_iodepth=$INITIAL_IODEPTH
-    local rw_numjobs=$INITIAL_NUMJOBS
-    local rw_escalation_count=0
-    local rw_saturated=false
-    local rw_step=0
-
-    local mrw_iodepth=$INITIAL_IODEPTH
-    local mrw_numjobs=$INITIAL_NUMJOBS
-    local mrw_escalation_count=0
-    local mrw_saturated=false
-    local mrw_step=0
-
-    # Resolve actual pattern names for each slot
-    local rr_pattern=$(sat_slot_pattern "read")    # e.g. "read" or "randread"
-    local rw_pattern=$(sat_slot_pattern "write")   # e.g. "write" or "randwrite"
-    local mrw_pattern=$(sat_slot_pattern "mixed")  # e.g. "rw" or "randrw"
-
-    # Mark disabled slots as pre-saturated so they're skipped
-    if [ -z "$rr_pattern" ]; then rr_saturated=true; fi
-    if [ -z "$rw_pattern" ]; then rw_saturated=true; fi
-    if [ -z "$mrw_pattern" ]; then mrw_saturated=true; fi
-
-    # Track best IOPS seen so far (for running context)
-    local rr_best_iops=0
-    local rr_best_qd=0
-    local rw_best_iops=0
-    local rw_best_qd=0
-    local mrw_best_iops=0
-    local mrw_best_qd=0
-
-    # Consecutive failure counters — stop a pattern after 3 consecutive failures
-    local rr_fail_count=0
-    local rw_fail_count=0
-    local mrw_fail_count=0
-    local MAX_CONSECUTIVE_FAILURES=3
+    for ((pi=0; pi<n; pi++)); do
+        SAT_P_IODEPTH[$pi]=$INITIAL_IODEPTH
+        SAT_P_NUMJOBS[$pi]=$INITIAL_NUMJOBS
+        SAT_P_ESC_COUNT[$pi]=0
+        SAT_P_SATURATED[$pi]=false
+        SAT_P_STEP[$pi]=0
+        SAT_P_FAIL_COUNT[$pi]=0
+        SAT_P_BEST_IOPS[$pi]=0
+        SAT_P_BEST_QD[$pi]=0
+    done
 
     local active_patterns="${SAT_PATTERNS_ARR[*]}"
 
@@ -1206,356 +1199,190 @@ saturation_loop() {
     while [ $step -lt $MAX_STEPS ]; do
         step=$((step + 1))
 
-        # Check if all active patterns are already saturated before running
-        if [ "$rr_saturated" = true ] && [ "$rw_saturated" = true ] && [ "$mrw_saturated" = true ]; then
+        # Check if all patterns are already saturated
+        local all_saturated=true
+        for ((pi=0; pi<n; pi++)); do
+            if [ "${SAT_P_SATURATED[$pi]}" = false ]; then
+                all_saturated=false
+                break
+            fi
+        done
+        if [ "$all_saturated" = true ]; then
             echo
             print_success "All patterns have reached saturation. Stopping."
             break
         fi
 
-        local rr_total_qd=$((rr_iodepth * rr_numjobs))
-        local rw_total_qd=$((rw_iodepth * rw_numjobs))
-        local mrw_total_qd=$((mrw_iodepth * mrw_numjobs))
-
         echo
         echo "========================================="
         print_step "STEP $step [bs=$block_size]"
-        if [ "$rr_saturated" = false ]; then
-            printf "  %-10s iodepth=%s, numjobs=%s (QD: %s)\n" "${rr_pattern}:" "$rr_iodepth" "$rr_numjobs" "$rr_total_qd"
-        fi
-        if [ "$rw_saturated" = false ]; then
-            printf "  %-10s iodepth=%s, numjobs=%s (QD: %s)\n" "${rw_pattern}:" "$rw_iodepth" "$rw_numjobs" "$rw_total_qd"
-        fi
-        if [ "$mrw_saturated" = false ]; then
-            printf "  %-10s iodepth=%s, numjobs=%s (QD: %s)\n" "${mrw_pattern}:" "$mrw_iodepth" "$mrw_numjobs" "$mrw_total_qd"
-        fi
+        for ((pi=0; pi<n; pi++)); do
+            if [ "${SAT_P_SATURATED[$pi]}" = false ]; then
+                local total_qd=$((SAT_P_IODEPTH[$pi] * SAT_P_NUMJOBS[$pi]))
+                printf "  %-10s iodepth=%s, numjobs=%s (QD: %s)\n" \
+                    "${SAT_PATTERNS_ARR[$pi]}:" "${SAT_P_IODEPTH[$pi]}" "${SAT_P_NUMJOBS[$pi]}" "$total_qd"
+            fi
+        done
         echo "========================================="
 
         SAT_RESULTS_STEP+=("$step")
 
-        # --- read-type slot (read/randread) ---
-        if [ "$rr_saturated" = false ]; then
-            rr_step=$((rr_step + 1))
-            SAT_RESULTS_RANDREAD_QD+=("$rr_total_qd")
+        # --- Process each pattern independently ---
+        for ((pi=0; pi<n; pi++)); do
+            local pattern="${SAT_PATTERNS_ARR[$pi]}"
+            local p_iodepth=${SAT_P_IODEPTH[$pi]}
+            local p_numjobs=${SAT_P_NUMJOBS[$pi]}
+            local p_total_qd=$((p_iodepth * p_numjobs))
 
-            local output_file="/tmp/fio_sat_${rr_pattern}_step${step}_$$.json"
-            if run_fio_step "$rr_pattern" "$rr_iodepth" "$rr_numjobs" "$output_file"; then
-                local rr_iops=$(extract_iops_value "$output_file" "$rr_pattern")
-                local rr_p95=$(extract_p95_clat_ms "$output_file" "$rr_pattern")
-                local rr_bw=$(extract_bw_mbs "$output_file" "$rr_pattern")
+            if [ "${SAT_P_SATURATED[$pi]}" = false ]; then
+                SAT_P_STEP[$pi]=$((SAT_P_STEP[$pi] + 1))
+                local p_step=${SAT_P_STEP[$pi]}
+                sat_r_append "$pi" QD "$p_total_qd"
 
-                if [ "$rr_p95" = "ERR" ] || [ "$rr_iops" = "ERR" ]; then
-                    rr_fail_count=$((rr_fail_count + 1))
-                    print_warning "  ${rr_pattern}: Failed to parse FIO JSON at step $step ($rr_fail_count/$MAX_CONSECUTIVE_FAILURES failures)"
-                    SAT_RESULTS_RANDREAD_IOPS+=("-")
-                    SAT_RESULTS_RANDREAD_P95+=("-")
-                    SAT_RESULTS_RANDREAD_BW+=("-")
-                else
-                    rr_fail_count=0
-                    SAT_RESULTS_RANDREAD_IOPS+=("$rr_iops")
-                    SAT_RESULTS_RANDREAD_P95+=("$rr_p95")
-                    SAT_RESULTS_RANDREAD_BW+=("$rr_bw")
+                local output_file="/tmp/fio_sat_${pattern}_step${step}_$$.json"
+                if run_fio_step "$pattern" "$p_iodepth" "$p_numjobs" "$output_file"; then
+                    # Extract metrics — mixed patterns (rw/randrw) need combined extraction
+                    local p_iops p_p95 p_bw
+                    local p_r_iops="" p_w_iops=""  # For mixed display
 
-                    local rr_avg=$(extract_avg_clat_ms "$output_file" "read")
-                    local rr_p70=$(extract_p70_clat_ms "$output_file" "$rr_pattern")
-                    local rr_p99=$(extract_p99_clat_ms "$output_file" "$rr_pattern")
-
-                    local rr_pct
-                    rr_pct=$(awk "BEGIN {printf \"%.0f\", ($rr_p95 / $LATENCY_THRESHOLD_MS) * 100}" 2>/dev/null || echo "?")
-
-                    local rr_is_best=""
-                    if [ "$rr_iops" != "ERR" ] && [ "$rr_iops" -gt "$rr_best_iops" ] 2>/dev/null; then
-                        rr_best_iops=$rr_iops
-                        rr_best_qd=$rr_total_qd
-                        rr_is_best=" ${GREEN}★ NEW BEST${NC}"
-                    fi
-
-                    local rr_p95_color="${GREEN}"
-                    if [ "$rr_pct" != "?" ] && [ "$rr_pct" -ge 100 ] 2>/dev/null; then rr_p95_color="${RED}"
-                    elif [ "$rr_pct" != "?" ] && [ "$rr_pct" -ge 70 ] 2>/dev/null; then rr_p95_color="${YELLOW}"; fi
-
-                    echo -e "  ${GREEN}${rr_pattern}${NC} [QD=${rr_total_qd}]: IOPS=${YELLOW}${rr_iops}${NC}  BW=${rr_bw}MB/s${rr_is_best}"
-                    echo -e "    Latency: avg=${rr_avg}ms  P70=${rr_p70}ms  >>> ${BOLD}${rr_p95_color}P95=${rr_p95}ms${NC} <<<  P99=${rr_p99}ms  [${rr_pct}% of ${LATENCY_THRESHOLD_MS}ms threshold]"
-                    if [ "$rr_best_iops" -gt 0 ] 2>/dev/null; then
-                        echo -e "    Best so far: ${rr_best_iops} IOPS @ QD=${rr_best_qd}"
-                    fi
-
-                    upload_results "$output_file" "saturation_${rr_pattern}_step${step}_qd${rr_total_qd}" || \
-                        print_warning "  ${rr_pattern}: Upload failed for step $step (continuing)"
-
-                    local threshold_exceeded
-                    threshold_exceeded=$(awk "BEGIN {print ($rr_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
-                    if [ "$threshold_exceeded" = "1" ]; then
-                        echo -e "  ${RED}▶ ${rr_pattern} SATURATED${NC} at step $step / QD=${rr_total_qd} (P95: ${rr_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
-                        rr_saturated=true
-                        SAT_RANDREAD_SATURATION_STEP=$((rr_step - 1))
-                        if [ $rr_step -gt 1 ]; then
-                            SAT_RANDREAD_SWEET_SPOT_STEP=$((rr_step - 2))
+                    if sat_is_mixed "$pattern"; then
+                        # Combined extraction for mixed patterns
+                        p_r_iops=$(extract_iops_value "$output_file" "read")
+                        p_w_iops=$(extract_iops_value "$output_file" "write")
+                        p_iops=0
+                        if [ "$p_r_iops" != "ERR" ] && [ "$p_w_iops" != "ERR" ]; then
+                            p_iops=$((p_r_iops + p_w_iops))
+                        elif [ "$p_r_iops" != "ERR" ]; then
+                            p_iops=$p_r_iops
+                        elif [ "$p_w_iops" != "ERR" ]; then
+                            p_iops=$p_w_iops
+                        else
+                            p_iops="ERR"
                         fi
+
+                        # Use worst P95 of read/write
+                        local p_r_p95=$(extract_p95_clat_ms "$output_file" "read")
+                        local p_w_p95=$(extract_p95_clat_ms "$output_file" "write")
+                        p_p95="ERR"
+                        if [ "$p_r_p95" != "ERR" ] && [ "$p_w_p95" != "ERR" ]; then
+                            local use_write
+                            use_write=$(awk "BEGIN {print ($p_w_p95 > $p_r_p95) ? 1 : 0}" 2>/dev/null)
+                            if [ "$use_write" = "1" ]; then p_p95=$p_w_p95; else p_p95=$p_r_p95; fi
+                        elif [ "$p_r_p95" != "ERR" ]; then
+                            p_p95=$p_r_p95
+                        elif [ "$p_w_p95" != "ERR" ]; then
+                            p_p95=$p_w_p95
+                        fi
+
+                        local p_bw_r=$(extract_bw_mbs "$output_file" "read")
+                        local p_bw_w=$(extract_bw_mbs "$output_file" "write")
+                        p_bw="ERR"
+                        if [ "$p_bw_r" != "ERR" ] && [ "$p_bw_w" != "ERR" ]; then
+                            p_bw=$(awk "BEGIN {printf \"%.2f\", $p_bw_r + $p_bw_w}" 2>/dev/null || echo "ERR")
+                        fi
+                    else
+                        # Simple extraction for single-direction patterns
+                        p_iops=$(extract_iops_value "$output_file" "$pattern")
+                        p_p95=$(extract_p95_clat_ms "$output_file" "$pattern")
+                        p_bw=$(extract_bw_mbs "$output_file" "$pattern")
+                    fi
+
+                    if [ "$p_p95" = "ERR" ] || [ "$p_iops" = "ERR" ]; then
+                        SAT_P_FAIL_COUNT[$pi]=$((SAT_P_FAIL_COUNT[$pi] + 1))
+                        print_warning "  ${pattern}: Failed to parse FIO JSON at step $step (${SAT_P_FAIL_COUNT[$pi]}/$MAX_CONSECUTIVE_FAILURES failures)"
+                        sat_r_append "$pi" IOPS "-"
+                        sat_r_append "$pi" P95 "-"
+                        sat_r_append "$pi" BW "-"
+                    else
+                        SAT_P_FAIL_COUNT[$pi]=0
+                        sat_r_append "$pi" IOPS "$p_iops"
+                        sat_r_append "$pi" P95 "$p_p95"
+                        sat_r_append "$pi" BW "$p_bw"
+
+                        local p_pct
+                        p_pct=$(awk "BEGIN {printf \"%.0f\", ($p_p95 / $LATENCY_THRESHOLD_MS) * 100}" 2>/dev/null || echo "?")
+
+                        local p_is_best=""
+                        if [ "$p_iops" != "ERR" ] && [ "$p_iops" -gt "${SAT_P_BEST_IOPS[$pi]}" ] 2>/dev/null; then
+                            SAT_P_BEST_IOPS[$pi]=$p_iops
+                            SAT_P_BEST_QD[$pi]=$p_total_qd
+                            p_is_best=" ${GREEN}★ NEW BEST${NC}"
+                        fi
+
+                        local p95_color="${GREEN}"
+                        if [ "$p_pct" != "?" ] && [ "$p_pct" -ge 100 ] 2>/dev/null; then p95_color="${RED}"
+                        elif [ "$p_pct" != "?" ] && [ "$p_pct" -ge 70 ] 2>/dev/null; then p95_color="${YELLOW}"; fi
+
+                        # Display results — mixed patterns show extra detail
+                        if sat_is_mixed "$pattern"; then
+                            echo -e "  ${GREEN}${pattern}${NC} [QD=${p_total_qd}]: IOPS=${YELLOW}${p_iops}${NC} (r:${p_r_iops} w:${p_w_iops})  BW=${p_bw}MB/s${p_is_best}"
+                            local avg_r=$(extract_avg_clat_ms "$output_file" "read")
+                            local avg_w=$(extract_avg_clat_ms "$output_file" "write")
+                            local p70_r=$(extract_p70_clat_ms "$output_file" "read")
+                            local p70_w=$(extract_p70_clat_ms "$output_file" "write")
+                            local p99_r=$(extract_p99_clat_ms "$output_file" "read")
+                            local p99_w=$(extract_p99_clat_ms "$output_file" "write")
+                            echo -e "    Read  lat: avg=${avg_r}ms  P70=${p70_r}ms  P95=${p_r_p95}ms  P99=${p99_r}ms"
+                            echo -e "    Write lat: avg=${avg_w}ms  P70=${p70_w}ms  P95=${p_w_p95}ms  P99=${p99_w}ms"
+                            echo -e "    >>> ${BOLD}${p95_color}P95(worst)=${p_p95}ms${NC} <<<  [${p_pct}% of ${LATENCY_THRESHOLD_MS}ms threshold]"
+                        else
+                            echo -e "  ${GREEN}${pattern}${NC} [QD=${p_total_qd}]: IOPS=${YELLOW}${p_iops}${NC}  BW=${p_bw}MB/s${p_is_best}"
+                            local p_avg=$(extract_avg_clat_ms "$output_file" "$(sat_extract_key "$pattern")")
+                            local p_p70=$(extract_p70_clat_ms "$output_file" "$pattern")
+                            local p_p99=$(extract_p99_clat_ms "$output_file" "$pattern")
+                            echo -e "    Latency: avg=${p_avg}ms  P70=${p_p70}ms  >>> ${BOLD}${p95_color}P95=${p_p95}ms${NC} <<<  P99=${p_p99}ms  [${p_pct}% of ${LATENCY_THRESHOLD_MS}ms threshold]"
+                        fi
+                        if [ "${SAT_P_BEST_IOPS[$pi]}" -gt 0 ] 2>/dev/null; then
+                            echo -e "    Best so far: ${SAT_P_BEST_IOPS[$pi]} IOPS @ QD=${SAT_P_BEST_QD[$pi]}"
+                        fi
+
+                        upload_results "$output_file" "saturation_${pattern}_step${step}_qd${p_total_qd}" || \
+                            print_warning "  ${pattern}: Upload failed for step $step (continuing)"
+
+                        local threshold_exceeded
+                        threshold_exceeded=$(awk "BEGIN {print ($p_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
+                        if [ "$threshold_exceeded" = "1" ]; then
+                            echo -e "  ${RED}▶ ${pattern} SATURATED${NC} at step $step / QD=${p_total_qd} (P95: ${p_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
+                            SAT_P_SATURATED[$pi]=true
+                            SAT_P_SAT_STEP[$pi]=$((p_step - 1))
+                        fi
+                    fi
+                else
+                    SAT_P_FAIL_COUNT[$pi]=$((SAT_P_FAIL_COUNT[$pi] + 1))
+                    sat_r_append "$pi" IOPS "-"
+                    sat_r_append "$pi" P95 "-"
+                    sat_r_append "$pi" BW "-"
+                    print_error "  ${pattern} test failed at step $step (${SAT_P_FAIL_COUNT[$pi]}/$MAX_CONSECUTIVE_FAILURES failures)"
+                fi
+
+                if [ ${SAT_P_FAIL_COUNT[$pi]} -ge $MAX_CONSECUTIVE_FAILURES ]; then
+                    echo -e "  ${RED}▶ ${pattern} STOPPED${NC} after $MAX_CONSECUTIVE_FAILURES consecutive failures"
+                    SAT_P_SATURATED[$pi]=true
+                fi
+                rm -f "$output_file"
+
+                # Escalate QD if not saturated
+                if [ "${SAT_P_SATURATED[$pi]}" = false ]; then
+                    if [ $((SAT_P_ESC_COUNT[$pi] % 4)) -eq 3 ]; then
+                        SAT_P_NUMJOBS[$pi]=$((SAT_P_NUMJOBS[$pi] * 2))
+                    else
+                        SAT_P_IODEPTH[$pi]=$((SAT_P_IODEPTH[$pi] * 2))
+                    fi
+                    SAT_P_ESC_COUNT[$pi]=$((SAT_P_ESC_COUNT[$pi] + 1))
+                    if [ $((SAT_P_IODEPTH[$pi] * SAT_P_NUMJOBS[$pi])) -gt $MAX_TOTAL_QD ]; then
+                        echo -e "  ${YELLOW}${pattern} reached QD cap (${MAX_TOTAL_QD}), marking as saturated${NC}"
+                        SAT_P_SATURATED[$pi]=true
                     fi
                 fi
             else
-                rr_fail_count=$((rr_fail_count + 1))
-                SAT_RESULTS_RANDREAD_IOPS+=("-")
-                SAT_RESULTS_RANDREAD_P95+=("-")
-                SAT_RESULTS_RANDREAD_BW+=("-")
-                print_error "  ${rr_pattern} test failed at step $step ($rr_fail_count/$MAX_CONSECUTIVE_FAILURES failures)"
+                # Pattern already saturated — append placeholders
+                sat_r_append "$pi" QD "-"
+                sat_r_append "$pi" IOPS "-"
+                sat_r_append "$pi" P95 "-"
+                sat_r_append "$pi" BW "-"
+                echo -e "  ${pattern}: ${YELLOW}done${NC} (saturated at QD=${SAT_P_BEST_QD[$pi]})"
             fi
-
-            if [ $rr_fail_count -ge $MAX_CONSECUTIVE_FAILURES ]; then
-                echo -e "  ${RED}▶ ${rr_pattern} STOPPED${NC} after $MAX_CONSECUTIVE_FAILURES consecutive failures"
-                rr_saturated=true
-            fi
-            rm -f "$output_file"
-
-            if [ "$rr_saturated" = false ]; then
-                if [ $((rr_escalation_count % 4)) -eq 3 ]; then
-                    rr_numjobs=$((rr_numjobs * 2))
-                else
-                    rr_iodepth=$((rr_iodepth * 2))
-                fi
-                rr_escalation_count=$((rr_escalation_count + 1))
-                if [ $((rr_iodepth * rr_numjobs)) -gt $MAX_TOTAL_QD ]; then
-                    echo -e "  ${YELLOW}${rr_pattern} reached QD cap (${MAX_TOTAL_QD}), marking as saturated${NC}"
-                    rr_saturated=true
-                fi
-            fi
-        else
-            SAT_RESULTS_RANDREAD_QD+=("-")
-            SAT_RESULTS_RANDREAD_IOPS+=("-")
-            SAT_RESULTS_RANDREAD_P95+=("-")
-            SAT_RESULTS_RANDREAD_BW+=("-")
-            if [ -n "$rr_pattern" ]; then
-                echo -e "  ${rr_pattern}: ${YELLOW}done${NC} (saturated at QD=${rr_best_qd})"
-            fi
-        fi
-
-        # --- write-type slot (write/randwrite) ---
-        if [ "$rw_saturated" = false ]; then
-            rw_step=$((rw_step + 1))
-            SAT_RESULTS_RANDWRITE_QD+=("$rw_total_qd")
-
-            local output_file="/tmp/fio_sat_${rw_pattern}_step${step}_$$.json"
-            if run_fio_step "$rw_pattern" "$rw_iodepth" "$rw_numjobs" "$output_file"; then
-                local rw_iops=$(extract_iops_value "$output_file" "$rw_pattern")
-                local rw_p95=$(extract_p95_clat_ms "$output_file" "$rw_pattern")
-                local rw_bw=$(extract_bw_mbs "$output_file" "$rw_pattern")
-
-                if [ "$rw_p95" = "ERR" ] || [ "$rw_iops" = "ERR" ]; then
-                    rw_fail_count=$((rw_fail_count + 1))
-                    print_warning "  ${rw_pattern}: Failed to parse FIO JSON at step $step ($rw_fail_count/$MAX_CONSECUTIVE_FAILURES failures)"
-                    SAT_RESULTS_RANDWRITE_IOPS+=("-")
-                    SAT_RESULTS_RANDWRITE_P95+=("-")
-                    SAT_RESULTS_RANDWRITE_BW+=("-")
-                else
-                    rw_fail_count=0
-                    SAT_RESULTS_RANDWRITE_IOPS+=("$rw_iops")
-                    SAT_RESULTS_RANDWRITE_P95+=("$rw_p95")
-                    SAT_RESULTS_RANDWRITE_BW+=("$rw_bw")
-
-                    local rw_avg=$(extract_avg_clat_ms "$output_file" "write")
-                    local rw_p70=$(extract_p70_clat_ms "$output_file" "$rw_pattern")
-                    local rw_p99=$(extract_p99_clat_ms "$output_file" "$rw_pattern")
-
-                    local rw_pct
-                    rw_pct=$(awk "BEGIN {printf \"%.0f\", ($rw_p95 / $LATENCY_THRESHOLD_MS) * 100}" 2>/dev/null || echo "?")
-
-                    local rw_is_best=""
-                    if [ "$rw_iops" != "ERR" ] && [ "$rw_iops" -gt "$rw_best_iops" ] 2>/dev/null; then
-                        rw_best_iops=$rw_iops
-                        rw_best_qd=$rw_total_qd
-                        rw_is_best=" ${GREEN}★ NEW BEST${NC}"
-                    fi
-
-                    local rw_p95_color="${GREEN}"
-                    if [ "$rw_pct" != "?" ] && [ "$rw_pct" -ge 100 ] 2>/dev/null; then rw_p95_color="${RED}"
-                    elif [ "$rw_pct" != "?" ] && [ "$rw_pct" -ge 70 ] 2>/dev/null; then rw_p95_color="${YELLOW}"; fi
-
-                    echo -e "  ${GREEN}${rw_pattern}${NC} [QD=${rw_total_qd}]: IOPS=${YELLOW}${rw_iops}${NC}  BW=${rw_bw}MB/s${rw_is_best}"
-                    echo -e "    Latency: avg=${rw_avg}ms  P70=${rw_p70}ms  >>> ${BOLD}${rw_p95_color}P95=${rw_p95}ms${NC} <<<  P99=${rw_p99}ms  [${rw_pct}% of ${LATENCY_THRESHOLD_MS}ms threshold]"
-                    if [ "$rw_best_iops" -gt 0 ] 2>/dev/null; then
-                        echo -e "    Best so far: ${rw_best_iops} IOPS @ QD=${rw_best_qd}"
-                    fi
-
-                    upload_results "$output_file" "saturation_${rw_pattern}_step${step}_qd${rw_total_qd}" || \
-                        print_warning "  ${rw_pattern}: Upload failed for step $step (continuing)"
-
-                    local threshold_exceeded
-                    threshold_exceeded=$(awk "BEGIN {print ($rw_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
-                    if [ "$threshold_exceeded" = "1" ]; then
-                        echo -e "  ${RED}▶ ${rw_pattern} SATURATED${NC} at step $step / QD=${rw_total_qd} (P95: ${rw_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
-                        rw_saturated=true
-                        SAT_RANDWRITE_SATURATION_STEP=$((rw_step - 1))
-                        if [ $rw_step -gt 1 ]; then
-                            SAT_RANDWRITE_SWEET_SPOT_STEP=$((rw_step - 2))
-                        fi
-                    fi
-                fi
-            else
-                rw_fail_count=$((rw_fail_count + 1))
-                SAT_RESULTS_RANDWRITE_IOPS+=("-")
-                SAT_RESULTS_RANDWRITE_P95+=("-")
-                SAT_RESULTS_RANDWRITE_BW+=("-")
-                print_error "  ${rw_pattern} test failed at step $step ($rw_fail_count/$MAX_CONSECUTIVE_FAILURES failures)"
-            fi
-
-            if [ $rw_fail_count -ge $MAX_CONSECUTIVE_FAILURES ]; then
-                echo -e "  ${RED}▶ ${rw_pattern} STOPPED${NC} after $MAX_CONSECUTIVE_FAILURES consecutive failures"
-                rw_saturated=true
-            fi
-            rm -f "$output_file"
-
-            if [ "$rw_saturated" = false ]; then
-                if [ $((rw_escalation_count % 4)) -eq 3 ]; then
-                    rw_numjobs=$((rw_numjobs * 2))
-                else
-                    rw_iodepth=$((rw_iodepth * 2))
-                fi
-                rw_escalation_count=$((rw_escalation_count + 1))
-                if [ $((rw_iodepth * rw_numjobs)) -gt $MAX_TOTAL_QD ]; then
-                    echo -e "  ${YELLOW}${rw_pattern} reached QD cap (${MAX_TOTAL_QD}), marking as saturated${NC}"
-                    rw_saturated=true
-                fi
-            fi
-        else
-            SAT_RESULTS_RANDWRITE_QD+=("-")
-            SAT_RESULTS_RANDWRITE_IOPS+=("-")
-            SAT_RESULTS_RANDWRITE_P95+=("-")
-            SAT_RESULTS_RANDWRITE_BW+=("-")
-            if [ -n "$rw_pattern" ]; then
-                echo -e "  ${rw_pattern}: ${YELLOW}done${NC} (saturated at QD=${rw_best_qd})"
-            fi
-        fi
-
-        # --- mixed-type slot (rw/randrw) ---
-        if [ "$mrw_saturated" = false ]; then
-            mrw_step=$((mrw_step + 1))
-            SAT_RESULTS_RANDRW_QD+=("$mrw_total_qd")
-
-            local output_file="/tmp/fio_sat_${mrw_pattern}_step${step}_$$.json"
-            if run_fio_step "$mrw_pattern" "$mrw_iodepth" "$mrw_numjobs" "$output_file"; then
-                # Mixed patterns produce both read and write sections; combine IOPS
-                local mrw_read_iops=$(extract_iops_value "$output_file" "read")
-                local mrw_write_iops=$(extract_iops_value "$output_file" "write")
-                local mrw_iops=0
-                if [ "$mrw_read_iops" != "ERR" ] && [ "$mrw_write_iops" != "ERR" ]; then
-                    mrw_iops=$((mrw_read_iops + mrw_write_iops))
-                elif [ "$mrw_read_iops" != "ERR" ]; then
-                    mrw_iops=$mrw_read_iops
-                elif [ "$mrw_write_iops" != "ERR" ]; then
-                    mrw_iops=$mrw_write_iops
-                else
-                    mrw_iops="ERR"
-                fi
-
-                # Use worst P95 of read/write
-                local mrw_p95=$(extract_p95_clat_ms "$output_file" "read")
-                local mrw_p95_write=$(extract_p95_clat_ms "$output_file" "write")
-                if [ "$mrw_p95" != "ERR" ] && [ "$mrw_p95_write" != "ERR" ]; then
-                    local use_write
-                    use_write=$(awk "BEGIN {print ($mrw_p95_write > $mrw_p95) ? 1 : 0}" 2>/dev/null)
-                    if [ "$use_write" = "1" ]; then
-                        mrw_p95=$mrw_p95_write
-                    fi
-                fi
-
-                local mrw_bw_read=$(extract_bw_mbs "$output_file" "read")
-                local mrw_bw_write=$(extract_bw_mbs "$output_file" "write")
-                local mrw_bw="ERR"
-                if [ "$mrw_bw_read" != "ERR" ] && [ "$mrw_bw_write" != "ERR" ]; then
-                    mrw_bw=$(awk "BEGIN {printf \"%.2f\", $mrw_bw_read + $mrw_bw_write}" 2>/dev/null || echo "ERR")
-                fi
-
-                if [ "$mrw_p95" = "ERR" ] || [ "$mrw_iops" = "ERR" ]; then
-                    mrw_fail_count=$((mrw_fail_count + 1))
-                    print_warning "  ${mrw_pattern}: Failed to parse FIO JSON at step $step ($mrw_fail_count/$MAX_CONSECUTIVE_FAILURES failures)"
-                    SAT_RESULTS_RANDRW_IOPS+=("-")
-                    SAT_RESULTS_RANDRW_P95+=("-")
-                    SAT_RESULTS_RANDRW_BW+=("-")
-                else
-                    mrw_fail_count=0
-                    SAT_RESULTS_RANDRW_IOPS+=("$mrw_iops")
-                    SAT_RESULTS_RANDRW_P95+=("$mrw_p95")
-                    SAT_RESULTS_RANDRW_BW+=("$mrw_bw")
-
-                    local mrw_avg_r=$(extract_avg_clat_ms "$output_file" "read")
-                    local mrw_avg_w=$(extract_avg_clat_ms "$output_file" "write")
-                    local mrw_p70=$(extract_p70_clat_ms "$output_file" "read")
-                    local mrw_p70_w=$(extract_p70_clat_ms "$output_file" "write")
-                    local mrw_p99=$(extract_p99_clat_ms "$output_file" "read")
-                    local mrw_p99_w=$(extract_p99_clat_ms "$output_file" "write")
-
-                    local mrw_pct
-                    mrw_pct=$(awk "BEGIN {printf \"%.0f\", ($mrw_p95 / $LATENCY_THRESHOLD_MS) * 100}" 2>/dev/null || echo "?")
-
-                    local mrw_is_best=""
-                    if [ "$mrw_iops" != "ERR" ] && [ "$mrw_iops" -gt "$mrw_best_iops" ] 2>/dev/null; then
-                        mrw_best_iops=$mrw_iops
-                        mrw_best_qd=$mrw_total_qd
-                        mrw_is_best=" ${GREEN}★ NEW BEST${NC}"
-                    fi
-
-                    local mrw_p95_color="${GREEN}"
-                    if [ "$mrw_pct" != "?" ] && [ "$mrw_pct" -ge 100 ] 2>/dev/null; then mrw_p95_color="${RED}"
-                    elif [ "$mrw_pct" != "?" ] && [ "$mrw_pct" -ge 70 ] 2>/dev/null; then mrw_p95_color="${YELLOW}"; fi
-
-                    echo -e "  ${GREEN}${mrw_pattern}${NC} [QD=${mrw_total_qd}]: IOPS=${YELLOW}${mrw_iops}${NC} (r:${mrw_read_iops} w:${mrw_write_iops})  BW=${mrw_bw}MB/s${mrw_is_best}"
-                    echo -e "    Read  lat: avg=${mrw_avg_r}ms  P70=${mrw_p70}ms  P95=${mrw_p95}ms  P99=${mrw_p99}ms"
-                    echo -e "    Write lat: avg=${mrw_avg_w}ms  P70=${mrw_p70_w}ms  P95=${mrw_p95_write}ms  P99=${mrw_p99_w}ms"
-                    echo -e "    >>> ${BOLD}${mrw_p95_color}P95(worst)=${mrw_p95}ms${NC} <<<  [${mrw_pct}% of ${LATENCY_THRESHOLD_MS}ms threshold]"
-                    if [ "$mrw_best_iops" -gt 0 ] 2>/dev/null; then
-                        echo -e "    Best so far: ${mrw_best_iops} IOPS @ QD=${mrw_best_qd}"
-                    fi
-
-                    upload_results "$output_file" "saturation_${mrw_pattern}_step${step}_qd${mrw_total_qd}" || \
-                        print_warning "  ${mrw_pattern}: Upload failed for step $step (continuing)"
-
-                    local threshold_exceeded
-                    threshold_exceeded=$(awk "BEGIN {print ($mrw_p95 > $LATENCY_THRESHOLD_MS) ? 1 : 0}")
-                    if [ "$threshold_exceeded" = "1" ]; then
-                        echo -e "  ${RED}▶ ${mrw_pattern} SATURATED${NC} at step $step / QD=${mrw_total_qd} (P95: ${mrw_p95}ms > ${LATENCY_THRESHOLD_MS}ms)"
-                        mrw_saturated=true
-                        SAT_RANDRW_SATURATION_STEP=$((mrw_step - 1))
-                        if [ $mrw_step -gt 1 ]; then
-                            SAT_RANDRW_SWEET_SPOT_STEP=$((mrw_step - 2))
-                        fi
-                    fi
-                fi
-            else
-                mrw_fail_count=$((mrw_fail_count + 1))
-                SAT_RESULTS_RANDRW_IOPS+=("-")
-                SAT_RESULTS_RANDRW_P95+=("-")
-                SAT_RESULTS_RANDRW_BW+=("-")
-                print_error "  ${mrw_pattern} test failed at step $step ($mrw_fail_count/$MAX_CONSECUTIVE_FAILURES failures)"
-            fi
-
-            if [ $mrw_fail_count -ge $MAX_CONSECUTIVE_FAILURES ]; then
-                echo -e "  ${RED}▶ ${mrw_pattern} STOPPED${NC} after $MAX_CONSECUTIVE_FAILURES consecutive failures"
-                mrw_saturated=true
-            fi
-            rm -f "$output_file"
-
-            if [ "$mrw_saturated" = false ]; then
-                if [ $((mrw_escalation_count % 4)) -eq 3 ]; then
-                    mrw_numjobs=$((mrw_numjobs * 2))
-                else
-                    mrw_iodepth=$((mrw_iodepth * 2))
-                fi
-                mrw_escalation_count=$((mrw_escalation_count + 1))
-                if [ $((mrw_iodepth * mrw_numjobs)) -gt $MAX_TOTAL_QD ]; then
-                    echo -e "  ${YELLOW}${mrw_pattern} reached QD cap (${MAX_TOTAL_QD}), marking as saturated${NC}"
-                    mrw_saturated=true
-                fi
-            fi
-        else
-            SAT_RESULTS_RANDRW_QD+=("-")
-            SAT_RESULTS_RANDRW_IOPS+=("-")
-            SAT_RESULTS_RANDRW_P95+=("-")
-            SAT_RESULTS_RANDRW_BW+=("-")
-            if [ -n "$mrw_pattern" ]; then
-                echo -e "  ${mrw_pattern}: ${YELLOW}done${NC} (saturated at QD=${mrw_best_qd})"
-            fi
-        fi
+        done
 
         # Print progress table after each step
         print_saturation_summary "$block_size"
@@ -1565,68 +1392,26 @@ saturation_loop() {
         print_warning "Reached maximum steps ($MAX_STEPS) without full saturation."
     fi
 
-    # If a pattern never saturated, find the last step with actual data as sweet spot
-    if [ -n "$rr_pattern" ] && [ "$rr_saturated" = false ] && [ ${#SAT_RESULTS_RANDREAD_IOPS[@]} -gt 0 ]; then
-        for ((i=${#SAT_RESULTS_RANDREAD_IOPS[@]}-1; i>=0; i--)); do
-            if [ "${SAT_RESULTS_RANDREAD_IOPS[$i]}" != "-" ]; then
-                SAT_RANDREAD_SWEET_SPOT_STEP=$i
-                break
-            fi
-        done
-        print_status "${rr_pattern} did not saturate - best observed at QD=${SAT_RESULTS_RANDREAD_QD[$SAT_RANDREAD_SWEET_SPOT_STEP]:-?}"
-    fi
-    if [ -n "$rw_pattern" ] && [ "$rw_saturated" = false ] && [ ${#SAT_RESULTS_RANDWRITE_IOPS[@]} -gt 0 ]; then
-        for ((i=${#SAT_RESULTS_RANDWRITE_IOPS[@]}-1; i>=0; i--)); do
-            if [ "${SAT_RESULTS_RANDWRITE_IOPS[$i]}" != "-" ]; then
-                SAT_RANDWRITE_SWEET_SPOT_STEP=$i
-                break
-            fi
-        done
-        print_status "${rw_pattern} did not saturate - best observed at QD=${SAT_RESULTS_RANDWRITE_QD[$SAT_RANDWRITE_SWEET_SPOT_STEP]:-?}"
-    fi
-    if [ -n "$mrw_pattern" ] && [ "$mrw_saturated" = false ] && [ ${#SAT_RESULTS_RANDRW_IOPS[@]} -gt 0 ]; then
-        for ((i=${#SAT_RESULTS_RANDRW_IOPS[@]}-1; i>=0; i--)); do
-            if [ "${SAT_RESULTS_RANDRW_IOPS[$i]}" != "-" ]; then
-                SAT_RANDRW_SWEET_SPOT_STEP=$i
-                break
-            fi
-        done
-        print_status "${mrw_pattern} did not saturate - best observed at QD=${SAT_RESULTS_RANDRW_QD[$SAT_RANDRW_SWEET_SPOT_STEP]:-?}"
-    fi
+    # Report patterns that never saturated
+    for ((pi=0; pi<n; pi++)); do
+        local pattern="${SAT_PATTERNS_ARR[$pi]}"
+        if [ "${SAT_P_SATURATED[$pi]}" = false ]; then
+            print_status "${pattern} did not saturate within $MAX_STEPS steps"
+        fi
+    done
 }
 
-# Function to print saturation summary table (only shows columns for enabled patterns)
-# Layout: Step | QD | <pattern> P95 IOPS | ... per enabled pattern (no BW column)
+# Function to print saturation summary table (shows columns for all patterns)
+# Layout: Step | QD | <pattern> P95 IOPS | ... per pattern (no BW column)
 print_saturation_summary() {
     local block_size=${1:-}
     local bs_label=""
     if [ -n "$block_size" ]; then bs_label=" [bs=$block_size]"; fi
 
-    # Determine which slots are enabled
-    local rr_enabled=false rw_enabled=false mrw_enabled=false
-    local rr_label="" rw_label="" mrw_label=""
-    if sat_slot_enabled "read"; then
-        rr_enabled=true
-        rr_label=$(sat_slot_pattern "read")
-    fi
-    if sat_slot_enabled "write"; then
-        rw_enabled=true
-        rw_label=$(sat_slot_pattern "write")
-    fi
-    if sat_slot_enabled "mixed"; then
-        mrw_enabled=true
-        mrw_label=$(sat_slot_pattern "mixed")
-    fi
-
-    # Count enabled patterns for separator width
-    local num_patterns=0
-    [ "$rr_enabled" = true ] && num_patterns=$((num_patterns + 1))
-    [ "$rw_enabled" = true ] && num_patterns=$((num_patterns + 1))
-    [ "$mrw_enabled" = true ] && num_patterns=$((num_patterns + 1))
+    local n=${#SAT_PATTERNS_ARR[@]}
 
     # Column widths: Step=5, QD=7, per-pattern: P95=10, IOPS=10 + separators
-    # "Step  | QD      | P95        IOPS       | ..."
-    local sep_len=$((5 + 3 + 7 + num_patterns * (3 + 10 + 1 + 10) + 8))
+    local sep_len=$((5 + 3 + 7 + n * (3 + 10 + 1 + 10) + 8))
 
     # --- Title ---
     echo
@@ -1635,42 +1420,21 @@ print_saturation_summary() {
     printf '%*s\n' "$sep_len" '' | tr ' ' '='
 
     # --- Two-row header: pattern names on top, P95/IOPS on bottom ---
-    # Top row: centered pattern names spanning their columns
     local top_fmt="%-5s | %-7s"
     local top_args=("" "")
     local bot_fmt="%-5s | %-7s"
     local bot_args=("Step" "QD")
 
-    if [ "$rr_enabled" = true ]; then
-        local tag="${rr_label}"
+    for ((pi=0; pi<n; pi++)); do
+        local tag="${SAT_PATTERNS_ARR[$pi]}"
         local col_width=21  # 10 + 1 + 10
         local pad_left=$(( (col_width - ${#tag}) / 2 ))
-        local pad_right=$(( col_width - ${#tag} - pad_left ))
+        local pad_right=$(( col_width - pad_left ))
         top_fmt+=" | %${pad_left}s%-${pad_right}s"
         top_args+=("" "$tag")
         bot_fmt+=" | %-10s %-10s"
         bot_args+=("P95(ms)" "IOPS")
-    fi
-    if [ "$rw_enabled" = true ]; then
-        local tag="${rw_label}"
-        local col_width=21
-        local pad_left=$(( (col_width - ${#tag}) / 2 ))
-        local pad_right=$(( col_width - ${#tag} - pad_left ))
-        top_fmt+=" | %${pad_left}s%-${pad_right}s"
-        top_args+=("" "$tag")
-        bot_fmt+=" | %-10s %-10s"
-        bot_args+=("P95(ms)" "IOPS")
-    fi
-    if [ "$mrw_enabled" = true ]; then
-        local tag="${mrw_label}"
-        local col_width=21
-        local pad_left=$(( (col_width - ${#tag}) / 2 ))
-        local pad_right=$(( col_width - ${#tag} - pad_left ))
-        top_fmt+=" | %${pad_left}s%-${pad_right}s"
-        top_args+=("" "$tag")
-        bot_fmt+=" | %-10s %-10s"
-        bot_args+=("P95(ms)" "IOPS")
-    fi
+    done
 
     printf "${top_fmt}\n" "${top_args[@]}"
     printf "${bot_fmt}\n" "${bot_args[@]}"
@@ -1678,63 +1442,34 @@ print_saturation_summary() {
 
     # --- Data rows ---
     local total_steps=${#SAT_RESULTS_STEP[@]}
-    for ((i=0; i<total_steps; i++)); do
-        local is_rr_sweet=false is_rw_sweet=false is_mrw_sweet=false
-        local is_rr_sat=false is_rw_sat=false is_mrw_sat=false
+    for ((si=0; si<total_steps; si++)); do
+        local has_sat=false
 
-        if [ "$rr_enabled" = true ]; then
-            if [ "$SAT_RANDREAD_SWEET_SPOT_STEP" -eq "$i" ] 2>/dev/null; then is_rr_sweet=true; fi
-            if [ "$SAT_RANDREAD_SATURATION_STEP" -eq "$i" ] 2>/dev/null; then is_rr_sat=true; fi
-        fi
-        if [ "$rw_enabled" = true ]; then
-            if [ "$SAT_RANDWRITE_SWEET_SPOT_STEP" -eq "$i" ] 2>/dev/null; then is_rw_sweet=true; fi
-            if [ "$SAT_RANDWRITE_SATURATION_STEP" -eq "$i" ] 2>/dev/null; then is_rw_sat=true; fi
-        fi
-        if [ "$mrw_enabled" = true ]; then
-            if [ "$SAT_RANDRW_SWEET_SPOT_STEP" -eq "$i" ] 2>/dev/null; then is_mrw_sweet=true; fi
-            if [ "$SAT_RANDRW_SATURATION_STEP" -eq "$i" ] 2>/dev/null; then is_mrw_sat=true; fi
-        fi
+        for ((pi=0; pi<n; pi++)); do
+            if [ "${SAT_P_SAT_STEP[$pi]}" -eq "$si" ] 2>/dev/null; then has_sat=true; fi
+        done
 
         local marker=""
-        if [ "$is_rr_sweet" = true ] || [ "$is_rw_sweet" = true ] || [ "$is_mrw_sweet" = true ]; then
-            marker="${GREEN}*SWEET*${NC}"
-        fi
-        if [ "$is_rr_sat" = true ] || [ "$is_rw_sat" = true ] || [ "$is_mrw_sat" = true ]; then
-            marker="${RED}!SAT!${NC}"
-        fi
-
         local row_color=""
-        if [ "$is_rr_sweet" = true ] || [ "$is_rw_sweet" = true ] || [ "$is_mrw_sweet" = true ]; then
-            row_color="${GREEN}"
-        elif [ "$is_rr_sat" = true ] || [ "$is_rw_sat" = true ] || [ "$is_mrw_sat" = true ]; then
+        if [ "$has_sat" = true ]; then
+            marker="${RED}!SAT!${NC}"
             row_color="${RED}"
         fi
 
-        # Pick QD from first active pattern (all active patterns share the same QD per step)
+        # Pick QD from first active pattern
         local step_qd="-"
-        if [ "$rr_enabled" = true ] && [ "${SAT_RESULTS_RANDREAD_QD[$i]}" != "-" ]; then
-            step_qd="${SAT_RESULTS_RANDREAD_QD[$i]}"
-        elif [ "$rw_enabled" = true ] && [ "${SAT_RESULTS_RANDWRITE_QD[$i]}" != "-" ]; then
-            step_qd="${SAT_RESULTS_RANDWRITE_QD[$i]}"
-        elif [ "$mrw_enabled" = true ] && [ "${SAT_RESULTS_RANDRW_QD[$i]}" != "-" ]; then
-            step_qd="${SAT_RESULTS_RANDRW_QD[$i]}"
-        fi
+        for ((pi=0; pi<n; pi++)); do
+            local qd=$(sat_r_get "$pi" QD "$si")
+            if [ "$qd" != "-" ] && [ -n "$qd" ]; then step_qd="$qd"; break; fi
+        done
 
         local row_fmt="${row_color}%-5s | %-7s"
-        local row_args=("${SAT_RESULTS_STEP[$i]}" "$step_qd")
+        local row_args=("${SAT_RESULTS_STEP[$si]}" "$step_qd")
 
-        if [ "$rr_enabled" = true ]; then
+        for ((pi=0; pi<n; pi++)); do
             row_fmt+=" | %-10s %-10s"
-            row_args+=("${SAT_RESULTS_RANDREAD_P95[$i]}" "${SAT_RESULTS_RANDREAD_IOPS[$i]}")
-        fi
-        if [ "$rw_enabled" = true ]; then
-            row_fmt+=" | %-10s %-10s"
-            row_args+=("${SAT_RESULTS_RANDWRITE_P95[$i]}" "${SAT_RESULTS_RANDWRITE_IOPS[$i]}")
-        fi
-        if [ "$mrw_enabled" = true ]; then
-            row_fmt+=" | %-10s %-10s"
-            row_args+=("${SAT_RESULTS_RANDRW_P95[$i]}" "${SAT_RESULTS_RANDRW_IOPS[$i]}")
-        fi
+            row_args+=("$(sat_r_get "$pi" P95 "$si")" "$(sat_r_get "$pi" IOPS "$si")")
+        done
         row_fmt+="${NC} %s\n"
         row_args+=("$marker")
 
@@ -1743,40 +1478,7 @@ print_saturation_summary() {
 
     printf '%*s\n' "$sep_len" '' | tr ' ' '='
     echo
-    echo -e "Legend: ${GREEN}*SWEET*${NC} = Sweet Spot (best within SLA)  ${RED}!SAT!${NC} = Saturation Point (P95 > ${LATENCY_THRESHOLD_MS}ms)"
-    echo
-
-    echo "--- Sweet Spot Summary ---"
-    if [ "$rr_enabled" = true ]; then
-        if [ "$SAT_RANDREAD_SWEET_SPOT_STEP" -ge 0 ] 2>/dev/null; then
-            local idx=$SAT_RANDREAD_SWEET_SPOT_STEP
-            printf -v rr_pad "%-10s" "${rr_label}:"
-            echo -e "${GREEN}${rr_pad} QD=${SAT_RESULTS_RANDREAD_QD[$idx]} | IOPS=${SAT_RESULTS_RANDREAD_IOPS[$idx]} | P95=${SAT_RESULTS_RANDREAD_P95[$idx]}ms${NC}"
-        else
-            printf -v rr_pad "%-10s" "${rr_label}:"
-            echo "${rr_pad} No sweet spot found"
-        fi
-    fi
-    if [ "$rw_enabled" = true ]; then
-        if [ "$SAT_RANDWRITE_SWEET_SPOT_STEP" -ge 0 ] 2>/dev/null; then
-            local idx=$SAT_RANDWRITE_SWEET_SPOT_STEP
-            printf -v rw_pad "%-10s" "${rw_label}:"
-            echo -e "${GREEN}${rw_pad} QD=${SAT_RESULTS_RANDWRITE_QD[$idx]} | IOPS=${SAT_RESULTS_RANDWRITE_IOPS[$idx]} | P95=${SAT_RESULTS_RANDWRITE_P95[$idx]}ms${NC}"
-        else
-            printf -v rw_pad "%-10s" "${rw_label}:"
-            echo "${rw_pad} No sweet spot found"
-        fi
-    fi
-    if [ "$mrw_enabled" = true ]; then
-        if [ "$SAT_RANDRW_SWEET_SPOT_STEP" -ge 0 ] 2>/dev/null; then
-            local idx=$SAT_RANDRW_SWEET_SPOT_STEP
-            printf -v mrw_pad "%-10s" "${mrw_label}:"
-            echo -e "${GREEN}${mrw_pad} QD=${SAT_RESULTS_RANDRW_QD[$idx]} | IOPS=${SAT_RESULTS_RANDRW_IOPS[$idx]} | P95=${SAT_RESULTS_RANDRW_P95[$idx]}ms${NC}"
-        else
-            printf -v mrw_pad "%-10s" "${mrw_label}:"
-            echo "${mrw_pad} No sweet spot found"
-        fi
-    fi
+    echo -e "Legend: ${RED}!SAT!${NC} = Saturation Point (P95 > ${LATENCY_THRESHOLD_MS}ms)"
     echo
 }
 
@@ -1980,11 +1682,11 @@ main() {
                     print_error "Option $1 requires an engine name (io_uring, aio, libaio, psync)"
                     exit 1
                 fi
-                IOENGINE="$2"
+                CLI_IOENGINE="$2"
                 shift 2
                 ;;
             -s|--saturation)
-                SATURATION_MODE=true
+                CLI_SATURATION_MODE=true
                 shift
                 ;;
             --threshold)
@@ -1996,15 +1698,15 @@ main() {
                     print_error "Option --threshold must be a positive number, got: $2"
                     exit 1
                 fi
-                LATENCY_THRESHOLD_MS="$2"
+                CLI_LATENCY_THRESHOLD_MS="$2"
                 shift 2
                 ;;
-            --block-size)
+            --block-size|--sat-block-sizes)
                 if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
-                    print_error "Option --block-size requires a size value (comma-separated for multiple)"
+                    print_error "Option $1 requires a size value (comma-separated for multiple)"
                     exit 1
                 fi
-                SAT_BLOCK_SIZES="$2"
+                CLI_SAT_BLOCK_SIZES="$2"
                 shift 2
                 ;;
             --sat-patterns)
@@ -2012,7 +1714,7 @@ main() {
                     print_error "Option --sat-patterns requires comma-separated patterns (randread,randwrite,randrw)"
                     exit 1
                 fi
-                SAT_PATTERNS="$2"
+                CLI_SAT_PATTERNS="$2"
                 shift 2
                 ;;
             --initial-iodepth)
@@ -2020,7 +1722,7 @@ main() {
                     print_error "Option --initial-iodepth requires a positive integer, got: ${2:-empty}"
                     exit 1
                 fi
-                INITIAL_IODEPTH="$2"
+                CLI_INITIAL_IODEPTH="$2"
                 shift 2
                 ;;
             --initial-numjobs)
@@ -2028,7 +1730,7 @@ main() {
                     print_error "Option --initial-numjobs requires a positive integer, got: ${2:-empty}"
                     exit 1
                 fi
-                INITIAL_NUMJOBS="$2"
+                CLI_INITIAL_NUMJOBS="$2"
                 shift 2
                 ;;
             --max-qd)
@@ -2036,9 +1738,72 @@ main() {
                     print_error "Option --max-qd requires a positive integer, got: ${2:-empty}"
                     exit 1
                 fi
-                MAX_TOTAL_QD="$2"
+                CLI_MAX_TOTAL_QD="$2"
                 shift 2
                 ;;
+            --max-steps)
+                if [ -z "$2" ] || ! [[ "$2" =~ ^[0-9]+$ ]] || [ "$2" -eq 0 ]; then
+                    print_error "Option --max-steps requires a positive integer, got: ${2:-empty}"
+                    exit 1
+                fi
+                CLI_MAX_STEPS="$2"
+                shift 2
+                ;;
+            # --- Standard test parameters ---
+            --hostname)
+                [ -z "$2" ] && { print_error "Option --hostname requires a value"; exit 1; }
+                CLI_HOSTNAME="$2"; shift 2 ;;
+            --protocol)
+                [ -z "$2" ] && { print_error "Option --protocol requires a value"; exit 1; }
+                CLI_PROTOCOL="$2"; shift 2 ;;
+            --drive-type)
+                [ -z "$2" ] && { print_error "Option --drive-type requires a value"; exit 1; }
+                CLI_DRIVE_TYPE="$2"; shift 2 ;;
+            --drive-model)
+                [ -z "$2" ] && { print_error "Option --drive-model requires a value"; exit 1; }
+                CLI_DRIVE_MODEL="$2"; shift 2 ;;
+            --description)
+                [ -z "$2" ] && { print_error "Option --description requires a value"; exit 1; }
+                CLI_DESCRIPTION="$2"; shift 2 ;;
+            --test-size)
+                [ -z "$2" ] && { print_error "Option --test-size requires a value"; exit 1; }
+                CLI_TEST_SIZE="$2"; shift 2 ;;
+            --num-jobs)
+                [ -z "$2" ] && { print_error "Option --num-jobs requires a value"; exit 1; }
+                CLI_NUM_JOBS="$2"; shift 2 ;;
+            --direct)
+                [ -z "$2" ] && { print_error "Option --direct requires a value (0 or 1)"; exit 1; }
+                CLI_DIRECT="$2"; shift 2 ;;
+            --runtime)
+                [ -z "$2" ] && { print_error "Option --runtime requires a value"; exit 1; }
+                CLI_RUNTIME="$2"; shift 2 ;;
+            --sync)
+                [ -z "$2" ] && { print_error "Option --sync requires a value (0 or 1)"; exit 1; }
+                CLI_SYNC="$2"; shift 2 ;;
+            --iodepth)
+                [ -z "$2" ] && { print_error "Option --iodepth requires a value"; exit 1; }
+                CLI_IODEPTH="$2"; shift 2 ;;
+            --block-sizes)
+                [ -z "$2" ] && { print_error "Option --block-sizes requires comma-separated sizes"; exit 1; }
+                CLI_BLOCK_SIZES="$2"; shift 2 ;;
+            --patterns)
+                [ -z "$2" ] && { print_error "Option --patterns requires comma-separated patterns"; exit 1; }
+                CLI_TEST_PATTERNS="$2"; shift 2 ;;
+            --target-dir)
+                [ -z "$2" ] && { print_error "Option --target-dir requires a path"; exit 1; }
+                CLI_TARGET_DIR="$2"; shift 2 ;;
+            --backend-url)
+                [ -z "$2" ] && { print_error "Option --backend-url requires a URL"; exit 1; }
+                CLI_BACKEND_URL="$2"; shift 2 ;;
+            -U|--username)
+                [ -z "$2" ] && { print_error "Option $1 requires a username"; exit 1; }
+                CLI_USERNAME="$2"; shift 2 ;;
+            -P|--password)
+                [ -z "$2" ] && { print_error "Option $1 requires a password"; exit 1; }
+                CLI_PASSWORD="$2"; shift 2 ;;
+            --config-uuid)
+                [ -z "$2" ] && { print_error "Option --config-uuid requires a UUID"; exit 1; }
+                CLI_CONFIG_UUID="$2"; shift 2 ;;
             *)
                 args+=("$1")
                 shift
@@ -2050,14 +1815,14 @@ main() {
     set -- "${args[@]}"
     
     # Load configuration (supports multiple env files and INCLUDE directives)
+    # Precedence: CLI flags > env vars / .env file > hardcoded defaults
     load_env_files "${env_files[@]}"
-    set_defaults
-    
+    init_config
+
     # Check prerequisites
     check_fio
     check_curl
     if [ "$SATURATION_MODE" = true ]; then check_jq; fi
-    detect_ioengine
     
     # Setup target (detect device vs directory mode)
     setup_target_dir
@@ -2171,7 +1936,7 @@ main() {
             else
                 RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_$(date -u +%Y-%m-%dT%H:%M:%S)_${sat_bs}")
             fi
-            DESCRIPTION="saturation-test,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            build_description
 
             if [ ${#SAT_BLOCK_SIZES_ARR[@]} -gt 1 ]; then
                 echo
@@ -2311,11 +2076,6 @@ RUNTIME="60"
 # TARGET_DIR=/mnt/pool/tests/
 # DESCRIPTION="FIO-Performance-Test"
 
-# Backend Configuration
-BACKEND_URL=https://fio-analyzer.stylite-live.net
-USERNAME=xxxxxxx
-PASSWORD=xxxxxxx
-
 # ============================================================
 # Saturation Test Mode (use with --saturation flag)
 # ============================================================
@@ -2331,6 +2091,12 @@ PASSWORD=xxxxxxx
 # INITIAL_NUMJOBS=4              # Starting number of jobs
 # MAX_STEPS=20                   # Safety limit for maximum steps
 # MAX_TOTAL_QD=16384             # Max total QD before auto-stop (prevents shm issues)
+
+
+# Backend Configuration
+BACKEND_URL=https://fio-analyzer.stylite-live.net
+USERNAME=xxxxxxx
+PASSWORD=xxxxxxx
 EOF
     
     if [ $? -eq 0 ]; then
@@ -2389,146 +2155,84 @@ FIO Performance Testing Script
 
 Usage: $0 [options]
 
-Options:
-  -h, --help         Show this help message
-  -y, --yes          Skip confirmation prompt and start tests automatically
-  -u, --uuid         Generate and output a random UUID
-  -g, --generate-env Generate a ready-to-use .env configuration file
-                     Optional: specify filename (default: .env)
-                     Example: $0 --generate-env base.env
-  -e, --env-file     Specify a custom .env file path (can be used multiple times)
-                     Files are loaded in order, with later files overriding earlier ones.
-                     Default: .env if no -e options are specified.
-  -i, --engine       Specify I/O engine to use (io_uring, libaio, psync, aio)
-                     Default: auto-detect (io_uring > libaio > psync)
-                     Example: $0 --engine io_uring
-  -s, --saturation   Enable saturation test mode (randread, randwrite, randrw)
-                     Finds max IOPS while keeping P95 latency below threshold
-                     Each pattern escalates QD independently until saturated
-  --threshold MS     P95 latency threshold in ms (default: 100, saturation only)
-  --block-size SIZE  Block sizes for saturation (comma-separated, default: 64k)
-                     Example: --block-size 4k,64k,128k
-  --sat-patterns PAT Patterns for saturation (comma-separated, default: randread,randwrite,randrw)
-                     Example: --sat-patterns randread,randwrite
-  --initial-iodepth N  Starting iodepth for saturation (default: 16)
-  --initial-numjobs N  Starting numjobs for saturation (default: 4)
-  --max-qd N           Maximum total QD before auto-stop (default: 4096)
-                       Prevents shm/resource exhaustion at extreme queue depths
+General Options:
+  -h, --help             Show this help message
+  -y, --yes              Skip confirmation prompt and start tests automatically
+  -u, --uuid             Generate and output a random UUID
+  -g, --generate-env     Generate a ready-to-use .env configuration file
+                         Optional: specify filename (default: .env)
+  -e, --env-file FILE    Specify a custom .env file path (can be used multiple times)
+                         Files are loaded in order; later files override earlier ones.
+  -i, --engine ENGINE    I/O engine (io_uring, libaio, psync). Default: auto-detect
+
+Host Metadata Options:
+  --hostname NAME        Server hostname (default: current hostname)
+  --protocol PROTO       Storage protocol (default: unknown)
+  --drive-type TYPE      Drive type (default: unknown)
+  --drive-model MODEL    Drive model (default: unknown)
+  --description TEXT     Test description prefix (default: empty, auto-built)
+  --config-uuid UUID     Fixed UUID per host-config (default: generated from hostname)
+
+Standard Test Options:
+  --block-sizes SIZES    Comma-separated block sizes (default: 4k,64k,1M)
+  --patterns PATS        Comma-separated test patterns (default: read,write,randread,randwrite)
+  --test-size SIZE       Test file size, comma-separated for multiple (default: 10M)
+  --num-jobs N           Parallel jobs, comma-separated for multiple (default: 4)
+  --runtime SEC          Runtime per test, comma-separated for multiple (default: 30)
+  --direct 0|1           Direct I/O mode, comma-separated for multiple (default: 1)
+  --sync 0|1             Sync mode, comma-separated for multiple (default: 1)
+  --iodepth N            I/O depth per job, comma-separated for multiple (default: 1)
+
+Infrastructure Options:
+  --target-dir PATH      Test directory or block device (default: ./fio_tmp/)
+                         Block device mode is DESTRUCTIVE (destroys all data!)
+  --backend-url URL      Backend API URL (default: http://localhost:8000)
+  -U, --username USER    Upload username (default: uploader)
+  -P, --password PASS    Upload password (default: uploader)
+
+Saturation Test Options (use with -s):
+  -s, --saturation       Enable saturation test mode
+  --threshold MS         P95 latency threshold in ms (default: 100)
+  --block-size SIZES     Saturation block sizes, comma-separated (default: 64k)
+  --sat-patterns PATS    Saturation patterns, comma-separated (default: randread,randwrite,randrw)
+                         Valid: read, randread, write, randwrite, rw, randrw
+  --initial-iodepth N    Starting iodepth for saturation (default: 16)
+  --initial-numjobs N    Starting numjobs for saturation (default: 4)
+  --max-qd N             Max total QD before auto-stop (default: 16384)
+  --max-steps N          Max escalation steps (default: 20)
+
+Precedence:
+  CLI flags > environment variables > .env file > hardcoded defaults
+
+  All options above can also be set via environment variables or .env files.
+  The env variable name matches the long flag name in UPPER_SNAKE_CASE:
+    --runtime 60        is equivalent to  RUNTIME=60
+    --block-sizes 4k,1M is equivalent to  BLOCK_SIZES=4k,1M
+    --drive-type ssd    is equivalent to  DRIVE_TYPE=ssd
 
 Configuration:
-  The script loads configuration from a .env file in the current directory.
-  Generate a .env file using: $0 --generate-env [filename]
-                     Examples: $0 --generate-env
-                              $0 --generate-env base.env
-                              $0 -g production.env
-  Or copy .env.example to .env and customize the values.
-  
-  Multiple .env files can be specified:
-    $0 -e base.env -e overrides.env
-  
-  .env files can include other .env files using the INCLUDE directive:
-    INCLUDE=/path/to/base.env
-    INCLUDE="relative/path/to/shared.env"
-  
-  Later files and variables override earlier ones.
-  Environment variables override .env file settings.
-
-Pre-flight Checks:
-  The script performs the following checks before starting tests:
-  1. Verifies FIO and curl are installed
-  2. Auto-detects best I/O engine (io_uring > libaio > psync) or validates specified engine
-  3. Tests API connectivity to the backend server
-  4. Validates authentication credentials
-  5. Confirms test configuration with user (unless --yes is used)
-
-Configuration Variables:
-  HOSTNAME       - Server hostname (default: current hostname)
-  PROTOCOL       - Storage protocol (default: unknown)
-  DESCRIPTION    - Test description (default: "FIO-Performance-Test")
-  DRIVE_MODEL    - Drive model (default: unknown)
-  DRIVE_TYPE     - Drive type (default: unknown)
-  TEST_SIZE      - Size of test file (default: 10M)
-  NUM_JOBS       - Number of parallel jobs (default: 4)
-  RUNTIME        - Test runtime in seconds (default: 30)
-  DIRECT         - Direct I/O mode (default: 1)
-  BACKEND_URL    - Backend API URL (default: http://localhost:8000)
-  TARGET_DIR     - Directory for test files OR block device (default: ./fio_tmp/)
-                   If set to a block device (e.g., /dev/sda), tests run directly
-                   on the device. DESTRUCTIVE: all data will be lost!
-                   Device must not be mounted.
-  USERNAME       - Authentication username (default: admin)
-  PASSWORD       - Authentication password (default: admin)
-  BLOCK_SIZES    - Comma-separated block sizes (default: 4k,64k,1M)
-  TEST_PATTERNS  - Comma-separated test patterns (default: read,write,randread,randwrite)
-  NUM_JOBS       - Number of parallel jobs (default: 4)
-  DIRECT         - Direct I/O mode (default: 1)
-  TEST_SIZE      - Size of test file (default: 10M)
-  SYNC           - Sync mode (default: 1)
-  IODEPTH        - I/O Depth (default: 1)
-  RUNTIME        - Test runtime in seconds (default: 30)
-
-Saturation Mode Variables (used with --saturation):
-  SAT_BLOCK_SIZES      - Block sizes, comma-separated (default: 64k)
-  SAT_PATTERNS         - Patterns to test, comma-separated (default: randread,randwrite,randrw)
-  LATENCY_THRESHOLD_MS - P95 latency threshold in ms (default: 100)
-  INITIAL_IODEPTH      - Starting iodepth (default: 16)
-  INITIAL_NUMJOBS      - Starting number of jobs (default: 4)
-  MAX_STEPS            - Safety limit for steps (default: 20)
-  MAX_TOTAL_QD         - Max total QD before auto-stop (default: 4096)
+  Generate a .env file:   $0 --generate-env [filename]
+  Use multiple env files:  $0 -e base.env -e overrides.env
+  INCLUDE directive:       Add INCLUDE=/path/to/base.env in your .env file
 
 Examples:
-  # Generate configuration file (default: .env)
-  $0 --generate-env
-  # Or generate a named file
-  $0 --generate-env base.env
-  $0 -g production.env
-  # Edit the file with your settings, then:
-  $0 -e base.env
-  
-  # Or use the old method:
-  cp .env.example .env
-  # Edit .env with your settings, then:
-  $0
-  
-  # Use a custom .env file
-  $0 --env-file /path/to/custom.env
-  $0 -e ./configs/production.env
-  
-  # Use multiple .env files (later files override earlier ones)
-  $0 -e base.env -e overrides.env
-  $0 -e shared.env -e server1.env -e server1-overrides.env
-  
-  # Use INCLUDE directive in .env file:
-  # In your .env file, add:
-  # INCLUDE=/path/to/base.env
-  # HOSTNAME=server1
-  # TEST_SIZE=10G
-  
-  # Override with environment variables
-  HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" DRIVE_MODEL="WD1003FZEX" DRIVE_TYPE="HDD" $0
-  
-  # Large test with custom patterns
-  TEST_SIZE="10G" RUNTIME="300" DIRECT="1" NUM_JOBS="8" TEST_PATTERNS="read,write" $0
-  
-  # Test directly on a block device (DESTRUCTIVE - destroys all data!)
-  # Device must not be mounted
-  TARGET_DIR="/dev/sdb" $0
-  TARGET_DIR="/dev/nvme0n1" DIRECT="1" $0
+  # Generate and edit configuration
+  $0 --generate-env && vim .env && $0
 
-  # Saturation test (find max IOPS within 100ms P95 latency SLA)
-  $0 --saturation
+  # Quick test with CLI flags (no .env needed)
+  $0 --hostname web01 --protocol iSCSI --drive-type ssd --test-size 1G --runtime 60 -y
 
-  # Saturation with custom threshold
-  $0 --saturation --threshold 50
+  # Override .env values with CLI flags
+  $0 -e production.env --runtime 120 --num-jobs 8
 
-  # Saturation with multiple block sizes
-  $0 --saturation --block-size 4k,64k,128k
+  # Block device test (DESTRUCTIVE)
+  $0 --target-dir /dev/nvme0n1 --direct 1
 
-  # Saturation with only randread and randwrite
-  $0 --saturation --sat-patterns randread,randwrite
+  # Saturation test
+  $0 --saturation --threshold 50 --block-size 4k,64k,128k
 
-  # Saturation with custom starting point and env file
-  $0 -e production.env --saturation --initial-iodepth 32 --initial-numjobs 8
+  # Saturation with custom starting point
+  $0 -e prod.env --saturation --initial-iodepth 32 --initial-numjobs 8
 
 EOF
     exit 0

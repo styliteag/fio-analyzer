@@ -867,7 +867,7 @@ async def get_saturation_data(
         100.0,
         ge=0.01,
         le=100000.0,
-        description="P95 latency threshold in milliseconds for sweet spot calculation",
+        description="P95 latency threshold in milliseconds for saturation point calculation",
         example=100.0,
     ),
     user: User = Depends(require_admin),
@@ -877,7 +877,7 @@ async def get_saturation_data(
     Get detailed saturation test data for a specific run.
 
     Returns all steps sorted by total outstanding I/O (iodepth * num_jobs),
-    grouped by read/write pattern. Calculates sweet spot and saturation point
+    grouped by read/write pattern. Calculates saturation point
     for each pattern based on the P95 latency threshold.
 
     **Authentication Required:** Admin access
@@ -944,10 +944,9 @@ async def get_saturation_data(
             }
             patterns[pattern]["steps"].append(step)
 
-        # Calculate sweet spot and saturation point per pattern
+        # Calculate saturation point per pattern
         for pattern_name, pattern_data in patterns.items():
             steps = pattern_data["steps"]
-            sweet_spot = None
             saturation_point = None
 
             for step in steps:
@@ -959,17 +958,8 @@ async def get_saturation_data(
 
                 if p95 > threshold_ms:
                     saturation_point = step
-                    # Sweet spot is the last step BEFORE saturation
-                    # (already set by the loop below)
                     break
 
-                # Keep updating sweet_spot to the last step within SLA
-                sweet_spot = step
-
-            # If no saturation found and we had valid steps, sweet_spot
-            # is already set to the last valid step by the loop above.
-
-            pattern_data["sweet_spot"] = sweet_spot
             pattern_data["saturation_point"] = saturation_point
 
         result = {

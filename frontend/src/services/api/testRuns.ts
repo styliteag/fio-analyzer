@@ -265,7 +265,6 @@ export interface SaturationStep {
 
 export interface SaturationPatternData {
     steps: SaturationStep[];
-    sweet_spot: SaturationStep | null;
     saturation_point: SaturationStep | null;
 }
 

@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Sweet Spot**: Removed sweet spot concept entirely from backend, frontend, and fio-test.sh — saturation point detection remains
+  - Backend: Removed sweet_spot calculation from saturation data endpoint
+  - Frontend: Removed green row highlighting and sweet spot legend from SaturationChart
+  - fio-test.sh: Removed SAT_P_SWEET_SPOT tracking, green *SWEET* markers, and sweet spot summary section
+
 ### Changed
+- **fio-test.sh**: Consolidated root-level `fio-test.sh` into `scripts/fio-test.sh` (root copy removed)
 - **Backend**: Saturation test data now stored in dedicated `saturation_runs` table instead of `test_runs`/`test_runs_all`
   - New imports route saturation data (`description LIKE 'saturation-test%'`) to `saturation_runs` only, skipping `update_latest_flags`
   - Saturation query endpoints (`/saturation-runs`, `/saturation-data`) now read from `saturation_runs`

@@ -344,7 +344,7 @@ When run with `--saturation`, the script systematically escalates queue depth:
 2. **Alternates** doubling iodepth then numjobs each step
 3. **Runs** randread then randwrite at each step, extracting IOPS, P95 latency, and bandwidth
 4. **Stops** when P95 completion latency exceeds the threshold (default: 100ms)
-5. **Reports** the sweet spot (best IOPS within SLA) and saturation point
+5. **Reports** the saturation point
 6. **Uploads** each step to the backend for visualization in the Saturation Test chart
 
 #### Script Output

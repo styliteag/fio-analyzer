@@ -289,11 +289,9 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ saturationData, loadi
             }
 
             // Determine row highlight
-            let highlight: 'sweet' | 'saturated' | null = null;
+            let highlight: 'saturated' | null = null;
             for (const pName of patternNames) {
-                const sweet = patterns[pName].sweet_spot;
                 const sat = patterns[pName].saturation_point;
-                if (sweet && sweet.total_qd === qd) highlight = 'sweet';
                 if (sat && sat.total_qd === qd) highlight = 'saturated';
             }
 
@@ -350,7 +348,6 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ saturationData, loadi
                         <tbody>
                             {tableRows.map((row) => {
                                 let rowClass = 'theme-bg-primary';
-                                if (row.highlight === 'sweet') rowClass = 'bg-green-50 dark:bg-green-900/30';
                                 if (row.highlight === 'saturated') rowClass = 'bg-red-50 dark:bg-red-900/30';
 
                                 return (
@@ -386,7 +383,6 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ saturationData, loadi
 
                     {/* Legend */}
                     <div className="mt-3 flex gap-6 text-sm theme-text-secondary">
-                        <span><span className="inline-block w-4 h-4 bg-green-100 dark:bg-green-900/40 border border-green-300 dark:border-green-700 rounded mr-1 align-text-bottom" /> Sweet Spot (best within SLA)</span>
                         <span><span className="inline-block w-4 h-4 bg-red-100 dark:bg-red-900/40 border border-red-300 dark:border-red-700 rounded mr-1 align-text-bottom" /> Saturation Point (P95 &gt; {saturationData.threshold_ms}ms)</span>
                     </div>
                 </div>
