@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.10.2] - 2026-02-18
+
+### Added
 - **Frontend**: Side-by-side saturation run comparison — two-step host→run selectors, optional second run for visual comparison with synchronized Y-axis scaling
 - **Frontend**: `useSaturationRunData` and `useSaturationRuns` hooks for independent run data loading
 - **Frontend**: Dedicated Saturation Analysis page (`/saturation`) with its own route, header navigation button, and Home page quick action/link
