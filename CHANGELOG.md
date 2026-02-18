@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Frontend**: Saturation chart Y-axis now rescales when hiding patterns via legend click in compare mode — previously stayed locked at shared max from all data
+
 ### Removed
 - **Sweet Spot**: Removed sweet spot concept entirely from backend, frontend, and fio-test.sh — saturation point detection remains
   - Backend: Removed sweet_spot calculation from saturation data endpoint

@@ -13,11 +13,12 @@ function formatRunLabel(run: SaturationRun): string {
     return `${run.drive_model} (${run.protocol}/${run.drive_type})${bs} - ${date} (${run.step_count} steps)`;
 }
 
-/** Compute the max IOPS across all patterns in a SaturationData */
-function getMaxIOPS(data: SaturationData | null): number {
+/** Compute the max IOPS across visible patterns in a SaturationData */
+function getMaxIOPS(data: SaturationData | null, hidden?: Set<string>): number {
     if (!data) return 0;
     let max = 0;
-    for (const pattern of Object.values(data.patterns)) {
+    for (const [name, pattern] of Object.entries(data.patterns)) {
+        if (hidden?.has(name)) continue;
         for (const step of pattern.steps) {
             if (step.iops != null && step.iops > max) max = step.iops;
         }
@@ -25,11 +26,12 @@ function getMaxIOPS(data: SaturationData | null): number {
     return max;
 }
 
-/** Compute the max P95 latency across all patterns in a SaturationData */
-function getMaxLatency(data: SaturationData | null): number {
+/** Compute the max P95 latency across visible patterns in a SaturationData */
+function getMaxLatency(data: SaturationData | null, hidden?: Set<string>): number {
     if (!data) return 0;
     let max = 0;
-    for (const pattern of Object.values(data.patterns)) {
+    for (const [name, pattern] of Object.entries(data.patterns)) {
+        if (hidden?.has(name)) continue;
         for (const step of pattern.steps) {
             if (step.p95_latency_ms != null && step.p95_latency_ms > max) max = step.p95_latency_ms;
         }
@@ -65,6 +67,10 @@ export default function Saturation() {
         [saturationRuns, compareHost]
     );
 
+    // Hidden patterns per chart (for y-axis rescaling)
+    const [primaryHidden, setPrimaryHidden] = useState<Set<string>>(new Set());
+    const [compareHidden, setCompareHidden] = useState<Set<string>>(new Set());
+
     // Fetch data for selected runs
     const { saturationData: primaryData, loading: primaryLoading, error: primaryError } = useSaturationRunData(selectedRunUuid);
     const { saturationData: compareData, loading: compareLoading, error: compareError } = useSaturationRunData(compareRunUuid);
@@ -86,17 +92,20 @@ export default function Saturation() {
     const handleHostChange = useCallback((host: string | null) => {
         setSelectedHost(host);
         setSelectedRunUuid(null);
+        setPrimaryHidden(new Set());
     }, []);
 
     const handleCompareHostChange = useCallback((host: string | null) => {
         setCompareHost(host);
         setCompareRunUuid(null);
+        setCompareHidden(new Set());
     }, []);
 
     const handleRemoveCompare = useCallback(() => {
         setShowCompare(false);
         setCompareHost(null);
         setCompareRunUuid(null);
+        setCompareHidden(new Set());
     }, []);
 
     const handleAddCompare = useCallback(() => {
@@ -110,16 +119,18 @@ export default function Saturation() {
         }
     }, [compareHost, compareRunUuid, compareRuns]);
 
-    // Synchronized Y-axis scaling
+    // Synchronized Y-axis scaling (respects hidden patterns)
     const sharedMaxIOPS = useMemo(() => {
         if (!showCompare || !compareRunUuid) return undefined;
-        return Math.max(getMaxIOPS(primaryData), getMaxIOPS(compareData));
-    }, [showCompare, compareRunUuid, primaryData, compareData]);
+        const max = Math.max(getMaxIOPS(primaryData, primaryHidden), getMaxIOPS(compareData, compareHidden));
+        return max > 0 ? max : undefined;
+    }, [showCompare, compareRunUuid, primaryData, compareData, primaryHidden, compareHidden]);
 
     const sharedMaxLatency = useMemo(() => {
         if (!showCompare || !compareRunUuid) return undefined;
-        return Math.max(getMaxLatency(primaryData), getMaxLatency(compareData));
-    }, [showCompare, compareRunUuid, primaryData, compareData]);
+        const max = Math.max(getMaxLatency(primaryData, primaryHidden), getMaxLatency(compareData, compareHidden));
+        return max > 0 ? max : undefined;
+    }, [showCompare, compareRunUuid, primaryData, compareData, primaryHidden, compareHidden]);
 
     // Look up run objects for subtitles
     const primaryRun = useMemo(
@@ -271,6 +282,7 @@ export default function Saturation() {
                                         error={primaryError}
                                         maxIOPS={sharedMaxIOPS}
                                         maxLatency={sharedMaxLatency}
+                                        onHiddenPatternsChange={setPrimaryHidden}
                                     />
                                 </Card>
                                 <Card className="p-6">
@@ -285,6 +297,7 @@ export default function Saturation() {
                                         error={compareError}
                                         maxIOPS={sharedMaxIOPS}
                                         maxLatency={sharedMaxLatency}
+                                        onHiddenPatternsChange={setCompareHidden}
                                     />
                                 </Card>
                             </div>

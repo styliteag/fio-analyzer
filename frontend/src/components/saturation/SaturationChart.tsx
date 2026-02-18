@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -30,9 +30,17 @@ interface SaturationChartProps {
     error: string | null;
     maxIOPS?: number;
     maxLatency?: number;
+    onHiddenPatternsChange?: (hidden: Set<string>) => void;
 }
 
-const SaturationChart: React.FC<SaturationChartProps> = ({ saturationData, loading, error, maxIOPS, maxLatency }) => {
+const SaturationChart: React.FC<SaturationChartProps> = ({ saturationData, loading, error, maxIOPS, maxLatency, onHiddenPatternsChange }) => {
+    const hiddenRef = useRef<Set<string>>(new Set());
+
+    // Reset hidden patterns when data changes (new run selected)
+    useEffect(() => {
+        hiddenRef.current = new Set();
+        onHiddenPatternsChange?.(new Set());
+    }, [saturationData]); // eslint-disable-line react-hooks/exhaustive-deps
     // Build chart data from saturation data
     const chartData = useMemo(() => {
         if (!saturationData) return null;
@@ -159,7 +167,17 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ saturationData, loadi
             }
         });
         chart.update();
-    }, []);
+
+        // Update ref and notify parent
+        const next = new Set(hiddenRef.current);
+        if (next.has(patternName)) {
+            next.delete(patternName);
+        } else {
+            next.add(patternName);
+        }
+        hiddenRef.current = next;
+        onHiddenPatternsChange?.(next);
+    }, [onHiddenPatternsChange]);
 
     const isDark = document.documentElement.classList.contains('dark');
     const textColor = isDark ? '#d1d5db' : '#1f2937';
