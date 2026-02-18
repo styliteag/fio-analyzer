@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -9,7 +9,7 @@ import {
     Tooltip,
     Legend,
 } from 'chart.js';
-import type { Plugin } from 'chart.js';
+import type { Chart, LegendItem, LegendElement, Plugin } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { useSaturationData } from '../../hooks/useSaturationData';
 import { Loading } from '../ui';
@@ -60,20 +60,19 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
 
         const datasets = [];
 
-        // One color per pattern — solid for IOPS, dashed+lighter for latency
-        // Same hue makes it obvious which IOPS/latency pair belongs together
+        // Each pattern gets a unique, distinguishable color
+        // Solid for IOPS, lighter dashed for latency — same hue pairs them visually
         const patternColors: Record<string, { solid: string; light: string }> = {
-            randread:  { solid: 'rgb(59, 130, 246)',  light: 'rgba(59, 130, 246, 0.5)' },   // blue
-            randwrite: { solid: 'rgb(34, 197, 94)',   light: 'rgba(34, 197, 94, 0.5)' },    // green
-            randrw:    { solid: 'rgb(168, 85, 247)',  light: 'rgba(168, 85, 247, 0.5)' },   // purple
-            read:      { solid: 'rgb(59, 130, 246)',  light: 'rgba(59, 130, 246, 0.5)' },   // blue
-            write:     { solid: 'rgb(34, 197, 94)',   light: 'rgba(34, 197, 94, 0.5)' },    // green
-            rw:        { solid: 'rgb(168, 85, 247)',  light: 'rgba(168, 85, 247, 0.5)' },   // purple
+            read:      { solid: 'rgb(59, 130, 246)',  light: 'rgba(59, 130, 246, 0.55)' },   // blue
+            write:     { solid: 'rgb(16, 185, 129)',  light: 'rgba(16, 185, 129, 0.55)' },   // emerald
+            rw:        { solid: 'rgb(139, 92, 246)',  light: 'rgba(139, 92, 246, 0.55)' },   // violet
+            randread:  { solid: 'rgb(249, 115, 22)',  light: 'rgba(249, 115, 22, 0.55)' },   // orange
+            randwrite: { solid: 'rgb(244, 63, 94)',   light: 'rgba(244, 63, 94, 0.55)' },    // rose
+            randrw:    { solid: 'rgb(6, 182, 212)',   light: 'rgba(6, 182, 212, 0.55)' },    // cyan
         };
 
         for (const pName of patternNames) {
             const steps = patterns[pName].steps;
-            const sweetSpot = patterns[pName].sweet_spot;
             const colors = patternColors[pName] || { solid: 'rgb(107, 114, 128)', light: 'rgba(107, 114, 128, 0.5)' };
 
             // IOPS line — solid, thicker
@@ -82,18 +81,13 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                 return step?.iops ?? null;
             });
 
-            const iopsPointRadius = sortedQDs.map(qd => {
-                if (sweetSpot && qd === sweetSpot.total_qd) return 8;
-                return 4;
-            });
-
             datasets.push({
                 label: `${pName} IOPS`,
                 data: iopsData,
                 borderColor: colors.solid,
                 backgroundColor: colors.solid,
                 borderWidth: 3,
-                pointRadius: iopsPointRadius,
+                pointRadius: 4,
                 pointHoverRadius: 8,
                 pointStyle: 'circle' as const,
                 tension: 0.3,
@@ -106,11 +100,6 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                 return step?.p95_latency_ms ?? null;
             });
 
-            const latencyPointRadius = sortedQDs.map(qd => {
-                if (sweetSpot && qd === sweetSpot.total_qd) return 8;
-                return 3;
-            });
-
             datasets.push({
                 label: `${pName} P95 Latency`,
                 data: latencyData,
@@ -118,7 +107,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                 backgroundColor: colors.light,
                 borderWidth: 2,
                 borderDash: [6, 4],
-                pointRadius: latencyPointRadius,
+                pointRadius: 3,
                 pointHoverRadius: 8,
                 pointStyle: 'triangle' as const,
                 tension: 0.3,
@@ -164,6 +153,22 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
     // Use linear scale if only 1 data point (log scale needs >= 2)
     const useLogScale = chartData ? chartData.labels.length >= 2 : true;
 
+    // Legend click handler: toggle both IOPS and Latency datasets for the same pattern
+    const handleLegendClick = useCallback((_e: unknown, legendItem: LegendItem, legend: LegendElement<'line'>) => {
+        const chart = legend.chart as Chart<'line'>;
+        const patternName = legendItem.text; // e.g. "randread"
+        const iopsLabel = `${patternName} IOPS`;
+        const latencyLabel = `${patternName} P95 Latency`;
+
+        chart.data.datasets.forEach((ds, i) => {
+            if (ds.label === iopsLabel || ds.label === latencyLabel) {
+                const meta = chart.getDatasetMeta(i);
+                meta.hidden = !meta.hidden;
+            }
+        });
+        chart.update();
+    }, []);
+
     const chartOptions = useMemo(() => ({
         responsive: true,
         maintainAspectRatio: false,
@@ -173,7 +178,36 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
         },
         plugins: {
             legend: {
-                position: 'top' as const,
+                position: 'bottom' as const,
+                labels: {
+                    // Show one entry per pattern (not per dataset)
+                    generateLabels(chart: Chart<'line'>): LegendItem[] {
+                        const seen = new Set<string>();
+                        const items: LegendItem[] = [];
+                        chart.data.datasets.forEach((ds, i) => {
+                            // Extract pattern name from "pattern IOPS" or "pattern P95 Latency"
+                            const label = ds.label || '';
+                            const pattern = label.replace(/ IOPS$/, '').replace(/ P95 Latency$/, '');
+                            if (seen.has(pattern)) return;
+                            seen.add(pattern);
+                            const meta = chart.getDatasetMeta(i);
+                            items.push({
+                                text: pattern,
+                                fillStyle: ds.borderColor as string,
+                                strokeStyle: ds.borderColor as string,
+                                lineWidth: 3,
+                                hidden: meta.hidden ?? false,
+                                datasetIndex: i,
+                            });
+                        });
+                        return items;
+                    },
+                    padding: 16,
+                    usePointStyle: true,
+                    pointStyle: 'rectRounded',
+                    font: { size: 13 },
+                },
+                onClick: handleLegendClick,
             },
             tooltip: {
                 callbacks: {
@@ -218,7 +252,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                 },
             },
         },
-    }), [useLogScale]);
+    }), [useLogScale, handleLegendClick]);
 
     // Build summary table rows from all patterns
     const tableRows = useMemo(() => {
