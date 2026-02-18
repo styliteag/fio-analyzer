@@ -168,16 +168,38 @@ generate_uuid_from_hash() {
     echo "$uuid"
 }
 
-# Configuration Variables with defaults
-set_defaults() {
+# Helper: Parse comma-separated string into a bash array
+parse_csv_to_array() {
+    local var_name="$1" csv_value="$2"
+    local -a arr
+    IFS=',' read -ra arr <<< "$csv_value"
+    eval "${var_name}=(\"\${arr[@]}\")"
+}
+
+# ============================================================
+# Configuration Functions
+# ============================================================
+
+# Single source of truth for ALL default values
+define_defaults() {
+    # Host metadata
     HOSTNAME="${HOSTNAME:-$(hostname -s)}"
     PROTOCOL="${PROTOCOL:-unknown}"
     DRIVE_TYPE="${DRIVE_TYPE:-unknown}"
     DRIVE_MODEL="${DRIVE_MODEL:-unknown}"
-    TEST_SIZE="${TEST_SIZE:-100M}"
+    DESCRIPTION="${DESCRIPTION:-}"
+
+    # Test parameters (scalar form, converted to arrays later)
+    TEST_SIZE="${TEST_SIZE:-10M}"
     NUM_JOBS="${NUM_JOBS:-4}"
     DIRECT="${DIRECT:-1}"
-    RUNTIME="${RUNTIME:-20}"
+    RUNTIME="${RUNTIME:-30}"
+    SYNC="${SYNC:-1}"
+    IODEPTH="${IODEPTH:-1}"
+    BLOCK_SIZES="${BLOCK_SIZES:-4k,64k,1M}"
+    TEST_PATTERNS="${TEST_PATTERNS:-read,write,randread,randwrite}"
+
+    # Infrastructure
     BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
     TARGET_DIR="${TARGET_DIR:-./fio_tmp/}"
     USERNAME="${USERNAME:-uploader}"
@@ -185,7 +207,6 @@ set_defaults() {
 
     # Saturation test mode defaults
     SATURATION_MODE="${SATURATION_MODE:-false}"
-    # Accept both SAT_BLOCK_SIZE (singular) and SAT_BLOCK_SIZES (plural)
     SAT_BLOCK_SIZES="${SAT_BLOCK_SIZES:-${SAT_BLOCK_SIZE:-64k}}"
     SAT_PATTERNS="${SAT_PATTERNS:-randread,randwrite,randrw}"
     LATENCY_THRESHOLD_MS="${LATENCY_THRESHOLD_MS:-100}"
@@ -193,14 +214,53 @@ set_defaults() {
     INITIAL_NUMJOBS="${INITIAL_NUMJOBS:-4}"
     MAX_STEPS="${MAX_STEPS:-20}"
     MAX_TOTAL_QD="${MAX_TOTAL_QD:-16384}"
+}
 
-    # UUID Generation
+# Apply CLI overrides (CLI flags take highest priority over env/.env/defaults)
+apply_cli_overrides() {
+    [ -n "${CLI_HOSTNAME+set}" ]             && HOSTNAME="$CLI_HOSTNAME"
+    [ -n "${CLI_PROTOCOL+set}" ]             && PROTOCOL="$CLI_PROTOCOL"
+    [ -n "${CLI_DRIVE_TYPE+set}" ]           && DRIVE_TYPE="$CLI_DRIVE_TYPE"
+    [ -n "${CLI_DRIVE_MODEL+set}" ]          && DRIVE_MODEL="$CLI_DRIVE_MODEL"
+    [ -n "${CLI_DESCRIPTION+set}" ]          && DESCRIPTION="$CLI_DESCRIPTION"
+    [ -n "${CLI_TEST_SIZE+set}" ]            && TEST_SIZE="$CLI_TEST_SIZE"
+    [ -n "${CLI_NUM_JOBS+set}" ]             && NUM_JOBS="$CLI_NUM_JOBS"
+    [ -n "${CLI_DIRECT+set}" ]               && DIRECT="$CLI_DIRECT"
+    [ -n "${CLI_RUNTIME+set}" ]              && RUNTIME="$CLI_RUNTIME"
+    [ -n "${CLI_SYNC+set}" ]                 && SYNC="$CLI_SYNC"
+    [ -n "${CLI_IODEPTH+set}" ]              && IODEPTH="$CLI_IODEPTH"
+    [ -n "${CLI_BLOCK_SIZES+set}" ]          && BLOCK_SIZES="$CLI_BLOCK_SIZES"
+    [ -n "${CLI_TEST_PATTERNS+set}" ]        && TEST_PATTERNS="$CLI_TEST_PATTERNS"
+    [ -n "${CLI_BACKEND_URL+set}" ]          && BACKEND_URL="$CLI_BACKEND_URL"
+    [ -n "${CLI_TARGET_DIR+set}" ]           && TARGET_DIR="$CLI_TARGET_DIR"
+    [ -n "${CLI_USERNAME+set}" ]             && USERNAME="$CLI_USERNAME"
+    [ -n "${CLI_PASSWORD+set}" ]             && PASSWORD="$CLI_PASSWORD"
+    [ -n "${CLI_CONFIG_UUID+set}" ]          && CONFIG_UUID="$CLI_CONFIG_UUID"
+    [ -n "${CLI_IOENGINE+set}" ]             && IOENGINE="$CLI_IOENGINE"
+    [ -n "${CLI_SATURATION_MODE+set}" ]      && SATURATION_MODE="$CLI_SATURATION_MODE"
+    [ -n "${CLI_SAT_BLOCK_SIZES+set}" ]      && SAT_BLOCK_SIZES="$CLI_SAT_BLOCK_SIZES"
+    [ -n "${CLI_SAT_PATTERNS+set}" ]         && SAT_PATTERNS="$CLI_SAT_PATTERNS"
+    [ -n "${CLI_LATENCY_THRESHOLD_MS+set}" ] && LATENCY_THRESHOLD_MS="$CLI_LATENCY_THRESHOLD_MS"
+    [ -n "${CLI_INITIAL_IODEPTH+set}" ]      && INITIAL_IODEPTH="$CLI_INITIAL_IODEPTH"
+    [ -n "${CLI_INITIAL_NUMJOBS+set}" ]      && INITIAL_NUMJOBS="$CLI_INITIAL_NUMJOBS"
+    [ -n "${CLI_MAX_STEPS+set}" ]            && MAX_STEPS="$CLI_MAX_STEPS"
+    [ -n "${CLI_MAX_TOTAL_QD+set}" ]         && MAX_TOTAL_QD="$CLI_MAX_TOTAL_QD"
+}
+
+# Generate UUIDs for tracking
+generate_uuids() {
     # config_uuid: Fixed per host-config (from .env or generated from hostname)
     if [ -n "$CONFIG_UUID" ]; then
-        print_status "Using CONFIG_UUID from .env: $CONFIG_UUID"
+        print_status "Using CONFIG_UUID: $CONFIG_UUID"
     else
         CONFIG_UUID=$(generate_uuid_from_hash "$HOSTNAME")
         print_status "Generated CONFIG_UUID from hostname: $CONFIG_UUID"
+    fi
+
+    # In saturation mode, derive a separate config_uuid
+    if [ "$SATURATION_MODE" = true ]; then
+        CONFIG_UUID=$(generate_uuid_from_hash "saturation-${CONFIG_UUID}")
+        print_status "Derived saturation CONFIG_UUID: $CONFIG_UUID"
     fi
 
     # run_uuid: Unique per script run (random UUID4)
@@ -212,121 +272,98 @@ set_defaults() {
         RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_${current_date}")
     fi
     print_status "Generated RUN_UUID for this script run: $RUN_UUID"
+}
 
-
-    # In saturation mode, derive a separate config_uuid from the normal one
+# Build description string (single location, no duplication)
+build_description() {
+    local prefix=""
     if [ "$SATURATION_MODE" = true ]; then
-        CONFIG_UUID=$(generate_uuid_from_hash "saturation-${CONFIG_UUID}")
-        print_status "Derived saturation CONFIG_UUID: $CONFIG_UUID"
+        prefix="saturation-test"
+    elif [ -n "$DESCRIPTION" ]; then
+        prefix="$DESCRIPTION"
     fi
 
-    # Build description with saturation-test prefix if in saturation mode
-    if [ "$SATURATION_MODE" = true ]; then
-        DESCRIPTION="saturation-test,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    else
-        DESCRIPTION="$DESCRIPTION,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    fi
-    # Sanitize the description change " " to "_" and remove any special charaters
+    DESCRIPTION="${prefix:+${prefix},}hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    # Sanitize: spaces to underscores, remove special chars
     DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
+}
 
-    # In saturation mode, freeze scalar values before array parsing overwrites them
+# Validate saturation-specific configuration
+validate_saturation_config() {
+    # Parse SAT_BLOCK_SIZES into array
+    IFS=',' read -ra SAT_BLOCK_SIZES_ARR <<< "$SAT_BLOCK_SIZES"
+
+    # Parse SAT_PATTERNS into array
+    IFS=',' read -ra SAT_PATTERNS_ARR <<< "$SAT_PATTERNS"
+
+    # Validate patterns — only these are supported by FIO
+    local valid_patterns="randread randwrite randrw read write rw"
+    for p in "${SAT_PATTERNS_ARR[@]}"; do
+        if ! echo "$valid_patterns" | grep -qw "$p"; then
+            print_error "Invalid saturation pattern: '$p'"
+            print_error "Valid patterns: randread, randwrite, randrw, read, write, rw"
+            exit 1
+        fi
+    done
+
+    # Check for duplicate patterns (exact duplicates only)
+    local seen_patterns=""
+    for p in "${SAT_PATTERNS_ARR[@]}"; do
+        if echo "$seen_patterns" | grep -qw "$p"; then
+            print_error "Duplicate pattern: '$p' specified more than once"
+            exit 1
+        fi
+        seen_patterns="$seen_patterns $p"
+    done
+}
+
+# Convert scalar values to arrays for multi-value iteration
+convert_scalars_to_arrays() {
+    # Freeze scalar values for saturation mode BEFORE array conversion
     if [ "$SATURATION_MODE" = true ]; then
         SAT_DIRECT="${DIRECT}"
         SAT_SYNC="${SYNC}"
         SAT_RUNTIME="${RUNTIME}"
         SAT_TEST_SIZE="${TEST_SIZE}"
-
-        # Parse SAT_BLOCK_SIZES into array
-        IFS=',' read -ra SAT_BLOCK_SIZES_ARR <<< "$SAT_BLOCK_SIZES"
-
-        # Parse SAT_PATTERNS into array
-        IFS=',' read -ra SAT_PATTERNS_ARR <<< "$SAT_PATTERNS"
-
-        # Validate patterns — only these are supported by FIO
-        local valid_patterns="randread randwrite randrw read write rw"
-        for p in "${SAT_PATTERNS_ARR[@]}"; do
-            if ! echo "$valid_patterns" | grep -qw "$p"; then
-                print_error "Invalid saturation pattern: '$p'"
-                print_error "Valid patterns: randread, randwrite, randrw, read, write, rw"
-                exit 1
-            fi
-        done
-
-        # Check for duplicate patterns (exact duplicates only)
-        local seen_patterns=""
-        for p in "${SAT_PATTERNS_ARR[@]}"; do
-            if echo "$seen_patterns" | grep -qw "$p"; then
-                print_error "Duplicate pattern: '$p' specified more than once"
-                exit 1
-            fi
-            seen_patterns="$seen_patterns $p"
-        done
     fi
 
-    # Parse BLOCK_SIZES from comma-separated string if provided
-    if [ -n "$BLOCK_SIZES" ] && [ "$BLOCK_SIZES" != "4k,64k,1M" ]; then
-        IFS=',' read -ra BLOCK_SIZES_ARRAY <<< "$BLOCK_SIZES"
-        BLOCK_SIZES=("${BLOCK_SIZES_ARRAY[@]}")
-    else
-        BLOCK_SIZES=("4k" "64k" "1M")
-    fi
-    
-    # Parse TEST_PATTERNS from comma-separated string if provided
-    if [ -n "$TEST_PATTERNS" ] && [ "$TEST_PATTERNS" != "read,write,randread,randwrite" ]; then
-        IFS=',' read -ra TEST_PATTERNS_ARRAY <<< "$TEST_PATTERNS"
-        TEST_PATTERNS=("${TEST_PATTERNS_ARRAY[@]}")
-    else
-        TEST_PATTERNS=("read" "write" "randread" "randwrite")
+    # Convert all comma-separated scalars to arrays unconditionally
+    parse_csv_to_array BLOCK_SIZES   "$BLOCK_SIZES"
+    parse_csv_to_array TEST_PATTERNS "$TEST_PATTERNS"
+    parse_csv_to_array NUM_JOBS      "$NUM_JOBS"
+    parse_csv_to_array DIRECT        "$DIRECT"
+    parse_csv_to_array TEST_SIZE     "$TEST_SIZE"
+    parse_csv_to_array SYNC          "$SYNC"
+    parse_csv_to_array IODEPTH       "$IODEPTH"
+    parse_csv_to_array RUNTIME       "$RUNTIME"
+}
+
+# Master configuration orchestrator
+# Precedence: CLI flags > env vars / .env file > hardcoded defaults
+init_config() {
+    # Step 1: Apply defaults for anything not already set (env/.env values survive)
+    define_defaults
+
+    # Step 2: Override with CLI flags (highest priority)
+    apply_cli_overrides
+
+    # Step 3: Detect I/O engine (before array conversion so psync fallback works)
+    detect_ioengine
+
+    # Step 4: Generate UUIDs
+    generate_uuids
+
+    # Step 5: Build description string
+    build_description
+
+    # Step 6: Validate saturation config if applicable
+    if [ "$SATURATION_MODE" = true ]; then
+        validate_saturation_config
     fi
 
-    # Parse NUM_JOBS from comma-separated string if provided
-    if [ -n "$NUM_JOBS" ] && [ "$NUM_JOBS" != "4" ]; then
-        IFS=',' read -ra NUM_JOBS_ARRAY <<< "$NUM_JOBS"
-        NUM_JOBS=("${NUM_JOBS_ARRAY[@]}")
-    else
-        NUM_JOBS=("4")
-    fi
-    
-    # Parse DIRECT from comma-separated string if provided
-    if [ -n "$DIRECT" ] && [ "$DIRECT" != "1" ]; then
-        IFS=',' read -ra DIRECT_ARRAY <<< "$DIRECT"
-        DIRECT=("${DIRECT_ARRAY[@]}")
-    else
-        DIRECT=("1")
-    fi
-
-    # Parse TEST_SIZE from comma-separated string if provided
-    if [ -n "$TEST_SIZE" ] && [ "$TEST_SIZE" != "10M" ]; then
-        IFS=',' read -ra TEST_SIZE_ARRAY <<< "$TEST_SIZE"
-        TEST_SIZE=("${TEST_SIZE_ARRAY[@]}")
-    else
-        TEST_SIZE=("10M")
-    fi
-
-    # Parse SYNC from comma-separated string if provided
-    if [ -n "$SYNC" ] && [ "$SYNC" != "1" ]; then
-        IFS=',' read -ra SYNC_ARRAY <<< "$SYNC"
-        SYNC=("${SYNC_ARRAY[@]}")
-    else
-        SYNC=("1")
-    fi
-
-    # Parse IODEPTH from comma-separated string if provided
-    if [ -n "$IODEPTH" ] && [ "$IODEPTH" != "1" ]; then
-        IFS=',' read -ra IODEPTH_ARRAY <<< "$IODEPTH"
-        IODEPTH=("${IODEPTH_ARRAY[@]}")
-    else
-        IODEPTH=("1")
-    fi
-
-    # Parse RUNTIME from comma-separated string if provided
-    if [ -n "$RUNTIME" ] && [ "$RUNTIME" != "30" ]; then
-        IFS=',' read -ra RUNTIME_ARRAY <<< "$RUNTIME"
-        RUNTIME=("${RUNTIME_ARRAY[@]}")
-    else
-        RUNTIME=("30")
-    fi
-
+    # Step 7: Convert scalar values to arrays (last step)
+    convert_scalars_to_arrays
 }
 
 # Function to check if fio is installed
@@ -1407,7 +1444,7 @@ print_saturation_summary() {
         local tag="${SAT_PATTERNS_ARR[$pi]}"
         local col_width=21  # 10 + 1 + 10
         local pad_left=$(( (col_width - ${#tag}) / 2 ))
-        local pad_right=$(( col_width - ${#tag} - pad_left ))
+        local pad_right=$(( col_width - pad_left ))
         top_fmt+=" | %${pad_left}s%-${pad_right}s"
         top_args+=("" "$tag")
         bot_fmt+=" | %-10s %-10s"
@@ -1679,11 +1716,11 @@ main() {
                     print_error "Option $1 requires an engine name (io_uring, aio, libaio, psync)"
                     exit 1
                 fi
-                IOENGINE="$2"
+                CLI_IOENGINE="$2"
                 shift 2
                 ;;
             -s|--saturation)
-                SATURATION_MODE=true
+                CLI_SATURATION_MODE=true
                 shift
                 ;;
             --threshold)
@@ -1695,15 +1732,15 @@ main() {
                     print_error "Option --threshold must be a positive number, got: $2"
                     exit 1
                 fi
-                LATENCY_THRESHOLD_MS="$2"
+                CLI_LATENCY_THRESHOLD_MS="$2"
                 shift 2
                 ;;
-            --block-size)
+            --block-size|--sat-block-sizes)
                 if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
-                    print_error "Option --block-size requires a size value (comma-separated for multiple)"
+                    print_error "Option $1 requires a size value (comma-separated for multiple)"
                     exit 1
                 fi
-                SAT_BLOCK_SIZES="$2"
+                CLI_SAT_BLOCK_SIZES="$2"
                 shift 2
                 ;;
             --sat-patterns)
@@ -1711,7 +1748,7 @@ main() {
                     print_error "Option --sat-patterns requires comma-separated patterns (randread,randwrite,randrw)"
                     exit 1
                 fi
-                SAT_PATTERNS="$2"
+                CLI_SAT_PATTERNS="$2"
                 shift 2
                 ;;
             --initial-iodepth)
@@ -1719,7 +1756,7 @@ main() {
                     print_error "Option --initial-iodepth requires a positive integer, got: ${2:-empty}"
                     exit 1
                 fi
-                INITIAL_IODEPTH="$2"
+                CLI_INITIAL_IODEPTH="$2"
                 shift 2
                 ;;
             --initial-numjobs)
@@ -1727,7 +1764,7 @@ main() {
                     print_error "Option --initial-numjobs requires a positive integer, got: ${2:-empty}"
                     exit 1
                 fi
-                INITIAL_NUMJOBS="$2"
+                CLI_INITIAL_NUMJOBS="$2"
                 shift 2
                 ;;
             --max-qd)
@@ -1735,9 +1772,72 @@ main() {
                     print_error "Option --max-qd requires a positive integer, got: ${2:-empty}"
                     exit 1
                 fi
-                MAX_TOTAL_QD="$2"
+                CLI_MAX_TOTAL_QD="$2"
                 shift 2
                 ;;
+            --max-steps)
+                if [ -z "$2" ] || ! [[ "$2" =~ ^[0-9]+$ ]] || [ "$2" -eq 0 ]; then
+                    print_error "Option --max-steps requires a positive integer, got: ${2:-empty}"
+                    exit 1
+                fi
+                CLI_MAX_STEPS="$2"
+                shift 2
+                ;;
+            # --- Standard test parameters ---
+            --hostname)
+                [ -z "$2" ] && { print_error "Option --hostname requires a value"; exit 1; }
+                CLI_HOSTNAME="$2"; shift 2 ;;
+            --protocol)
+                [ -z "$2" ] && { print_error "Option --protocol requires a value"; exit 1; }
+                CLI_PROTOCOL="$2"; shift 2 ;;
+            --drive-type)
+                [ -z "$2" ] && { print_error "Option --drive-type requires a value"; exit 1; }
+                CLI_DRIVE_TYPE="$2"; shift 2 ;;
+            --drive-model)
+                [ -z "$2" ] && { print_error "Option --drive-model requires a value"; exit 1; }
+                CLI_DRIVE_MODEL="$2"; shift 2 ;;
+            --description)
+                [ -z "$2" ] && { print_error "Option --description requires a value"; exit 1; }
+                CLI_DESCRIPTION="$2"; shift 2 ;;
+            --test-size)
+                [ -z "$2" ] && { print_error "Option --test-size requires a value"; exit 1; }
+                CLI_TEST_SIZE="$2"; shift 2 ;;
+            --num-jobs)
+                [ -z "$2" ] && { print_error "Option --num-jobs requires a value"; exit 1; }
+                CLI_NUM_JOBS="$2"; shift 2 ;;
+            --direct)
+                [ -z "$2" ] && { print_error "Option --direct requires a value (0 or 1)"; exit 1; }
+                CLI_DIRECT="$2"; shift 2 ;;
+            --runtime)
+                [ -z "$2" ] && { print_error "Option --runtime requires a value"; exit 1; }
+                CLI_RUNTIME="$2"; shift 2 ;;
+            --sync)
+                [ -z "$2" ] && { print_error "Option --sync requires a value (0 or 1)"; exit 1; }
+                CLI_SYNC="$2"; shift 2 ;;
+            --iodepth)
+                [ -z "$2" ] && { print_error "Option --iodepth requires a value"; exit 1; }
+                CLI_IODEPTH="$2"; shift 2 ;;
+            --block-sizes)
+                [ -z "$2" ] && { print_error "Option --block-sizes requires comma-separated sizes"; exit 1; }
+                CLI_BLOCK_SIZES="$2"; shift 2 ;;
+            --patterns)
+                [ -z "$2" ] && { print_error "Option --patterns requires comma-separated patterns"; exit 1; }
+                CLI_TEST_PATTERNS="$2"; shift 2 ;;
+            --target-dir)
+                [ -z "$2" ] && { print_error "Option --target-dir requires a path"; exit 1; }
+                CLI_TARGET_DIR="$2"; shift 2 ;;
+            --backend-url)
+                [ -z "$2" ] && { print_error "Option --backend-url requires a URL"; exit 1; }
+                CLI_BACKEND_URL="$2"; shift 2 ;;
+            -U|--username)
+                [ -z "$2" ] && { print_error "Option $1 requires a username"; exit 1; }
+                CLI_USERNAME="$2"; shift 2 ;;
+            -P|--password)
+                [ -z "$2" ] && { print_error "Option $1 requires a password"; exit 1; }
+                CLI_PASSWORD="$2"; shift 2 ;;
+            --config-uuid)
+                [ -z "$2" ] && { print_error "Option --config-uuid requires a UUID"; exit 1; }
+                CLI_CONFIG_UUID="$2"; shift 2 ;;
             *)
                 args+=("$1")
                 shift
@@ -1749,14 +1849,14 @@ main() {
     set -- "${args[@]}"
     
     # Load configuration (supports multiple env files and INCLUDE directives)
+    # Precedence: CLI flags > env vars / .env file > hardcoded defaults
     load_env_files "${env_files[@]}"
-    set_defaults
-    
+    init_config
+
     # Check prerequisites
     check_fio
     check_curl
     if [ "$SATURATION_MODE" = true ]; then check_jq; fi
-    detect_ioengine
     
     # Setup target (detect device vs directory mode)
     setup_target_dir
@@ -1870,7 +1970,7 @@ main() {
             else
                 RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_$(date -u +%Y-%m-%dT%H:%M:%S)_${sat_bs}")
             fi
-            DESCRIPTION="saturation-test,hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            build_description
 
             if [ ${#SAT_BLOCK_SIZES_ARR[@]} -gt 1 ]; then
                 echo
@@ -2010,11 +2110,6 @@ RUNTIME="60"
 # TARGET_DIR=/mnt/pool/tests/
 # DESCRIPTION="FIO-Performance-Test"
 
-# Backend Configuration
-BACKEND_URL=https://fio-analyzer.stylite-live.net
-USERNAME=xxxxxxx
-PASSWORD=xxxxxxx
-
 # ============================================================
 # Saturation Test Mode (use with --saturation flag)
 # ============================================================
@@ -2030,6 +2125,12 @@ PASSWORD=xxxxxxx
 # INITIAL_NUMJOBS=4              # Starting number of jobs
 # MAX_STEPS=20                   # Safety limit for maximum steps
 # MAX_TOTAL_QD=16384             # Max total QD before auto-stop (prevents shm issues)
+
+
+# Backend Configuration
+BACKEND_URL=https://fio-analyzer.stylite-live.net
+USERNAME=xxxxxxx
+PASSWORD=xxxxxxx
 EOF
     
     if [ $? -eq 0 ]; then
@@ -2088,147 +2189,84 @@ FIO Performance Testing Script
 
 Usage: $0 [options]
 
-Options:
-  -h, --help         Show this help message
-  -y, --yes          Skip confirmation prompt and start tests automatically
-  -u, --uuid         Generate and output a random UUID
-  -g, --generate-env Generate a ready-to-use .env configuration file
-                     Optional: specify filename (default: .env)
-                     Example: $0 --generate-env base.env
-  -e, --env-file     Specify a custom .env file path (can be used multiple times)
-                     Files are loaded in order, with later files overriding earlier ones.
-                     Default: .env if no -e options are specified.
-  -i, --engine       Specify I/O engine to use (io_uring, libaio, psync, aio)
-                     Default: auto-detect (io_uring > libaio > psync)
-                     Example: $0 --engine io_uring
-  -s, --saturation   Enable saturation test mode (randread, randwrite, randrw)
-                     Finds max IOPS while keeping P95 latency below threshold
-                     Each pattern escalates QD independently until saturated
-  --threshold MS     P95 latency threshold in ms (default: 100, saturation only)
-  --block-size SIZE  Block sizes for saturation (comma-separated, default: 64k)
-                     Example: --block-size 4k,64k,128k
-  --sat-patterns PAT Patterns for saturation (comma-separated, default: randread,randwrite,randrw)
-                     Valid: read, randread, write, randwrite, rw, randrw (any combination)
-                     Example: --sat-patterns read,write,randread,randwrite,randrw
-  --initial-iodepth N  Starting iodepth for saturation (default: 16)
-  --initial-numjobs N  Starting numjobs for saturation (default: 4)
-  --max-qd N           Maximum total QD before auto-stop (default: 4096)
-                       Prevents shm/resource exhaustion at extreme queue depths
+General Options:
+  -h, --help             Show this help message
+  -y, --yes              Skip confirmation prompt and start tests automatically
+  -u, --uuid             Generate and output a random UUID
+  -g, --generate-env     Generate a ready-to-use .env configuration file
+                         Optional: specify filename (default: .env)
+  -e, --env-file FILE    Specify a custom .env file path (can be used multiple times)
+                         Files are loaded in order; later files override earlier ones.
+  -i, --engine ENGINE    I/O engine (io_uring, libaio, psync). Default: auto-detect
+
+Host Metadata Options:
+  --hostname NAME        Server hostname (default: current hostname)
+  --protocol PROTO       Storage protocol (default: unknown)
+  --drive-type TYPE      Drive type (default: unknown)
+  --drive-model MODEL    Drive model (default: unknown)
+  --description TEXT     Test description prefix (default: empty, auto-built)
+  --config-uuid UUID     Fixed UUID per host-config (default: generated from hostname)
+
+Standard Test Options:
+  --block-sizes SIZES    Comma-separated block sizes (default: 4k,64k,1M)
+  --patterns PATS        Comma-separated test patterns (default: read,write,randread,randwrite)
+  --test-size SIZE       Test file size, comma-separated for multiple (default: 10M)
+  --num-jobs N           Parallel jobs, comma-separated for multiple (default: 4)
+  --runtime SEC          Runtime per test, comma-separated for multiple (default: 30)
+  --direct 0|1           Direct I/O mode, comma-separated for multiple (default: 1)
+  --sync 0|1             Sync mode, comma-separated for multiple (default: 1)
+  --iodepth N            I/O depth per job, comma-separated for multiple (default: 1)
+
+Infrastructure Options:
+  --target-dir PATH      Test directory or block device (default: ./fio_tmp/)
+                         Block device mode is DESTRUCTIVE (destroys all data!)
+  --backend-url URL      Backend API URL (default: http://localhost:8000)
+  -U, --username USER    Upload username (default: uploader)
+  -P, --password PASS    Upload password (default: uploader)
+
+Saturation Test Options (use with -s):
+  -s, --saturation       Enable saturation test mode
+  --threshold MS         P95 latency threshold in ms (default: 100)
+  --block-size SIZES     Saturation block sizes, comma-separated (default: 64k)
+  --sat-patterns PATS    Saturation patterns, comma-separated (default: randread,randwrite,randrw)
+                         Valid: read, randread, write, randwrite, rw, randrw
+  --initial-iodepth N    Starting iodepth for saturation (default: 16)
+  --initial-numjobs N    Starting numjobs for saturation (default: 4)
+  --max-qd N             Max total QD before auto-stop (default: 16384)
+  --max-steps N          Max escalation steps (default: 20)
+
+Precedence:
+  CLI flags > environment variables > .env file > hardcoded defaults
+
+  All options above can also be set via environment variables or .env files.
+  The env variable name matches the long flag name in UPPER_SNAKE_CASE:
+    --runtime 60        is equivalent to  RUNTIME=60
+    --block-sizes 4k,1M is equivalent to  BLOCK_SIZES=4k,1M
+    --drive-type ssd    is equivalent to  DRIVE_TYPE=ssd
 
 Configuration:
-  The script loads configuration from a .env file in the current directory.
-  Generate a .env file using: $0 --generate-env [filename]
-                     Examples: $0 --generate-env
-                              $0 --generate-env base.env
-                              $0 -g production.env
-  Or copy .env.example to .env and customize the values.
-  
-  Multiple .env files can be specified:
-    $0 -e base.env -e overrides.env
-  
-  .env files can include other .env files using the INCLUDE directive:
-    INCLUDE=/path/to/base.env
-    INCLUDE="relative/path/to/shared.env"
-  
-  Later files and variables override earlier ones.
-  Environment variables override .env file settings.
-
-Pre-flight Checks:
-  The script performs the following checks before starting tests:
-  1. Verifies FIO and curl are installed
-  2. Auto-detects best I/O engine (io_uring > libaio > psync) or validates specified engine
-  3. Tests API connectivity to the backend server
-  4. Validates authentication credentials
-  5. Confirms test configuration with user (unless --yes is used)
-
-Configuration Variables:
-  HOSTNAME       - Server hostname (default: current hostname)
-  PROTOCOL       - Storage protocol (default: unknown)
-  DESCRIPTION    - Test description (default: "FIO-Performance-Test")
-  DRIVE_MODEL    - Drive model (default: unknown)
-  DRIVE_TYPE     - Drive type (default: unknown)
-  TEST_SIZE      - Size of test file (default: 10M)
-  NUM_JOBS       - Number of parallel jobs (default: 4)
-  RUNTIME        - Test runtime in seconds (default: 30)
-  DIRECT         - Direct I/O mode (default: 1)
-  BACKEND_URL    - Backend API URL (default: http://localhost:8000)
-  TARGET_DIR     - Directory for test files OR block device (default: ./fio_tmp/)
-                   If set to a block device (e.g., /dev/sda), tests run directly
-                   on the device. DESTRUCTIVE: all data will be lost!
-                   Device must not be mounted.
-  USERNAME       - Authentication username (default: admin)
-  PASSWORD       - Authentication password (default: admin)
-  BLOCK_SIZES    - Comma-separated block sizes (default: 4k,64k,1M)
-  TEST_PATTERNS  - Comma-separated test patterns (default: read,write,randread,randwrite)
-  NUM_JOBS       - Number of parallel jobs (default: 4)
-  DIRECT         - Direct I/O mode (default: 1)
-  TEST_SIZE      - Size of test file (default: 10M)
-  SYNC           - Sync mode (default: 1)
-  IODEPTH        - I/O Depth (default: 1)
-  RUNTIME        - Test runtime in seconds (default: 30)
-
-Saturation Mode Variables (used with --saturation):
-  SAT_BLOCK_SIZES      - Block sizes, comma-separated (default: 64k)
-  SAT_PATTERNS         - Patterns to test, comma-separated (default: randread,randwrite,randrw)
-  LATENCY_THRESHOLD_MS - P95 latency threshold in ms (default: 100)
-  INITIAL_IODEPTH      - Starting iodepth (default: 16)
-  INITIAL_NUMJOBS      - Starting number of jobs (default: 4)
-  MAX_STEPS            - Safety limit for steps (default: 20)
-  MAX_TOTAL_QD         - Max total QD before auto-stop (default: 4096)
+  Generate a .env file:   $0 --generate-env [filename]
+  Use multiple env files:  $0 -e base.env -e overrides.env
+  INCLUDE directive:       Add INCLUDE=/path/to/base.env in your .env file
 
 Examples:
-  # Generate configuration file (default: .env)
-  $0 --generate-env
-  # Or generate a named file
-  $0 --generate-env base.env
-  $0 -g production.env
-  # Edit the file with your settings, then:
-  $0 -e base.env
-  
-  # Or use the old method:
-  cp .env.example .env
-  # Edit .env with your settings, then:
-  $0
-  
-  # Use a custom .env file
-  $0 --env-file /path/to/custom.env
-  $0 -e ./configs/production.env
-  
-  # Use multiple .env files (later files override earlier ones)
-  $0 -e base.env -e overrides.env
-  $0 -e shared.env -e server1.env -e server1-overrides.env
-  
-  # Use INCLUDE directive in .env file:
-  # In your .env file, add:
-  # INCLUDE=/path/to/base.env
-  # HOSTNAME=server1
-  # TEST_SIZE=10G
-  
-  # Override with environment variables
-  HOSTNAME="web01" PROTOCOL="iSCSI" DESCRIPTION="Production test" DRIVE_MODEL="WD1003FZEX" DRIVE_TYPE="HDD" $0
-  
-  # Large test with custom patterns
-  TEST_SIZE="10G" RUNTIME="300" DIRECT="1" NUM_JOBS="8" TEST_PATTERNS="read,write" $0
-  
-  # Test directly on a block device (DESTRUCTIVE - destroys all data!)
-  # Device must not be mounted
-  TARGET_DIR="/dev/sdb" $0
-  TARGET_DIR="/dev/nvme0n1" DIRECT="1" $0
+  # Generate and edit configuration
+  $0 --generate-env && vim .env && $0
 
-  # Saturation test (find max IOPS within 100ms P95 latency SLA)
-  $0 --saturation
+  # Quick test with CLI flags (no .env needed)
+  $0 --hostname web01 --protocol iSCSI --drive-type ssd --test-size 1G --runtime 60 -y
 
-  # Saturation with custom threshold
-  $0 --saturation --threshold 50
+  # Override .env values with CLI flags
+  $0 -e production.env --runtime 120 --num-jobs 8
 
-  # Saturation with multiple block sizes
-  $0 --saturation --block-size 4k,64k,128k
+  # Block device test (DESTRUCTIVE)
+  $0 --target-dir /dev/nvme0n1 --direct 1
 
-  # Saturation with only randread and randwrite
-  $0 --saturation --sat-patterns randread,randwrite
+  # Saturation test
+  $0 --saturation --threshold 50 --block-size 4k,64k,128k
 
-  # Saturation with custom starting point and env file
-  $0 -e production.env --saturation --initial-iodepth 32 --initial-numjobs 8
+  # Saturation with custom starting point
+  $0 -e prod.env --saturation --initial-iodepth 32 --initial-numjobs 8
 
 EOF
     exit 0

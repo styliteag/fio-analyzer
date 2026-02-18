@@ -8,7 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **fio-test.sh**: 19 new CLI flags for all parameters (`--hostname`, `--protocol`, `--drive-type`, `--drive-model`, `--description`, `--test-size`, `--num-jobs`, `--runtime`, `--direct`, `--sync`, `--iodepth`, `--block-sizes`, `--patterns`, `--target-dir`, `--backend-url`, `-U/--username`, `-P/--password`, `--config-uuid`, `--max-steps`)
+- **fio-test.sh**: Proper precedence chain: CLI flags > env vars / .env file > hardcoded defaults
+
+### Changed
+- **fio-test.sh**: Replaced monolithic `set_defaults()` with focused functions: `define_defaults()`, `apply_cli_overrides()`, `generate_uuids()`, `build_description()`, `validate_saturation_config()`, `convert_scalars_to_arrays()`, `init_config()`
+- **fio-test.sh**: Replaced 8 copy-pasted array parsing blocks with single `parse_csv_to_array()` helper (unconditional parsing, no fragile default-check skipping)
+- **fio-test.sh**: DESCRIPTION now built in single `build_description()` function (was duplicated in 3 places)
+- **fio-test.sh**: Help text reorganized with categorized sections and corrected defaults
+
+### Fixed
+- **fio-test.sh**: RUNTIME default mismatch — was `20` in set_defaults but `30` in array parsing. Unified to `30`
+- **fio-test.sh**: TEST_SIZE default mismatch — was `100M` in set_defaults but `10M` in array parsing. Unified to `10M`
+- **fio-test.sh**: MAX_TOTAL_QD help text said `4096` but code used `16384`. Fixed help to match code
+- **fio-test.sh**: USERNAME/PASSWORD help text said `admin` but code used `uploader`. Fixed help to match code
+- **fio-test.sh**: DESCRIPTION uninitialized in non-saturation mode caused leading comma in metadata string
+- **fio-test.sh**: SYNC and IODEPTH had no scalar defaults, causing empty SAT_SYNC in saturation mode
+- **fio-test.sh**: `detect_ioengine()` psync fallback set IODEPTH as scalar after array conversion. Now runs before array conversion
+- **fio-test.sh**: CLI flags were overwritten by .env file loading. Now CLI flags take proper highest priority
+
 
 ## [0.10.1] - 2026-02-17
 
