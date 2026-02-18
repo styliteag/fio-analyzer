@@ -169,6 +169,10 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
         chart.update();
     }, []);
 
+    const isDark = document.documentElement.classList.contains('dark');
+    const textColor = isDark ? '#d1d5db' : '#374151';
+    const gridColor = isDark ? 'rgba(156, 163, 175, 0.2)' : 'rgba(107, 114, 128, 0.15)';
+
     const chartOptions = useMemo(() => ({
         responsive: true,
         maintainAspectRatio: false,
@@ -193,6 +197,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                             const meta = chart.getDatasetMeta(i);
                             items.push({
                                 text: pattern,
+                                fontColor: textColor,
                                 fillStyle: ds.borderColor as string,
                                 strokeStyle: ds.borderColor as string,
                                 lineWidth: 3,
@@ -202,6 +207,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                         });
                         return items;
                     },
+                    color: textColor,
                     padding: 16,
                     usePointStyle: true,
                     pointStyle: 'rectRounded',
@@ -222,13 +228,16 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                 title: {
                     display: true,
                     text: 'Total Outstanding I/O (iodepth x numjobs)',
+                    color: textColor,
                 },
                 type: (useLogScale ? 'logarithmic' : 'linear') as 'logarithmic' | 'linear',
                 ticks: {
+                    color: textColor,
                     callback: function (tickValue: string | number) {
                         return String(tickValue);
                     },
                 },
+                grid: { color: gridColor },
             },
             'y-iops': {
                 type: 'linear' as const,
@@ -236,7 +245,10 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                 title: {
                     display: true,
                     text: 'IOPS',
+                    color: textColor,
                 },
+                ticks: { color: textColor },
+                grid: { color: gridColor },
                 beginAtZero: true,
             },
             'y-latency': {
@@ -245,14 +257,16 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                 title: {
                     display: true,
                     text: 'P95 Latency (ms)',
+                    color: textColor,
                 },
+                ticks: { color: textColor },
                 beginAtZero: true,
                 grid: {
                     drawOnChartArea: false,
                 },
             },
         },
-    }), [useLogScale, handleLegendClick]);
+    }), [useLogScale, handleLegendClick, textColor, gridColor]);
 
     // Build summary table rows from all patterns
     const tableRows = useMemo(() => {
