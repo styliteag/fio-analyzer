@@ -162,7 +162,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ saturationData, loadi
     }, []);
 
     const isDark = document.documentElement.classList.contains('dark');
-    const textColor = isDark ? '#d1d5db' : '#374151';
+    const textColor = isDark ? '#d1d5db' : '#1f2937';
     const gridColor = isDark ? 'rgba(156, 163, 175, 0.2)' : 'rgba(107, 114, 128, 0.15)';
 
     const chartOptions = useMemo(() => ({
