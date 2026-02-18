@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- 
+
+## [0.10.3] - 2026-02-18
+
 ### Fixed
 - **Frontend**: Saturation chart Y-axis now rescales when hiding patterns via legend click in compare mode — previously stayed locked at shared max from all data
 
