@@ -368,6 +368,77 @@ class DatabaseManager:
                 log_info(f"Creating index idx_{table_name}_run_uuid")
                 cursor.execute(f"CREATE INDEX idx_{table_name}_run_uuid ON {table_name}(run_uuid)")
 
+        # Migration 4: Create dedicated saturation_runs table
+        cursor.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='saturation_runs'
+        """)
+        if not cursor.fetchone():
+            log_info("Creating saturation_runs table")
+            cursor.execute("""
+                CREATE TABLE saturation_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    test_date TEXT,
+                    drive_model TEXT NOT NULL,
+                    drive_type TEXT NOT NULL,
+                    test_name TEXT NOT NULL,
+                    block_size TEXT NOT NULL,
+                    read_write_pattern TEXT NOT NULL,
+                    queue_depth INTEGER NOT NULL,
+                    duration INTEGER NOT NULL,
+                    fio_version TEXT,
+                    job_runtime INTEGER,
+                    rwmixread INTEGER,
+                    total_ios_read INTEGER,
+                    total_ios_write INTEGER,
+                    usr_cpu REAL,
+                    sys_cpu REAL,
+                    hostname TEXT,
+                    protocol TEXT,
+                    description TEXT,
+                    uploaded_file_path TEXT,
+                    output_file TEXT,
+                    num_jobs INTEGER,
+                    direct INTEGER,
+                    test_size TEXT,
+                    sync INTEGER,
+                    iodepth INTEGER,
+                    avg_latency REAL,
+                    bandwidth REAL,
+                    iops REAL,
+                    p1_latency REAL,
+                    p5_latency REAL,
+                    p10_latency REAL,
+                    p20_latency REAL,
+                    p30_latency REAL,
+                    p40_latency REAL,
+                    p50_latency REAL,
+                    p60_latency REAL,
+                    p70_latency REAL,
+                    p80_latency REAL,
+                    p90_latency REAL,
+                    p95_latency REAL,
+                    p99_latency REAL,
+                    p99_5_latency REAL,
+                    p99_9_latency REAL,
+                    p99_95_latency REAL,
+                    p99_99_latency REAL,
+                    config_uuid TEXT,
+                    run_uuid TEXT
+                )
+            """)
+            cursor.execute(
+                "CREATE INDEX idx_saturation_runs_run_uuid ON saturation_runs(run_uuid)"
+            )
+            cursor.execute(
+                "CREATE INDEX idx_saturation_runs_hostname ON saturation_runs(hostname)"
+            )
+            cursor.execute(
+                "CREATE INDEX idx_saturation_runs_timestamp ON saturation_runs(timestamp DESC)"
+            )
+            log_info("saturation_runs table created with indexes")
+
         self.connection.commit()
 
     async def _populate_sample_data(self, cursor: sqlite3.Cursor):

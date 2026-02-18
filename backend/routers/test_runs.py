@@ -793,7 +793,7 @@ async def get_saturation_runs(
     try:
         cursor = db.cursor()
 
-        where_clause = "description LIKE 'saturation-test%'"
+        where_clause = "run_uuid IS NOT NULL"
         params = []
 
         if hostname:
@@ -804,8 +804,8 @@ async def get_saturation_runs(
             SELECT run_uuid, hostname, protocol, drive_type, drive_model,
                    block_size,
                    MIN(timestamp) as started, COUNT(*) as step_count
-            FROM test_runs_all
-            WHERE {where_clause} AND run_uuid IS NOT NULL
+            FROM saturation_runs
+            WHERE {where_clause}
             GROUP BY run_uuid
             ORDER BY MIN(timestamp) DESC
             LIMIT ? OFFSET ?
@@ -892,8 +892,8 @@ async def get_saturation_data(
                    block_size, read_write_pattern, iodepth, num_jobs,
                    iops, avg_latency, bandwidth, p95_latency, p99_latency,
                    config_uuid, run_uuid, description
-            FROM test_runs_all
-            WHERE run_uuid = ? AND description LIKE 'saturation-test%'
+            FROM saturation_runs
+            WHERE run_uuid = ?
             ORDER BY (iodepth * num_jobs) ASC
         """
         cursor.execute(query, (run_uuid,))

@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- 
+### Changed
+- **Backend**: Saturation test data now stored in dedicated `saturation_runs` table instead of `test_runs`/`test_runs_all`
+  - New imports route saturation data (`description LIKE 'saturation-test%'`) to `saturation_runs` only, skipping `update_latest_flags`
+  - Saturation query endpoints (`/saturation-runs`, `/saturation-data`) now read from `saturation_runs`
+  - Normal endpoints (`/test-runs`, time-series, filters) no longer return saturation rows
+  - Migration 4 auto-creates `saturation_runs` table on backend startup (idempotent)
+  - Standalone migration script (`backend/scripts/migrate_saturation_data.py`) moves existing saturation data
+
 
 ## [0.10.2] - 2026-02-18
 

@@ -59,6 +59,11 @@ def generate_uuid_from_hash(input_string: str) -> str:
     return str(uuid.UUID(bytes=bytes(uuid_bytes)))
 
 
+def is_saturation_run(description: str) -> bool:
+    """Check if a test run is a saturation test based on description prefix."""
+    return bool(description and description.startswith("saturation-test"))
+
+
 @router.post(
     "/",
     summary="Import FIO Test Data",
@@ -244,17 +249,18 @@ async def import_fio_data(
             hash_seed = "_".join(meta_fields)
             test_run_data["run_uuid"] = generate_uuid_from_hash(hash_seed)
 
-        # Update latest flags
-        await db_manager.update_latest_flags(test_run_data)
-
         # Save uploaded file
         file_path = save_uploaded_file(content, file.filename, test_run_data)
 
         # Create metadata file (matching Node.js behavior)
         create_metadata_file(file_path, test_run_data, user.username, file.filename)
 
-        # Insert into database with file path
-        test_run_id = insert_test_run(db, test_run_data, file_path)
+        # Route to appropriate table based on description
+        if is_saturation_run(description):
+            test_run_id = insert_saturation_run(db, test_run_data, file_path)
+        else:
+            await db_manager.update_latest_flags(test_run_data)
+            test_run_id = insert_test_run(db, test_run_data, file_path)
 
         log_info(
             "FIO data imported successfully",
@@ -500,11 +506,16 @@ async def bulk_import_fio_data(
                     dry_run_results.append({"path": str(json_file), "metadata": test_run_data})
                     processed_files += 1
                 else:
+                    # Route saturation vs normal data
+                    bulk_description = test_run_data.get("description", "")
+                    is_saturation = is_saturation_run(bulk_description)
+                    dup_table = "saturation_runs" if is_saturation else "test_runs_all"
+
                     # Check if test run already exists with more specific criteria
                     cursor = db.cursor()
                     cursor.execute(
-                        """
-                        SELECT id FROM test_runs_all
+                        f"""
+                        SELECT id FROM {dup_table}
                         WHERE hostname = ? AND protocol = ? AND drive_model = ?
                         AND drive_type = ? AND block_size = ? AND read_write_pattern = ?
                         AND queue_depth = ? AND test_name = ? AND uploaded_file_path = ?
@@ -528,11 +539,11 @@ async def bulk_import_fio_data(
                         skipped_files += 1
                         continue
 
-                    # Update latest flags
-                    await db_manager.update_latest_flags(test_run_data)
-
-                    # Insert into database with file path
-                    insert_test_run(db, test_run_data, str(json_file))
+                    if is_saturation:
+                        insert_saturation_run(db, test_run_data, str(json_file))
+                    else:
+                        await db_manager.update_latest_flags(test_run_data)
+                        insert_test_run(db, test_run_data, str(json_file))
                     total_test_runs += 1
                     processed_files += 1
 
@@ -829,8 +840,6 @@ def extract_percentile_latency(job: Dict[str, Any], percentile: float) -> float:
     return max_lat / 1000000  # Convert ns to ms
 
 
-
-
 def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> int:
     """
     Insert test run data into both current and historical database tables.
@@ -930,6 +939,92 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
 
     db.commit()
     return test_run_id
+
+
+def insert_saturation_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> int:
+    """
+    Insert a saturation test run into the dedicated saturation_runs table.
+
+    Saturation runs are stored separately from normal test runs to avoid
+    polluting latest-tracking logic and normal query endpoints.
+
+    Args:
+        db: Database connection
+        test_run_data: Complete test run data dictionary
+        file_path: Optional path to the source JSON file
+
+    Returns:
+        ID of the inserted saturation run
+    """
+    cursor = db.cursor()
+
+    columns = [
+        "timestamp",
+        "test_date",
+        "drive_model",
+        "drive_type",
+        "test_name",
+        "block_size",
+        "read_write_pattern",
+        "queue_depth",
+        "duration",
+        "fio_version",
+        "job_runtime",
+        "rwmixread",
+        "total_ios_read",
+        "total_ios_write",
+        "usr_cpu",
+        "sys_cpu",
+        "hostname",
+        "protocol",
+        "description",
+        "config_uuid",
+        "run_uuid",
+        "output_file",
+        "num_jobs",
+        "direct",
+        "test_size",
+        "sync",
+        "iodepth",
+        "avg_latency",
+        "bandwidth",
+        "iops",
+        "p1_latency",
+        "p5_latency",
+        "p10_latency",
+        "p20_latency",
+        "p30_latency",
+        "p40_latency",
+        "p50_latency",
+        "p60_latency",
+        "p70_latency",
+        "p80_latency",
+        "p90_latency",
+        "p95_latency",
+        "p99_latency",
+        "p99_5_latency",
+        "p99_9_latency",
+        "p99_95_latency",
+        "p99_99_latency",
+    ]
+
+    values = [test_run_data.get(col) for col in columns]
+    placeholders = ", ".join(["?" for _ in columns])
+
+    cursor.execute(
+        f"INSERT INTO saturation_runs ({', '.join(columns)}) VALUES ({placeholders})",
+        values,
+    )
+    run_id = cursor.lastrowid
+
+    if file_path:
+        cursor.execute(
+            "UPDATE saturation_runs SET uploaded_file_path = ? WHERE id = ?",
+            (str(file_path), run_id),
+        )
+
+    db.commit()
+    return run_id
 
 
 def save_uploaded_file(content: bytes, filename: str, test_run_data: Dict[str, Any]) -> str:
