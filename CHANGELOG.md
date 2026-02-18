@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.10.4] - 2026-02-18
+
+### Added
 - **Admin**: Saturation tab in Admin page — view, edit (description/metadata), and delete saturation runs grouped by run_uuid
 - **Backend**: `PUT /saturation-runs/bulk-by-uuid` and `DELETE /saturation-runs/by-uuid` endpoints for managing saturation runs
 
