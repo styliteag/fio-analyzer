@@ -8,11 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Frontend**: Side-by-side saturation run comparison — two-step host→run selectors, optional second run for visual comparison with synchronized Y-axis scaling
+- **Frontend**: `useSaturationRunData` and `useSaturationRuns` hooks for independent run data loading
 - **Frontend**: Dedicated Saturation Analysis page (`/saturation`) with its own route, header navigation button, and Home page quick action/link
 - **fio-test.sh**: 19 new CLI flags for all parameters (`--hostname`, `--protocol`, `--drive-type`, `--drive-model`, `--description`, `--test-size`, `--num-jobs`, `--runtime`, `--direct`, `--sync`, `--iodepth`, `--block-sizes`, `--patterns`, `--target-dir`, `--backend-url`, `-U/--username`, `-P/--password`, `--config-uuid`, `--max-steps`)
 - **fio-test.sh**: Proper precedence chain: CLI flags > env vars / .env file > hardcoded defaults
 
 ### Changed
+- **Frontend**: Refactored `SaturationChart` into a pure display component (data via props, no internal selectors or data fetching)
+- **Frontend**: Saturation page now uses host→run two-step selection instead of flat dropdown
 - **Frontend**: Moved Saturation Test from Host page visualization to standalone page — `useSaturationData` hook no longer depends on `DriveAnalysis[]`, loads all runs by default
 - **Frontend**: Removed saturation button from Host page visualization controls (14 views → 13)
 - **fio-test.sh**: Replaced monolithic `set_defaults()` with focused functions: `define_defaults()`, `apply_cli_overrides()`, `generate_uuids()`, `build_description()`, `validate_saturation_config()`, `convert_scalars_to_arrays()`, `init_config()`

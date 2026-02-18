@@ -11,9 +11,8 @@ import {
 } from 'chart.js';
 import type { Chart, LegendItem, LegendElement, Plugin } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import { useSaturationData } from '../../hooks/useSaturationData';
 import { Loading } from '../ui';
-import type { SaturationStep } from '../../services/api/testRuns';
+import type { SaturationData, SaturationStep } from '../../services/api/testRuns';
 
 ChartJS.register(
     CategoryScale,
@@ -26,21 +25,14 @@ ChartJS.register(
 );
 
 interface SaturationChartProps {
-    hostname?: string | null;
+    saturationData: SaturationData | null;
+    loading: boolean;
+    error: string | null;
+    maxIOPS?: number;
+    maxLatency?: number;
 }
 
-const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
-    const {
-        saturationRuns,
-        loadingRuns,
-        runsError,
-        selectedRunUuid,
-        setSelectedRunUuid,
-        saturationData,
-        loadingData,
-        dataError,
-    } = useSaturationData(hostname);
-
+const SaturationChart: React.FC<SaturationChartProps> = ({ saturationData, loading, error, maxIOPS, maxLatency }) => {
     // Build chart data from saturation data
     const chartData = useMemo(() => {
         if (!saturationData) return null;
@@ -250,6 +242,7 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                 ticks: { color: textColor },
                 grid: { color: gridColor },
                 beginAtZero: true,
+                ...(maxIOPS !== undefined && maxIOPS > 0 ? { suggestedMax: maxIOPS } : {}),
             },
             'y-latency': {
                 type: 'linear' as const,
@@ -264,9 +257,10 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
                 grid: {
                     drawOnChartArea: false,
                 },
+                ...(maxLatency !== undefined && maxLatency > 0 ? { suggestedMax: maxLatency } : {}),
             },
         },
-    }), [useLogScale, handleLegendClick, textColor, gridColor]);
+    }), [useLogScale, handleLegendClick, textColor, gridColor, maxIOPS, maxLatency]);
 
     // Build summary table rows from all patterns
     const tableRows = useMemo(() => {
@@ -314,63 +308,28 @@ const SaturationChart: React.FC<SaturationChartProps> = ({ hostname }) => {
         });
     }, [saturationData]);
 
-    // No saturation runs available
-    if (!loadingRuns && saturationRuns.length === 0) {
-        return (
-            <div className="text-center py-12">
-                <p className="theme-text-secondary text-lg mb-2">No Saturation Test Data</p>
-                <p className="theme-text-secondary text-sm">
-                    Run <code>fio-test.sh --saturation</code> to generate data.
-                </p>
-            </div>
-        );
-    }
+    if (loading) return <Loading />;
+    if (error) return <p className="text-red-500 mb-4">{error}</p>;
+    if (!saturationData || !chartData) return null;
 
     return (
         <div>
-            {/* Run Selector */}
-            <div className="mb-6">
-                <label className="block text-sm font-medium theme-text-secondary mb-1">
-                    Select Saturation Run
-                </label>
-                <select
-                    aria-label="Select saturation test run"
-                    className="w-full max-w-lg px-3 py-2 border rounded-lg theme-bg-primary theme-text-primary theme-border-primary"
-                    value={selectedRunUuid || ''}
-                    onChange={(e) => setSelectedRunUuid(e.target.value || null)}
-                >
-                    <option value="">-- Select a run --</option>
-                    {saturationRuns.map((run) => (
-                        <option key={run.run_uuid} value={run.run_uuid}>
-                            {run.hostname} - {run.drive_model} ({run.protocol}/{run.drive_type}){run.block_size ? ` [${run.block_size}]` : ''} - {new Date(run.started).toLocaleDateString()} ({run.step_count} steps)
-                        </option>
-                    ))}
-                </select>
+            {/* Chart */}
+            <div className="mb-8">
+                <div className="mb-2 text-sm theme-text-secondary">
+                    Threshold: {saturationData.threshold_ms}ms P95 Latency | Block Size: {saturationData.block_size || 'N/A'} | {saturationData.hostname} - {saturationData.drive_model}
+                </div>
+                <div style={{ height: '450px' }}>
+                    <Line
+                        data={chartData}
+                        options={chartOptions}
+                        plugins={[thresholdPlugin]}
+                    />
+                </div>
             </div>
 
-            {/* Loading states */}
-            {(loadingRuns || loadingData) && <Loading />}
-            {runsError && <p className="text-red-500 mb-4">{runsError}</p>}
-            {dataError && <p className="text-red-500 mb-4">{dataError}</p>}
-
-            {/* Chart */}
-            {chartData && saturationData && (
-                <div className="mb-8">
-                    <div className="mb-2 text-sm theme-text-secondary">
-                        Threshold: {saturationData.threshold_ms}ms P95 Latency | Block Size: {saturationData.block_size || 'N/A'} | {saturationData.hostname} - {saturationData.drive_model}
-                    </div>
-                    <div style={{ height: '450px' }}>
-                        <Line
-                            data={chartData}
-                            options={chartOptions}
-                            plugins={[thresholdPlugin]}
-                        />
-                    </div>
-                </div>
-            )}
-
             {/* Summary Table */}
-            {tableRows.length > 0 && saturationData && (
+            {tableRows.length > 0 && (
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm border-collapse theme-text-primary">
                         <thead>
