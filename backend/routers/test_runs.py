@@ -300,7 +300,7 @@ async def get_test_runs(
                 "offset": offset,
                 "has_more": (offset + len(test_runs)) < total,
             }
-        
+
         # Frontend expects direct array of test runs, not wrapped object
         return test_runs
 
@@ -802,7 +802,7 @@ async def get_saturation_runs(
 
         query = f"""
             SELECT run_uuid, hostname, protocol, drive_type, drive_model,
-                   block_size,
+                   block_size, description,
                    MIN(timestamp) as started, COUNT(*) as step_count
             FROM saturation_runs
             WHERE {where_clause}
@@ -824,6 +824,7 @@ async def get_saturation_runs(
                 "drive_type": row_dict["drive_type"],
                 "drive_model": row_dict["drive_model"],
                 "block_size": row_dict.get("block_size"),
+                "description": row_dict.get("description"),
                 "started": row_dict["started"],
                 "step_count": row_dict["step_count"],
             })
@@ -990,6 +991,163 @@ async def get_saturation_data(
     except Exception as e:
         log_error("Error retrieving saturation data", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to retrieve saturation data")
+
+
+@router.put(
+    "/saturation-runs/bulk-by-uuid",
+    summary="Bulk Update Saturation Runs by UUID",
+    description="Update all saturation runs matching a run_uuid",
+    responses={
+        200: {
+            "description": "Bulk update completed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Successfully updated 8 saturation runs",
+                        "updated": 8,
+                        "run_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                    }
+                }
+            },
+        },
+        400: {"description": "Invalid request data or missing run_uuid"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def bulk_update_saturation_runs_by_uuid(
+    request: Request,
+    run_uuid: str = Query(..., description="Update all saturation runs with this run_uuid"),
+    updates: dict = Body(
+        ...,
+        description="Fields to update (description, hostname, protocol, drive_type, drive_model)",
+    ),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Perform bulk updates on all saturation runs matching a run_uuid.
+
+    **Authentication Required:** Admin access
+
+    **Updatable Fields:**
+    - description, hostname, protocol, drive_type, drive_model
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    try:
+        allowed_fields = {"description", "hostname", "protocol", "drive_type", "drive_model"}
+        invalid_fields = set(updates.keys()) - allowed_fields
+        if invalid_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid fields: {', '.join(invalid_fields)}. Allowed: {', '.join(allowed_fields)}",
+            )
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No updates provided")
+
+        set_clauses = []
+        params = []
+        for field, value in updates.items():
+            set_clauses.append(f"{field} = ?")
+            params.append(value)
+
+        set_clause = ", ".join(set_clauses)
+        params.append(run_uuid)
+
+        cursor = db.cursor()
+        cursor.execute(
+            f"UPDATE saturation_runs SET {set_clause} WHERE run_uuid = ?",
+            params,
+        )
+        updated = cursor.rowcount
+        db.commit()
+
+        log_info(
+            "Saturation runs bulk updated by UUID",
+            {
+                "request_id": request_id,
+                "run_uuid": run_uuid,
+                "updated": updated,
+                "fields": list(updates.keys()),
+            },
+        )
+
+        return {
+            "message": f"Successfully updated {updated} saturation runs",
+            "updated": updated,
+            "run_uuid": run_uuid,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error("Error bulk updating saturation runs", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to update saturation runs")
+
+
+@router.delete(
+    "/saturation-runs/by-uuid",
+    summary="Delete Saturation Runs by UUID",
+    description="Delete all saturation runs matching a run_uuid",
+    responses={
+        200: {
+            "description": "Deletion completed successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Successfully deleted 8 saturation runs",
+                        "deleted": 8,
+                        "run_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                    }
+                }
+            },
+        },
+        400: {"description": "Missing run_uuid parameter"},
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def delete_saturation_runs_by_uuid(
+    request: Request,
+    run_uuid: str = Query(..., description="Delete all saturation runs with this run_uuid"),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Delete all saturation runs matching a run_uuid.
+
+    **Authentication Required:** Admin access
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    try:
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM saturation_runs WHERE run_uuid = ?", (run_uuid,))
+        deleted = cursor.rowcount
+        db.commit()
+
+        log_info(
+            "Saturation runs deleted by UUID",
+            {
+                "request_id": request_id,
+                "run_uuid": run_uuid,
+                "deleted": deleted,
+            },
+        )
+
+        return {
+            "message": f"Successfully deleted {deleted} saturation runs",
+            "deleted": deleted,
+            "run_uuid": run_uuid,
+        }
+
+    except Exception as e:
+        log_error("Error deleting saturation runs", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to delete saturation runs")
 
 
 @router.get(

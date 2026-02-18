@@ -246,8 +246,17 @@ export interface SaturationRun {
     drive_type: string;
     drive_model: string;
     block_size: string | null;
+    description: string | null;
     started: string;
     step_count: number;
+}
+
+export interface SaturationRunUpdateData {
+    description?: string;
+    hostname?: string;
+    protocol?: string;
+    drive_type?: string;
+    drive_model?: string;
 }
 
 export interface SaturationStep {
@@ -312,6 +321,30 @@ export const bulkUpdateTestRunsByUUID = async (
     return apiCall(`/api/test-runs/bulk-by-uuid?${queryParam}`, {
         method: "PUT",
         body: JSON.stringify(updates),
+        signal: abortSignal
+    });
+};
+
+// Bulk update saturation runs by run_uuid
+export const updateSaturationRunByUUID = async (
+    runUuid: string,
+    updates: SaturationRunUpdateData,
+    abortSignal?: AbortSignal
+) => {
+    return apiCall(`/api/test-runs/saturation-runs/bulk-by-uuid?run_uuid=${encodeURIComponent(runUuid)}`, {
+        method: "PUT",
+        body: JSON.stringify(updates),
+        signal: abortSignal
+    });
+};
+
+// Delete saturation runs by run_uuid
+export const deleteSaturationRunByUUID = async (
+    runUuid: string,
+    abortSignal?: AbortSignal
+) => {
+    return apiCall(`/api/test-runs/saturation-runs/by-uuid?run_uuid=${encodeURIComponent(runUuid)}`, {
+        method: "DELETE",
         signal: abortSignal
     });
 };

@@ -16,6 +16,7 @@ import {
 	X,
 	Calendar,
 	PackageMinus,
+	Activity,
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Loading from '../components/ui/Loading';
@@ -30,7 +31,11 @@ import {
 	fetchTestRun,
 	fetchTestRuns,
 	extractTestRuns,
+	fetchSaturationRuns,
+	updateSaturationRunByUUID,
+	deleteSaturationRunByUUID,
 } from '../services/api/testRuns';
+import type { SaturationRun, SaturationRunUpdateData } from '../services/api/testRuns';
 import {
 	fetchTimeSeriesHistory,
 	previewTimeSeriesCleanup,
@@ -40,7 +45,7 @@ import { useNavigate } from 'react-router-dom';
 import type { TestRun, UUIDGroup } from '../types';
 
 // Tab types
-type AdminTab = 'by-config' | 'by-run' | 'latest' | 'history' | 'hierarchy';
+type AdminTab = 'by-config' | 'by-run' | 'latest' | 'history' | 'hierarchy' | 'saturation';
 
 interface EditableFields {
 	hostname?: string;
@@ -90,6 +95,26 @@ interface HierarchyEditState {
 	level: string; // e.g., "Host: server01", "Host-Protocol: server01-NFS", etc.
 	fields: EditableFields;
 	enabledFields: Record<keyof EditableFields, boolean>;
+}
+
+interface SaturationEditFields {
+	description?: string;
+	hostname?: string;
+	protocol?: string;
+	drive_type?: string;
+	drive_model?: string;
+}
+
+interface SaturationEditState {
+	isOpen: boolean;
+	run: SaturationRun | null;
+	fields: SaturationEditFields;
+	enabledFields: Record<keyof SaturationEditFields, boolean>;
+}
+
+interface SaturationDeleteState {
+	isOpen: boolean;
+	run: SaturationRun | null;
 }
 
 const Admin: React.FC = () => {
@@ -161,6 +186,27 @@ const Admin: React.FC = () => {
 			drive_type: false,
 			drive_model: false,
 		},
+	});
+
+	// Saturation run management state
+	const [saturationRuns, setSaturationRuns] = useState<SaturationRun[]>([]);
+	const [saturationLoading, setSaturationLoading] = useState(false);
+	const [saturationError, setSaturationError] = useState<string | null>(null);
+	const [saturationEditState, setSaturationEditState] = useState<SaturationEditState>({
+		isOpen: false,
+		run: null,
+		fields: {},
+		enabledFields: {
+			description: false,
+			hostname: false,
+			protocol: false,
+			drive_type: false,
+			drive_model: false,
+		},
+	});
+	const [saturationDeleteState, setSaturationDeleteState] = useState<SaturationDeleteState>({
+		isOpen: false,
+		run: null,
 	});
 
 	// UUID group runs state - stores fetched runs for each UUID
@@ -279,6 +325,49 @@ const Admin: React.FC = () => {
 				.finally(() => setTimeSeriesLoading(false));
 		}
 	}, [activeTab]);
+
+	// Fetch saturation runs
+	const loadSaturationRuns = useCallback(async () => {
+		setSaturationLoading(true);
+		setSaturationError(null);
+		try {
+			const result = await fetchSaturationRuns();
+			if (result.error) {
+				throw new Error(result.error);
+			}
+			setSaturationRuns(result.data || []);
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : 'Failed to fetch saturation runs';
+			setSaturationError(message);
+			console.error('Error fetching saturation runs:', err);
+		} finally {
+			setSaturationLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (activeTab === 'saturation') {
+			loadSaturationRuns();
+		}
+	}, [activeTab, loadSaturationRuns]);
+
+	// Filter saturation runs based on search term
+	const filteredSaturationRuns = useMemo(() => {
+		if (!searchTerm) return saturationRuns;
+
+		const lowerSearch = searchTerm.toLowerCase();
+		return saturationRuns.filter((run) => {
+			return (
+				run.hostname?.toLowerCase().includes(lowerSearch) ||
+				run.protocol?.toLowerCase().includes(lowerSearch) ||
+				run.drive_type?.toLowerCase().includes(lowerSearch) ||
+				run.drive_model?.toLowerCase().includes(lowerSearch) ||
+				run.block_size?.toLowerCase().includes(lowerSearch) ||
+				run.description?.toLowerCase().includes(lowerSearch) ||
+				run.run_uuid?.toLowerCase().includes(lowerSearch)
+			);
+		});
+	}, [saturationRuns, searchTerm]);
 
 	// Filter UUID groups based on search term
 	const filteredConfigGroups = useMemo(() => {
@@ -854,6 +943,76 @@ const Admin: React.FC = () => {
 		}
 	}, [hierarchyEditState, activeTab]);
 
+	// Open saturation edit modal
+	const openSaturationEdit = useCallback((run: SaturationRun) => {
+		setSaturationEditState({
+			isOpen: true,
+			run,
+			fields: {
+				description: run.description || '',
+				hostname: run.hostname || '',
+				protocol: run.protocol || '',
+				drive_type: run.drive_type || '',
+				drive_model: run.drive_model || '',
+			},
+			enabledFields: {
+				description: false,
+				hostname: false,
+				protocol: false,
+				drive_type: false,
+				drive_model: false,
+			},
+		});
+	}, []);
+
+	// Submit saturation edit
+	const handleSaturationEdit = useCallback(async () => {
+		if (!saturationEditState.run) return;
+
+		const updates: SaturationRunUpdateData = {};
+		for (const [key, enabled] of Object.entries(saturationEditState.enabledFields)) {
+			if (enabled) {
+				updates[key as keyof SaturationRunUpdateData] =
+					saturationEditState.fields[key as keyof SaturationEditFields];
+			}
+		}
+
+		if (Object.keys(updates).length === 0) {
+			alert('Please enable and fill at least one field to update');
+			return;
+		}
+
+		try {
+			await updateSaturationRunByUUID(saturationEditState.run.run_uuid, updates);
+			alert(`Successfully updated saturation run (${saturationEditState.run.step_count} steps)`);
+			setSaturationEditState({ ...saturationEditState, isOpen: false });
+			loadSaturationRuns();
+		} catch (err) {
+			console.error('Error updating saturation run:', err);
+			alert('Failed to update saturation run');
+		}
+	}, [saturationEditState, loadSaturationRuns]);
+
+	// Open saturation delete modal
+	const openSaturationDelete = useCallback((run: SaturationRun) => {
+		setSaturationDeleteState({ isOpen: true, run });
+	}, []);
+
+	// Submit saturation delete
+	const handleSaturationDelete = useCallback(async () => {
+		if (!saturationDeleteState.run) return;
+
+		try {
+			await deleteSaturationRunByUUID(saturationDeleteState.run.run_uuid);
+			alert(`Successfully deleted saturation run (${saturationDeleteState.run.step_count} steps)`);
+			setSaturationDeleteState({ isOpen: false, run: null });
+			loadSaturationRuns();
+		} catch (err) {
+			console.error('Error deleting saturation run:', err);
+			alert('Failed to delete saturation run');
+		}
+	}, [saturationDeleteState, loadSaturationRuns]);
+
 	// Format date range
 	const formatDateRange = (firstTest: string, lastTest: string) => {
 		const first = new Date(firstTest).toLocaleDateString();
@@ -1326,6 +1485,17 @@ const Admin: React.FC = () => {
 						>
 							<Server className="w-4 h-4" />
 							By Hierarchy
+						</button>
+						<button
+							onClick={() => setActiveTab('saturation')}
+							className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
+								activeTab === 'saturation'
+									? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
+									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+							}`}
+						>
+							<Activity className="w-4 h-4" />
+							Saturation
 						</button>
 					</div>
 				</div>
@@ -2035,6 +2205,94 @@ const Admin: React.FC = () => {
 						)}
 					</div>
 				)}
+				{activeTab === 'saturation' && (
+					<div>
+						<div className="mb-6 flex items-center justify-between">
+							<div className="flex items-center gap-2">
+								<Activity className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+								<h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Saturation Runs</h2>
+							</div>
+							<div className="text-sm text-gray-600 dark:text-gray-400">
+								{filteredSaturationRuns.length}{searchTerm ? ` / ${saturationRuns.length}` : ''} run{filteredSaturationRuns.length !== 1 ? 's' : ''}
+							</div>
+						</div>
+
+						{saturationLoading ? (
+							<Loading message="Loading saturation runs..." />
+						) : saturationError ? (
+							<ErrorDisplay error={saturationError} />
+						) : filteredSaturationRuns.length === 0 ? (
+							<div className="text-center py-12 text-gray-500 dark:text-gray-400">
+								{searchTerm ? `No saturation runs found matching "${searchTerm}"` : 'No saturation runs found'}
+							</div>
+						) : (
+							<div className="space-y-3">
+								{filteredSaturationRuns.map((run) => (
+									<div
+										key={run.run_uuid}
+										className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-4"
+									>
+										<div className="flex items-start justify-between">
+											<div className="flex-1 min-w-0">
+												<div className="flex items-center gap-2 mb-2">
+													<span className="font-semibold text-gray-900 dark:text-gray-100">{run.hostname}</span>
+													<span className="text-gray-400 dark:text-gray-500">•</span>
+													<span className="text-sm text-gray-600 dark:text-gray-400">{run.protocol}</span>
+													<span className="text-gray-400 dark:text-gray-500">•</span>
+													<span className="text-sm text-gray-600 dark:text-gray-400">{run.drive_type}</span>
+													<span className="text-gray-400 dark:text-gray-500">•</span>
+													<span className="text-sm text-gray-600 dark:text-gray-400">{run.drive_model}</span>
+												</div>
+												<div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+													{run.block_size && (
+														<span>Block: {run.block_size}</span>
+													)}
+													<span>{run.step_count} step{run.step_count !== 1 ? 's' : ''}</span>
+													<span>{new Date(run.started).toLocaleString()}</span>
+												</div>
+												{run.description && (
+													<div className="mt-2 text-sm text-gray-600 dark:text-gray-300 truncate">
+														{run.description}
+													</div>
+												)}
+												<div className="mt-1 font-mono text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+													<span className="truncate">{run.run_uuid}</span>
+													<button
+														onClick={() => copyUUID(run.run_uuid)}
+														className="flex-shrink-0 p-0.5 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+														title="Copy UUID"
+													>
+														{copiedUUID === run.run_uuid ? (
+															<Check className="w-3.5 h-3.5 text-green-500" />
+														) : (
+															<Copy className="w-3.5 h-3.5" />
+														)}
+													</button>
+												</div>
+											</div>
+											<div className="flex items-center gap-2 ml-4 flex-shrink-0">
+												<button
+													onClick={() => openSaturationEdit(run)}
+													className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+													title="Edit saturation run"
+												>
+													<Edit2 className="w-4 h-4" />
+												</button>
+												<button
+													onClick={() => openSaturationDelete(run)}
+													className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+													title="Delete saturation run"
+												>
+													<Trash2 className="w-4 h-4" />
+												</button>
+											</div>
+										</div>
+									</div>
+								))}
+							</div>
+						)}
+					</div>
+				)}
 			</div>
 
 			{/* UUID Edit Modal */}
@@ -2221,6 +2479,118 @@ const Admin: React.FC = () => {
 							onClick={() =>
 								setUuidDeleteState({ ...uuidDeleteState, isOpen: false })
 							}
+						>
+							Cancel
+						</Button>
+					</div>
+				</div>
+			</Modal>
+
+			{/* Saturation Edit Modal */}
+			<Modal
+				isOpen={saturationEditState.isOpen}
+				onClose={() => setSaturationEditState({ ...saturationEditState, isOpen: false })}
+				title="Edit Saturation Run"
+			>
+				<div className="space-y-4">
+					<div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+						<p className="text-sm text-blue-800 dark:text-blue-200">
+							<strong>Warning:</strong> This will update all{' '}
+							{saturationEditState.run?.step_count} step{saturationEditState.run?.step_count !== 1 ? 's' : ''} in this saturation run.
+						</p>
+						<p className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-mono">
+							UUID: {saturationEditState.run?.run_uuid}
+						</p>
+					</div>
+
+					{(
+						['description', 'hostname', 'protocol', 'drive_type', 'drive_model'] as Array<
+							keyof SaturationEditFields
+						>
+					).map((field) => (
+						<div key={field} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+							<label className="flex items-center gap-2 mb-2">
+								<input
+									type="checkbox"
+									checked={saturationEditState.enabledFields[field]}
+									onChange={(e) =>
+										setSaturationEditState({
+											...saturationEditState,
+											enabledFields: {
+												...saturationEditState.enabledFields,
+												[field]: e.target.checked,
+											},
+										})
+									}
+									className="rounded"
+								/>
+								<span className="font-medium text-sm capitalize text-gray-900 dark:text-gray-100">
+									{field.replace('_', ' ')}
+								</span>
+							</label>
+							<input
+								type="text"
+								disabled={!saturationEditState.enabledFields[field]}
+								value={saturationEditState.fields[field] || ''}
+								onChange={(e) =>
+									setSaturationEditState({
+										...saturationEditState,
+										fields: {
+											...saturationEditState.fields,
+											[field]: e.target.value,
+										},
+									})
+								}
+								placeholder={`Enter new ${field.replace('_', ' ')}`}
+								className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+							/>
+						</div>
+					))}
+
+					<div className="flex gap-2 pt-4">
+						<Button onClick={handleSaturationEdit} className="flex-1">
+							Update {saturationEditState.run?.step_count} Steps
+						</Button>
+						<Button
+							variant="outline"
+							onClick={() => setSaturationEditState({ ...saturationEditState, isOpen: false })}
+						>
+							Cancel
+						</Button>
+					</div>
+				</div>
+			</Modal>
+
+			{/* Saturation Delete Modal */}
+			<Modal
+				isOpen={saturationDeleteState.isOpen}
+				onClose={() => setSaturationDeleteState({ isOpen: false, run: null })}
+				title="Confirm Saturation Run Deletion"
+			>
+				<div className="space-y-4">
+					<div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+						<p className="text-sm text-red-800 dark:text-red-200">
+							<strong>Warning:</strong> You are about to delete a saturation run with{' '}
+							{saturationDeleteState.run?.step_count} step{saturationDeleteState.run?.step_count !== 1 ? 's' : ''}. This action cannot be undone.
+						</p>
+						<p className="text-xs text-red-600 dark:text-red-400 mt-1">
+							<span className="font-semibold">{saturationDeleteState.run?.hostname}</span>
+							{' • '}{saturationDeleteState.run?.protocol}
+							{' • '}{saturationDeleteState.run?.drive_type}
+							{' • '}{saturationDeleteState.run?.drive_model}
+						</p>
+						<p className="text-xs text-red-600 dark:text-red-400 mt-1 font-mono">
+							UUID: {saturationDeleteState.run?.run_uuid}
+						</p>
+					</div>
+
+					<div className="flex gap-2">
+						<Button variant="danger" onClick={handleSaturationDelete} className="flex-1">
+							Delete {saturationDeleteState.run?.step_count} Steps
+						</Button>
+						<Button
+							variant="outline"
+							onClick={() => setSaturationDeleteState({ isOpen: false, run: null })}
 						>
 							Cancel
 						</Button>
