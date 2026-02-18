@@ -742,13 +742,18 @@ const Admin: React.FC = () => {
 		}
 
 		try {
-			await bulkUpdateTestRunsByUUID(
+			const result = await bulkUpdateTestRunsByUUID(
 				uuidEditState.uuid,
 				uuidEditState.uuidType,
 				updates
 			);
-			alert(`Successfully updated ${uuidEditState.count} test runs`);
+			if (result.error) {
+				throw new Error(result.error);
+			}
 			setUuidEditState({ ...uuidEditState, isOpen: false });
+
+			// Clear cached expanded runs so they reload with new data
+			setUuidGroupRuns(new Map());
 
 			// Refresh data
 			if (uuidEditState.uuidType === 'config_uuid') {
@@ -797,9 +802,14 @@ const Admin: React.FC = () => {
 		}
 
 		try {
-			await deleteTestRuns(group.test_run_ids);
-			alert(`Successfully deleted ${uuidDeleteState.count} test runs`);
+			const result = await deleteTestRuns(group.test_run_ids);
+			if (result.failed > 0) {
+				throw new Error(`Failed to delete ${result.failed} of ${result.total} test runs`);
+			}
 			setUuidDeleteState({ ...uuidDeleteState, isOpen: false });
+
+			// Clear cached expanded runs
+			setUuidGroupRuns(new Map());
 
 			// Refresh data
 			if (uuidDeleteState.uuidType === 'config_uuid') {
@@ -885,8 +895,10 @@ const Admin: React.FC = () => {
 		}
 
 		try {
-			await bulkUpdateTestRuns(hierarchyEditState.testRunIds, updates);
-			alert(`Successfully updated ${hierarchyEditState.count} test runs`);
+			const result = await bulkUpdateTestRuns(hierarchyEditState.testRunIds, updates);
+			if (result.error) {
+				throw new Error(result.error);
+			}
 			setHierarchyEditState({ ...hierarchyEditState, isOpen: false });
 
 			// Refresh hierarchical data
@@ -983,8 +995,10 @@ const Admin: React.FC = () => {
 		}
 
 		try {
-			await updateSaturationRunByUUID(saturationEditState.run.run_uuid, updates);
-			alert(`Successfully updated saturation run (${saturationEditState.run.step_count} steps)`);
+			const result = await updateSaturationRunByUUID(saturationEditState.run.run_uuid, updates);
+			if (result.error) {
+				throw new Error(result.error);
+			}
 			setSaturationEditState({ ...saturationEditState, isOpen: false });
 			loadSaturationRuns();
 		} catch (err) {
@@ -1003,8 +1017,10 @@ const Admin: React.FC = () => {
 		if (!saturationDeleteState.run) return;
 
 		try {
-			await deleteSaturationRunByUUID(saturationDeleteState.run.run_uuid);
-			alert(`Successfully deleted saturation run (${saturationDeleteState.run.step_count} steps)`);
+			const result = await deleteSaturationRunByUUID(saturationDeleteState.run.run_uuid);
+			if (result.error) {
+				throw new Error(result.error);
+			}
 			setSaturationDeleteState({ isOpen: false, run: null });
 			loadSaturationRuns();
 		} catch (err) {

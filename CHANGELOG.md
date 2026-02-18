@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Admin**: Saturation tab in Admin page — view, edit (description/metadata), and delete saturation runs grouped by run_uuid
 - **Backend**: `PUT /saturation-runs/bulk-by-uuid` and `DELETE /saturation-runs/by-uuid` endpoints for managing saturation runs
 
+### Fixed
+- **Admin**: Edit/delete handlers now check API response for errors instead of silently assuming success — fixes views not refreshing after edits across all tabs
+- **Admin**: Clear cached expanded UUID group runs after edit/delete so data refreshes properly
+
 
 ## [0.10.3] - 2026-02-18
 
