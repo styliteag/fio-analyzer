@@ -435,6 +435,16 @@ detect_ioengine() {
         print_warning "No async I/O engines available - falling back to psync"
         print_status "psync uses POSIX pwrite() - synchronous I/O only"
     fi
+
+    # Detect sync engines where iodepth is always effectively 1
+    case "$IOENGINE" in
+        psync|sync|vsync)
+            IS_SYNC_ENGINE=true
+            ;;
+        *)
+            IS_SYNC_ENGINE=false
+            ;;
+    esac
 }
 
 # Function to validate test configuration
@@ -1176,6 +1186,11 @@ saturation_loop() {
     # Initialize per-pattern state arrays
     # Escalation strategy: prefer iodepth over numjobs (3:1 ratio)
     # iodepth is cheap (just queue depth per job), numjobs is expensive (processes/shm)
+    # Exception: sync engines (psync/sync/vsync) ignore iodepth, so we only escalate numjobs
+    if [ "$IS_SYNC_ENGINE" = true ]; then
+        INITIAL_IODEPTH=1
+        print_warning "Sync engine ($IOENGINE) detected - forcing iodepth=1, escalating numjobs only"
+    fi
     for ((pi=0; pi<n; pi++)); do
         SAT_P_IODEPTH[$pi]=$INITIAL_IODEPTH
         SAT_P_NUMJOBS[$pi]=$INITIAL_NUMJOBS
@@ -1363,7 +1378,10 @@ saturation_loop() {
 
                 # Escalate QD if not saturated
                 if [ "${SAT_P_SATURATED[$pi]}" = false ]; then
-                    if [ $((SAT_P_ESC_COUNT[$pi] % 4)) -eq 3 ]; then
+                    if [ "$IS_SYNC_ENGINE" = true ]; then
+                        # Sync engines (psync/sync/vsync) ignore iodepth - only numjobs creates real QD
+                        SAT_P_NUMJOBS[$pi]=$((SAT_P_NUMJOBS[$pi] * 2))
+                    elif [ $((SAT_P_ESC_COUNT[$pi] % 4)) -eq 3 ]; then
                         SAT_P_NUMJOBS[$pi]=$((SAT_P_NUMJOBS[$pi] * 2))
                     else
                         SAT_P_IODEPTH[$pi]=$((SAT_P_IODEPTH[$pi] * 2))
