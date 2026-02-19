@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- 
+
+## [0.10.5] - 2026-02-20
+
 ### Fixed
 - **fio-test.sh**: Saturation test now detects sync engines (psync/sync/vsync) and escalates only numjobs — iodepth is ignored by these engines, so 75% of QD escalation steps were previously ineffective
 
