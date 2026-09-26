@@ -80,3 +80,9 @@ tmp/
 .cache/
 .grok/settings.json
 .claude/
+.claude/settings.local.json
+backup/
+
+# Playwright artifacts
+frontend/test-results/
+frontend/playwright-report/

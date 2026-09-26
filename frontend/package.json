@@ -10,7 +10,8 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "type-check": "tsc --noEmit",
     "preview": "vite preview",
-    "server": "python backend/main.py"
+    "server": "python backend/main.py",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@react-three/drei": "^10.4.2",
@@ -25,17 +26,16 @@
     "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.1.0",
-    "react-parallel-coordinates": "^0.2.9",
     "react-router-dom": "^7.6.3",
     "react-select": "^5.10.1",
     "tailwindcss": "^3.4.16"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
+    "@playwright/test": "^1.63.0",
     "@types/d3": "^7.4.3",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "@types/react-router-dom": "^5.3.3",
     "@typescript-eslint/eslint-plugin": "^8.35.0",
     "@typescript-eslint/parser": "^8.35.0",
     "@vitejs/plugin-react": "^4.6.0",
