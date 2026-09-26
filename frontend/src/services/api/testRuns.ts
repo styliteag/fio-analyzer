@@ -316,7 +316,7 @@ export const bulkUpdateTestRunsByUUID = async (
     updates: TestRunUpdateData,
     abortSignal?: AbortSignal
 ) => {
-    const queryParam = uuidType === 'config_uuid' ? `config_uuid=${uuid}` : `run_uuid=${uuid}`;
+    const queryParam = new URLSearchParams({ [uuidType]: uuid }).toString();
 
     return apiCall(`/api/test-runs/bulk-by-uuid?${queryParam}`, {
         method: "PUT",

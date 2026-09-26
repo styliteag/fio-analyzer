@@ -125,11 +125,9 @@ export const usePaginatedTimeSeriesData = (): UsePaginatedTimeSeriesDataResult =
                     // Update data state with accumulated results
                     setData([...allData]);
 
-                    console.log(`🔄 [usePaginatedTimeSeriesData] Batch ${currentBatch}/${totalBatches} loaded: ${batchData.length} records (total: ${allData.length}/${totalRecords})`);
 
                     // Check if we have more data
                     if (!pagination.has_more || batchData.length === 0) {
-                        console.log(`✅ [usePaginatedTimeSeriesData] All data loaded: ${allData.length} total records`);
                         break;
                     }
 
@@ -146,7 +144,6 @@ export const usePaginatedTimeSeriesData = (): UsePaginatedTimeSeriesDataResult =
             // Handle AbortError specifically
             if (isAbortError(err) || isCancelledError(err)) {
                 setIsCancelled(true);
-                console.log('🚫 [usePaginatedTimeSeriesData] Fetch cancelled by user');
                 return;
             }
 
@@ -173,7 +170,6 @@ export const usePaginatedTimeSeriesData = (): UsePaginatedTimeSeriesDataResult =
         setLoading(false);
         setProgress(null);
         
-        console.log('🚫 [usePaginatedTimeSeriesData] Fetch cancelled by user');
     }, []);
 
     return {

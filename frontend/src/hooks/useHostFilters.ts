@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
+import { useUpdateUrlParams, useUrlList, useUrlNumberList } from './useUrlState';
 import type { HostAnalysisData } from '../services/api/hostAnalysis';
 
 export interface UseHostFiltersReturn {
@@ -47,40 +48,51 @@ export interface UseHostFiltersProps {
     combinedHostData: HostAnalysisData | null;
 }
 
+// URL query keys for every filter, so filtered views survive reloads and can be shared
+export const HOST_FILTER_KEYS = {
+    blockSizes: 'bs',
+    patterns: 'pattern',
+    queueDepths: 'qd',
+    numJobs: 'jobs',
+    syncs: 'sync',
+    directs: 'direct',
+    ioDepths: 'iodepth',
+    testSizes: 'size',
+    durations: 'dur',
+    hosts: 'fhost',
+    hostProtocols: 'fproto',
+    hostProtocolTypes: 'ftype',
+    hostProtocolTypeModels: 'fmodel',
+} as const;
+
+export const clearHostFilters = (params: URLSearchParams): void => {
+    Object.values(HOST_FILTER_KEYS).forEach((key) => params.delete(key));
+};
+
 export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHostFiltersReturn => {
+    const updateParams = useUpdateUrlParams();
+
     // Filter states
-    const [selectedBlockSizes, setSelectedBlockSizes] = useState<string[]>([]);
-    const [selectedPatterns, setSelectedPatterns] = useState<string[]>([]);
-    const [selectedQueueDepths, setSelectedQueueDepths] = useState<number[]>([]);
-    const [selectedNumJobs, setSelectedNumJobs] = useState<number[]>([]);
-    const [selectedSyncs, setSelectedSyncs] = useState<number[]>([]);
-    const [selectedDirects, setSelectedDirects] = useState<number[]>([]);
-    const [selectedIoDepths, setSelectedIoDepths] = useState<number[]>([]);
-    const [selectedTestSizes, setSelectedTestSizes] = useState<string[]>([]);
-    const [selectedDurations, setSelectedDurations] = useState<number[]>([]);
+    const [selectedBlockSizes, setSelectedBlockSizes] = useUrlList(HOST_FILTER_KEYS.blockSizes);
+    const [selectedPatterns, setSelectedPatterns] = useUrlList(HOST_FILTER_KEYS.patterns);
+    const [selectedQueueDepths, setSelectedQueueDepths] = useUrlNumberList(HOST_FILTER_KEYS.queueDepths);
+    const [selectedNumJobs, setSelectedNumJobs] = useUrlNumberList(HOST_FILTER_KEYS.numJobs);
+    const [selectedSyncs, setSelectedSyncs] = useUrlNumberList(HOST_FILTER_KEYS.syncs);
+    const [selectedDirects, setSelectedDirects] = useUrlNumberList(HOST_FILTER_KEYS.directs);
+    const [selectedIoDepths, setSelectedIoDepths] = useUrlNumberList(HOST_FILTER_KEYS.ioDepths);
+    const [selectedTestSizes, setSelectedTestSizes] = useUrlList(HOST_FILTER_KEYS.testSizes);
+    const [selectedDurations, setSelectedDurations] = useUrlNumberList(HOST_FILTER_KEYS.durations);
 
     // Hierarchical filter states
-    const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
-    const [selectedHostProtocols, setSelectedHostProtocols] = useState<string[]>([]);
-    const [selectedHostProtocolTypes, setSelectedHostProtocolTypes] = useState<string[]>([]);
-    const [selectedHostProtocolTypeModels, setSelectedHostProtocolTypeModels] = useState<string[]>([]);
+    const [selectedHosts, setSelectedHosts] = useUrlList(HOST_FILTER_KEYS.hosts);
+    const [selectedHostProtocols, setSelectedHostProtocols] = useUrlList(HOST_FILTER_KEYS.hostProtocols);
+    const [selectedHostProtocolTypes, setSelectedHostProtocolTypes] = useUrlList(HOST_FILTER_KEYS.hostProtocolTypes);
+    const [selectedHostProtocolTypeModels, setSelectedHostProtocolTypeModels] = useUrlList(HOST_FILTER_KEYS.hostProtocolTypeModels);
 
-    // Reset filters function
+    // Reset all filters in a single URL update
     const resetFilters = useCallback(() => {
-        setSelectedBlockSizes([]);
-        setSelectedPatterns([]);
-        setSelectedQueueDepths([]);
-        setSelectedNumJobs([]);
-        setSelectedSyncs([]);
-        setSelectedDirects([]);
-        setSelectedIoDepths([]);
-        setSelectedTestSizes([]);
-        setSelectedDurations([]);
-        setSelectedHosts([]);
-        setSelectedHostProtocols([]);
-        setSelectedHostProtocolTypes([]);
-        setSelectedHostProtocolTypeModels([]);
-    }, []);
+        updateParams(clearHostFilters);
+    }, [updateParams]);
 
     // Filter drives based on selected criteria
     const filteredDrives = useMemo((): any[] => {

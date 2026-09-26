@@ -100,7 +100,7 @@ const Button: React.FC<ButtonProps> = ({
         >
             {loading && loadingSpinner}
             {!loading && !isIconOnly && iconPosition === 'left' && iconElement}
-            {!loading && !isIconOnly && <span>{children}</span>}
+            {!isIconOnly && <span className="inline-flex items-center gap-2">{children}</span>}
             {!loading && !isIconOnly && iconPosition === 'right' && iconElement}
             {!loading && isIconOnly && iconElement}
         </button>

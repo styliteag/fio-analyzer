@@ -140,16 +140,6 @@ const getFallbackMetrics = (recentTestRuns: TestRun[]): {avgIOPS: number, avgLat
         ? Math.round(latencyAvg * 100) / 100  // Round to 2 decimal places
         : 0;
     
-    console.log('Fallback metrics calculated:', {
-        testRunsUsed: recentTestRuns.length,
-        validIOPS: validIOPS.length,
-        validLatency: validLatency.length,
-        avgIOPS,
-        avgLatency,
-        latencySample: validLatency.slice(0, 5),
-        latencySum: validLatency.reduce((sum, val) => sum + val, 0),
-        latencyAvg: validLatency.length > 0 ? validLatency.reduce((sum, val) => sum + val, 0) / validLatency.length : 0
-    });
     
     return { avgIOPS, avgLatency };
 };
@@ -212,32 +202,13 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
         const latestData = latestResult.status === 'fulfilled' ? latestResult.value.data || [] : [];
         
         // Debug logging
-        console.log('Dashboard stats - servers:', servers.length, servers);
-        console.log('Dashboard stats - latestData:', latestData.length, latestData.slice(0, 5));
         
         // Calculate statistics
         const activeServers = servers.filter(s => s.test_count > 0).length;
-        console.log('Active servers count:', activeServers, 'from', servers.length, 'total servers');
         
         // Calculate average IOPS and latency from latest data
         const iopsData = latestData.filter(d => d.metric_type === 'iops' && d.value > 0);
         const latencyData = latestData.filter(d => d.metric_type === 'avg_latency' && d.value > 0);
-        
-        console.log('IOPS data points:', iopsData.length);
-        console.log('Latency data points:', latencyData.length);
-        if (latencyData.length > 0) {
-            const sampleValues = latencyData.slice(0, 5).map(d => d.value);
-            const sum = latencyData.reduce((sum, d) => sum + d.value, 0);
-            const avg = sum / latencyData.length;
-            console.log('Latency calculation details:', {
-                sampleValues,
-                sum,
-                count: latencyData.length,
-                average: avg,
-                min: Math.min(...latencyData.map(d => d.value)),
-                max: Math.max(...latencyData.map(d => d.value))
-            });
-        }
         
         let avgIOPS = 0;
         let avgLatency = 0;
@@ -245,7 +216,6 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
         // Try to get IOPS and latency from time series latest
         if (iopsData.length > 0) {
             avgIOPS = Math.round(iopsData.reduce((sum, d) => sum + d.value, 0) / iopsData.length);
-            console.log('Calculated avgIOPS from time series:', avgIOPS);
         }
         
         if (latencyData.length > 0) {
@@ -259,15 +229,6 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
                 const sum = numericValues.reduce((sum, val) => sum + val, 0);
                 const avg = sum / numericValues.length;
                 avgLatency = Math.round(avg * 100) / 100; // Round to 2 decimal places
-                console.log('Calculated avgLatency from time series:', {
-                    sum,
-                    count: numericValues.length,
-                    avg,
-                    rounded: avgLatency,
-                    sampleValues: numericValues.slice(0, 5),
-                    min: Math.min(...numericValues),
-                    max: Math.max(...numericValues)
-                });
             } else {
                 console.warn('No valid numeric latency values found in time series data');
             }
@@ -275,21 +236,13 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
         
         // If either metric is missing, use fallback method from test runs
         if (avgIOPS === 0 || avgLatency === 0) {
-            console.log('Missing metrics from time series, trying fallback method from test runs...');
-            console.log('Test runs available:', testRuns.length);
-            if (testRuns.length > 0) {
-                console.log('Sample test run latency:', testRuns[0]?.avg_latency, 'IOPS:', testRuns[0]?.iops);
-            }
-            
             // Use more test runs for better average (up to 50)
             const fallbackMetrics = getFallbackMetrics(testRuns.slice(0, 50));
             
             if (avgIOPS === 0 && fallbackMetrics.avgIOPS > 0) {
-                console.log('Using fallback IOPS:', fallbackMetrics.avgIOPS);
                 avgIOPS = fallbackMetrics.avgIOPS;
             }
             if (avgLatency === 0 && fallbackMetrics.avgLatency > 0) {
-                console.log('Using fallback latency:', fallbackMetrics.avgLatency);
                 avgLatency = fallbackMetrics.avgLatency;
             }
         }
@@ -321,11 +274,6 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
             ? getRelativeTime(mostRecentRun.timestamp) 
             : 'No recent uploads';
         
-        // Debug logging for timestamp format
-        if (mostRecentRun) {
-            console.log('Most recent run timestamp:', mostRecentRun.timestamp, 'Parsed:', new Date(mostRecentRun.timestamp));
-        }
-        
         // Generate recent activity
         const recentActivity = generateRecentActivity(testRuns, servers);
         
@@ -346,11 +294,6 @@ export const fetchDashboardStats = async (): Promise<DashboardStats> => {
         );
         const hostnamesWithHistory = uniqueTimeSeriesHostnames.size;
         
-        console.log('Test run hostnames:', [...uniqueHostnames]);
-        console.log('Time series server entries:', servers.length);
-        console.log('Time series server details:', servers.map(s => `${s.hostname}|${s.protocol}|${s.drive_model}`));
-        console.log('Time series hostnames:', [...uniqueTimeSeriesHostnames]);
-        console.log('Unique time series hostnames count:', uniqueTimeSeriesHostnames.size);
         
         return {
             totalTestRuns,

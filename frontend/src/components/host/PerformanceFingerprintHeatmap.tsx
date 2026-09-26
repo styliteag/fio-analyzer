@@ -95,7 +95,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
         });
     }, [drives, columnDimension]);
 
-    const allHostnames = [...new Set(drives.map(drive => drive.hostname))].sort();
     // Get patterns from actual data, but map them to our expected format
     const rawPatterns = [...new Set(drives.flatMap(drive =>
         drive.configurations.map(config => config.read_write_pattern)
@@ -111,8 +110,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
 
     const allPatterns = rawPatterns.map(pattern => patternMapping[pattern] || pattern);
 
-    console.log('Raw patterns from data:', rawPatterns);
-    console.log('Mapped patterns:', allPatterns);
 
     // Create row definitions - each row is hostname + protocol + driveModel + pattern
     const rowDefinitions = React.useMemo(() => {
@@ -278,9 +275,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     const responsivenessRange = visibleMaxResponsiveness > 0 ? visibleMaxResponsiveness : 1;
     const latencyRange = visibleMaxLatency > 0 ? visibleMaxLatency : 1;
 
-    console.log('All column values:', allColumnValues);
-    console.log('All hostnames:', allHostnames);
-    console.log('All patterns:', allPatterns);
 
     // Build heatmap data - organized by row definition and column dimension
     // Each row represents a hostname + pattern combination
@@ -288,7 +282,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
     const heatmapData: HeatmapCell[][] = React.useMemo(() => {
         const data: HeatmapCell[][] = [];
 
-        console.log('Building heatmap data for', rowDefinitions.length, 'rows and', allColumnValues.length, 'column values');
 
         // Initialize heatmap data structure
         rowDefinitions.forEach((rowDef, rowIndex) => {
@@ -442,7 +435,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 );
 
                 if (rowIndex === -1) {
-                    console.log('Row not found for:', hostKey, mappedPattern, 'original pattern:', config.read_write_pattern);
                     return;
                 }
 
@@ -480,7 +472,6 @@ const PerformanceFingerprintHeatmap: React.FC<PerformanceFingerprintHeatmapProps
                 });
                 
                 if (colIndex === -1) {
-                    console.log('Column not found for dimension value:', columnValue, 'dimension:', columnDimension);
                     return;
                 }
 

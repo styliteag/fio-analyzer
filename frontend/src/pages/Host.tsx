@@ -1,11 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import { DashboardHeader, DashboardFooter } from '../components/layout';
-import { Card, Loading, ErrorDisplay } from '../components/ui';
+import React, { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, Server, Upload } from 'lucide-react';
+import { PageHeader, PAGE_CONTAINER } from '../components/layout';
+import { Card, Loading, ErrorDisplay, EmptyState } from '../components/ui';
+import { useUrlValue } from '../hooks/useUrlState';
 import { useHostData } from '../hooks/useHostData';
 import { useHostFilters } from '../hooks/useHostFilters';
 import HostSelector from '../components/host/HostSelector';
 import HostSummaryCards from '../components/host/HostSummaryCards';
-import HostVisualizationControls, { type VisualizationView } from '../components/host/HostVisualizationControls';
+import HostVisualizationControls, { VIEW_IDS, type VisualizationView } from '../components/host/HostVisualizationControls';
 import HostFiltersSidebar from '../components/host/HostFiltersSidebar';
 import HostOverview from '../components/host/HostOverview';
 import DriveRadarChart from '../components/host/DriveRadarChart';
@@ -25,8 +28,8 @@ import PerformanceMatrixView from '../components/host/PerformanceMatrixView';
 
 const Host: React.FC = () => {
 
-    // Visualization states
-    const [activeView, setActiveView] = useState<VisualizationView>('overview');
+    // Active visualization is kept in the URL (?view=radar)
+    const [activeView, setActiveView] = useUrlValue<VisualizationView>('view', 'overview', VIEW_IDS);
 
     // Use custom hooks for data and filters
     const {
@@ -36,6 +39,7 @@ const Host: React.FC = () => {
         combinedHostData,
         loading,
         error,
+        failedHosts,
         handleHostsChange,
         refreshData
     } = useHostData();
@@ -71,12 +75,6 @@ const Host: React.FC = () => {
         resetFilters
     } = useHostFilters({ combinedHostData });
 
-    // Handle host changes and reset filters
-    const handleHostsChangeWithReset = (newHosts: string[]) => {
-        handleHostsChange(newHosts);
-        resetFilters();
-    };
-
     // Calculate filtered summary data
     const filteredHostData = useMemo(() => {
         if (!combinedHostData) return null;
@@ -105,116 +103,85 @@ const Host: React.FC = () => {
         };
     }, [combinedHostData, filteredDrives]);
 
-    if (loadingHosts) {
-        return (
-            <div className="min-h-screen theme-bg-secondary">
-                <DashboardHeader />
-                <main className="container mx-auto px-4 py-8">
-                    <Loading />
-                </main>
-                <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="min-h-screen theme-bg-secondary">
-                <DashboardHeader />
-                <main className="container mx-auto px-4 py-8">
-                    <ErrorDisplay
-                        error={error}
-                        onRetry={refreshData}
-                        showRetry={true}
-                    />
-                </main>
-                <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
-            </div>
-        );
-    }
-
-    if (availableHosts.length === 0) {
-        return (
-            <div className="min-h-screen theme-bg-secondary">
-                <DashboardHeader />
-                <main className="container mx-auto px-4 py-8">
-                    <div className="text-center">
-                        <p className="theme-text-secondary">No hosts available for analysis</p>
-                    </div>
-                </main>
-                <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
-            </div>
-        );
-    }
-
-    // Show host selector when no hosts are selected
-    if (selectedDataHosts.length === 0) {
-        return (
-            <div className="min-h-screen theme-bg-secondary">
-                <DashboardHeader />
-                <main className="container mx-auto px-4 py-8">
-                    <div className="max-w-4xl mx-auto">
-                        <div className="mb-8">
-                            <h1 className="text-3xl font-bold theme-text-primary mb-2">Host Analysis</h1>
-                            <p className="theme-text-secondary">Select one or more hosts to analyze their storage performance</p>
-                        </div>
-
-                        <Card className="p-6">
-                            <div className="mb-4">
-                                <h2 className="text-xl font-semibold theme-text-primary mb-2">Available Hosts</h2>
-                                <p className="theme-text-secondary text-sm">Choose hosts to analyze their performance data</p>
-                            </div>
-
-                            <HostSelector
-                                selectedHosts={selectedDataHosts}
-                                onHostsChange={handleHostsChangeWithReset}
-                                availableHosts={availableHosts}
-                                loadingHosts={loadingHosts}
-                                loading={loadingHosts}
-                                onRefresh={refreshData}
-                            />
-                        </Card>
-                    </div>
-                </main>
-                <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
-            </div>
-        );
-    }
-
-    // Show loading when hosts are selected but data is still loading
-    if (loading && selectedDataHosts.length > 0) {
-        return (
-            <div className="min-h-screen theme-bg-secondary">
-                <DashboardHeader />
-                <main className="container mx-auto px-4 py-8">
-                    <Loading />
-                </main>
-                <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
-            </div>
-        );
-    }
+    const hasHosts = availableHosts.length > 0;
+    const nothingSelected = selectedDataHosts.length === 0;
 
     return (
-        <div className="min-h-screen theme-bg-secondary">
-            <DashboardHeader />
+        <div className={PAGE_CONTAINER}>
+            <PageHeader
+                title="Host Analysis"
+                description="Compare storage performance across hosts, protocols, drive types and models."
+            />
 
-            <main className="container mx-auto px-4 py-8">
-                {/* Host Selector */}
+            {error && (
+                <div className="mb-6">
+                    <ErrorDisplay error={error} onRetry={refreshData} showRetry={true} />
+                </div>
+            )}
+
+            {!loadingHosts && !hasHosts && !error && (
+                <Card className="p-6">
+                    <EmptyState
+                        icon={<Server className="h-12 w-12" />}
+                        title="No benchmark data yet"
+                        description="Upload FIO JSON results or run fio-test.sh on a host. Hosts appear here after their first upload."
+                        action={
+                            <Link to="/upload" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium theme-btn-primary">
+                                <Upload className="h-4 w-4" aria-hidden="true" />
+                                Upload results
+                            </Link>
+                        }
+                    />
+                </Card>
+            )}
+
+            {(loadingHosts || hasHosts) && (
                 <HostSelector
                     availableHosts={availableHosts}
                     selectedHosts={selectedDataHosts}
                     loadingHosts={loadingHosts}
                     loading={loading}
-                    onHostsChange={handleHostsChangeWithReset}
+                    onHostsChange={handleHostsChange}
                     onRefresh={refreshData}
                 />
+            )}
 
-                {/* Loading state for host data */}
-                {loading && selectedDataHosts.length > 0 && (
-                    <div className="flex justify-center py-12">
-                        <Loading />
-                    </div>
-                )}
+            {failedHosts.length > 0 && !error && (
+                <div role="alert" className="mb-6 flex items-center gap-2 rounded-lg border border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
+                    <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    Could not load data for: {failedHosts.join(', ')}. Showing the remaining hosts.
+                </div>
+            )}
+
+            {hasHosts && nothingSelected && (
+                <Card className="p-6">
+                    <EmptyState
+                        icon={<Server className="h-12 w-12" />}
+                        title="Pick hosts to start"
+                        description="Select one host for a deep dive, or several to compare them. Your selection, view and filters are saved in the URL, so you can bookmark or share it."
+                        action={
+                            <div role="group" aria-label="Quick pick a host" className="flex flex-wrap justify-center gap-2">
+                                {availableHosts.slice(0, 8).map((host) => (
+                                    <button
+                                        key={host}
+                                        type="button"
+                                        onClick={() => handleHostsChange([host])}
+                                        className="px-3 py-1.5 rounded-full border text-sm theme-nav-link theme-border-primary"
+                                    >
+                                        {host}
+                                    </button>
+                                ))}
+                            </div>
+                        }
+                    />
+                </Card>
+            )}
+
+            {loading && !nothingSelected && (
+                <div className="flex justify-center py-12">
+                    <Loading />
+                </div>
+            )}
 
                 {/* Content when host data is available */}
                 {!loading && combinedHostData && filteredHostData && (
@@ -330,9 +297,6 @@ const Host: React.FC = () => {
                         </div>
                     </>
                 )}
-            </main>
-
-            <DashboardFooter getApiDocsUrl={() => "/api-docs"} />
         </div>
     );
 };

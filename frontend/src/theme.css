@@ -165,6 +165,27 @@
 .theme-text-error {
 	color: var(--text-error);
 }
+
+/* Hover variants: Tailwind cannot generate these for plain CSS classes */
+.hover\:theme-text-primary:hover {
+	color: var(--text-primary);
+}
+.hover\:theme-text-accent:hover {
+	color: var(--text-accent);
+}
+
+/* Navigation link states */
+.theme-nav-link {
+	color: var(--text-secondary);
+}
+.theme-nav-link:hover {
+	color: var(--text-primary);
+	background-color: var(--bg-tertiary);
+}
+.theme-nav-link-active {
+	color: var(--text-accent);
+	background-color: var(--bg-accent);
+}
 .theme-text-success {
 	color: var(--text-success);
 }

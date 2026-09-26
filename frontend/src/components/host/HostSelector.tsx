@@ -1,7 +1,6 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '../ui';
 import { getSelectStyles } from '../../hooks/useThemeColors';
 
@@ -14,6 +13,8 @@ export interface HostSelectorProps {
     onRefresh: () => void;
 }
 
+const toOption = (host: string) => ({ value: host, label: host });
+
 const HostSelector: React.FC<HostSelectorProps> = ({
     availableHosts,
     selectedHosts,
@@ -22,61 +23,45 @@ const HostSelector: React.FC<HostSelectorProps> = ({
     onHostsChange,
     onRefresh
 }) => {
-    const navigate = useNavigate();
+    const allSelected = availableHosts.length > 0 && selectedHosts.length === availableHosts.length;
 
     return (
-        <div className="mb-8">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4">
-                <div className="flex items-center gap-4">
+        <div className="mb-6 theme-card rounded-lg border p-4">
+            <label htmlFor="host-select" className="block text-sm font-medium theme-text-primary mb-2">
+                Hosts to analyze
+            </label>
+            <div className="flex flex-col md:flex-row md:items-center gap-3">
+                <div className="flex-1 min-w-0">
+                    <Select
+                        inputId="host-select"
+                        isMulti
+                        closeMenuOnSelect={false}
+                        hideSelectedOptions={false}
+                        blurInputOnSelect={false}
+                        isDisabled={loadingHosts}
+                        isLoading={loadingHosts}
+                        options={availableHosts.map(toOption)}
+                        value={selectedHosts.map(toOption)}
+                        onChange={(selected) => onHostsChange(selected ? selected.map((s) => s.value) : [])}
+                        placeholder="Search or pick one or more hosts…"
+                        noOptionsMessage={() => 'No matching host'}
+                        className="text-sm"
+                        styles={getSelectStyles()}
+                    />
+                </div>
+                <div className="flex gap-2 shrink-0">
                     <Button
                         variant="outline"
-                        onClick={() => navigate('/')}
-                        className="flex items-center gap-2"
+                        size="sm"
+                        onClick={() => onHostsChange(allSelected ? [] : availableHosts)}
+                        disabled={loadingHosts || availableHosts.length === 0}
                     >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Home
+                        {allSelected ? 'Clear all' : 'Select all'}
                     </Button>
-                    <Button
-                        variant="outline"
-                        onClick={onRefresh}
-                        disabled={loading}
-                        className="flex items-center gap-2"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                    <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading || loadingHosts} title="Reload host list and data">
+                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
                         Refresh
                     </Button>
-                </div>
-
-                {/* Host Selector */}
-                <div className="flex items-center gap-3 flex-1 max-w-md">
-                    <span className="text-sm font-medium theme-text-secondary whitespace-nowrap">
-                        Select Hosts:
-                    </span>
-                    <div className="flex-1">
-                        <Select
-                            isMulti
-                            closeMenuOnSelect={false}
-                            hideSelectedOptions={false}
-                            blurInputOnSelect={false}
-                            isClearable={false}
-                            isDisabled={loadingHosts}
-                            options={availableHosts.map(host => ({
-                                value: host,
-                                label: host
-                            }))}
-                            value={selectedHosts.map(host => ({
-                                value: host,
-                                label: host
-                            }))}
-                            onChange={(selected) => {
-                                const hosts = selected ? selected.map(s => s.value) : [];
-                                onHostsChange(hosts);
-                            }}
-                            placeholder="Select hosts to analyze..."
-                            className="text-sm"
-                            styles={getSelectStyles()}
-                        />
-                    </div>
                 </div>
             </div>
         </div>

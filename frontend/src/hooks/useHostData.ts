@@ -1,113 +1,104 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { clearHostFilters } from './useHostFilters';
+import { useUpdateUrlParams, useUrlList, writeList } from './useUrlState';
 import { fetchHostAnalysis, getHostList, type HostAnalysisData } from '../services/api/hostAnalysis';
-
-export interface UseHostDataProps {
-    // No longer using hostname from URL
-}
 
 export interface UseHostDataReturn {
     // Host list data
     availableHosts: string[];
     loadingHosts: boolean;
     selectedHosts: string[];
-    
+
     // Host analysis data
     hostDataMap: Record<string, HostAnalysisData>;
     combinedHostData: HostAnalysisData | null;
     loading: boolean;
     error: string | null;
-    
+    failedHosts: string[];
+
     // Actions
     handleHostsChange: (newHosts: string[]) => void;
     refreshData: () => void;
 }
 
+export const HOSTS_PARAM = 'hosts';
+
 export const useHostData = (): UseHostDataReturn => {
+    // Selected hosts live in the URL (?hosts=a&hosts=b)
+    const [selectedHosts] = useUrlList(HOSTS_PARAM);
+    const updateParams = useUpdateUrlParams();
+
     // Host list states
     const [availableHosts, setAvailableHosts] = useState<string[]>([]);
     const [loadingHosts, setLoadingHosts] = useState(true);
-    const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
-    
+
     // Host analysis data states
     const [hostDataMap, setHostDataMap] = useState<Record<string, HostAnalysisData>>({});
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [failedHosts, setFailedHosts] = useState<string[]>([]);
+    const requestId = useRef(0);
 
-    // Load available hosts
     const loadHostList = useCallback(async () => {
         try {
             setLoadingHosts(true);
-            const hosts = await getHostList();
-            setAvailableHosts(hosts);
-            
-            // Don't auto-select any host - let user choose
-        } catch (err) {
-            console.error('Failed to load host list:', err);
+            setError(null);
+            setAvailableHosts(await getHostList());
+        } catch {
             setError('Failed to load available hosts');
         } finally {
             setLoadingHosts(false);
         }
     }, []);
 
-    // Load host analysis data for multiple hosts
-    const loadHostsData = useCallback(async (hosts: string[] = selectedHosts) => {
+    // Load analysis data for all hosts in parallel; keep partial results
+    const loadHostsData = useCallback(async (hosts: string[]) => {
         if (hosts.length === 0) {
+            requestId.current += 1;
             setLoading(false);
+            setHostDataMap({});
+            setFailedHosts([]);
             return;
         }
-
-        try {
-            setLoading(true);
-            setError(null);
-            const dataMap: Record<string, HostAnalysisData> = {};
-            
-            // Load data for each host
-            for (const host of hosts) {
-                try {
-                    const data = await fetchHostAnalysis(host);
-                    dataMap[host] = data;
-                } catch (err) {
-                    console.error(`Failed to load data for host ${host}:`, err);
-                    // Continue with other hosts even if one fails
-                }
-            }
-            
-            setHostDataMap(dataMap);
-        } catch (err) {
-            console.error('Failed to load host analysis:', err);
-            setError(err instanceof Error ? err.message : 'Failed to load host analysis');
-        } finally {
-            setLoading(false);
+        requestId.current += 1;
+        const currentRequest = requestId.current;
+        setLoading(true);
+        setError(null);
+        const results = await Promise.allSettled(hosts.map((host) => fetchHostAnalysis(host)));
+        if (currentRequest !== requestId.current) return; // a newer selection superseded this one
+        const loaded = hosts.flatMap((host, index) => {
+            const result = results[index];
+            return result.status === 'fulfilled' ? [[host, result.value] as const] : [];
+        });
+        const failed = hosts.filter((_, index) => results[index].status === 'rejected');
+        setHostDataMap(Object.fromEntries(loaded));
+        setFailedHosts(failed);
+        if (loaded.length === 0) {
+            setError(`Failed to load data for ${failed.join(', ')}`);
         }
-    }, [selectedHosts]);
+        setLoading(false);
+    }, []);
 
-    // Handle host selection change
+    // Changing hosts clears drill-down filters in the same URL update
     const handleHostsChange = useCallback((newHosts: string[]) => {
-        setSelectedHosts(newHosts);
-        loadHostsData(newHosts);
-    }, [loadHostsData]);
+        updateParams((params) => {
+            writeList(params, HOSTS_PARAM, newHosts);
+            clearHostFilters(params);
+        });
+    }, [updateParams]);
 
-    // Refresh data function
     const refreshData = useCallback(() => {
-        if (selectedHosts.length > 0) {
-            loadHostsData(selectedHosts);
-        } else {
-            loadHostList();
-        }
+        loadHostList();
+        loadHostsData(selectedHosts);
     }, [selectedHosts, loadHostsData, loadHostList]);
 
-    // Load host list on component mount
     useEffect(() => {
         loadHostList();
     }, [loadHostList]);
 
-
-    // Load host data when selected hosts change (after host list is loaded)
     useEffect(() => {
-        if (selectedHosts.length > 0 && !loadingHosts) {
-            loadHostsData(selectedHosts);
-        }
-    }, [selectedHosts, loadingHosts, loadHostsData]);
+        loadHostsData(selectedHosts);
+    }, [selectedHosts, loadHostsData]);
 
     // Combine data from all selected hosts
     const combinedHostData = useMemo(() => {
@@ -168,7 +159,8 @@ export const useHostData = (): UseHostDataReturn => {
         combinedHostData,
         loading,
         error,
-        
+        failedHosts,
+
         // Actions
         handleHostsChange,
         refreshData

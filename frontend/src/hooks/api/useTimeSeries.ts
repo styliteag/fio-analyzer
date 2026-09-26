@@ -148,12 +148,10 @@ export const useTimeSeriesHistory = ({
     const [data, setData] = useState<TimeSeriesDataPoint[]>([]);
     
     const fetchHistory = useCallback(async (fetchOptions?: TimeSeriesHistoryOptions) => {
-        console.log('🚀 [useTimeSeriesHistory] Starting paginated fetch...');
         
         try {
             // Use pagination hook to fetch ALL data
             await paginatedData.fetchAllData(fetchOptions || options);
-            console.log('✅ [useTimeSeriesHistory] Paginated data loaded:', paginatedData.data.length, 'records');
         } catch (error) {
             console.error('❌ [useTimeSeriesHistory] Failed to load paginated data:', error);
         }

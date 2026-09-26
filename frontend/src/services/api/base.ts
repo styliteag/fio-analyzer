@@ -184,9 +184,12 @@ export const apiUpload = async (
         }
 
         if (!response.ok) {
+            // FastAPI puts the reason into {"detail": "..."}; surface it instead of the bare status text
+            const body = await response.json().catch(() => null);
+            const detail = body && typeof body.detail === 'string' ? body.detail : null;
             return {
                 status: response.status,
-                error: `Upload Error: ${response.statusText}`,
+                error: detail ?? `Upload failed (${response.status} ${response.statusText})`,
             };
         }
 

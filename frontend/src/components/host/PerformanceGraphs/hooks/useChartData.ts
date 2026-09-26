@@ -334,13 +334,11 @@ export const useChartData = (
   // Refetch function (could be used to refresh data from API)
   const refetch = useCallback(() => {
     // In a real implementation, this would trigger a data refresh
-    console.log('Refetching chart data...');
   }, []);
 
   // Cache invalidation function
   const invalidateCache = useCallback(() => {
     // In a real implementation, this would clear any cached data
-    console.log('Invalidating chart data cache...');
   }, []);
 
   return {

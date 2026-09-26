@@ -1,7 +1,11 @@
 import { useState, useMemo, useCallback } from 'react';
-import { DashboardHeader, DashboardFooter } from '../components/layout';
+import { useSearchParams } from 'react-router-dom';
+import { Gauge } from 'lucide-react';
+import { PageHeader } from '../components/layout';
 import Card from '../components/ui/Card';
-import { Loading } from '../components/ui';
+import { Loading, ErrorDisplay, EmptyState } from '../components/ui';
+import { useUpdateUrlParams, writeValue } from '../hooks/useUrlState';
+import { TESTING_SCRIPT_URL } from '../utils/apiDocs';
 import SaturationChart from '../components/saturation/SaturationChart';
 import { useSaturationRuns, useSaturationRunData } from '../hooks/useSaturationData';
 import type { SaturationRun, SaturationData } from '../services/api/testRuns';
@@ -39,6 +43,12 @@ function getMaxLatency(data: SaturationData | null, hidden?: Set<string>): numbe
     return max;
 }
 
+/** Use the run from the URL if it belongs to the list, else the first (newest) run */
+function pickRun(runs: SaturationRun[], requested: string | null): string | null {
+    if (requested && runs.some(r => r.run_uuid === requested)) return requested;
+    return runs[0]?.run_uuid ?? null;
+}
+
 /** Build a subtitle string for a run's card header */
 function buildSubtitle(run: SaturationRun): string {
     const bs = run.block_size ? ` | Block Size: ${run.block_size}` : '';
@@ -48,14 +58,17 @@ function buildSubtitle(run: SaturationRun): string {
 export default function Saturation() {
     const { saturationRuns, hostnames, loadingRuns, runsError } = useSaturationRuns();
 
-    // Primary selection
-    const [selectedHost, setSelectedHost] = useState<string | null>(null);
-    const [selectedRunUuid, setSelectedRunUuid] = useState<string | null>(null);
+    // Selection lives in the URL (?host=&run=&chost=&crun=&compare=1) so it survives reloads
+    const [searchParams] = useSearchParams();
+    const updateParams = useUpdateUrlParams();
+    const urlHost = searchParams.get('host');
+    const urlRun = searchParams.get('run');
+    const compareHost = searchParams.get('chost');
+    const urlCompareRun = searchParams.get('crun');
+    const showCompare = searchParams.get('compare') === '1';
 
-    // Comparison selection
-    const [showCompare, setShowCompare] = useState(false);
-    const [compareHost, setCompareHost] = useState<string | null>(null);
-    const [compareRunUuid, setCompareRunUuid] = useState<string | null>(null);
+    // Default to the first host and its newest run until the user picks something
+    const selectedHost = urlHost ?? hostnames[0] ?? null;
 
     // Filter runs by host
     const primaryRuns = useMemo(
@@ -67,6 +80,9 @@ export default function Saturation() {
         [saturationRuns, compareHost]
     );
 
+    const selectedRunUuid = pickRun(primaryRuns, urlRun);
+    const compareRunUuid = pickRun(compareRuns, urlCompareRun);
+
     // Hidden patterns per chart (for y-axis rescaling)
     const [primaryHidden, setPrimaryHidden] = useState<Set<string>>(new Set());
     const [compareHidden, setCompareHidden] = useState<Set<string>>(new Set());
@@ -75,49 +91,39 @@ export default function Saturation() {
     const { saturationData: primaryData, loading: primaryLoading, error: primaryError } = useSaturationRunData(selectedRunUuid);
     const { saturationData: compareData, loading: compareLoading, error: compareError } = useSaturationRunData(compareRunUuid);
 
-    // Auto-select first host and run when runs load
-    useMemo(() => {
-        if (!selectedHost && hostnames.length > 0) {
-            setSelectedHost(hostnames[0]);
-        }
-    }, [hostnames, selectedHost]);
-
-    useMemo(() => {
-        if (selectedHost && !selectedRunUuid && primaryRuns.length > 0) {
-            setSelectedRunUuid(primaryRuns[0].run_uuid);
-        }
-    }, [selectedHost, selectedRunUuid, primaryRuns]);
-
     // Handlers
     const handleHostChange = useCallback((host: string | null) => {
-        setSelectedHost(host);
-        setSelectedRunUuid(null);
+        updateParams((params) => {
+            writeValue(params, 'host', host);
+            params.delete('run');
+        });
         setPrimaryHidden(new Set());
-    }, []);
+    }, [updateParams]);
+
+    const setSelectedRunUuid = useCallback((run: string | null) => {
+        updateParams((params) => writeValue(params, 'run', run));
+    }, [updateParams]);
 
     const handleCompareHostChange = useCallback((host: string | null) => {
-        setCompareHost(host);
-        setCompareRunUuid(null);
+        updateParams((params) => {
+            writeValue(params, 'chost', host);
+            params.delete('crun');
+        });
         setCompareHidden(new Set());
-    }, []);
+    }, [updateParams]);
+
+    const setCompareRunUuid = useCallback((run: string | null) => {
+        updateParams((params) => writeValue(params, 'crun', run));
+    }, [updateParams]);
 
     const handleRemoveCompare = useCallback(() => {
-        setShowCompare(false);
-        setCompareHost(null);
-        setCompareRunUuid(null);
+        updateParams((params) => ['compare', 'chost', 'crun'].forEach((key) => params.delete(key)));
         setCompareHidden(new Set());
-    }, []);
+    }, [updateParams]);
 
     const handleAddCompare = useCallback(() => {
-        setShowCompare(true);
-    }, []);
-
-    // Auto-select first compare run when compare host changes
-    useMemo(() => {
-        if (compareHost && !compareRunUuid && compareRuns.length > 0) {
-            setCompareRunUuid(compareRuns[0].run_uuid);
-        }
-    }, [compareHost, compareRunUuid, compareRuns]);
+        updateParams((params) => params.set('compare', '1'));
+    }, [updateParams]);
 
     // Synchronized Y-axis scaling (respects hidden patterns)
     const sharedMaxIOPS = useMemo(() => {
@@ -146,29 +152,32 @@ export default function Saturation() {
     const noData = !loadingRuns && saturationRuns.length === 0;
 
     return (
-        <div className="min-h-screen theme-bg-secondary transition-colors">
-            <DashboardHeader />
-
-            <main className="w-full px-4 sm:px-6 lg:px-8 py-6">
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold theme-text-primary mb-2">
-                        Saturation Test Analysis
-                    </h1>
-                    <p className="theme-text-secondary text-lg">
-                        Analyze IOPS saturation and P95 latency thresholds across queue depths
-                    </p>
-                </div>
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+                <PageHeader
+                    title="Saturation Analysis"
+                    description="Find the queue depth where IOPS stop scaling and P95 latency crosses its threshold."
+                />
 
                 {loadingRuns && <Loading />}
-                {runsError && <p className="text-red-500 mb-4">{runsError}</p>}
-
-                {noData && (
-                    <div className="text-center py-12">
-                        <p className="theme-text-secondary text-lg mb-2">No Saturation Test Data</p>
-                        <p className="theme-text-secondary text-sm">
-                            Run <code>fio-test.sh --saturation</code> to generate data.
-                        </p>
+                {runsError && (
+                    <div className="mb-4">
+                        <ErrorDisplay error={runsError} />
                     </div>
+                )}
+
+                {noData && !runsError && (
+                    <Card className="p-6">
+                        <EmptyState
+                            icon={<Gauge className="h-12 w-12" />}
+                            title="No saturation test data yet"
+                            description="A saturation run raises the queue depth step by step until P95 latency exceeds a threshold. Run it on a host with fio-test.sh --saturation; results upload automatically."
+                            action={
+                                <a href={TESTING_SCRIPT_URL} className="px-4 py-2 rounded-lg text-sm font-medium theme-btn-primary">
+                                    Download fio-test.sh
+                                </a>
+                            }
+                        />
+                    </Card>
                 )}
 
                 {!noData && !loadingRuns && (
@@ -178,9 +187,9 @@ export default function Saturation() {
                             {/* Primary selector */}
                             <div className="flex flex-wrap items-end gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium theme-text-secondary mb-1">Host</label>
+                                    <label htmlFor="sat-host" className="block text-sm font-medium theme-text-secondary mb-1">Host</label>
                                     <select
-                                        aria-label="Select host"
+                                        id="sat-host"
                                         className="px-3 py-2 border rounded-lg theme-bg-primary theme-text-primary theme-border-primary"
                                         value={selectedHost || ''}
                                         onChange={(e) => handleHostChange(e.target.value || null)}
@@ -192,9 +201,9 @@ export default function Saturation() {
                                     </select>
                                 </div>
                                 <div className="flex-1 min-w-[250px]">
-                                    <label className="block text-sm font-medium theme-text-secondary mb-1">Run</label>
+                                    <label htmlFor="sat-run" className="block text-sm font-medium theme-text-secondary mb-1">Run</label>
                                     <select
-                                        aria-label="Select saturation run"
+                                        id="sat-run"
                                         className="w-full max-w-xl px-3 py-2 border rounded-lg theme-bg-primary theme-text-primary theme-border-primary"
                                         value={selectedRunUuid || ''}
                                         onChange={(e) => setSelectedRunUuid(e.target.value || null)}
@@ -214,9 +223,9 @@ export default function Saturation() {
                             {showCompare && (
                                 <div className="flex flex-wrap items-end gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium theme-text-secondary mb-1">Compare Host</label>
+                                        <label htmlFor="sat-compare-host" className="block text-sm font-medium theme-text-secondary mb-1">Compare Host</label>
                                         <select
-                                            aria-label="Select compare host"
+                                            id="sat-compare-host"
                                             className="px-3 py-2 border rounded-lg theme-bg-primary theme-text-primary theme-border-primary"
                                             value={compareHost || ''}
                                             onChange={(e) => handleCompareHostChange(e.target.value || null)}
@@ -228,9 +237,9 @@ export default function Saturation() {
                                         </select>
                                     </div>
                                     <div className="flex-1 min-w-[250px]">
-                                        <label className="block text-sm font-medium theme-text-secondary mb-1">Compare Run</label>
+                                        <label htmlFor="sat-compare-run" className="block text-sm font-medium theme-text-secondary mb-1">Compare Run</label>
                                         <select
-                                            aria-label="Select compare run"
+                                            id="sat-compare-run"
                                             className="w-full max-w-xl px-3 py-2 border rounded-lg theme-bg-primary theme-text-primary theme-border-primary"
                                             value={compareRunUuid || ''}
                                             onChange={(e) => setCompareRunUuid(e.target.value || null)}
@@ -312,12 +321,6 @@ export default function Saturation() {
                         )}
                     </>
                 )}
-            </main>
-
-            <DashboardFooter getApiDocsUrl={() => {
-                const apiBaseUrl = import.meta.env.VITE_API_URL || '';
-                return apiBaseUrl ? `${apiBaseUrl}/api-docs` : '/api-docs';
-            }} />
         </div>
     );
 }

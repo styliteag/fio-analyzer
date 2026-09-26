@@ -5,7 +5,10 @@
 import React, { useState, useEffect } from 'react';
 import { User, getUsers, createUser, updateUser, deleteUser, UserCreate, UserUpdate } from '../services/api/users';
 import { useAuth } from '../contexts/AuthContext';
-import { DashboardHeader } from '../components/layout';
+import { PageHeader } from '../components/layout';
+import { ErrorDisplay, Loading } from '../components/ui';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { useToast } from '../contexts/ToastContext';
 
 interface UserFormData {
 	username: string;
@@ -15,7 +18,9 @@ interface UserFormData {
 }
 
 const UserManager: React.FC = () => {
-	const { username: currentUsername, isAdmin } = useAuth();
+	const { username: currentUsername } = useAuth();
+	const confirm = useConfirm();
+	const toast = useToast();
 	const [users, setUsers] = useState<User[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -30,24 +35,10 @@ const UserManager: React.FC = () => {
 	const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 	const [operationLoading, setOperationLoading] = useState<Record<string, boolean>>({});
 
-	// Load users on component mount
+	// Load users on component mount (route is admin-only via RequireRole)
 	useEffect(() => {
-		if (isAdmin) {
-			loadUsers();
-		}
-	}, [isAdmin]);
-
-	// Redirect non-admin users
-	if (!isAdmin) {
-		return (
-			<div className="min-h-screen theme-bg-secondary flex items-center justify-center">
-				<div className="text-center">
-					<h1 className="text-2xl font-bold theme-text-primary mb-4">Access Denied</h1>
-					<p className="theme-text-secondary">You need admin privileges to access user management.</p>
-				</div>
-			</div>
-		);
-	}
+		loadUsers();
+	}, []);
 
 	const loadUsers = async () => {
 		try {
@@ -56,7 +47,6 @@ const UserManager: React.FC = () => {
 			const usersData = await getUsers();
 			setUsers(usersData);
 		} catch (err) {
-			console.error('Failed to load users:', err);
 			setError(err instanceof Error ? err.message : 'Failed to load users');
 		} finally {
 			setLoading(false);
@@ -114,9 +104,9 @@ const UserManager: React.FC = () => {
 			await createUser(userData);
 			await loadUsers();
 			resetForm();
+			toast.success(`User "${userData.username}" created`);
 		} catch (err) {
-			console.error('Failed to create user:', err);
-			setError(err instanceof Error ? err.message : 'Failed to create user');
+			toast.error(err instanceof Error ? err.message : 'Failed to create user');
 		} finally {
 			setOperationLoading(prev => ({ ...prev, [operationKey]: false }));
 		}
@@ -141,16 +131,22 @@ const UserManager: React.FC = () => {
 			await updateUser(editingUser.username, userData);
 			await loadUsers();
 			resetForm();
+			toast.success(`User "${editingUser.username}" updated`);
 		} catch (err) {
-			console.error('Failed to update user:', err);
-			setError(err instanceof Error ? err.message : 'Failed to update user');
+			toast.error(err instanceof Error ? err.message : 'Failed to update user');
 		} finally {
 			setOperationLoading(prev => ({ ...prev, [operationKey]: false }));
 		}
 	};
 
 	const handleDeleteUser = async (username: string) => {
-		if (!confirm(`Are you sure you want to delete user "${username}"?`)) return;
+		const confirmed = await confirm({
+			title: 'Delete user',
+			message: `Delete user "${username}"? They will no longer be able to log in or upload.`,
+			confirmLabel: 'Delete',
+			danger: true,
+		});
+		if (!confirmed) return;
 
 		const operationKey = `delete-${username}`;
 		setOperationLoading(prev => ({ ...prev, [operationKey]: true }));
@@ -158,9 +154,9 @@ const UserManager: React.FC = () => {
 		try {
 			await deleteUser(username);
 			await loadUsers();
+			toast.success(`User "${username}" deleted`);
 		} catch (err) {
-			console.error('Failed to delete user:', err);
-			setError(err instanceof Error ? err.message : 'Failed to delete user');
+			toast.error(err instanceof Error ? err.message : 'Failed to delete user');
 		} finally {
 			setOperationLoading(prev => ({ ...prev, [operationKey]: false }));
 		}
@@ -180,52 +176,22 @@ const UserManager: React.FC = () => {
 
 	if (loading) {
 		return (
-			<div className="min-h-screen theme-bg-secondary flex items-center justify-center">
-				<div className="text-center">
-					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-					<p className="theme-text-secondary">Loading users...</p>
-				</div>
+			<div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+				<Loading />
 			</div>
 		);
 	}
 
 	return (
-		<div className="min-h-screen theme-bg-secondary">
-			<DashboardHeader />
-			<div className="py-8">
-				<div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-					{/* Header */}
-					<div className="mb-8">
-						<h1 className="text-3xl font-bold theme-text-primary">User Management</h1>
-						<p className="mt-2 text-sm theme-text-secondary">
-							Manage admin and uploader users for the FIO Analyzer system.
-						</p>
-					</div>
+		<div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+					<PageHeader
+						title="User Management"
+						description="Admins can view and manage all data. Uploaders can only upload FIO results (for example from fio-test.sh)."
+					/>
 
-					{/* Error Message */}
 					{error && (
-						<div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
-							<div className="flex">
-								<div className="flex-shrink-0">
-									<svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-										<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-									</svg>
-								</div>
-								<div className="ml-3">
-									<h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
-									<div className="mt-2 text-sm text-red-700 dark:text-red-300">{error}</div>
-								</div>
-								<div className="ml-auto pl-3">
-									<button
-										onClick={() => setError(null)}
-										className="inline-flex text-red-400 hover:text-red-600 dark:hover:text-red-300"
-									>
-										<svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-											<path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-										</svg>
-									</button>
-								</div>
-							</div>
+						<div className="mb-6">
+							<ErrorDisplay error={error} onRetry={loadUsers} showRetry />
 						</div>
 					)}
 
@@ -417,8 +383,6 @@ const UserManager: React.FC = () => {
 							)}
 						</div>
 					</div>
-				</div>
-			</div>
 		</div>
 	);
 };

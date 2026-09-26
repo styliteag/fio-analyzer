@@ -76,12 +76,8 @@ export const useApiCall = <T = unknown>(
             abortControllerRef.current = null;
             setIsCancelled(true);
             setLoading(false);
-            
-            if (enableLogging) {
-                console.log('API call cancelled by user');
-            }
         }
-    }, [enableLogging]);
+    }, []);
 
     const setProgress = useCallback((current: number, total: number) => {
         if (showProgress) {
