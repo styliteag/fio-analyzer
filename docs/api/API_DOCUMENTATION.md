@@ -44,6 +44,9 @@ The API uses HTTP Basic Authentication with two user roles:
 - `PUT /api/time-series/bulk` - Bulk update time series data
 - `DELETE /api/time-series/delete` - Delete time series data
 
+### Dashboard
+- `GET /api/dashboard/stats` - Aggregated counts, averages and last upload time (admin only; computed in SQL, a few hundred bytes)
+
 ### Utilities
 - `GET /api/filters` - Get available filter options
 - `GET /api/info` - Get API information and metadata
@@ -71,8 +74,9 @@ Most endpoints support filtering with these common parameters:
 - `directs` - Direct I/O flags (0=buffered, 1=direct)
 
 ### Pagination
-- `limit` - Maximum number of results (default: 1000)
+- `limit` - Maximum number of results (default: 1000, max: 10000)
 - `offset` - Number of results to skip
+- `include_metadata=true` on `/api/test-runs` returns `{data, total, limit, offset, has_more}`; follow `has_more` to fetch all rows
 
 ## Response Formats
 

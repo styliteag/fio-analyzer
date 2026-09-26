@@ -40,7 +40,4 @@ export {
     bulkImportFioData,
 } from './upload';
 
-export {
-    fetchDashboardStats,
-    fetchQuickStats,
-} from './dashboard';
+export { fetchDashboardStats } from './dashboard';

@@ -8,6 +8,12 @@
   "endpoints": [
     {
       "method": "GET",
+      "path": "/api/dashboard/stats",
+      "auth": "admin",
+      "summary": "Get Dashboard Statistics"
+    },
+    {
+      "method": "GET",
       "path": "/api/filters",
       "auth": "admin",
       "summary": "Get Filter Options"
@@ -43,10 +49,46 @@
       "summary": "Bulk Update Test Runs"
     },
     {
+      "method": "PUT",
+      "path": "/api/test-runs/bulk-by-uuid",
+      "auth": "admin",
+      "summary": "Bulk Update Test Runs by UUID"
+    },
+    {
+      "method": "GET",
+      "path": "/api/test-runs/grouped-by-uuid",
+      "auth": "admin",
+      "summary": "Get Test Runs Grouped by UUID"
+    },
+    {
       "method": "GET",
       "path": "/api/test-runs/performance-data",
       "auth": "admin",
       "summary": "Get Performance Data"
+    },
+    {
+      "method": "GET",
+      "path": "/api/test-runs/saturation-data",
+      "auth": "admin",
+      "summary": "Get Saturation Test Data"
+    },
+    {
+      "method": "GET",
+      "path": "/api/test-runs/saturation-runs",
+      "auth": "admin",
+      "summary": "List Saturation Test Runs"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/test-runs/saturation-runs/bulk-by-uuid",
+      "auth": "admin",
+      "summary": "Bulk Update Saturation Runs by UUID"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/test-runs/saturation-runs/by-uuid",
+      "auth": "admin",
+      "summary": "Delete Saturation Runs by UUID"
     },
     {
       "method": "DELETE",
@@ -89,6 +131,18 @@
       "path": "/api/time-series/history",
       "auth": "admin",
       "summary": "Get Historical Time Series"
+    },
+    {
+      "method": "POST",
+      "path": "/api/time-series/history/cleanup",
+      "auth": "admin",
+      "summary": "Execute Historical Data Cleanup"
+    },
+    {
+      "method": "GET",
+      "path": "/api/time-series/history/cleanup-preview",
+      "auth": "admin",
+      "summary": "Preview Historical Data Cleanup"
     },
     {
       "method": "GET",
