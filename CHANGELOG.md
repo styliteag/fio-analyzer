@@ -8,11 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **UI**: Shared app shell on every page: one header with all sections (Dashboard, Hosts, History, Saturation, Upload, Admin, Users), active-page highlight, mobile menu, skip link and a consistent footer
+- **UI**: Role-aware navigation. Uploader accounts see only Upload and land there after login; admin-only pages show an "Access denied" page instead of failing API calls
+- **UI**: 404 page for unknown routes
+- **UI**: Page state in the URL (shareable, survives reload): Host selection, view and all filters; History host, time range, metrics and configurations; Saturation host/run/compare selection; Admin tab and search
+- **UI**: Toast notifications and a confirmation dialog replace `alert()` / `confirm()`
+- **UI**: Dashboard redesign: task cards, "Tested hosts" table with deep links into Host Analysis and History, first-run "Get started" guide when the database is empty
+- **UI**: Metric help tooltips (IOPS, bandwidth, latency percentiles) and descriptions for every Host visualization; visualizations grouped into Summary / Compare / Relationships / Trends
+- **UI**: Empty states with next steps on Host, History and Saturation pages
+- **Upload**: Working drag and drop, file type check, collapsible fio command examples, success banner with "View results" link; host metadata is kept for the next upload instead of redirecting away
+- **Frontend**: Playwright E2E smoke tests (`npm run test:e2e`, see `frontend/e2e/`)
 
 ### Changed
 - **Repo**: `.claude/` (Claude Code settings and speckit commands) is no longer tracked and is now listed in `.gitignore`
 - **Docs**: `AGENTS.md` is the single agent instruction file (English-by-default rule, project facts merged from `CLAUDE.md`, stale references removed); `CLAUDE.md` now only imports it; past milestones moved to `INFRASTRUCTURE.md`
+- **History**: Loads data on first visit (previously the chart stayed empty until a host was picked), defaults to the host with the most tests, metric checkboxes instead of multi-select lists, unit-aware axis labels
+- **Host Analysis**: Hosts load in parallel; hosts that fail to load are reported instead of silently skipped
+- **Admin**: Split the 3000-line page into `pages/admin/` (one file per tab, modals and hooks); default tab is now "Latest Runs"; each tab explains what it lists; edits and deletes confirm with a toast
+
+### Fixed
+- **Upload**: Failed imports were reported as successful; the server's error message is now shown
+- **UI**: Buttons rendered their icon above the label instead of beside it
+- **UI**: `hover:theme-*` classes had no effect
+- **UI**: History page header overlapped the sidebar
+- **Admin**: Bulk update by UUID now URL-encodes the UUID query parameter
+- **Admin**: Hierarchy tab mislabeled protocol/type/model for hostnames containing `-` (e.g. `server-01`); labels now come from the run data
+
+### Removed
+- Unused frontend code (legacy `HostSelector`, `PerformanceMatrix`, unused services/utils) and the unused `react-parallel-coordinates` and `@types/react-router-dom` packages
+- Debug `console.log` output in dashboard statistics, history and chart hooks
 
 ## [0.10.5] - 2026-02-20
 

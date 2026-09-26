@@ -53,6 +53,13 @@ Update `CHANGELOG.md` in every commit, because releases are cut from the `[Unrel
 ## Testing Guidelines
 - Backend: `pytest` available via `uv run pytest`. Quick smoke: `cd backend && make check` or `python3 test_api.py`.
 - Test names: `test_*.py` in `backend/`. Add focused unit tests for routers and utils.
+- Frontend E2E: Playwright specs in `frontend/e2e/` run against the running dev stack (`./start-frontend-backend.sh`). Run `cd frontend && E2E_USER=<admin> E2E_PASSWORD=<pw> npm run test:e2e`. Optional: `E2E_UPLOADER_USER`/`E2E_UPLOADER_PASSWORD` for the uploader-role test, `PW_CHANNEL=chrome` to use local Chrome instead of `npx playwright install`.
+
+## Frontend UI Conventions
+- Every route renders inside `AppShell` (`components/layout`): pages must not render their own header, footer or `min-h-screen` wrapper. Start a page with `PageHeader` and `PAGE_CONTAINER`.
+- Navigation entries and role visibility live in `components/layout/navItems.ts`; guard admin routes with `RequireRole` in `App.tsx`.
+- Keep user-selectable page state (selection, view, filters) in the URL via `hooks/useUrlState.ts`. Batch related param changes into one `useUpdateUrlParams` call.
+- Use `useToast()` for feedback and `useConfirm()` for destructive actions. Never use `alert()` / `confirm()`.
 
 ## Commit & Pull Request Guidelines
 -- If you write code, dont git commit anything without permission from the user!
