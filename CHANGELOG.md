@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.10.6] - 2026-09-26
+
+### Added
 - **UI**: Shared app shell on every page: one header with all sections (Dashboard, Hosts, History, Saturation, Upload, Admin, Users), active-page highlight, mobile menu, skip link and a consistent footer
 - **UI**: Role-aware navigation. Uploader accounts see only Upload and land there after login; admin-only pages show an "Access denied" page instead of failing API calls
 - **UI**: 404 page for unknown routes
