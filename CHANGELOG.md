@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - 
 
+### Changed
+- **Repo**: `.claude/` (Claude Code settings and speckit commands) is no longer tracked and is now listed in `.gitignore`
+
 ## [0.10.5] - 2026-02-20
 
 ### Fixed

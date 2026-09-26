@@ -79,3 +79,4 @@ tmp/
 *.temp
 .cache/
 .grok/settings.json
+.claude/
