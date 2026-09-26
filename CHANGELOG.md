@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **Backend**: `GET /api/dashboard/stats` aggregates dashboard numbers in SQL; the dashboard no longer downloads ~1 MB of test runs to count them
+
+### Fixed
+- **Host Analysis**: Hosts with more than 1000 latest test runs were silently truncated to 1000; all pages are now loaded
 
 ## [0.10.6] - 2026-09-26
 

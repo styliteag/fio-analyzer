@@ -38,6 +38,7 @@ export const useHostData = (): UseHostDataReturn => {
     const [error, setError] = useState<string | null>(null);
     const [failedHosts, setFailedHosts] = useState<string[]>([]);
     const requestId = useRef(0);
+    const abortRef = useRef<AbortController | null>(null);
 
     const loadHostList = useCallback(async () => {
         try {
@@ -54,6 +55,7 @@ export const useHostData = (): UseHostDataReturn => {
     // Load analysis data for all hosts in parallel; keep partial results
     const loadHostsData = useCallback(async (hosts: string[]) => {
         if (hosts.length === 0) {
+            abortRef.current?.abort();
             requestId.current += 1;
             setLoading(false);
             setHostDataMap({});
@@ -62,9 +64,12 @@ export const useHostData = (): UseHostDataReturn => {
         }
         requestId.current += 1;
         const currentRequest = requestId.current;
+        abortRef.current?.abort(); // stop multi-page downloads for a previous selection
+        const controller = new AbortController();
+        abortRef.current = controller;
         setLoading(true);
         setError(null);
-        const results = await Promise.allSettled(hosts.map((host) => fetchHostAnalysis(host)));
+        const results = await Promise.allSettled(hosts.map((host) => fetchHostAnalysis(host, controller.signal)));
         if (currentRequest !== requestId.current) return; // a newer selection superseded this one
         const loaded = hosts.flatMap((host, index) => {
             const result = results[index];
@@ -99,6 +104,9 @@ export const useHostData = (): UseHostDataReturn => {
     useEffect(() => {
         loadHostsData(selectedHosts);
     }, [selectedHosts, loadHostsData]);
+
+    // Cancel in-flight downloads when leaving the page
+    useEffect(() => () => abortRef.current?.abort(), []);
 
     // Combine data from all selected hosts
     const combinedHostData = useMemo(() => {

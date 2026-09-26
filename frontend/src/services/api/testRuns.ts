@@ -113,6 +113,45 @@ export const fetchTestRuns = async (options: TestRunsOptions = {}, abortSignal?:
     });
 };
 
+// Backend caps a single /api/test-runs response at this many rows
+const MAX_PAGE_SIZE = 10000;
+
+/**
+ * Fetch every test run matching the filters, following pagination.
+ * A single request defaults to 1000 rows, which silently truncated hosts with more latest runs.
+ */
+export const fetchAllTestRuns = async (
+    options: Omit<TestRunsOptions, 'limit' | 'offset' | 'include_metadata'> = {},
+    abortSignal?: AbortSignal,
+): Promise<TestRun[]> => {
+    const collected: TestRun[] = [];
+    let offset = 0;
+    for (;;) {
+        const response = await apiCall<TestRunsMetadataResponse>(
+            `/api/test-runs?${buildPageQuery(options, offset)}`,
+            { signal: abortSignal },
+        );
+        if (response.error || !response.data) {
+            throw new Error(response.error || 'Failed to fetch test runs');
+        }
+        const page = response.data.data;
+        collected.push(...page);
+        // Stop on the server's signal, on an empty page, or once the reported total is reached
+        if (!response.data.has_more || page.length === 0 || collected.length >= response.data.total) {
+            return collected;
+        }
+        offset += page.length;
+    }
+};
+
+const buildPageQuery = (options: Omit<TestRunsOptions, 'limit' | 'offset' | 'include_metadata'>, offset: number): string => {
+    const params = buildFilterParams(options);
+    params.append('limit', MAX_PAGE_SIZE.toString());
+    params.append('offset', offset.toString());
+    params.append('include_metadata', 'true');
+    return params.toString();
+};
+
 // Helper function to convert ActiveFilters to TestRunsOptions
 export const convertActiveFiltersToOptions = (
     activeFilters: ActiveFilters

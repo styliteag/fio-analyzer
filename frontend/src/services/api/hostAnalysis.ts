@@ -1,5 +1,5 @@
 import type { TestRun } from '../../types';
-import { fetchTestRuns, fetchFilters, extractTestRuns } from './testRuns';
+import { fetchAllTestRuns, fetchFilters } from './testRuns';
 
 export interface HostAnalysisData {
     hostname: string;
@@ -67,15 +67,8 @@ export interface PerformanceSummary {
     worstDrive: string;
 }
 
-export const fetchHostAnalysis = async (hostname: string): Promise<HostAnalysisData> => {
-    const response = await fetchTestRuns({ hostnames: [hostname] });
-    
-    // Handle API response wrapper
-    if (!response.data) {
-        throw new Error(`Failed to fetch test runs for host: ${hostname}`);
-    }
-    
-    const testRuns = extractTestRuns(response.data);
+export const fetchHostAnalysis = async (hostname: string, abortSignal?: AbortSignal): Promise<HostAnalysisData> => {
+    const testRuns = await fetchAllTestRuns({ hostnames: [hostname] }, abortSignal);
 
     // Filter out test runs with null performance data
     // Note: avg_latency is optional since it may not be available for all test data
