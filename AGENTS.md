@@ -1,25 +1,38 @@
 # Repository Guidelines
 
+## Language
+- Respond and reason in English by default, even when the user writes in German or another language. Switch only when the user explicitly asks for another language. Keep commands, identifiers, error messages and quoted historical text unchanged.
+
+## Project Overview
+Storage Performance Visualizer: a full-stack web application that analyzes and visualizes FIO (Flexible I/O Tester) benchmark results.
+- Frontend: React + TypeScript + Vite with interactive charts (`frontend/`).
+- Backend: Python FastAPI server with SQLite (`backend/`). The backend was migrated from Node.js/Express; see [MIGRATION_SUMMARY.md](./docs/migration/MIGRATION_SUMMARY.md).
+- Authentication: role-based access with admin and upload-only users.
+- Testing script: `scripts/fio-test.sh`, an automated FIO runner with configurable parameters.
+
 ## Project Structure & Module Organization
 - `backend/`: FastAPI app (`main.py`), API `routers/`, `auth/`, `database/`, `config/`, `utils/`; tooling (`Makefile`, `pyproject.toml`). Data persists under `backend/db/` and uploads in `backend/uploads/`.
 - `frontend/`: Vite + React + TypeScript (`src/`, `vite.config.ts`, `eslint.config.js`).
 - `docker/`: Multi‑stage image (`docker/app/Dockerfile`) and compose files.
-- `scripts/`: Utilities (`start-frontend-backend.sh`, `fio-test.sh`, `.env.example`).
+- `scripts/`: Utilities (`fio-test.sh`, `generate_endpoints.py`, `.env.example`).
+- Repository root: `start-frontend-backend.sh`, `setup-backend-uv.sh`, `setup-backend-venv.sh`.
 - `docs/`, `README.md`, `.pre-commit-config.yaml` for shared tooling.
 
 ## Build, Test, and Development Commands
-- Backend (Python 3.11+):
-  - Setup: `cd backend && uv sync` (or `make install`).
+- Backend (Python 3.11+, package manager `uv`):
+  - Setup: `cd backend && uv sync` (or `make install`). One-time setup scripts: `./setup-backend-uv.sh` (recommended) or `./setup-backend-venv.sh`.
+  - Alternative without uv: `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt`, then `uvicorn main:app --reload --host 0.0.0.0 --port 8000`.
   - Quick checks: `make check` (syntax/import), `make lint` (full lint), `make start` (pre-flight + run).
   - Run server: `uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000`.
   - Linting: `uv run flake8 .` (Python code quality check).
+  - Reset the database: `rm db/storage_performance.db` (in `backend/`). It is regenerated on the next start.
 - Frontend:
   - `cd frontend && npm install`.
-  - Dev server: `npm run dev`. Build: `npm run build`. 
+  - Dev server: `npm run dev` (http://localhost:5173). Build: `npm run build`.
   - Linting: `npm run lint` (ESLint). Type check: `npm run type-check` (TypeScript).
 - Full stack:
-  - Local: `./start-frontend-backend.sh` (starts backend with `uv` and Vite dev).
-  - Docker: `docker compose up --build -d` (see `docker/compose.yml`).
+  - Local: `./start-frontend-backend.sh` sets up the Python environment if needed and starts the backend (http://localhost:8000) and Vite (http://localhost:5173). To start the backend, use this script or ask the user to start it.
+  - Docker: `cd docker && docker compose up --build -d` (see `docker/compose.yml`). Production: `cd docker && docker compose -f compose.prod.yml up -d`.
 
 ## Coding Style & Naming Conventions
 - Python: formatted with Black (88 cols), isort (Black profile), flake8; modules/functions `snake_case`. Routers live in `backend/routers/*.py`.
@@ -29,9 +42,10 @@
   - Code Quality: Use `npm run lint` for ESLint checking
   - Type Safety: Use `npm run type-check` for TypeScript validation
 - Run `pre-commit install` once; commits should pass hooks.
+- Always use "2025-06-31" as date and 20:00:00 as time and "2025-06-31 20:00:00" as datetime
 
 #### CHANGELOG Maintenance
-⚠️ **IMPORTANT**: Always update `CHANGELOG.md` when making commits!
+Update `CHANGELOG.md` in every commit, because releases are cut from the `[Unreleased]` section.
 - Add new changes under `[Unreleased]` section before committing
 - Move to new version section when releasing
 - Use semantic versioning format
@@ -39,7 +53,6 @@
 ## Testing Guidelines
 - Backend: `pytest` available via `uv run pytest`. Quick smoke: `cd backend && make check` or `python3 test_api.py`.
 - Test names: `test_*.py` in `backend/`. Add focused unit tests for routers and utils.
-- Browser smoke: `tests-with-browser/` (Playwright). After app is running: `cd tests-with-browser && npm i && node test-app.js`.
 
 ## Commit & Pull Request Guidelines
 -- If you write code, dont git commit anything without permission from the user!
@@ -52,21 +65,48 @@
 - SQLite path: `backend/db/storage_performance.db`. Persist volumes in Docker (`docker/compose.yml`). Update ports consistently in env, backend settings, and compose.
 
 ## Agent Workflow & Quality Gates
-- After any frontend change: run `npm run lint` and `npm run type-check` (`npx tsc --noEmit`); fix all errors before PR.
+- After any frontend change (`*.ts`, `*.tsx`): run `npm run lint` and `npm run type-check` (`npx tsc --noEmit`); fix all errors before continuing or opening a PR.
 - After any backend change: run `uv run flake8 .` for Python linting.
-- Prefer `uv run <cmd>` for backend tasks (e.g., `uv run uvicorn ...`, `uv run pytest`). Always run `make check` before starting the backend.
+- Prefer `uv run <cmd>` for backend tasks (e.g., `uv run uvicorn ...`, `uv run pytest`) over activating the venv. Run `make check` before starting the backend, so syntax and import errors surface before startup.
+- If a feature is hard to build in the frontend, you may add a backend function for it.
 - Manage users with: `cd backend && uv run python scripts/manage_users.py add --username <u> --password <p> [--uploader]`.
 
 ## Authentication & Roles
 - Admins: full access to UI and management actions. Stored in `backend/.htpasswd`.
 - Uploaders: can upload FIO results only. Stored in `backend/.htuploaders`.
-- Manage users: `cd backend && uv run python scripts/manage_users.py add --username <u> --password <p> [--uploader]` (use `list`/`remove` accordingly).
+- Manage users: `cd backend && uv run python scripts/manage_users.py add --username <u> --password <p> [--uploader]` (use `list`/`remove` accordingly, e.g. `list --uploader`, `remove --username <u> --uploader`).
+
+## Database
+- SQLite with a simplified schema: performance metrics (iops, latency, bandwidth, p95/p99 latency) are stored directly in the main tables; there are no separate performance_metrics tables.
+- `test_runs`: latest result per host/drive/configuration. `test_runs_all`: complete history.
+- The database auto-initializes with sample data when empty.
+- Schema changes are applied automatically on backend startup by `_run_migrations()`. Standalone UUID migration (optional): `uv run python backend/scripts/migrate_add_uuids.py`.
+- Docker volume mounts:
+  - `./data/backend/db:/app/db` (database)
+  - `./data/backend/uploads:/app/uploads` (uploaded files)
+  - `./data/auth/.htpasswd:/app/.htpasswd` (admin users)
+  - `./data/auth/.htuploaders:/app/.htuploaders` (upload-only users)
+
+### UUID Tracking
+- `config_uuid`: fixed per host configuration. Set as `CONFIG_UUID` in `.env` (optional); otherwise generated from a hostname hash. Groups all tests from one host configuration.
+- `run_uuid`: unique per script execution (random UUID4 at script start). Falls back to hash(hostname + date) if missing from an upload. Groups all tests from one run.
+- Older databases get both columns added and backfilled on startup.
+
+## FIO Testing Script
+```bash
+wget http://example.intern/fio-test.sh
+chmod +x fio-test.sh
+./fio-test.sh --generate-env
+# Edit .env with your settings
+./fio-test.sh
+```
 
 ## API Quicklinks
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 - OpenAPI JSON: http://localhost:8000/openapi.json
 - Health check: http://localhost:8000/health
+- Full reference: [API_DOCUMENTATION.md](./docs/api/API_DOCUMENTATION.md)
 
 ## Docker URLs & Nginx Paths
 - Frontend: http://localhost/ (served by nginx).
@@ -141,9 +181,17 @@ docker build \
 
 For the full, parameterized reference (examples, schemas), use Swagger at `/docs` or ReDoc at `/redoc`. A machine-readable index is at `docs/api/endpoints.json`.
 
+## Project Documentation
+- [API_DOCUMENTATION.md](./docs/api/API_DOCUMENTATION.md): complete API reference.
+- [DEVELOPMENT_SETUP.md](./docs/development/DEVELOPMENT_SETUP.md): development setup and tools.
+- [FASTAPI_README.md](./docs/development/FASTAPI_README.md): FastAPI backend guide.
+- [MIGRATION_SUMMARY.md](./docs/migration/MIGRATION_SUMMARY.md): Node.js to FastAPI migration notes.
+- [frontend/src/PERFORMANCE_OPTIMIZATIONS.md](./frontend/src/PERFORMANCE_OPTIMIZATIONS.md): React memoization and chart optimization.
+- Past refactoring milestones: see [INFRASTRUCTURE.md](./INFRASTRUCTURE.md).
+
 ## Hierarchical Data Structure (Host-Protocol-Type-Model)
 
-⚠️ **CRITICAL**: The data structure for Host-Protocol-Type-Model is **hierarchical** and this paradigm must be used everywhere in the codebase!
+The Host-Protocol-Type-Model data structure is hierarchical, and every component must use it. Filters, host selection and grouping all key on the same four levels, so a component that flattens them breaks cross-component consistency.
 
 ### Hierarchy Levels
 
@@ -193,4 +241,4 @@ When configuring test runs, the `.env` file must specify values that create mean
 - `DRIVE_TYPE`: Drive type (hdd, ssd, nvme, mirror, raidz1, raidz2, raidz3, etc.; use `vm-` prefix for VMs)
 - `DRIVE_MODEL`: Drive model identifier (can include special parameters like `poolName-syncoff`, `poolName-syncall`)
 
-**This hierarchical paradigm must be maintained consistently across all components, filters, and data structures!**
+Keep this hierarchy consistent across all components, filters and data structures.

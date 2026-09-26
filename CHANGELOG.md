@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Repo**: `.claude/` (Claude Code settings and speckit commands) is no longer tracked and is now listed in `.gitignore`
+- **Docs**: `AGENTS.md` is the single agent instruction file (English-by-default rule, project facts merged from `CLAUDE.md`, stale references removed); `CLAUDE.md` now only imports it; past milestones moved to `INFRASTRUCTURE.md`
 
 ## [0.10.5] - 2026-02-20
 
