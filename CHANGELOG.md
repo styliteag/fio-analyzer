@@ -8,7 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **fio-test.sh**: `PREFILL=1` writes test files once with incompressible data and reuses them across tests, so reads no longer hit unwritten/fallocated extents or zero data squashed by ZFS compression
+- **fio-test.sh**: `FILE_PER_JOB=1` gives every fio job its own file instead of all jobs sharing one
+- **fio-test.sh**: `KEEP_JSON_DIR` keeps a copy of every fio JSON result; `FIO_EXTRA_ARGS` appends extra fio options to every benchmark run
+- **fio-test.sh**: Runs with `PREFILL`/`FILE_PER_JOB` are tagged `prefill:1` / `fileperjob:1` in the description; all new options are off by default
+
+### Fixed
+- **fio-test.sh**: `--description` was dropped in saturation mode; saturation uploads now keep it (`saturation-test,<description>,...`)
 
 ## [0.10.7] - 2026-09-26
 
@@ -32,13 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Upload**: Working drag and drop, file type check, collapsible fio command examples, success banner with "View results" link; host metadata is kept for the next upload instead of redirecting away
 - **Frontend**: Playwright E2E smoke tests (`npm run test:e2e`, see `frontend/e2e/`)
 
-### Changed
 - **Repo**: `.claude/` (Claude Code settings and speckit commands) is no longer tracked and is now listed in `.gitignore`
 - **Docs**: `AGENTS.md` is the single agent instruction file (English-by-default rule, project facts merged from `CLAUDE.md`, stale references removed); `CLAUDE.md` now only imports it; past milestones moved to `INFRASTRUCTURE.md`
 - **History**: Loads data on first visit (previously the chart stayed empty until a host was picked), defaults to the host with the most tests, metric checkboxes instead of multi-select lists, unit-aware axis labels
 - **Host Analysis**: Hosts load in parallel; hosts that fail to load are reported instead of silently skipped
 - **Admin**: Split the 3000-line page into `pages/admin/` (one file per tab, modals and hooks); default tab is now "Latest Runs"; each tab explains what it lists; edits and deletes confirm with a toast
-
 ### Fixed
 - **Upload**: Failed imports were reported as successful; the server's error message is now shown
 - **UI**: Buttons rendered their icon above the label instead of beside it
@@ -78,7 +82,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Frontend: Removed green row highlighting and sweet spot legend from SaturationChart
   - fio-test.sh: Removed SAT_P_SWEET_SPOT tracking, green *SWEET* markers, and sweet spot summary section
 
-### Changed
 - **fio-test.sh**: Consolidated root-level `fio-test.sh` into `scripts/fio-test.sh` (root copy removed)
 - **Backend**: Saturation test data now stored in dedicated `saturation_runs` table instead of `test_runs`/`test_runs_all`
   - New imports route saturation data (`description LIKE 'saturation-test%'`) to `saturation_runs` only, skipping `update_latest_flags`
@@ -86,7 +89,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Normal endpoints (`/test-runs`, time-series, filters) no longer return saturation rows
   - Migration 4 auto-creates `saturation_runs` table on backend startup (idempotent)
   - Standalone migration script (`backend/scripts/migrate_saturation_data.py`) moves existing saturation data
-
 
 ## [0.10.2] - 2026-02-18
 
@@ -97,7 +99,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **fio-test.sh**: 19 new CLI flags for all parameters (`--hostname`, `--protocol`, `--drive-type`, `--drive-model`, `--description`, `--test-size`, `--num-jobs`, `--runtime`, `--direct`, `--sync`, `--iodepth`, `--block-sizes`, `--patterns`, `--target-dir`, `--backend-url`, `-U/--username`, `-P/--password`, `--config-uuid`, `--max-steps`)
 - **fio-test.sh**: Proper precedence chain: CLI flags > env vars / .env file > hardcoded defaults
 
-### Changed
 - **Frontend**: Refactored `SaturationChart` into a pure display component (data via props, no internal selectors or data fetching)
 - **Frontend**: Saturation page now uses host→run two-step selection instead of flat dropdown
 - **Frontend**: Moved Saturation Test from Host page visualization to standalone page — `useSaturationData` hook no longer depends on `DriveAnalysis[]`, loads all runs by default
@@ -106,7 +107,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **fio-test.sh**: Replaced 8 copy-pasted array parsing blocks with single `parse_csv_to_array()` helper (unconditional parsing, no fragile default-check skipping)
 - **fio-test.sh**: DESCRIPTION now built in single `build_description()` function (was duplicated in 3 places)
 - **fio-test.sh**: Help text reorganized with categorized sections and corrected defaults
-
 ### Fixed
 - **fio-test.sh**: RUNTIME default mismatch — was `20` in set_defaults but `30` in array parsing. Unified to `30`
 - **fio-test.sh**: TEST_SIZE default mismatch — was `100M` in set_defaults but `10M` in array parsing. Unified to `10M`
@@ -127,11 +127,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Saturation Test**: Progress summary table printed after each step (live results during test)
 - **Saturation Test**: Accepts both `SAT_BLOCK_SIZE` (singular) and `SAT_BLOCK_SIZES` (plural) in `.env`
 
-### Changed
 - **Saturation Test**: Summary table redesigned — single QD column, P95 before IOPS, only enabled pattern columns shown, BW column removed
 - **Saturation Test**: FIO JSON extraction rewritten with jq for reliable parsing (jq now required for saturation mode)
 - **Frontend**: Saturation chart uses same color per pattern for IOPS/latency pairing (solid=IOPS, dashed=latency) for clarity
-
 ### Fixed
 - **Saturation Test**: Write IOPS/BW incorrectly read as 0 — `tail -1` was hitting FIO's trim section instead of write section; fixed with jq
 - **Saturation Test**: `.env` inline comments now stripped correctly (e.g., `IODEPTH=16 # comment` parses as `16`)
@@ -303,7 +301,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.10] - 2025-09-27
 
-### Changed
 - **Host Page URL Structure**: Removed hostname from URL path for cleaner navigation
   - Changed route from `/host/:hostname?` to `/host` in App.tsx
   - Updated Host.tsx to no longer use hostname from URL parameters
@@ -316,7 +313,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Improved user experience with clear selection interface
   - Fixed loading state logic to properly show empty state instead of spinner
   - Fixed refresh button spinning unnecessarily in empty state
-
 ### Fixed
 - **Performance Graphs Dark Mode**: Fixed text visibility issues in dark mode across all Performance Graphs components
   - Updated PerformanceMatrix gradient text colors to use `text-gray-900 dark:text-gray-100` for proper contrast
@@ -416,13 +412,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.3] - 2025-09-XX
 
-### Changed
 - Updated project documentation and cleanup
 - Removed deprecated agent markdown files
 - Removed unused prompt creation markdown file
 - Removed tests-with-browser directory and associated files
 - Removed deprecated command markdown files
-
 ### Fixed
 - VERSION file path resolution for Docker environment
 
@@ -446,10 +440,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update datetime handling to use timezone-aware timestamps
 - Admin.tsx data loading optimization
 
-### Changed
 - Update default mode in Claude settings
 - Remove .mcp.json configuration file
-
 ## [0.5.0] - 2025-08-XX
 
 ### Added
@@ -466,9 +458,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.3] - 2025-08-XX
 
-### Changed
 - Update Docker configuration and version bump
-
 ---
 
 ## Version History Notes

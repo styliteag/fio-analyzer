@@ -214,6 +214,12 @@ define_defaults() {
     INITIAL_NUMJOBS="${INITIAL_NUMJOBS:-4}"
     MAX_STEPS="${MAX_STEPS:-20}"
     MAX_TOTAL_QD="${MAX_TOTAL_QD:-16384}"
+
+    # Advanced fio options (.env only, all off by default)
+    FIO_EXTRA_ARGS="${FIO_EXTRA_ARGS:-}"
+    KEEP_JSON_DIR="${KEEP_JSON_DIR:-}"
+    FILE_PER_JOB="${FILE_PER_JOB:-0}"
+    PREFILL="${PREFILL:-0}"
 }
 
 # Apply CLI overrides (CLI flags take highest priority over env/.env/defaults)
@@ -275,15 +281,21 @@ generate_uuids() {
 }
 
 # Build description string (single location, no duplication)
+# Uses BASE_DESCRIPTION (the user-supplied text) so repeated calls do not nest.
+# Saturation uploads must start with "saturation-test" (backend detection).
 build_description() {
     local prefix=""
     if [ "$SATURATION_MODE" = true ]; then
-        prefix="saturation-test"
-    elif [ -n "$DESCRIPTION" ]; then
-        prefix="$DESCRIPTION"
+        prefix="saturation-test${BASE_DESCRIPTION:+,${BASE_DESCRIPTION}}"
+    elif [ -n "$BASE_DESCRIPTION" ]; then
+        prefix="$BASE_DESCRIPTION"
     fi
 
-    DESCRIPTION="${prefix:+${prefix},}hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    local tags=""
+    if [ "$PREFILL" = 1 ]; then tags+=",prefill:1"; fi
+    if [ "$FILE_PER_JOB" = 1 ]; then tags+=",fileperjob:1"; fi
+
+    DESCRIPTION="${prefix:+${prefix},}hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)${tags}"
 
     # Sanitize: spaces to underscores, remove special chars
     DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
@@ -339,6 +351,32 @@ convert_scalars_to_arrays() {
     parse_csv_to_array RUNTIME       "$RUNTIME"
 }
 
+# Validate FILE_PER_JOB/PREFILL and parse FIO_EXTRA_ARGS into FIO_EXTRA_ARGS_ARR
+# FIO_EXTRA_ARGS is split on whitespace (no eval): values containing spaces are not supported.
+validate_advanced_options() {
+    local opt
+    for opt in FILE_PER_JOB PREFILL; do
+        case "${!opt}" in
+            0|1) ;;
+            *)
+                print_warning "$opt must be 0 or 1 (got '${!opt}'), disabling"
+                printf -v "$opt" '%s' 0
+                ;;
+        esac
+    done
+
+    if { [ "$FILE_PER_JOB" = 1 ] || [ "$PREFILL" = 1 ]; } && is_block_device "$TARGET_DIR"; then
+        print_warning "PREFILL/FILE_PER_JOB only apply to directory targets - ignored for block device $TARGET_DIR"
+        FILE_PER_JOB=0
+        PREFILL=0
+    fi
+
+    FIO_EXTRA_ARGS_ARR=()
+    if [ -n "$FIO_EXTRA_ARGS" ]; then
+        read -r -a FIO_EXTRA_ARGS_ARR <<< "$FIO_EXTRA_ARGS"
+    fi
+}
+
 # Master configuration orchestrator
 # Precedence: CLI flags > env vars / .env file > hardcoded defaults
 init_config() {
@@ -347,6 +385,8 @@ init_config() {
 
     # Step 2: Override with CLI flags (highest priority)
     apply_cli_overrides
+    BASE_DESCRIPTION="$DESCRIPTION"
+    validate_advanced_options
 
     # Step 3: Detect I/O engine (before array conversion so psync fallback works)
     detect_ioengine
@@ -699,6 +739,105 @@ sanitize_fio_json() {
     return 0
 }
 
+# Data file base name: stable per test size when PREFILL=1 (files are reused), else the per-test name
+data_file_base() {
+    local default_base=$1 test_size=$2
+    if [ "$PREFILL" = 1 ]; then
+        echo "fio_data_${test_size}"
+    else
+        echo "$default_base"
+    fi
+}
+
+# Build fio file-target arguments into FIO_TARGET_ARGS for a data file base name
+build_fio_target_args() {
+    local base=$1
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        FIO_TARGET_ARGS=(--filename="$TARGET_DIR")
+    elif [ "$FILE_PER_JOB" = 1 ]; then
+        # Literal $jobnum is expanded by fio: <base>.0 .. <base>.(numjobs-1)
+        FIO_TARGET_ARGS=(--directory="$TARGET_DIR" --filename_format="${base}.\$jobnum")
+    else
+        FIO_TARGET_ARGS=(--filename="${TARGET_DIR}/${base}")
+    fi
+}
+
+# Remove per-test data files (skipped for devices and PREFILL, which reuses files until cleanup)
+remove_test_files() {
+    local base=$1
+    if [ "$TARGET_IS_DEVICE" = true ] || [ "$PREFILL" = 1 ]; then
+        return 0
+    fi
+    rm -f "${TARGET_DIR}/${base}" 2>/dev/null || true
+    if [ "$FILE_PER_JOB" = 1 ]; then
+        rm -f "${TARGET_DIR}/${base}."* 2>/dev/null || true
+    fi
+}
+
+# Write missing test data files once with incompressible data (PREFILL=1 only)
+# Avoids reads from unwritten/fallocated extents and ZFS compression of zero data.
+prefill_test_files() {
+    local base=$1 test_size=$2 num_jobs=$3 direct=$4
+    if [ "$PREFILL" != 1 ] || [ "$TARGET_IS_DEVICE" = true ]; then
+        return 0
+    fi
+
+    # One fio job per missing file, so existing files are not rewritten
+    local -a job_args=() files=()
+    local j
+    if [ "$FILE_PER_JOB" = 1 ]; then
+        for ((j=0; j<num_jobs; j++)); do
+            if [ ! -f "${TARGET_DIR}/${base}.${j}" ]; then
+                files+=("${TARGET_DIR}/${base}.${j}")
+                job_args+=(--name="prefill_${j}" --filename="${TARGET_DIR}/${base}.${j}")
+            fi
+        done
+    elif [ ! -f "${TARGET_DIR}/${base}" ]; then
+        files+=("${TARGET_DIR}/${base}")
+        job_args+=(--name=prefill --filename="${TARGET_DIR}/${base}")
+    fi
+    if [ ${#files[@]} -eq 0 ]; then
+        return 0
+    fi
+
+    print_status "Prefilling ${#files[@]} test file(s) ${base} (${test_size} each) with incompressible data..."
+    local error_file
+    error_file=$(mktemp "${TMPDIR:-/tmp}/fio_prefill_error.XXXXXX")
+    if fio --rw=write --bs=1M --size="$test_size" --refill_buffers --randrepeat=0 \
+        --end_fsync=1 --ioengine="$IOENGINE" --direct="$direct" --thread --group_reporting \
+        "${job_args[@]}" >/dev/null 2>"$error_file"; then
+        rm -f "$error_file"
+        return 0
+    fi
+
+    print_error "Prefill failed for ${base}"
+    head -5 "$error_file" 2>/dev/null | while IFS= read -r line; do
+        print_error "    $line"
+    done
+    rm -f "$error_file" "${files[@]}"
+    return 1
+}
+
+# Copy a fio JSON result into KEEP_JSON_DIR (keeps basename; suffix only on collision)
+keep_json_copy() {
+    local json_file=$1
+    if [ -z "$KEEP_JSON_DIR" ]; then
+        return 0
+    fi
+    if ! mkdir -p "$KEEP_JSON_DIR"; then
+        print_warning "Cannot create KEEP_JSON_DIR: $KEEP_JSON_DIR"
+        return 0
+    fi
+    local name dest n=1
+    name=$(basename "$json_file")
+    dest="${KEEP_JSON_DIR}/${name}"
+    while [ -e "$dest" ]; do
+        dest="${KEEP_JSON_DIR}/${name%.json}_${n}.json"
+        n=$((n + 1))
+    done
+    cp "$json_file" "$dest" || print_warning "Failed to copy $json_file to $KEEP_JSON_DIR"
+}
+
 run_fio_test() {
     local block_size=$1
     local pattern=$2
@@ -715,14 +854,15 @@ run_fio_test() {
     # Capture stderr to detect specific errors
     local error_file="/tmp/fio_error_$$_$(date +%s).txt"
     
-    # Determine filename based on target type (device vs directory)
-    local fio_filename
-    if [ "$TARGET_IS_DEVICE" = true ]; then
-        fio_filename="$TARGET_DIR"
-    else
-        fio_filename="${TARGET_DIR}/fio_test_${pattern}_${block_size}"
+    # Determine file target based on target type (device vs directory) and PREFILL/FILE_PER_JOB
+    local data_base
+    data_base=$(data_file_base "fio_test_${pattern}_${block_size}" "$test_size")
+    build_fio_target_args "$data_base"
+    if ! prefill_test_files "$data_base" "$test_size" "$num_jobs" "$direct"; then
+        rm -f "$error_file"
+        return 1
     fi
-    
+
     fio --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
         --description="${DESCRIPTION}" \
         --rw="$pattern" \
@@ -735,24 +875,23 @@ run_fio_test() {
         --iodepth="$iodepth" \
         --direct="$direct" \
         --sync="$sync" \
-        --filename="$fio_filename" \
+        "${FIO_TARGET_ARGS[@]}" \
         --output-format=json \
         --output="$output_file" \
         --ioengine="$IOENGINE" \
         --norandommap \
         --randrepeat=0 \
-        --thread 2>"$error_file"
-    
+        --thread "${FIO_EXTRA_ARGS_ARR[@]}" 2>"$error_file"
+
     local fio_exit_code=$?
-    
-    # Clean up test file (only for directory mode, not device mode)
-    if [ "$TARGET_IS_DEVICE" != true ]; then
-        rm -f "${TARGET_DIR}/fio_test_${pattern}_${block_size}" 2>/dev/null || true
-    fi
+
+    # Clean up test file (only for directory mode, not device mode; PREFILL keeps files)
+    remove_test_files "$data_base"
 
     if [ $fio_exit_code -eq 0 ]; then
         # Strip any non-JSON prefix lines (e.g., FIO "note:" warnings)
         sanitize_fio_json "$output_file"
+        keep_json_copy "$output_file"
         print_success "FIO test completed: ${pattern} with ${block_size}, ${num_jobs} jobs"
         rm -f "$error_file"
         return 0
@@ -953,6 +1092,7 @@ cleanup() {
     if [ "$TARGET_IS_DEVICE" != true ]; then
         rm -f "${TARGET_DIR}/fio_test_"*
         rm -f "${TARGET_DIR}/fio_saturation_"* 2>/dev/null || true
+        rm -f "${TARGET_DIR}/fio_data_"* 2>/dev/null || true
     fi
     rm -f /tmp/fio_results_*.json
     rm -f /tmp/fio_sat_*.json 2>/dev/null || true
@@ -975,11 +1115,11 @@ run_fio_step() {
 
     local error_file="/tmp/fio_sat_error_$$_$(date +%s).txt"
 
-    local fio_filename
-    if [ "$TARGET_IS_DEVICE" = true ]; then
-        fio_filename="$TARGET_DIR"
-    else
-        fio_filename="${TARGET_DIR}/fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}"
+    local data_base
+    data_base=$(data_file_base "fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}" "$SAT_TEST_SIZE")
+    build_fio_target_args "$data_base"
+    if ! prefill_test_files "$data_base" "$SAT_TEST_SIZE" "$num_jobs" "$SAT_DIRECT"; then
+        return 1
     fi
 
     fio --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
@@ -994,23 +1134,22 @@ run_fio_step() {
         --iodepth="$iodepth" \
         --direct="$SAT_DIRECT" \
         --sync="$SAT_SYNC" \
-        --filename="$fio_filename" \
+        "${FIO_TARGET_ARGS[@]}" \
         --output-format=json \
         --output="$output_file" \
         --ioengine="$IOENGINE" \
         --norandommap \
         --randrepeat=0 \
-        --thread 2>"$error_file"
+        --thread "${FIO_EXTRA_ARGS_ARR[@]}" 2>"$error_file"
 
     local fio_exit_code=$?
 
-    if [ "$TARGET_IS_DEVICE" != true ]; then
-        rm -f "${TARGET_DIR}/fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}" 2>/dev/null || true
-    fi
+    remove_test_files "$data_base"
 
     if [ $fio_exit_code -eq 0 ]; then
         # Strip any non-JSON prefix lines (e.g., FIO "note:" warnings)
         sanitize_fio_json "$output_file"
+        keep_json_copy "$output_file"
         rm -f "$error_file"
         return 0
     else
@@ -1555,6 +1694,18 @@ show_config() {
         echo "Target Dir:   $TARGET_DIR"
     fi
     echo "Username:     $USERNAME"
+    if [ -n "$FIO_EXTRA_ARGS" ]; then
+        echo "FIO Extra:    ${FIO_EXTRA_ARGS_ARR[*]}"
+    fi
+    if [ -n "$KEEP_JSON_DIR" ]; then
+        echo "Keep JSON:    $KEEP_JSON_DIR"
+    fi
+    if [ "$PREFILL" = 1 ]; then
+        echo "Prefill:      enabled (data files written once, reused, removed at end)"
+    fi
+    if [ "$FILE_PER_JOB" = 1 ]; then
+        echo "File per job: enabled"
+    fi
     if [ "$SATURATION_MODE" = true ]; then
         echo "-----------------------------------------"
         echo "Mode:         SATURATION TEST"
@@ -1796,7 +1947,7 @@ main() {
                 [ -z "$2" ] && { print_error "Option --runtime requires a value"; exit 1; }
                 CLI_RUNTIME="$2"; shift 2 ;;
             --sync)
-                [ -z "$2" ] && { print_error "Option --sync requires a value (0 or 1)"; exit 1; }
+                [ -z "$2" ] && { print_error "Option --sync requires a value (none, sync, dsync; legacy 0 or 1)"; exit 1; }
                 CLI_SYNC="$2"; shift 2 ;;
             --iodepth)
                 [ -z "$2" ] && { print_error "Option --iodepth requires a value"; exit 1; }
@@ -2084,7 +2235,8 @@ DIRECT="1"
 # Examples: 10M, 100M, 1G
 TEST_SIZE="10G"
 
-# Sync mode (1 = enabled, 0 = disabled, comma-separated for multiple values)
+# Sync mode passed to fio --sync (comma-separated for multiple values)
+# none = no O_SYNC, sync = O_SYNC, dsync = O_DSYNC (legacy: 0 = none, 1 = sync)
 SYNC="1"
 
 
@@ -2093,6 +2245,20 @@ RUNTIME="60"
 # Test directory default is "./fio_tmp/"
 # TARGET_DIR=/mnt/pool/tests/
 # DESCRIPTION="FIO-Performance-Test"
+
+# ============================================================
+# Advanced fio options (all off by default)
+# ============================================================
+# Extra arguments appended to every fio benchmark run (split on whitespace,
+# values containing spaces are not supported), e.g. "--buffer_compress_percentage=50"
+# FIO_EXTRA_ARGS=""
+# Copy every fio JSON result into this directory (created if missing)
+# KEEP_JSON_DIR=""
+# 1 = every fio job gets its own file instead of all jobs sharing one (directories only)
+# FILE_PER_JOB=0
+# 1 = write test files once with incompressible data and reuse them across tests
+#     (realistic reads on ext4/xfs fallocated files and ZFS compression; directories only)
+# PREFILL=0
 
 # ============================================================
 # Saturation Test Mode (use with --saturation flag)
@@ -2198,7 +2364,8 @@ Standard Test Options:
   --num-jobs N           Parallel jobs, comma-separated for multiple (default: 4)
   --runtime SEC          Runtime per test, comma-separated for multiple (default: 30)
   --direct 0|1           Direct I/O mode, comma-separated for multiple (default: 1)
-  --sync 0|1             Sync mode, comma-separated for multiple (default: 1)
+  --sync none|sync|dsync Sync mode, comma-separated for multiple (default: 1)
+                         Legacy values 0 (= none) and 1 (= sync) are still accepted
   --iodepth N            I/O depth per job, comma-separated for multiple (default: 1)
 
 Infrastructure Options:
@@ -2218,6 +2385,15 @@ Saturation Test Options (use with -s):
   --initial-numjobs N    Starting numjobs for saturation (default: 4)
   --max-qd N             Max total QD before auto-stop (default: 16384)
   --max-steps N          Max escalation steps (default: 20)
+
+Advanced Settings (.env / environment only, all off by default):
+  FIO_EXTRA_ARGS="..."   Extra fio arguments appended to every benchmark run
+                         (split on whitespace; values with spaces not supported)
+  KEEP_JSON_DIR=PATH     Copy each fio JSON result into PATH (created if missing)
+  FILE_PER_JOB=0|1       Give every fio job its own file (directory targets only)
+  PREFILL=0|1            Write test files once with incompressible data and reuse
+                         them across tests; removed at the end (directory targets only)
+                         PREFILL/FILE_PER_JOB add prefill:1 / fileperjob:1 to the description
 
 Precedence:
   CLI flags > environment variables > .env file > hardcoded defaults
