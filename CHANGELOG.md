@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.10.8] - 2026-09-27
+
+### Added
 - **fio-test.sh**: `PREFILL=1` writes test files once with incompressible data and reuses them across tests, so reads no longer hit unwritten/fallocated extents or zero data squashed by ZFS compression
 - **fio-test.sh**: `FILE_PER_JOB=1` gives every fio job its own file instead of all jobs sharing one
 - **fio-test.sh**: `KEEP_JSON_DIR` keeps a copy of every fio JSON result; `FIO_EXTRA_ARGS` appends extra fio options to every benchmark run
