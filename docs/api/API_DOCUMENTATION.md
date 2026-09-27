@@ -70,7 +70,7 @@ Most endpoints support filtering with these common parameters:
 - `patterns` - I/O patterns (randread, randwrite, read, write)
 - `block_sizes` - Block sizes (4K, 8K, 64K, 1M)
 - `queue_depths` - Queue depths (1, 8, 32, 64)
-- `syncs` - Sync flags (0=async, 1=sync)
+- `syncs` - fio sync modes: `none`, `sync`, `dsync` (legacy `0`/`1` accepted)
 - `directs` - Direct I/O flags (0=buffered, 1=direct)
 
 ### Pagination

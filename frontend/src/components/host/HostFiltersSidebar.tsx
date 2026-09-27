@@ -10,7 +10,7 @@ export interface HostFiltersSidebarProps {
     selectedPatterns: string[];
     selectedQueueDepths: number[];
     selectedNumJobs: number[];
-    selectedSyncs: number[];
+    selectedSyncs: string[];
     selectedDirects: number[];
     selectedIoDepths: number[];
     selectedTestSizes: string[];
@@ -24,7 +24,7 @@ export interface HostFiltersSidebarProps {
     onPatternChange: (patterns: string[]) => void;
     onQueueDepthChange: (depths: number[]) => void;
     onNumJobsChange: (numJobs: number[]) => void;
-    onSyncChange: (syncs: number[]) => void;
+    onSyncChange: (syncs: string[]) => void;
     onDirectChange: (directs: number[]) => void;
     onIoDepthChange: (ioDepths: number[]) => void;
     onTestSizeChange: (testSizes: string[]) => void;

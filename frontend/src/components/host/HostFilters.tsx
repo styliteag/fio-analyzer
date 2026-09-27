@@ -1,3 +1,4 @@
+import { formatSyncMode, SYNC_MODE_LABELS } from '../../utils/syncMode';
 import React, { memo, useCallback, useMemo } from 'react';
 import { Filter, RotateCcw } from 'lucide-react';
 import { Button } from '../ui';
@@ -10,7 +11,7 @@ interface HostFiltersProps {
     selectedPatterns: string[];
     selectedQueueDepths: number[];
     selectedNumJobs: number[];
-    selectedSyncs: number[];
+    selectedSyncs: string[];
     selectedDirects: number[];
     selectedIoDepths: number[];
     selectedTestSizes: string[];
@@ -24,7 +25,7 @@ interface HostFiltersProps {
     onPatternChange: (patterns: string[]) => void;
     onQueueDepthChange: (queueDepths: number[]) => void;
     onNumJobsChange: (numJobs: number[]) => void;
-    onSyncChange: (syncs: number[]) => void;
+    onSyncChange: (syncs: string[]) => void;
     onDirectChange: (directs: number[]) => void;
     onIoDepthChange: (ioDepths: number[]) => void;
     onTestSizeChange: (testSizes: string[]) => void;
@@ -114,7 +115,7 @@ const ActiveFilters = memo<{
     selectedPatterns: string[];
     selectedQueueDepths: number[];
     selectedNumJobs: number[];
-    selectedSyncs: number[];
+    selectedSyncs: string[];
     selectedDirects: number[];
     selectedIoDepths: number[];
     selectedTestSizes: string[];
@@ -172,7 +173,7 @@ const ActiveFilters = memo<{
                         <div>Host-Protocol-Type-Model: {selectedHostProtocolTypeModels.join(', ')}</div>
                     )}
                     {selectedSyncs.length > 0 && (
-                        <div>Sync: {selectedSyncs.map(s => s === 1 ? 'On' : 'Off').join(', ')}</div>
+                        <div>Sync: {selectedSyncs.map(formatSyncMode).join(', ')}</div>
                     )}
                     {selectedDirects.length > 0 && (
                         <div>Direct I/O: {selectedDirects.map(d => d === 1 ? 'On' : 'Off').join(', ')}</div>
@@ -321,7 +322,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                 patterns: new Set<string>(),
                 queueDepths: new Set<number>(),
                 numJobs: new Set<number>(),
-                syncs: new Set<number>(),
+                syncs: new Set<string>(),
                 directs: new Set<number>(),
                 ioDepths: new Set<number>(),
                 testSizes: new Set<string>(),
@@ -358,7 +359,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
         };
 
         // Helper function to check if a config matches current filters (can test specific values)
-        const configMatches = (config: any, testBlockSize?: string, testPattern?: string, testQueueDepth?: number, testNumJobs?: number, testSync?: number, testDirect?: number, testIoDepth?: number, testTestSize?: string, testDuration?: number) => {
+        const configMatches = (config: any, testBlockSize?: string, testPattern?: string, testQueueDepth?: number, testNumJobs?: number, testSync?: string, testDirect?: number, testIoDepth?: number, testTestSize?: string, testDuration?: number) => {
             const blockSizeMatch = testBlockSize !== undefined ? config.block_size === testBlockSize : (selectedBlockSizes.length === 0 || selectedBlockSizes.includes(config.block_size));
             const patternMatch = testPattern !== undefined ? config.read_write_pattern === testPattern : (selectedPatterns.length === 0 || selectedPatterns.includes(config.read_write_pattern));
             const queueDepthMatch = testQueueDepth !== undefined ? config.queue_depth === testQueueDepth : (selectedQueueDepths.length === 0 || selectedQueueDepths.includes(config.queue_depth));
@@ -387,7 +388,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
         const patterns = new Set<string>();
         const queueDepths = new Set<number>();
         const numJobs = new Set<number>();
-        const syncs = new Set<number>();
+        const syncs = new Set<string>();
         const directs = new Set<number>();
         const ioDepths = new Set<number>();
         const testSizes = new Set<string>();
@@ -579,7 +580,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
             return true;
         };
 
-        const configMatches = (config: any, testBlockSize?: string, testPattern?: string, testQueueDepth?: number, testNumJobs?: number, testSync?: number, testDirect?: number, testIoDepth?: number, testTestSize?: string, testDuration?: number) => {
+        const configMatches = (config: any, testBlockSize?: string, testPattern?: string, testQueueDepth?: number, testNumJobs?: number, testSync?: string, testDirect?: number, testIoDepth?: number, testTestSize?: string, testDuration?: number) => {
             const blockSizeMatch = testBlockSize !== undefined ? config.block_size === testBlockSize : (selectedBlockSizes.length === 0 || selectedBlockSizes.includes(config.block_size));
             const patternMatch = testPattern !== undefined ? config.read_write_pattern === testPattern : (selectedPatterns.length === 0 || selectedPatterns.includes(config.read_write_pattern));
             const queueDepthMatch = testQueueDepth !== undefined ? config.queue_depth === testQueueDepth : (selectedQueueDepths.length === 0 || selectedQueueDepths.includes(config.queue_depth));
@@ -903,7 +904,7 @@ const HostFilters: React.FC<HostFiltersProps> = ({
                     selectedValues={selectedSyncs}
                     onChange={onSyncChange}
                     colorClass="bg-pink-500"
-                    labelMap={{ 0: 'Off', 1: 'On' }}
+                    labelMap={SYNC_MODE_LABELS}
                     availableOptions={availableOptions.syncs}
                     optionCounts={optionCounts.syncs}
                 />

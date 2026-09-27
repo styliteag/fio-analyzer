@@ -26,6 +26,7 @@ from auth.middleware import User, require_admin, require_uploader
 from config.settings import settings
 from database.connection import db_manager, get_db
 from utils.logging import log_error, log_info
+from utils.sync_mode import normalize_sync
 
 router = APIRouter()
 
@@ -695,7 +696,7 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
         "num_jobs": int(job_opts.get("numjobs") or global_opts.get("numjobs") or 1),
         "direct": int(job_opts.get("direct") or global_opts.get("direct") or 0),
         "test_size": job_opts.get("size") or global_opts.get("size") or "1M",
-        "sync": int(job_opts.get("sync") or global_opts.get("sync") or 0),
+        "sync": _extract_sync(job_opts, global_opts),
         "iodepth": int(job_opts.get("iodepth") or global_opts.get("iodepth") or 1),
         # Extract performance metrics
         "iops": extract_iops(job),
@@ -732,6 +733,15 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
     }
 
     return test_run_data
+
+
+def _extract_sync(job_opts: Dict[str, Any], global_opts: Dict[str, Any]) -> str:
+    """Read fio's sync option (none/sync/dsync, legacy 0/1); unknown values are a client error."""
+    raw = job_opts.get("sync", global_opts.get("sync"))
+    try:
+        return normalize_sync(raw)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 def extract_iops(job: Dict[str, Any]) -> float:

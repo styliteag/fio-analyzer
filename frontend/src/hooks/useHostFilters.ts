@@ -8,7 +8,7 @@ export interface UseHostFiltersReturn {
     selectedPatterns: string[];
     selectedQueueDepths: number[];
     selectedNumJobs: number[];
-    selectedSyncs: number[];
+    selectedSyncs: string[];
     selectedDirects: number[];
     selectedIoDepths: number[];
     selectedTestSizes: string[];
@@ -25,7 +25,7 @@ export interface UseHostFiltersReturn {
     setSelectedPatterns: (patterns: string[]) => void;
     setSelectedQueueDepths: (depths: number[]) => void;
     setSelectedNumJobs: (numJobs: number[]) => void;
-    setSelectedSyncs: (syncs: number[]) => void;
+    setSelectedSyncs: (syncs: string[]) => void;
     setSelectedDirects: (directs: number[]) => void;
     setSelectedIoDepths: (ioDepths: number[]) => void;
     setSelectedTestSizes: (testSizes: string[]) => void;
@@ -77,7 +77,7 @@ export const useHostFilters = ({ combinedHostData }: UseHostFiltersProps): UseHo
     const [selectedPatterns, setSelectedPatterns] = useUrlList(HOST_FILTER_KEYS.patterns);
     const [selectedQueueDepths, setSelectedQueueDepths] = useUrlNumberList(HOST_FILTER_KEYS.queueDepths);
     const [selectedNumJobs, setSelectedNumJobs] = useUrlNumberList(HOST_FILTER_KEYS.numJobs);
-    const [selectedSyncs, setSelectedSyncs] = useUrlNumberList(HOST_FILTER_KEYS.syncs);
+    const [selectedSyncs, setSelectedSyncs] = useUrlList(HOST_FILTER_KEYS.syncs);
     const [selectedDirects, setSelectedDirects] = useUrlNumberList(HOST_FILTER_KEYS.directs);
     const [selectedIoDepths, setSelectedIoDepths] = useUrlNumberList(HOST_FILTER_KEYS.ioDepths);
     const [selectedTestSizes, setSelectedTestSizes] = useUrlList(HOST_FILTER_KEYS.testSizes);

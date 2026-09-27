@@ -23,7 +23,7 @@ export interface TestRun {
 	num_jobs?: number;
 	direct?: number;
 	test_size?: string;
-	sync?: number;
+	sync?: string;
 	iodepth?: number;
 	// Uniqueness tracking
 	is_latest?: number;
@@ -86,7 +86,7 @@ export interface FilterOptions {
 	hostnames: string[];
 	protocols: string[];
 	host_disk_combinations: string[];
-	syncs: number[];
+	syncs: string[];
 	queue_depths: number[];
 	directs: number[];
 	num_jobs: number[];

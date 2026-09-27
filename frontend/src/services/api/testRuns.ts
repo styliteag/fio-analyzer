@@ -19,7 +19,7 @@ export interface TestRunsOptions {
     drive_models?: string[];
     patterns?: string[];
     block_sizes?: (string | number)[];
-    syncs?: number[];
+    syncs?: string[];
     queue_depths?: number[];
     directs?: number[];
     num_jobs?: number[];

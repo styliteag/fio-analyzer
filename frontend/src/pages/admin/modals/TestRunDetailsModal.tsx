@@ -1,3 +1,4 @@
+import { formatSyncMode } from '../../../utils/syncMode';
 import type { ReactNode } from 'react';
 import Button from '../../../components/ui/Button';
 import Loading from '../../../components/ui/Loading';
@@ -68,7 +69,7 @@ const ParameterSection: React.FC<{ readonly run: TestRun }> = ({ run }) => (
             <Row label="Test Size">{run.test_size || 'N/A'}</Row>
             <Row label="Duration">{run.duration ? `${run.duration}s` : 'N/A'}</Row>
             <Row label="Direct I/O">{run.direct ? 'Yes' : 'No'}</Row>
-            <Row label="Sync">{run.sync ? 'Yes' : 'No'}</Row>
+            <Row label="Sync">{formatSyncMode(run.sync)}</Row>
             {isSet(run.rwmixread) && <Row label="Read/Write Mix (Read %)">{run.rwmixread}%</Row>}
             {run.fio_version && <Row label="FIO Version">{run.fio_version}</Row>}
             {isSet(run.job_runtime) && <Row label="Job Runtime">{run.job_runtime}s</Row>}

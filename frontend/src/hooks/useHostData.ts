@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { clearHostFilters } from './useHostFilters';
+import { compareSyncModes } from '../utils/syncMode';
 import { useUpdateUrlParams, useUrlList, writeList } from './useUrlState';
 import { fetchHostAnalysis, getHostList, type HostAnalysisData } from '../services/api/hostAnalysis';
 
@@ -125,7 +126,7 @@ export const useHostData = (): UseHostDataReturn => {
         const allHosts_list = [...new Set(allHosts.flatMap(h => h.testCoverage.hosts))].sort();
         const allDriveTypes = [...new Set(allHosts.flatMap(h => h.testCoverage.driveTypes))].sort();
         const allDriveModels = [...new Set(allHosts.flatMap(h => h.testCoverage.driveModels))].sort();
-        const allSyncs = [...new Set(allHosts.flatMap(h => h.testCoverage.syncs))].sort((a, b) => a - b);
+        const allSyncs = [...new Set(allHosts.flatMap(h => h.testCoverage.syncs))].sort(compareSyncModes);
         const allDirects = [...new Set(allHosts.flatMap(h => h.testCoverage.directs))].sort((a, b) => a - b);
         const allIoDepths = [...new Set(allHosts.flatMap(h => h.testCoverage.ioDepths))].sort((a, b) => a - b);
         const allTestSizes = [...new Set(allHosts.flatMap(h => h.testCoverage.testSizes))].sort();

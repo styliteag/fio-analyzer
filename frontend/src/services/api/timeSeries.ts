@@ -17,7 +17,7 @@ export interface TimeSeriesHistoryOptions {
     readWritePattern?: string;
     queueDepth?: number;
     testSize?: string;
-    sync?: number;
+    sync?: string;
     direct?: number;
     numJobs?: number;
     duration?: number;
@@ -81,7 +81,7 @@ export const fetchTimeSeriesHistory = async (options: TimeSeriesHistoryOptions =
     if (readWritePattern) params.append("read_write_pattern", readWritePattern);
     if (queueDepth !== undefined) params.append("queue_depth", queueDepth.toString());
     if (testSize) params.append("test_size", testSize);
-    if (sync !== undefined) params.append("sync", sync.toString());
+    if (sync !== undefined) params.append("sync", sync);
     if (direct !== undefined) params.append("direct", direct.toString());
     if (numJobs !== undefined) params.append("num_jobs", numJobs.toString());
     if (duration !== undefined) params.append("duration", duration.toString());
@@ -176,7 +176,7 @@ export const fetchTimeSeriesAll = async (filters?: {
     drive_models?: string[];
     patterns?: string[];
     block_sizes?: (string|number)[];
-    syncs?: number[];
+    syncs?: string[];
     queue_depths?: number[];
     directs?: number[];
     num_jobs?: number[];

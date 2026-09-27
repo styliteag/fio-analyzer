@@ -12,6 +12,7 @@ from auth.middleware import User, require_admin
 from database.connection import get_db
 from database.models import TrendData
 from utils.logging import log_error, log_info
+from utils.sync_mode import parse_sync_filter
 
 router = APIRouter()
 
@@ -207,7 +208,7 @@ async def get_all_time_series(
     ),
     syncs: Optional[str] = Query(
         None,
-        description="Comma-separated list of sync flags (0=async, 1=sync)",
+        description="Comma-separated sync modes: none, sync, dsync (legacy 0/1 accepted)",
         example="0,1",
     ),
     queue_depths: Optional[str] = Query(
@@ -319,7 +320,7 @@ async def get_all_time_series(
             params.extend(block_size_list)
 
         if syncs:
-            sync_list = [int(s.strip()) for s in syncs.split(",")]
+            sync_list = parse_sync_filter(syncs)
             placeholders = ",".join(["?" for _ in sync_list])
             where_conditions.append(f"sync IN ({placeholders})")
             params.extend(sync_list)
@@ -404,6 +405,8 @@ async def get_all_time_series(
 
         return results
 
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("Error retrieving all time series data", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to retrieve all time series data")
@@ -661,7 +664,7 @@ async def get_historical_time_series(
         le=365,
     ),
     test_size: Optional[str] = Query(None, description="Test data size to filter by", example="10G"),
-    sync: Optional[int] = Query(None, description="Sync flag to filter by (0=async, 1=sync)", example=0),
+    sync: Optional[str] = Query(None, description="Sync mode to filter by: none, sync, dsync (legacy 0/1 accepted)", example="sync"),
     direct: Optional[int] = Query(
         None,
         description="Direct I/O flag to filter by (0=buffered, 1=direct)",
@@ -775,7 +778,7 @@ async def get_historical_time_series(
 
         if sync is not None:
             where_conditions.append("sync = ?")
-            params.append(sync)
+            params.append(parse_sync_filter(sync)[0])
 
         if direct is not None:
             where_conditions.append("direct = ?")
@@ -895,6 +898,8 @@ async def get_historical_time_series(
 
         return response
 
+    except HTTPException:
+        raise
     except Exception as e:
         log_error(
             "Error retrieving historical time series data",

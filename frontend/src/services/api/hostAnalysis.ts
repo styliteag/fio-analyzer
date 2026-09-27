@@ -1,3 +1,4 @@
+import { compareSyncModes } from '../../utils/syncMode';
 import type { TestRun } from '../../types';
 import { fetchAllTestRuns, fetchFilters } from './testRuns';
 
@@ -28,7 +29,7 @@ export interface TestConfiguration {
     read_write_pattern: string;
     queue_depth: number;
     num_jobs: number | null | undefined;
-    sync: number | null | undefined;
+    sync: string | null | undefined;
     direct: number | null | undefined;
     iodepth: number | null | undefined;
     test_size: string | null | undefined;
@@ -52,7 +53,7 @@ export interface TestCoverage {
     hosts: string[];
     driveTypes: string[];
     driveModels: string[];
-    syncs: number[];
+    syncs: string[];
     directs: number[];
     ioDepths: number[];
     testSizes: string[];
@@ -144,7 +145,7 @@ export const fetchHostAnalysis = async (hostname: string, abortSignal?: AbortSig
         hosts: [...new Set(validRuns.map((r: TestRun) => r.hostname || 'unknown'))].sort(),
         driveTypes: [...new Set(validRuns.map((r: TestRun) => r.drive_type || 'unknown'))].sort(),
         driveModels: [...new Set(validRuns.map((r: TestRun) => r.drive_model || 'unknown'))].sort(),
-        syncs: [...new Set(validRuns.filter((r: TestRun) => (r as any).sync !== null && (r as any).sync !== undefined).map((r: TestRun) => (r as any).sync!))].sort((a: number, b: number) => a - b),
+        syncs: [...new Set(validRuns.filter((r: TestRun) => (r as any).sync !== null && (r as any).sync !== undefined).map((r: TestRun) => String((r as any).sync)))].sort(compareSyncModes),
         directs: [...new Set(validRuns.filter((r: TestRun) => (r as any).direct !== null && (r as any).direct !== undefined).map((r: TestRun) => (r as any).direct!))].sort((a: number, b: number) => a - b),
         ioDepths: [...new Set(validRuns.filter((r: TestRun) => (r as any).iodepth !== null && (r as any).iodepth !== undefined).map((r: TestRun) => (r as any).iodepth!))].sort((a: number, b: number) => a - b),
         testSizes: [...new Set(validRuns.filter((r: TestRun) => (r as any).test_size !== null && (r as any).test_size !== undefined).map((r: TestRun) => (r as any).test_size!))].sort(),

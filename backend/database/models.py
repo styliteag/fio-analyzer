@@ -36,7 +36,7 @@ class TestRunBase:
     num_jobs: Optional[int] = None
     direct: Optional[int] = None
     test_size: Optional[str] = None
-    sync: Optional[int] = None
+    sync: Optional[str] = None
     iodepth: Optional[int] = None
     # Performance metrics
     avg_latency: Optional[float] = None

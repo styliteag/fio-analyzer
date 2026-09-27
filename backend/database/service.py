@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from utils.logging import log_error, log_info
+from utils.sync_mode import parse_sync_filter
 
 from .connection import get_db
 from .models import TestRun, dataclass_to_dict
@@ -225,7 +226,7 @@ class TestRunService(DatabaseService):
         builder.where_in("protocol", protocols or [])
         builder.where_in("read_write_pattern", patterns or [])
         builder.where_in("block_size", [int(bs) for bs in block_sizes] if block_sizes else [])
-        builder.where_in("sync", [int(s) for s in syncs] if syncs else [])
+        builder.where_in("sync", parse_sync_filter(",".join(syncs)) if syncs else [])
         builder.where_in("queue_depth", [int(qd) for qd in queue_depths] if queue_depths else [])
         builder.where_in("direct", [int(d) for d in directs] if directs else [])
         builder.where_in("num_jobs", [int(nj) for nj in num_jobs] if num_jobs else [])

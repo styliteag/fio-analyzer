@@ -3,7 +3,7 @@ import { adminCredentials, login } from './helpers';
 
 const admin = adminCredentials();
 
-const run = (id: number, blockSize: string) => ({
+const run = (id: number, blockSize: string, sync = 'sync') => ({
     id,
     timestamp: '2026-09-01T10:00:00+00:00',
     hostname: 'paged-host',
@@ -18,6 +18,7 @@ const run = (id: number, blockSize: string) => ({
     bandwidth: 100,
     p95_latency: 2,
     p99_latency: 3,
+    sync,
 });
 
 test.describe('host analysis loads every page of test runs', () => {
@@ -42,5 +43,30 @@ test.describe('host analysis loads every page of test runs', () => {
 
         await expect(page.getByText('Total Tests').locator('..')).toContainText('3');
         expect(new Set(offsets)).toEqual(new Set(['0', '2'])); // StrictMode may load twice in dev
+    });
+});
+
+test.describe('sync mode filter', () => {
+    test.skip(!admin, 'E2E_USER / E2E_PASSWORD not set');
+
+    test('shows none, sync and dsync as separate named options', async ({ page }) => {
+        await page.route('**/api/test-runs?*', async (route) => {
+            const url = new URL(route.request().url());
+            if (url.searchParams.get('hostnames') !== 'sync-host') return route.continue();
+            const data = [run(1, '4K', 'none'), run(2, '4K', 'sync'), run(3, '4K', 'dsync')].map((r) => ({ ...r, hostname: 'sync-host' }));
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ data, total: 3, limit: 10000, offset: 0, has_more: false }),
+            });
+        });
+
+        await login(page, admin!);
+        await page.goto('/host?hosts=sync-host');
+
+        const section = page.getByText('Sync Mode', { exact: true }).locator('..');
+        await expect(section).toContainText('None');
+        await expect(section).toContainText('Sync (O_SYNC)');
+        await expect(section).toContainText('DSync (O_DSYNC)');
     });
 });

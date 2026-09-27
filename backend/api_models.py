@@ -86,7 +86,7 @@ class TestRunBase(BaseModel):
         le=1,
     )
     test_size: Optional[str] = Field(None, description="Test data size", example="10G")
-    sync: Optional[int] = Field(None, description="Sync flag (0=async, 1=sync)", example=0, ge=0, le=1)
+    sync: Optional[str] = Field(None, description="fio sync mode: none, sync or dsync", example="sync")
     iodepth: Optional[int] = Field(None, description="I/O depth (same as queue_depth)", example=32, ge=1)
 
     # Performance metrics
@@ -187,7 +187,7 @@ class PerformanceDataResponse(BaseModel):
     num_jobs: Optional[int] = Field(None, description="Number of jobs")
     direct: Optional[int] = Field(None, description="Direct I/O flag")
     test_size: Optional[str] = Field(None, description="Test size")
-    sync: Optional[int] = Field(None, description="Sync flag")
+    sync: Optional[str] = Field(None, description="fio sync mode: none, sync or dsync")
     iodepth: Optional[int] = Field(None, description="I/O depth")
     duration: int = Field(..., description="Duration in seconds", example=300)
     metrics: PerformanceMetrics = Field(..., description="Performance metrics")
@@ -290,7 +290,7 @@ class FilterOptions(BaseModel):
         description="Available I/O patterns",
         example=["randread", "randwrite", "read", "write"],
     )
-    syncs: List[int] = Field(..., description="Available sync flag values", example=[0, 1])
+    syncs: List[str] = Field(..., description="Available sync modes", example=["none", "sync", "dsync"])
     queue_depths: List[int] = Field(..., description="Available queue depths", example=[1, 8, 16, 32, 64])
     directs: List[int] = Field(..., description="Available direct I/O flag values", example=[0, 1])
     num_jobs: List[int] = Field(..., description="Available job count values", example=[1, 4, 8, 16])

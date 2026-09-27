@@ -37,7 +37,7 @@ router = APIRouter()
                         ],
                         "block_sizes": ["4K", "8K", "64K", "1M"],
                         "patterns": ["randread", "randwrite", "read", "write"],
-                        "syncs": [0, 1],
+                        "syncs": ["none", "sync", "dsync"],
                         "queue_depths": [1, 8, 16, 32, 64],
                         "directs": [0, 1],
                         "num_jobs": [1, 4, 8, 16],
@@ -77,7 +77,7 @@ async def get_filters(
     - **host_disk_combinations**: Formatted hostname-protocol-drive combinations
     - **block_sizes**: All I/O block sizes found in test data
     - **patterns**: All I/O access patterns (randread, write, etc.)
-    - **syncs**: Sync flag values (0=async, 1=sync)
+    - **syncs**: fio sync modes (none, sync, dsync)
     - **queue_depths**: All I/O queue depth values
     - **directs**: Direct I/O flag values (0=buffered, 1=direct)
     - **num_jobs**: All concurrent job count values

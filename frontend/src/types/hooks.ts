@@ -220,7 +220,7 @@ export interface FilterOptionsData {
   hostnames: string[];
   protocols: string[];
   host_disk_combinations: string[];
-  syncs: number[];
+  syncs: string[];
   queue_depths: number[];
   directs: number[];
   num_jobs: number[];

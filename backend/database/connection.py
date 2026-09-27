@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 from config.settings import settings
+from database.sync_migration import migrate_sync_to_text
 from utils.helpers import (
     calculate_unique_key,
     get_base_bandwidth,
@@ -90,7 +91,7 @@ class DatabaseManager:
                 num_jobs INTEGER,
                 direct INTEGER,
                 test_size TEXT,
-                sync INTEGER,
+                sync TEXT,
                 iodepth INTEGER,
                 -- Performance metrics directly in main table
                 avg_latency REAL,
@@ -152,7 +153,7 @@ class DatabaseManager:
                 num_jobs INTEGER,
                 direct INTEGER,
                 test_size TEXT,
-                sync INTEGER,
+                sync TEXT,
                 iodepth INTEGER,
                 -- Performance metrics directly in main table
                 avg_latency REAL,
@@ -402,7 +403,7 @@ class DatabaseManager:
                     num_jobs INTEGER,
                     direct INTEGER,
                     test_size TEXT,
-                    sync INTEGER,
+                    sync TEXT,
                     iodepth INTEGER,
                     avg_latency REAL,
                     bandwidth REAL,
@@ -438,6 +439,9 @@ class DatabaseManager:
                 "CREATE INDEX idx_saturation_runs_timestamp ON saturation_runs(timestamp DESC)"
             )
             log_info("saturation_runs table created with indexes")
+
+        # Migration 5: fio sync mode as text (none, sync, dsync) instead of 0/1
+        migrate_sync_to_text(cursor)
 
         self.connection.commit()
 
@@ -501,7 +505,7 @@ class DatabaseManager:
                     # Generate job options
                     num_jobs = random.choice([1, 2, 4, 8])
                     direct_io = random.choice([0, 1])
-                    sync_mode = 1 if random.random() > 0.7 else 0
+                    sync_mode = "sync" if random.random() > 0.7 else "none"
                     test_size = random.choice(["1M", "10M", "100M", "1G"])
                     iodepth = random.choice([1, 4, 8, 16, 32])
 

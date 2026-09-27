@@ -20,6 +20,7 @@ from auth.middleware import User, require_admin
 from database.connection import get_db
 from database.models import BulkUpdateRequest
 from utils.logging import log_error, log_info
+from utils.sync_mode import parse_sync_filter
 
 router = APIRouter()
 
@@ -93,7 +94,7 @@ async def get_test_runs(
     ),
     syncs: Optional[str] = Query(
         None,
-        description="Comma-separated list of sync flag values to filter by (0=async, 1=sync)",
+        description="Comma-separated sync modes to filter by: none, sync, dsync (legacy 0/1 accepted)",
         example="0,1",
     ),
     queue_depths: Optional[str] = Query(
@@ -202,9 +203,9 @@ async def get_test_runs(
             where_conditions.append(f"block_size IN ({placeholders})")
             params.extend(block_size_list)
 
-        # ADDED: syncs filter (integer conversion)
+        # syncs filter: fio sync mode names (legacy 0/1 accepted)
         if syncs:
-            sync_list = [int(s.strip()) for s in syncs.split(",")]
+            sync_list = parse_sync_filter(syncs)
             placeholders = ",".join(["?" for _ in sync_list])
             where_conditions.append(f"sync IN ({placeholders})")
             params.extend(sync_list)
@@ -304,6 +305,8 @@ async def get_test_runs(
         # Frontend expects direct array of test runs, not wrapped object
         return test_runs
 
+    except HTTPException:
+        raise
     except Exception as e:
         log_error("Error retrieving test runs", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to retrieve test runs")

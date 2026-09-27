@@ -69,7 +69,7 @@ class TestRunResponse(BaseModel):
     read_write_pattern: str
     block_size: int
     queue_depth: Optional[int] = None
-    sync: Optional[int] = None
+    sync: Optional[str] = None
     direct: Optional[int] = None
     num_jobs: Optional[int] = None
     timestamp: str
