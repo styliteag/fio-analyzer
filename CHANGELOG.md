@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- 
+
+## [0.12.0] - 2026-09-28
+
 > **Upgrade note - back up the database first.** On the first start the backend rebuilds the `test_runs` table so that the client count becomes part of its unique key (migration 9). Stop the container and copy `data/backend/db/storage_performance.db` (Docker) or `backend/db/storage_performance.db` before upgrading. The migration keeps every row, index and view; existing results get `clients = 1`.
 
 ### Added
