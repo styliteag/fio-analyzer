@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.11.2] - 2026-09-28
+
+### Added
 - **Comparison**: responses include `match_counts` (strict vs. loose) and a `hint` when strict matching finds fewer configurations, e.g. "0 configurations match exactly, 26 match when test size, runtime and file layout are ignored"; the Compare page shows it with one-click fixes
 - **fio-test.sh**: storage detection also records the ZFS pool layout (`pool`, `pool_layout` mirror/raidz1-3/draid/stripe/mixed, `pool_vdevs`) and warns when `DRIVE_TYPE` contradicts it (e.g. `mirror` on a raidz2 pool)
 - **fio-test.sh**: storage detection records the disk below the target (model, vendor, serial, transport, driver such as virtio_scsi/virtio_blk/nvme, rotational, size) and, inside VMs, the hypervisor (`systemd-detect-virt`, DMI vendor/product), so VM runs can be told apart without relying on `DRIVE_MODEL`
