@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Tests for client_run_step in fio-test.sh (run: bash scripts/tests/test_client_step_retry.sh)
+# A fio server can refuse a job right after the previous one ("<host> error: failed to
+# setup shm segment", seen with fio 3.43 servers on macOS): fio exits 0, writes the server
+# message before the JSON and client_stats is empty. Such a step is retried
+# (FIO_RETRY_MAX); steps with a real client error are not.
+
+# shellcheck disable=SC2034,SC2329  # config vars and stubs are used by the sourced functions
+
+set -u
+DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT="$DIR/../fio-test.sh"
+TWO="$DIR/fixtures/fio_client_2clients.json"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+FUNCS="transient_fio_error_line is_transient_fio_error run_fio_with_retry sanitize_fio_json
+fio_server_address client_fio_args client_step_complete client_output_messages client_run_step"
+SED_EXPR=""
+for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
+# shellcheck source=/dev/null
+source <(sed -n "$SED_EXPR" "$SCRIPT")
+for f in $FUNCS; do
+    declare -F "$f" >/dev/null || { echo "function $f not found in $SCRIPT"; exit 1; }
+done
+
+print_status() { :; }
+print_error() { :; }
+print_warning() { echo "WARN: $*" >>"$TMP/warnings"; }
+sleep() { :; }
+
+failures=0
+check() {  # check <description> <expected> <actual>
+    if [ "$2" = "$3" ]; then
+        echo "ok   - $1"
+    else
+        echo "FAIL - $1 (expected '$2', got '$3')"
+        failures=$((failures + 1))
+    fi
+}
+
+EMPTY='{ "fio version" : "fio-3.43", "global options" : {}, "client_stats" : [], "disk_util" : [] }'
+# fio stub: output of call <k> is FIO_OUT_<k> ("two" = the real 2-client fixture)
+fio() {
+    local out="" arg calls var
+    for arg in "$@"; do case "$arg" in --output=*) out=${arg#--output=} ;; esac; done
+    calls=$(( $(cat "$TMP/calls") + 1 ))
+    echo "$calls" >"$TMP/calls"
+    var="FIO_OUT_$calls"
+    case "${!var:-two}" in
+        two) cp "$TWO" "$out" ;;
+        shm) printf '<node-a.home> error: failed to setup shm segment\n\n%s\n' "$EMPTY" >"$out" ;;
+        err) jq '.client_stats[0].error = 28' "$TWO" >"$out" ;;
+    esac
+    return 0
+}
+CLIENT_CONN_HOST=(127.0.0.1 127.0.0.1) CLIENT_CONN_PORT=(18801 18802)
+CLIENT_KEY=(127.0.0.1:18801 127.0.0.1:18802)
+CLIENT_WORK_DIR="$TMP"
+
+# 1. server refuses once, then the job runs
+FIO_RETRY_MAX=2 FIO_RETRY_COUNT=0 CLIENT_SERVER_RETRIES=0 FIO_OUT_1=shm FIO_OUT_2=two
+echo 0 >"$TMP/calls" && : >"$TMP/warnings"
+client_run_step 2 "$TMP/job.fio" "$TMP/out.json" step1; rc=$?
+check "refused step is retried and succeeds" 0 "$rc"
+check "fio ran twice" 2 "$(cat "$TMP/calls")"
+check "retry counted" 1 "$CLIENT_SERVER_RETRIES"
+check "server message shown" 1 "$(grep -c 'failed to setup shm segment' "$TMP/warnings")"
+client_step_complete "$TMP/out.json" 2; check "final JSON is complete" 0 "$?"
+
+# 2. server keeps refusing: gives up after FIO_RETRY_MAX retries, JSON stays for the upload
+FIO_RETRY_MAX=2 FIO_RETRY_COUNT=0 FIO_OUT_1=shm FIO_OUT_2=shm FIO_OUT_3=shm
+echo 0 >"$TMP/calls" && : >"$TMP/warnings"
+client_run_step 2 "$TMP/job.fio" "$TMP/out.json" step2
+check "persistent refusal: 1 + 2 retries" 3 "$(cat "$TMP/calls")"
+check "persistent refusal: JSON is valid" 0 "$(jq -e '.client_stats' "$TMP/out.json" >/dev/null; echo $?)"
+
+# 3. a client error (error != 0) is a result, not retried
+FIO_RETRY_MAX=2 FIO_RETRY_COUNT=0 FIO_OUT_1=err
+echo 0 >"$TMP/calls"
+client_run_step 2 "$TMP/job.fio" "$TMP/out.json" step3
+check "client error not retried" 1 "$(cat "$TMP/calls")"
+
+# 4. FIO_RETRY_MAX=0 disables the retry
+FIO_RETRY_MAX=0 FIO_RETRY_COUNT=0 FIO_OUT_1=shm
+echo 0 >"$TMP/calls"
+client_run_step 2 "$TMP/job.fio" "$TMP/out.json" step4
+check "FIO_RETRY_MAX=0: no retry" 1 "$(cat "$TMP/calls")"
+
+if [ "$failures" -gt 0 ]; then
+    echo "$failures test(s) failed"
+    exit 1
+fi
+echo "all tests passed"

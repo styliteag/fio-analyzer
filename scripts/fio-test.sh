@@ -262,6 +262,27 @@ define_defaults() {
     STORAGE_DETECT="${STORAGE_DETECT:-1}"
     STORAGE_INFO=""
     STORAGE_WARNINGS=0
+
+    # Server mode (--server): fio --server on this host for a controller
+    FIO_SERVER_BIND="${FIO_SERVER_BIND:-}"
+    FIO_SERVER_PORT="${FIO_SERVER_PORT:-8765}"
+    # Empty = FIO_SERVER_PORT + 1 (8766 by default), also on the controller
+    FIO_SERVER_INFO_PORT="${FIO_SERVER_INFO_PORT:-}"
+    FIO_SERVER_TIMEOUT="${FIO_SERVER_TIMEOUT:-2h}"
+    FIO_SERVER_STATE_DIR="${FIO_SERVER_STATE_DIR:-}"
+    # 1 = allow a loopback-bound server as root (every local user could use it)
+    FIO_SERVER_ALLOW_ROOT="${FIO_SERVER_ALLOW_ROOT:-0}"
+    # Client mode (controller): CLIENTS set = run every test on these fio servers
+    CLIENTS="${CLIENTS:-}"
+    RAMP_CLIENTS="${RAMP_CLIENTS:-}"
+    CLIENT_SSH="${CLIENT_SSH:-0}"
+    CLIENT_SSH_USER="${CLIENT_SSH_USER:-}"
+    CLIENT_SSH_BASE_PORT="${CLIENT_SSH_BASE_PORT:-18765}"
+    CLIENT_IOENGINE="${CLIENT_IOENGINE:-libaio}"
+    CLIENT_TARGET_IS_DEVICE="${CLIENT_TARGET_IS_DEVICE:-auto}"
+    CLIENT_MODE=false
+    CLIENT_SSH_PIDS=()
+    CLIENT_WORK_DIR=""
 }
 
 # Apply CLI overrides (CLI flags take highest priority over env/.env/defaults)
@@ -293,6 +314,8 @@ apply_cli_overrides() {
     [ -n "${CLI_INITIAL_NUMJOBS+set}" ]      && INITIAL_NUMJOBS="$CLI_INITIAL_NUMJOBS"
     [ -n "${CLI_MAX_STEPS+set}" ]            && MAX_STEPS="$CLI_MAX_STEPS"
     [ -n "${CLI_MAX_TOTAL_QD+set}" ]         && MAX_TOTAL_QD="$CLI_MAX_TOTAL_QD"
+    [ -n "${CLI_CLIENTS+set}" ]              && CLIENTS="$CLI_CLIENTS"
+    [ -n "${CLI_RAMP_CLIENTS+set}" ]         && RAMP_CLIENTS="$CLI_RAMP_CLIENTS"
 }
 
 # Generate UUIDs for tracking
@@ -337,6 +360,12 @@ build_description() {
     if [ "$PREFILL" = 1 ]; then tags+=",prefill:1"; fi
     if [ "$FILE_PER_JOB" = 1 ]; then tags+=",fileperjob:1"; fi
     if [ "$SATURATION_MODE" = true ] && sat_cap_active; then tags+=",satcap:${SAT_MAX_TOTAL_SIZE}"; fi
+    # Client mode: clients of this step, ramp run, step with missing/failed clients
+    if [ "${CLIENT_MODE:-false}" = true ]; then
+        tags+=",clients:${STEP_CLIENTS:-0}"
+        if [ -n "${RAMP_CLIENTS:-}" ]; then tags+=",ramp:1"; fi
+        if [ "${STEP_COMPLETE:-1}" = 0 ]; then tags+=",incomplete:1"; fi
+    fi
 
     DESCRIPTION="${prefix:+${prefix},}hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)${tags}"
 
@@ -504,7 +533,9 @@ validate_advanced_options() {
         esac
     done
 
-    if { [ "$FILE_PER_JOB" = 1 ] || [ "$PREFILL" = 1 ]; } && is_block_device "$TARGET_DIR"; then
+    # Client mode: TARGET_DIR is a path on the clients (validate_client_config decides)
+    if [ "${CLIENT_MODE:-false}" != true ] && { [ "$FILE_PER_JOB" = 1 ] || [ "$PREFILL" = 1 ]; } \
+        && is_block_device "$TARGET_DIR"; then
         print_warning "PREFILL/FILE_PER_JOB only apply to directory targets - ignored for block device $TARGET_DIR"
         FILE_PER_JOB=0
         PREFILL=0
@@ -531,10 +562,20 @@ init_config() {
     # Step 2: Override with CLI flags (highest priority)
     apply_cli_overrides
     BASE_DESCRIPTION="$DESCRIPTION"
+    CLIENT_MODE=false
+    if [ -n "$CLIENTS" ]; then CLIENT_MODE=true; fi
     validate_advanced_options
 
-    # Step 3: Detect I/O engine (before array conversion so psync fallback works)
-    detect_ioengine
+    # Step 3: Detect I/O engine (before array conversion so psync fallback works).
+    # Client mode: the clients run the jobs with CLIENT_IOENGINE, nothing is detected here.
+    if [ "$CLIENT_MODE" = true ]; then
+        validate_client_config || exit 1
+        STEP_CLIENTS=${RAMP_STEPS[${#RAMP_STEPS[@]} - 1]}
+        IOENGINE="$CLIENT_IOENGINE"
+        set_sync_engine_flag
+    else
+        detect_ioengine
+    fi
 
     # Step 4: Generate UUIDs
     generate_uuids
@@ -719,13 +760,33 @@ check_api_connectivity() {
     fi
 }
 
+# curl config with the upload credentials (read via -K <(...), so the password never
+# appears in the process list). Inside double quotes curl unescapes \\ and \".
+curl_auth_config() {
+    local cred="${USERNAME}:${PASSWORD}"
+    cred=${cred//[$'\r\n']/}
+    # Quoted replacements behave the same with and without bash 5.2 patsub_replacement
+    cred=${cred//\\/'\\'}
+    cred=${cred//\"/'\"'}
+    printf 'user = "%s"\n' "$cred"
+}
+
+# Warn (once) when the upload credentials are still the defaults
+warn_default_credentials() {
+    if [ "${DEFAULT_CRED_WARNED:-false}" = true ]; then return 0; fi
+    if [ "$USERNAME" = uploader ] && [ "$PASSWORD" = uploader ]; then
+        print_warning "Upload credentials are the defaults uploader/uploader - set USERNAME/PASSWORD in .env"
+        DEFAULT_CRED_WARNED=true
+    fi
+}
+
 # Function to validate credentials
 check_credentials() {
     print_status "Validating upload credentials for user '$USERNAME'"
 
     # Test upload endpoint for upload-only users
     local upload_response
-    upload_response=$(curl -s -w "%{http_code}" -u "$USERNAME:$PASSWORD" \
+    upload_response=$(curl -s -w "%{http_code}" -K <(curl_auth_config) \
         --connect-timeout 10 --max-time 30 \
         -X GET "$BACKEND_URL/api/import" 2>/dev/null)
 
@@ -743,7 +804,7 @@ check_credentials() {
             # Test with a POST request to validate upload permissions
             print_status "Testing upload endpoint with POST request..."
             local post_response
-            post_response=$(curl -s -w "%{http_code}" -u "$USERNAME:$PASSWORD" \
+            post_response=$(curl -s -w "%{http_code}" -K <(curl_auth_config) \
                 --connect-timeout 10 --max-time 30 \
                 -X POST "$BACKEND_URL/api/import" 2>/dev/null)
 
@@ -1854,14 +1915,21 @@ upload_results() {
     if [ "$SATURATION_MODE" = true ]; then
         extra_fields+=(--form-string "latency_threshold_ms=$LATENCY_THRESHOLD_MS")
     fi
+    # Client mode: step and client details instead of the controller's own storage_info.
     # Detected storage configuration (JSON); --form-string so '@'/'<' are never read as files
-    if [ -n "${STORAGE_INFO:-}" ]; then
+    if [ "${CLIENT_MODE:-false}" = true ]; then
+        extra_fields+=(--form-string "clients=${STEP_CLIENTS}"
+            --form-string "ramp_uuid=${RAMP_UUID}"
+            --form-string "client_hosts=${STEP_CLIENT_HOSTS}"
+            --form-string "client_storage_info=${STEP_CLIENT_STORAGE}"
+            --form-string "ramp_step_complete=${STEP_COMPLETE}")
+    elif [ -n "${STORAGE_INFO:-}" ]; then
         extra_fields+=(--form-string "storage_info=$STORAGE_INFO")
     fi
 
     response=$(curl -s -w "%{http_code}" \
         -X POST \
-        -u "$USERNAME:$PASSWORD" \
+        -K <(curl_auth_config) \
         -F "file=@$json_file" \
         --form-string "drive_model=$DRIVE_MODEL" \
         --form-string "drive_type=$DRIVE_TYPE" \
@@ -1876,6 +1944,8 @@ upload_results() {
     
     http_code="${response: -3}"
     response_body="${response%???}"
+    # Printed to the terminal: no escape sequences from the server
+    response_body=${response_body//[[:cntrl:]]/}
     
     if [ "$http_code" -eq 200 ]; then
         print_success "Upload successful: $test_name"
@@ -1890,6 +1960,14 @@ upload_results() {
 # Function to cleanup test files
 cleanup() {
     print_status "Cleaning up test files..."
+    # Client mode: TARGET_DIR is a path on the clients - never touch the local one
+    if [ "${CLIENT_MODE:-false}" = true ]; then
+        client_close_tunnels
+        if [ -n "$CLIENT_WORK_DIR" ] && [ -d "$CLIENT_WORK_DIR" ]; then
+            rm -rf "$CLIENT_WORK_DIR"
+        fi
+        return 0
+    fi
     # Only clean up test files if using directory mode
     if [ "$TARGET_IS_DEVICE" != true ]; then
         rm -f "${TARGET_DIR}/fio_test_"*
@@ -2520,6 +2598,30 @@ get_max_value() {
     echo "$max"
 }
 
+# Client-mode lines of show_config: target, clients, ramp steps, SSH and per-client storage
+show_client_config() {
+    local i ssh="off (direct connections)"
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        echo "Target:       $TARGET_DIR on every client (BLOCK DEVICE - DESTRUCTIVE!)"
+    else
+        echo "Target Dir:   $TARGET_DIR on every client"
+    fi
+    echo "Clients:      ${#CLIENT_ENTRY[@]}: ${CLIENT_ENTRY[*]}"
+    if [ -n "$RAMP_CLIENTS" ]; then
+        echo "Ramp Steps:   ${RAMP_STEPS[*]} clients (one ramp_uuid per test configuration)"
+    else
+        echo "Ramp Steps:   none (all ${#CLIENT_ENTRY[@]} clients in every test)"
+    fi
+    if [ "$CLIENT_SSH" = 1 ]; then
+        ssh="on (${CLIENT_SSH_USER:+${CLIENT_SSH_USER}@}<client>, local ports from ${CLIENT_SSH_BASE_PORT})"
+    fi
+    echo "SSH Tunnels:  $ssh"
+    for ((i = 0; i < ${#CLIENT_ENTRY[@]}; i++)); do
+        printf 'Storage %-5s %s (%s): %s\n' "[$((i + 1))]" "${CLIENT_NAME[$i]:-?}" "${CLIENT_ENTRY[$i]}" \
+            "$(client_storage_summary "${CLIENT_STORAGE[$i]:-}")"
+    done
+}
+
 # Function to display configuration
 show_config() {
     local max_runtime=$(get_max_value "${RUNTIME[@]}")
@@ -2545,13 +2647,17 @@ show_config() {
     echo "I/O Engine:   $IOENGINE"
     echo "I/O Depth:    $IODEPTH"
     echo "Backend URL:  $BACKEND_URL"
-    if [ "$TARGET_IS_DEVICE" = true ]; then
+    if [ "${CLIENT_MODE:-false}" = true ]; then
+        show_client_config
+    elif [ "$TARGET_IS_DEVICE" = true ]; then
         echo "Target:       $TARGET_DIR (BLOCK DEVICE - DESTRUCTIVE!)"
     else
         echo "Target Dir:   $TARGET_DIR"
     fi
     echo "Username:     $USERNAME"
-    echo "Storage:      $(storage_summary)"
+    if [ "${CLIENT_MODE:-false}" != true ]; then
+        echo "Storage:      $(storage_summary)"
+    fi
     if [ -n "$FIO_EXTRA_ARGS" ]; then
         echo "FIO Extra:    ${FIO_EXTRA_ARGS_ARR[*]}"
     fi
@@ -2686,6 +2792,1033 @@ run_all_tests() {
     fi
 }
 
+# ============================================================
+# Multi-client mode (fio client/server)
+# ============================================================
+# Server mode (--server): this host runs `fio --server` bound to FIO_SERVER_BIND and
+# publishes its storage detection (storage.json, hostname.txt) read-only over HTTP.
+# Client mode (CLIENTS set): this host is the controller. Every test runs on the listed
+# fio servers at once (`fio --client=... job.fio`), optionally ramped over RAMP_CLIENTS.
+
+# Seconds from a duration like 90, 45s, 10m or 2h (0 = no timeout); returns 1 when invalid
+parse_duration_seconds() {
+    local re='^([0-9]{1,9})([sSmMhH]?)$' n
+    [[ "$1" =~ $re ]] || return 1
+    n=$((10#${BASH_REMATCH[1]}))
+    case "${BASH_REMATCH[2]}" in
+        m|M) n=$((n * 60)) ;;
+        h|H) n=$((n * 3600)) ;;
+    esac
+    echo "$n"
+}
+
+# True for loopback addresses (127.0.0.0/8, ::1)
+is_loopback_addr() {
+    case "$1" in
+        127.*|::1|"[::1]") return 0 ;;
+    esac
+    return 1
+}
+
+# True for a TCP port number 1-65535
+valid_port() {
+    [[ "$1" =~ ^[0-9]{1,5}$ ]] && [ "$((10#$1))" -ge 1 ] && [ "$((10#$1))" -le 65535 ]
+}
+
+# Canonical form of a FIO_SERVER_BIND address; returns 1 unless the input is a specific
+# address in canonical form: wildcards in every spelling (0::, ::0.0.0.0, ::ffff:0.0.0.0),
+# leading zeros (00.0.0.0) and scope ids are refused. Uses python3 ipaddress; without
+# python3 only canonical IPv4 addresses and ::1 are accepted.
+server_bind_canonical() {
+    local addr=$1 octet='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])'
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c '
+import ipaddress, sys
+s = sys.argv[1]
+try:
+    a = ipaddress.ip_address(s)
+except ValueError:
+    sys.exit(1)
+mapped = getattr(a, "ipv4_mapped", None)
+if "%" in s or a.is_unspecified or (mapped is not None and mapped.is_unspecified) or str(a) != s.lower():
+    sys.exit(1)
+print(a)' "$addr" 2>/dev/null
+        return
+    fi
+    if [[ "$addr" =~ ^${octet}\.${octet}\.${octet}\.${octet}$ ]] && [ "$addr" != 0.0.0.0 ]; then
+        echo "$addr"
+        return 0
+    fi
+    if [ "$addr" = "::1" ]; then
+        echo "::1"
+        return 0
+    fi
+    return 1
+}
+
+# Validate FIO_SERVER_BIND / FIO_SERVER_PORT / FIO_SERVER_INFO_PORT for --server.
+# Refuses a missing, wildcard or non-canonical address (fio's server has no authentication)
+# and a loopback bind as root unless FIO_SERVER_ALLOW_ROOT=1.
+# Sets SERVER_LOOPBACK=true for 127.0.0.1 / ::1 (reachable through SSH tunnels only).
+server_validate_bind() {
+    local bind=${FIO_SERVER_BIND:-} canon
+    SERVER_LOOPBACK=false
+    bind=${bind#[}
+    bind=${bind%]}
+    if [ -z "$bind" ]; then
+        print_error "Server mode needs FIO_SERVER_BIND: the IP address of the interface to listen on,"
+        print_error "  e.g. FIO_SERVER_BIND=10.44.44.101 (isolated benchmark network) or 127.0.0.1 (SSH tunnels)"
+        return 1
+    fi
+    if ! canon=$(server_bind_canonical "$bind"); then
+        print_error "FIO_SERVER_BIND must be one specific IP address in canonical form (got '$FIO_SERVER_BIND');"
+        print_error "  wildcards such as 0.0.0.0 or :: are refused in every spelling (fio's server has no authentication)"
+        if ! command -v python3 >/dev/null 2>&1; then
+            print_error "  without python3 only IPv4 addresses and ::1 are accepted"
+        fi
+        return 1
+    fi
+    bind=$canon
+    if ! valid_port "${FIO_SERVER_PORT:-}"; then
+        print_error "FIO_SERVER_PORT must be a port number 1-65535 (got '${FIO_SERVER_PORT:-}')"
+        return 1
+    fi
+    FIO_SERVER_PORT=$((10#$FIO_SERVER_PORT))
+    if [ -z "${FIO_SERVER_INFO_PORT:-}" ]; then FIO_SERVER_INFO_PORT=$((FIO_SERVER_PORT + 1)); fi
+    if ! valid_port "$FIO_SERVER_INFO_PORT" || [ "$((10#$FIO_SERVER_INFO_PORT))" -eq "$FIO_SERVER_PORT" ]; then
+        print_error "FIO_SERVER_INFO_PORT must be a port number 1-65535 other than FIO_SERVER_PORT (got '$FIO_SERVER_INFO_PORT')"
+        return 1
+    fi
+    FIO_SERVER_INFO_PORT=$((10#$FIO_SERVER_INFO_PORT))
+    FIO_SERVER_BIND=$bind
+    if is_loopback_addr "$bind"; then
+        SERVER_LOOPBACK=true
+        if [ "$(id -u 2>/dev/null)" = 0 ] && [ "${FIO_SERVER_ALLOW_ROOT:-0}" != 1 ]; then
+            print_error "Refusing a loopback fio server as root: every local user could run fio jobs and"
+            print_error "  exec_prerun commands as root. Run it as an unprivileged user (block device access"
+            print_error "  via group permissions), or set FIO_SERVER_ALLOW_ROOT=1 on a single-user host."
+            return 1
+        fi
+        print_status "Listening on loopback ($bind) only: not reachable over the network."
+        print_status "  The controller must use CLIENT_SSH=1 (SSH tunnels to this host)."
+    fi
+    return 0
+}
+
+# fio --server / --client address: ip:<IPv4>,<port>, ip6:<IPv6>,<port> or <name>,<port>
+fio_server_address() {
+    local host=$1 port=$2 ipv4='^[0-9]{1,3}(\.[0-9]{1,3}){3}$'
+    if [[ "$host" =~ $ipv4 ]]; then
+        echo "ip:${host},${port}"
+    elif [[ "$host" == *:* ]]; then
+        echo "ip6:${host},${port}"
+    else
+        echo "${host},${port}"
+    fi
+}
+
+# State directory of the server (PID files, published info/): FIO_SERVER_STATE_DIR,
+# else /run/fio-test when /run is writable, else $XDG_RUNTIME_DIR/fio-test; empty when
+# none applies (run_server_mode then creates a mktemp directory).
+# SI_RUN_DIR replaces /run only with FIO_TEST_HOOKS=1 (tests).
+server_state_dir() {
+    local run=/run
+    if [ "${FIO_TEST_HOOKS:-0}" = 1 ] && [ -n "${SI_RUN_DIR:-}" ]; then run=$SI_RUN_DIR; fi
+    if [ -n "${FIO_SERVER_STATE_DIR:-}" ]; then
+        echo "$FIO_SERVER_STATE_DIR"
+    elif [ -d "$run" ] && [ -w "$run" ]; then
+        echo "$run/fio-test"
+    elif [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+        echo "$XDG_RUNTIME_DIR/fio-test"
+    fi
+}
+
+# An existing state directory must be a real directory (no symlink) owned by this user
+# without group/other write permission, and its info/ must not be a symlink.
+# A missing directory is fine (it is created with mode 700).
+server_check_state_dir() {
+    local dir=$1
+    if [ -L "$dir" ]; then
+        print_error "Server state directory $dir is a symlink - refusing"
+        return 1
+    fi
+    [ -e "$dir" ] || return 0
+    if [ ! -d "$dir" ] || [ ! -O "$dir" ]; then
+        print_error "Server state directory $dir must be a directory owned by $(id -un 2>/dev/null)"
+        return 1
+    fi
+    if [ -n "$(find "$dir" -maxdepth 0 \( -perm -g+w -o -perm -o+w \) 2>/dev/null)" ]; then
+        print_error "Server state directory $dir is writable by group/others - refusing (use mode 700)"
+        return 1
+    fi
+    if [ -L "$dir/info" ]; then
+        print_error "$dir/info is a symlink - refusing"
+        return 1
+    fi
+    return 0
+}
+
+# Write <content> to <dir>/<name> without following a symlink at that name:
+# temp file in the same directory, then rename over the name
+server_write_file() {
+    local dir=$1 name=$2 content=$3 tmp
+    if [ -d "$dir/$name" ] && [ ! -L "$dir/$name" ]; then return 1; fi
+    tmp=$(mktemp "$dir/.${name}.XXXXXX") || return 1
+    if ! printf '%s\n' "$content" >"$tmp" || ! chmod 644 "$tmp"; then
+        rm -f "$tmp"
+        return 1
+    fi
+    # mv onto a symlink to a directory would move into that directory: drop the link first
+    if [ -L "$dir/$name" ]; then rm -f "$dir/$name"; fi
+    mv -f "$tmp" "$dir/$name"
+}
+
+# Write the published files into <state dir>/info: storage.json and hostname.txt only
+server_write_info() {
+    local dir="$1/info" info=${STORAGE_INFO:-} name
+    if [ -L "$dir" ]; then return 1; fi
+    mkdir -p "$dir" || return 1
+    if [ -z "$info" ]; then info='{}'; fi
+    name=$(hostname -s 2>/dev/null || hostname 2>/dev/null)
+    name=${name//[^A-Za-z0-9._-]/}
+    server_write_file "$dir" storage.json "$info" || return 1
+    server_write_file "$dir" hostname.txt "${name:-unknown}"
+}
+
+# Start time and owner uid of a process ("<lstart> <uid>", single spaces; empty if gone)
+server_proc_stamp() {
+    ps -o lstart=,uid= -p "$1" 2>/dev/null | head -n 1 | tr -s ' \t' '  ' | sed 's/^ //; s/ $//'
+}
+
+# PID file <dir>/<kind>.pid: line 1 the PID, line 2 its start time and uid
+server_write_pidfile() {
+    local dir=$1 kind=$2 pid=$3
+    server_write_file "$dir" "${kind}.pid" "${pid}"$'\n'"$(server_proc_stamp "$pid")"
+}
+
+# True when PID runs the process this script recorded as <kind> (server, fio or http),
+# so a PID reused by another program is never killed
+server_pid_matches() {
+    local pid=$1 kind=$2 cmd
+    cmd=$(ps -o command= -p "$pid" 2>/dev/null) || return 1
+    case "$kind" in
+        server) [[ "$cmd" == *" --server"* ]] ;;
+        fio) [[ "$cmd" == *fio*" --server="* ]] ;;
+        http) [[ "$cmd" == *http.server* ]] ;;
+        *) return 1 ;;
+    esac
+}
+
+# --server-stop: stop the processes recorded in <state dir>/{server,fio,http}.pid and
+# remove the PID files. A PID is killed only when its start time and uid still match the
+# recorded ones, the uid is ours (root: any recorded uid) and the command matches.
+server_stop_pids() {
+    local dir=$1 kind pidfile pid rec cur uid me
+    me=$(id -u 2>/dev/null)
+    if [ ! -d "$dir" ]; then
+        print_error "No server state directory $dir (set FIO_SERVER_STATE_DIR to the directory --server printed)"
+        return 1
+    fi
+    for kind in server fio http; do
+        pidfile="$dir/$kind.pid"
+        [ -f "$pidfile" ] || continue
+        pid=$(sed -n 1p "$pidfile" 2>/dev/null)
+        rec=$(sed -n 2p "$pidfile" 2>/dev/null)
+        cur=""
+        if [[ "$pid" =~ ^[1-9][0-9]{0,9}$ ]]; then cur=$(server_proc_stamp "$pid"); fi
+        uid=${rec##* }
+        if [ -n "$rec" ] && [ "$cur" = "$rec" ] && { [ "$uid" = "$me" ] || [ "$me" = 0 ]; } \
+            && server_pid_matches "$pid" "$kind"; then
+            kill "$pid" 2>/dev/null && print_status "Stopped $kind process (PID $pid)"
+        else
+            print_warning "Ignoring $pidfile: '$pid' is not a running $kind process of fio-test.sh"
+        fi
+        rm -f "$pidfile"
+    done
+    return 0
+}
+
+# Prominent warning: fio's server executes whatever job a client sends
+print_server_security_warning() {
+    local ports="${FIO_SERVER_PORT},${FIO_SERVER_INFO_PORT}" user
+    user=$(id -un 2>/dev/null || echo "this user")
+    echo
+    print_warning "${BOLD}=================== SECURITY WARNING ===================${NC}"
+    print_warning "fio's server mode has NO authentication and NO encryption. Anyone who can"
+    print_warning "reach ${FIO_SERVER_BIND}:${FIO_SERVER_PORT} can run arbitrary fio jobs as '${user}':"
+    print_warning "  write to any file or block device this user can open (as root: every disk),"
+    print_warning "  and run shell commands (fio exec_prerun/exec_postrun)."
+    if [ "${SERVER_LOOPBACK:-false}" = true ]; then
+        print_warning "Bound to loopback: every local user of this host can still connect."
+    else
+        print_warning "Use it only on an isolated benchmark network and allow only the controller:"
+        print_warning "  nft insert rule inet filter input tcp dport { ${ports} } ip saddr != <CONTROLLER_IP> drop"
+        print_warning "  iptables -I INPUT -p tcp -m multiport --dports ${ports} ! -s <CONTROLLER_IP> -j DROP"
+    fi
+    print_warning "Stop it with Ctrl-C or './fio-test.sh --server-stop'; it stops itself after FIO_SERVER_TIMEOUT."
+    print_warning "${BOLD}========================================================${NC}"
+    echo
+}
+
+# Stop the processes started by run_server_mode and remove the PID files / published info
+server_shutdown() {
+    local pid
+    if [ "${SERVER_SHUTDOWN_DONE:-false}" = true ]; then return 0; fi
+    SERVER_SHUTDOWN_DONE=true
+    for pid in ${SERVER_HTTP_PID:-} ${SERVER_FIO_PID:-}; do
+        if kill -0 "$pid" 2>/dev/null; then
+            # fio forks one child per client connection: stop those first
+            if command -v pkill >/dev/null 2>&1; then pkill -TERM -P "$pid" 2>/dev/null; fi
+            kill "$pid" 2>/dev/null
+        fi
+    done
+    rm -f "$SERVER_STATE_DIR/server.pid" "$SERVER_STATE_DIR/fio.pid" "$SERVER_STATE_DIR/http.pid"
+    rm -f "$SERVER_STATE_DIR/info/storage.json" "$SERVER_STATE_DIR/info/hostname.txt" ${SERVER_HTTP_LOG:+"$SERVER_HTTP_LOG"}
+    rmdir "$SERVER_STATE_DIR/info" 2>/dev/null
+    if [ "${SERVER_STATE_TEMP:-false}" = true ]; then rmdir "$SERVER_STATE_DIR" 2>/dev/null; fi
+    print_status "fio server stopped"
+}
+
+# Start the read-only info HTTP server (storage.json, hostname.txt) if python3 exists
+server_start_info_http() {
+    if ! command -v python3 >/dev/null 2>&1; then
+        print_warning "python3 not found - no info server; the controller uploads {} as this client's storage info"
+        return 0
+    fi
+    # New log file (mktemp: never an existing name or symlink)
+    SERVER_HTTP_LOG=$(mktemp "$SERVER_STATE_DIR/http.XXXXXX") || return 1
+    python3 -m http.server --bind "$FIO_SERVER_BIND" "$FIO_SERVER_INFO_PORT" \
+        --directory "$SERVER_STATE_DIR/info" </dev/null >"$SERVER_HTTP_LOG" 2>&1 &
+    SERVER_HTTP_PID=$!
+    server_write_pidfile "$SERVER_STATE_DIR" http "$SERVER_HTTP_PID"
+}
+
+# Prepare the server state directory; refuses to start a second server on it
+server_prepare_state_dir() {
+    local old
+    SERVER_STATE_DIR=$(server_state_dir)
+    SERVER_STATE_TEMP=false
+    if [ -z "$SERVER_STATE_DIR" ]; then
+        SERVER_STATE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/fio-test-server.XXXXXX") || return 1
+        SERVER_STATE_TEMP=true
+    fi
+    server_check_state_dir "$SERVER_STATE_DIR" || return 1
+    # Only a directory created here gets mode 700; an existing one keeps its mode
+    if [ ! -d "$SERVER_STATE_DIR" ] && ! { mkdir -p "$(dirname "$SERVER_STATE_DIR")" \
+        && mkdir -m 700 "$SERVER_STATE_DIR"; }; then
+        print_error "Cannot create server state directory $SERVER_STATE_DIR"
+        return 1
+    fi
+    old=$(head -n 1 "$SERVER_STATE_DIR/fio.pid" 2>/dev/null)
+    if [[ "$old" =~ ^[1-9][0-9]*$ ]] && kill -0 "$old" 2>/dev/null && server_pid_matches "$old" fio; then
+        print_error "A fio server (PID $old) already uses $SERVER_STATE_DIR - stop it with --server-stop"
+        print_error "  or use another FIO_SERVER_STATE_DIR for a second instance"
+        return 1
+    fi
+}
+
+# --server: run fio --server (plus the info HTTP server) until Ctrl-C, --server-stop,
+# FIO_SERVER_TIMEOUT or fio exiting
+run_server_mode() {
+    local timeout_s start
+    SERVER_HTTP_PID="" SERVER_FIO_PID="" SERVER_HTTP_LOG="" SERVER_SHUTDOWN_DONE=false
+    server_validate_bind || exit 1
+    if ! timeout_s=$(parse_duration_seconds "$FIO_SERVER_TIMEOUT"); then
+        print_error "FIO_SERVER_TIMEOUT must be a duration like 7200, 90m or 2h (0 = no timeout), got '$FIO_SERVER_TIMEOUT'"
+        exit 1
+    fi
+    check_fio
+    print_server_security_warning
+    server_prepare_state_dir || exit 1
+    # Own traps (the default one would clean up TARGET_DIR)
+    trap 'server_shutdown; exit 0' INT TERM
+    trap 'server_shutdown' EXIT
+    # TARGET_DIR must be the same path the controller uses (created here if missing)
+    if [[ "$TARGET_DIR" != /* ]]; then
+        print_warning "TARGET_DIR '$TARGET_DIR' is relative - the controller needs an absolute path (same on every client)"
+    fi
+    setup_target_dir
+    detect_storage
+    server_write_info "$SERVER_STATE_DIR" || { print_error "Cannot write $SERVER_STATE_DIR/info"; exit 1; }
+
+    server_write_pidfile "$SERVER_STATE_DIR" server "$$"
+    server_start_info_http
+    fio --server="$(fio_server_address "$FIO_SERVER_BIND" "$FIO_SERVER_PORT")" </dev/null &
+    SERVER_FIO_PID=$!
+    server_write_pidfile "$SERVER_STATE_DIR" fio "$SERVER_FIO_PID"
+    sleep 1
+    if ! kill -0 "$SERVER_FIO_PID" 2>/dev/null; then
+        print_error "fio --server exited at once (port ${FIO_SERVER_PORT} in use or address not on this host?)"
+        exit 1
+    fi
+    if [ -n "${SERVER_HTTP_PID:-}" ] && ! kill -0 "$SERVER_HTTP_PID" 2>/dev/null; then
+        print_warning "Info HTTP server did not start: $(tail -n 1 "$SERVER_HTTP_LOG" 2>/dev/null | tr -d '\000-\037')"
+    fi
+
+    print_success "fio server listening on ${FIO_SERVER_BIND}:${FIO_SERVER_PORT} (PID $SERVER_FIO_PID)"
+    print_status "Storage info:  http://${FIO_SERVER_BIND}:${FIO_SERVER_INFO_PORT}/storage.json"
+    print_status "Storage:       $(storage_summary)"
+    print_status "Target:        $TARGET_DIR (the controller's TARGET_DIR must be this path)"
+    print_status "State dir:     $SERVER_STATE_DIR"
+    if [ "$timeout_s" -gt 0 ]; then
+        print_status "Timeout:       stops by itself after ${FIO_SERVER_TIMEOUT}"
+    fi
+    print_status "Stop:          Ctrl-C or FIO_SERVER_STATE_DIR=$SERVER_STATE_DIR $0 --server-stop"
+
+    start=$SECONDS
+    while kill -0 "$SERVER_FIO_PID" 2>/dev/null; do
+        if [ "$timeout_s" -gt 0 ] && [ $((SECONDS - start)) -ge "$timeout_s" ]; then
+            print_warning "FIO_SERVER_TIMEOUT (${FIO_SERVER_TIMEOUT}) reached - stopping"
+            break
+        fi
+        sleep 1
+    done
+    server_shutdown
+    exit 0
+}
+
+# --server-stop: stop the server recorded in the state directory
+run_server_stop_mode() {
+    local dir
+    dir=$(server_state_dir)
+    if [ -z "$dir" ]; then
+        print_error "No default state directory - set FIO_SERVER_STATE_DIR to the directory --server printed"
+        exit 1
+    fi
+    server_stop_pids "$dir" || exit 1
+    exit 0
+}
+
+# Parse CLIENTS ("host[:port[:infoport]]", comma-separated; IPv6 as "[addr]:port") into
+# CLIENT_ENTRY (as written), CLIENT_ADDR, CLIENT_PORT and CLIENT_INFO_PORT.
+# Port default FIO_SERVER_PORT; info port default FIO_SERVER_INFO_PORT, else port + 1.
+parse_clients() {
+    local list=$1 entry addr port info seen=" "
+    local re_v6='^\[([0-9A-Fa-f:.]+)\](:([0-9]+))?(:([0-9]+))?$'
+    local re_host='^([A-Za-z0-9][A-Za-z0-9._-]*)(:([0-9]+))?(:([0-9]+))?$'
+    local -a raw
+    CLIENT_ENTRY=() CLIENT_ADDR=() CLIENT_PORT=() CLIENT_INFO_PORT=()
+    if [ -z "${list//[[:space:],]/}" ] || [[ "$list" == *, ]]; then
+        print_error "CLIENTS must list fio servers: host[:port[:infoport]],... (got '$list')"
+        return 1
+    fi
+    IFS=',' read -ra raw <<< "$list"
+    for entry in "${raw[@]}"; do
+        entry="${entry#"${entry%%[![:space:]]*}"}"
+        entry="${entry%"${entry##*[![:space:]]}"}"
+        if [[ "$entry" =~ $re_v6 ]] || [[ "$entry" =~ $re_host ]]; then
+            addr=${BASH_REMATCH[1]} port=${BASH_REMATCH[3]:-${FIO_SERVER_PORT:-8765}}
+            info=${BASH_REMATCH[5]:-${FIO_SERVER_INFO_PORT:-}}
+        else
+            print_error "Invalid CLIENTS entry '$entry' (host[:port[:infoport]], IPv6 as [addr]:port)"
+            return 1
+        fi
+        if ! valid_port "$port"; then print_error "Invalid port in CLIENTS entry '$entry'"; return 1; fi
+        port=$((10#$port))
+        if [ -z "$info" ]; then info=$((port + 1)); fi
+        if ! valid_port "$info" || [ "$((10#$info))" -eq "$port" ]; then
+            print_error "Invalid info port in CLIENTS entry '$entry'"
+            return 1
+        fi
+        if [[ "$seen" == *" ${addr}:${port} "* ]]; then
+            print_error "Duplicate CLIENTS entry '$entry'"
+            return 1
+        fi
+        seen+="${addr}:${port} "
+        CLIENT_ENTRY+=("$entry") CLIENT_ADDR+=("$addr") CLIENT_PORT+=("$port") CLIENT_INFO_PORT+=("$((10#$info))")
+    done
+}
+
+# Parse RAMP_CLIENTS (ascending client counts, each <= count) into RAMP_STEPS;
+# empty = one step with all clients
+parse_ramp_clients() {
+    local list=$1 count=$2 value prev=0
+    local -a raw
+    RAMP_STEPS=()
+    if [ -z "${list//[[:space:]]/}" ]; then
+        RAMP_STEPS=("$count")
+        return 0
+    fi
+    IFS=',' read -ra raw <<< "$list"
+    if [ ${#raw[@]} -eq 0 ] || [[ "$list" == *, ]]; then
+        print_error "RAMP_CLIENTS must be ascending client counts like 1,2,4 (got '$list')"
+        return 1
+    fi
+    for value in "${raw[@]}"; do
+        value=${value//[[:space:]]/}
+        if ! [[ "$value" =~ ^[1-9][0-9]{0,3}$ ]] || [ "$value" -le "$prev" ] || [ "$value" -gt "$count" ]; then
+            print_error "RAMP_CLIENTS must be ascending client counts from 1 to $count (got '$list')"
+            return 1
+        fi
+        RAMP_STEPS+=("$value")
+        prev=$value
+    done
+}
+
+# Check the client-mode settings; TARGET_IS_DEVICE from CLIENT_TARGET_IS_DEVICE
+# (auto = the path starts with /dev/). TARGET_DIR is never looked at locally.
+validate_client_config() {
+    local var value n
+    if [ "$SATURATION_MODE" = true ]; then
+        print_error "SATURATION_MODE (--saturation) cannot be combined with CLIENTS (client mode) - run them separately"
+        return 1
+    fi
+    parse_clients "$CLIENTS" || return 1
+    n=${#CLIENT_ADDR[@]}
+    parse_ramp_clients "${RAMP_CLIENTS:-}" "$n" || return 1
+    case "$CLIENT_SSH" in
+        0|1) ;;
+        *) print_error "CLIENT_SSH must be 0 or 1 (got '$CLIENT_SSH')"; return 1 ;;
+    esac
+    if [ "$CLIENT_SSH" = 1 ]; then
+        if ! valid_port "$CLIENT_SSH_BASE_PORT" || [ $((10#$CLIENT_SSH_BASE_PORT + 2 * n - 1)) -gt 65535 ]; then
+            print_error "CLIENT_SSH_BASE_PORT needs 2 free local ports per client below 65536 (got '$CLIENT_SSH_BASE_PORT')"
+            return 1
+        fi
+        CLIENT_SSH_BASE_PORT=$((10#$CLIENT_SSH_BASE_PORT))
+        if [ -n "$CLIENT_SSH_USER" ] && ! [[ "$CLIENT_SSH_USER" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
+            print_error "Invalid CLIENT_SSH_USER '$CLIENT_SSH_USER'"
+            return 1
+        fi
+    fi
+    # Values end up in an ini job file: no control characters (a newline would add options)
+    if [[ "$TARGET_DIR" != /* ]] || [[ "$TARGET_DIR" == *[[:cntrl:]]* ]]; then
+        print_error "In client mode TARGET_DIR must be an absolute path on the clients (got '$TARGET_DIR')"
+        return 1
+    fi
+    if ! [[ "$CLIENT_IOENGINE" =~ ^[A-Za-z0-9_.:-]+$ ]] || [[ "$CLIENT_IOENGINE" == external* ]]; then
+        print_error "Invalid CLIENT_IOENGINE '$CLIENT_IOENGINE'"
+        return 1
+    fi
+    for var in BLOCK_SIZES TEST_PATTERNS NUM_JOBS DIRECT TEST_SIZE SYNC IODEPTH RUNTIME; do
+        value=${!var:-}
+        if [[ "$value" == *[[:cntrl:]]* ]]; then print_error "Invalid $var '$value'"; return 1; fi
+    done
+    case "$CLIENT_TARGET_IS_DEVICE" in
+        auto) if [[ "$TARGET_DIR" == /dev/* ]]; then TARGET_IS_DEVICE=true; else TARGET_IS_DEVICE=false; fi ;;
+        1) TARGET_IS_DEVICE=true ;;
+        0) TARGET_IS_DEVICE=false ;;
+        *) print_error "CLIENT_TARGET_IS_DEVICE must be auto, 0 or 1 (got '$CLIENT_TARGET_IS_DEVICE')"; return 1 ;;
+    esac
+    if [ "$TARGET_IS_DEVICE" = true ] && { [ "$PREFILL" = 1 ] || [ "$FILE_PER_JOB" = 1 ]; }; then
+        print_warning "PREFILL/FILE_PER_JOB only apply to directory targets - ignored for block device $TARGET_DIR"
+        PREFILL=0
+        FILE_PER_JOB=0
+    fi
+    return 0
+}
+
+# SSH tunnel command for client <i> into SSH_CMD: local <lport> -> fio port,
+# local <linfo> -> info port, both on the client's 127.0.0.1
+client_ssh_command() {
+    local i=$1 lport=$2 linfo=$3 target=${CLIENT_ADDR[$1]}
+    if [ -n "${CLIENT_SSH_USER:-}" ]; then target="${CLIENT_SSH_USER}@${target}"; fi
+    SSH_CMD=(ssh -N -o ExitOnForwardFailure=yes -o BatchMode=yes
+        -L "${lport}:127.0.0.1:${CLIENT_PORT[$i]}" -L "${linfo}:127.0.0.1:${CLIENT_INFO_PORT[$i]}" -- "$target")
+}
+
+# True when something already listens on local port $1
+client_port_in_use() {
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+}
+
+# Wait up to 10s until a local tunnel port accepts connections (fails when ssh exits)
+client_wait_port() {
+    local host=$1 port=$2 pid=$3 i
+    for ((i = 0; i < 50; i++)); do
+        kill -0 "$pid" 2>/dev/null || return 1
+        if (exec 3<>"/dev/tcp/${host}/${port}") 2>/dev/null; then return 0; fi
+        sleep 0.2
+    done
+    return 1
+}
+
+# Connection endpoints per client into CLIENT_CONN_HOST/PORT/INFO_PORT and CLIENT_KEY
+# ("host:port" as fio reports it in client_stats). CLIENT_SSH=1 starts one SSH tunnel per
+# client in the background (PIDs in CLIENT_SSH_PIDS, closed by client_close_tunnels).
+client_setup_connections() {
+    local i n=${#CLIENT_ADDR[@]} lport
+    CLIENT_CONN_HOST=() CLIENT_CONN_PORT=() CLIENT_CONN_INFO_PORT=() CLIENT_KEY=() CLIENT_SSH_PIDS=()
+    if [ "${CLIENT_SSH:-0}" = 1 ]; then
+        # Another local user's listener on a tunnel port would receive our fio traffic
+        for ((lport = CLIENT_SSH_BASE_PORT; lport < CLIENT_SSH_BASE_PORT + 2 * n; lport++)); do
+            if client_port_in_use "$lport"; then
+                print_error "Local port $lport is already in use - choose another CLIENT_SSH_BASE_PORT"
+                return 1
+            fi
+        done
+    fi
+    for ((i = 0; i < n; i++)); do
+        if [ "${CLIENT_SSH:-0}" = 1 ]; then
+            lport=$((CLIENT_SSH_BASE_PORT + 2 * i))
+            client_ssh_command "$i" "$lport" "$((lport + 1))"
+            print_status "SSH tunnel to ${CLIENT_ADDR[$i]}: 127.0.0.1:${lport} -> fio ${CLIENT_PORT[$i]}, 127.0.0.1:$((lport + 1)) -> info ${CLIENT_INFO_PORT[$i]}"
+            "${SSH_CMD[@]}" </dev/null &
+            CLIENT_SSH_PIDS+=("$!")
+            CLIENT_CONN_HOST+=(127.0.0.1) CLIENT_CONN_PORT+=("$lport") CLIENT_CONN_INFO_PORT+=("$((lport + 1))")
+        else
+            CLIENT_CONN_HOST+=("${CLIENT_ADDR[$i]}") CLIENT_CONN_PORT+=("${CLIENT_PORT[$i]}")
+            CLIENT_CONN_INFO_PORT+=("${CLIENT_INFO_PORT[$i]}")
+        fi
+        CLIENT_KEY+=("${CLIENT_CONN_HOST[$i]}:${CLIENT_CONN_PORT[$i]}")
+    done
+    if [ "${CLIENT_SSH:-0}" = 1 ]; then
+        for ((i = 0; i < n; i++)); do
+            if ! client_wait_port 127.0.0.1 "${CLIENT_CONN_INFO_PORT[$i]}" "${CLIENT_SSH_PIDS[$i]}"; then
+                print_error "SSH tunnel to ${CLIENT_ADDR[$i]} did not come up (key-based login and free local port ${CLIENT_CONN_PORT[$i]} needed)"
+                return 1
+            fi
+        done
+        # ExitOnForwardFailure: ssh exits when it could not bind; then someone else answered
+        sleep 0.5
+        for ((i = 0; i < n; i++)); do
+            if ! kill -0 "${CLIENT_SSH_PIDS[$i]}" 2>/dev/null; then
+                print_error "SSH tunnel to ${CLIENT_ADDR[$i]} exited - another process answers on its local port"
+                return 1
+            fi
+        done
+    fi
+    return 0
+}
+
+# Client mode without SSH: the controller trusts every client (fio protocol)
+print_client_security_warning() {
+    if [ "${CLIENT_SSH:-0}" = 1 ]; then return 0; fi
+    print_warning "Client mode: fio's client/server protocol has no authentication and no encryption,"
+    print_warning "  and the controller trusts every client (a fio server can make the controller read"
+    print_warning "  or write files). Use an isolated network or CLIENT_SSH=1, and run the controller as"
+    print_warning "  an unprivileged user whose .env is readable only by that user."
+}
+
+# Close the SSH tunnels started by client_setup_connections
+client_close_tunnels() {
+    local pid
+    for pid in ${CLIENT_SSH_PIDS[@]+"${CLIENT_SSH_PIDS[@]}"}; do
+        kill "$pid" 2>/dev/null
+    done
+    CLIENT_SSH_PIDS=()
+    return 0
+}
+
+# fio --client arguments for the first <n> clients into CLIENT_FIO_ARGS
+client_fio_args() {
+    local i
+    CLIENT_FIO_ARGS=()
+    for ((i = 0; i < $1; i++)); do
+        CLIENT_FIO_ARGS+=("--client=$(fio_server_address "${CLIENT_CONN_HOST[$i]}" "${CLIENT_CONN_PORT[$i]}")")
+    done
+}
+
+# Host name as sent by a client: [A-Za-z0-9._-] only, at most 64 characters
+client_sanitize_name() {
+    local v=${1//[^A-Za-z0-9._-]/}
+    printf '%s' "${v:0:64}"
+}
+
+# True when $1 is a JSON object
+client_valid_json_object() {
+    [ -n "$1" ] && jq -e 'type == "object"' >/dev/null 2>&1 <<< "$1"
+}
+
+# Fetch hostname.txt and storage.json of every client into CLIENT_NAME / CLIENT_STORAGE
+# (address as name and {} when a client publishes nothing)
+client_fetch_info() {
+    local i n=${#CLIENT_ENTRY[@]} host base name info
+    CLIENT_NAME=() CLIENT_STORAGE=()
+    for ((i = 0; i < n; i++)); do
+        host=${CLIENT_CONN_HOST[$i]}
+        if [[ "$host" == *:* ]]; then host="[$host]"; fi
+        base="http://${host}:${CLIENT_CONN_INFO_PORT[$i]}"
+        name=$(curl -s -f --noproxy '*' --max-time 5 --max-filesize 256 "$base/hostname.txt" 2>/dev/null \
+            | head -c 256 | head -n 1)
+        name=$(client_sanitize_name "$name")
+        info=$(curl -s -f --noproxy '*' --max-time 5 --max-filesize 65536 "$base/storage.json" 2>/dev/null \
+            | head -c 65536)
+        if ! client_valid_json_object "$info"; then
+            print_warning "No storage info from ${CLIENT_ENTRY[$i]} ($base/storage.json) - using {}"
+            info='{}'
+        fi
+        CLIENT_NAME+=("${name:-${CLIENT_ADDR[$i]}}")
+        CLIENT_STORAGE+=("$info")
+    done
+}
+
+# Comma-separated names of the first <n> clients (client_hosts upload field)
+client_hosts_list() {
+    local IFS=,
+    echo "${CLIENT_NAME[*]:0:$1}"
+}
+
+# client_storage_info upload field for the first <n> clients:
+# {"<host>:<port>": {<storage.json>..., "client_name": "<CLIENTS entry>"}, ...}
+# Kept below 120000 bytes (one command-line argument of curl; Linux allows 128 KiB):
+# drops virt, ceph, disk, then zfs details, then keeps only fs_type.
+client_storage_info_json() {
+    local n=$1 out part
+    out=$(printf '%s\n' "${CLIENT_STORAGE[@]:0:$n}" | jq -c -s --args '
+        . as $v | ($v | length) as $n
+        | reduce range(0; $n) as $i ({}; . + {($ARGS.positional[$i]): ($v[$i] + {client_name: $ARGS.positional[$i + $n]})})' \
+        "${CLIENT_KEY[@]:0:$n}" "${CLIENT_ENTRY[@]:0:$n}") || out='{}'
+    for part in virt ceph disk zfs; do
+        [ "$(LC_ALL=C; echo "${#out}")" -gt 120000 ] || break
+        out=$(jq -c --arg p "$part" 'map_values(del(.[$p]))' <<< "$out")
+    done
+    if [ "$(LC_ALL=C; echo "${#out}")" -gt 120000 ]; then
+        out=$(jq -c 'map_values({client_name, fs_type})' <<< "$out")
+    fi
+    echo "$out"
+}
+
+# One-line summary of a client's storage.json for show_config
+client_storage_summary() {
+    local out
+    out=$(jq -r '[("fs=" + (.fs_type // empty)), ("zfs=" + (.zfs.dataset // empty)),
+        ("sync=" + (.zfs.sync // empty)), ("recordsize=" + (.zfs.recordsize // empty)),
+        ("volblocksize=" + (.zfs.volblocksize // empty)), ("layout=" + (.zfs.pool_layout // empty)),
+        ("ceph=" + (.ceph.kind // empty)), ("pool=" + (.ceph.pool // empty)),
+        ("disk=" + (.disk.name // empty)), ("model=" + (.disk.model // empty)),
+        ("driver=" + (.disk.driver // empty)), ("virt=" + (.virt.type // empty)),
+        ("kernel=" + (.kernel // empty))] | join(" ")' <<< "$1" 2>/dev/null)
+    out=${out//[[:cntrl:]]/}
+    echo "${out:-unknown}"
+}
+
+# fio job name: the host metadata, without characters that end an ini section name
+client_job_name() {
+    local name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}"
+    printf '%s' "${name//[^A-Za-z0-9_.,:;+@-]/}"
+}
+
+# Target lines of a job file (like build_fio_target_args); ':' is escaped for fio
+client_job_target_lines() {
+    local base=$1 dir=${TARGET_DIR%/}
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        echo "filename=${TARGET_DIR//:/\\:}"
+    elif [ "$FILE_PER_JOB" = 1 ]; then
+        echo "directory=${dir//:/\\:}"
+        echo "filename_format=${base}.\$jobnum"
+    else
+        echo "filename=${dir//:/\\:}/${base}"
+    fi
+}
+
+# FIO_EXTRA_ARGS as job file lines: --key=value -> key=value, --flag -> flag.
+# Command-line-only options and anything else are skipped with a warning.
+client_extra_args_ini() {
+    local arg key
+    for arg in ${FIO_EXTRA_ARGS_ARR[@]+"${FIO_EXTRA_ARGS_ARR[@]}"}; do
+        key=${arg#--}
+        key=${key%%=*}
+        if [[ "$arg" != --?* ]] || ! [[ "$key" =~ ^[A-Za-z0-9_]+$ ]]; then
+            print_warning "FIO_EXTRA_ARGS: '$arg' cannot be used in a client job file - skipped"
+            continue
+        fi
+        case "$key" in
+            exec_*|output*|client|server|daemonize|remote*|section|minimal|append*|terse*|eta*|status*|debug|\
+            parse*|showcmd|cmdhelp|enghelp|version|help|trigger*|aux*|bandwidth*|alloc*|max*jobs|readonly)
+                print_warning "FIO_EXTRA_ARGS: '$arg' is a fio command-line option or runs commands - skipped"
+                continue
+                ;;
+            ioengine)
+                if [[ "${arg#*=}" == external* ]]; then
+                    print_warning "FIO_EXTRA_ARGS: '$arg' loads code on the clients - skipped"
+                    continue
+                fi
+                ;;
+        esac
+        echo "${arg#--}"
+    done
+}
+
+# Write the benchmark job file for one client-mode test
+# Usage: client_write_job_file <file> <pattern> <bs> <numjobs> <direct> <size> <sync> <iodepth> <runtime> <data base>
+client_write_job_file() {
+    local file=$1 pattern=$2 block_size=$3 num_jobs=$4 direct=$5 test_size=$6 sync=$7 iodepth=$8 runtime=$9
+    local base=${10}
+    {
+        echo "[global]"
+        echo "ioengine=${CLIENT_IOENGINE}"
+        echo "direct=${direct}"
+        echo "sync=${sync}"
+        echo "bs=${block_size}"
+        echo "rw=${pattern}"
+        echo "iodepth=${iodepth}"
+        echo "size=${test_size}"
+        echo "runtime=${runtime}"
+        echo "time_based"
+        echo "group_reporting"
+        echo "norandommap"
+        echo "randrepeat=0"
+        echo "thread"
+        echo "numjobs=${num_jobs}"
+        client_job_target_lines "$base"
+        # Without PREFILL every test removes its data files on the clients
+        if [ "$TARGET_IS_DEVICE" != true ] && [ "$PREFILL" != 1 ]; then echo "unlink=1"; fi
+        client_extra_args_ini
+        echo
+        echo "[$(client_job_name)]"
+        echo "description=${DESCRIPTION}"
+    } >"$file"
+}
+
+# Job file that writes the PREFILL data files (incompressible) on every client
+# Usage: client_write_prefill_job <file> <data base> <size> <files per job> <direct>
+client_write_prefill_job() {
+    local file=$1 base=$2 test_size=$3 num_jobs=$4 direct=$5 dir=${TARGET_DIR%/} j
+    dir=${dir//:/\\:}
+    {
+        printf '%s\n' "[global]" "rw=write" "bs=1M" "size=${test_size}" "refill_buffers" "randrepeat=0" \
+            "end_fsync=1" "ioengine=${CLIENT_IOENGINE}" "direct=${direct}" "thread"
+        if [ "$FILE_PER_JOB" = 1 ]; then
+            for ((j = 0; j < num_jobs; j++)); do
+                printf '\n%s\n%s\n' "[prefill_${j}]" "filename=${dir}/${base}.${j}"
+            done
+        else
+            printf '\n%s\n%s\n' "[prefill]" "filename=${dir}/${base}"
+        fi
+    } >"$file"
+}
+
+# Job file that removes the PREFILL data files on the clients (reads 4k, then unlink)
+# Usage: client_write_cleanup_job <file> <data base> <size> <files per job>
+client_write_cleanup_job() {
+    local file=$1 base=$2 test_size=$3 num_jobs=$4 dir=${TARGET_DIR%/} j
+    dir=${dir//:/\\:}
+    {
+        printf '%s\n' "[global]" "ioengine=psync" "rw=read" "bs=4k" "io_size=4k" "size=${test_size}" "unlink=1"
+        if [ "$FILE_PER_JOB" = 1 ]; then
+            for ((j = 0; j < num_jobs; j++)); do
+                printf '\n%s\n%s\n' "[cleanup_${j}]" "filename=${dir}/${base}.${j}"
+            done
+        else
+            printf '\n%s\n%s\n' "[cleanup]" "filename=${dir}/${base}"
+        fi
+    } >"$file"
+}
+
+# True when the step's JSON has a client_stats entry without error for each of the
+# first <n> clients (matched on CLIENT_KEY "host:port") and no entry reports an error
+client_step_complete() {
+    local json=$1 n=$2 i keys
+    [ -s "$json" ] || return 1
+    jq -e '(.client_stats | type == "array") and ([.client_stats[] | (.error // 0)] | all(. == 0))' \
+        "$json" >/dev/null 2>&1 || return 1
+    # No control characters in any hostname; exactly one entry per expected client
+    jq -e 'all(.client_stats[]; (.hostname // "" | tostring | test("[[:cntrl:]]") | not))' \
+        "$json" >/dev/null 2>&1 || return 1
+    keys=$(jq -r '.client_stats[] | select(.jobname != "All clients") | "\(.hostname):\(.port)"' "$json" 2>/dev/null)
+    for ((i = 0; i < n; i++)); do
+        [ "$(grep -cxF -- "${CLIENT_KEY[$i]}" <<< "$keys")" = 1 ] || return 1
+    done
+    return 0
+}
+
+# Total IOPS (read + write) of a step: the "All clients" entry, or the only client
+client_step_iops() {
+    jq -r '((.client_stats | map(select(.jobname == "All clients")) | .[0]) // .client_stats[0])
+        | ((.read.iops // 0) + (.write.iops // 0)) + 0.5 | floor' "$1" 2>/dev/null
+}
+
+# Print IOPS, bandwidth and P95 latency of a step
+display_client_step() {
+    local line iops bw p95
+    line=$(jq -r '((.client_stats | map(select(.jobname == "All clients")) | .[0]) // .client_stats[0])
+        | [((.read.iops // 0) + (.write.iops // 0) + 0.5 | floor),
+           (((.read.bw_bytes // 0) + (.write.bw_bytes // 0)) / 1048576 * 100 | floor / 100),
+           ([.read, .write] | map(select((.iops // 0) > 0) | .clat_ns.percentile["95.000000"] // 0) | max // 0
+            | . / 10000 | floor / 100)] | @tsv' "$1" 2>/dev/null) || return 0
+    IFS=$'\t' read -r iops bw p95 <<< "$line"
+    echo -e "  ${YELLOW}IOPS${NC}: ${iops}  ${BLUE}Bandwidth${NC}: ${bw} MB/s  ${CYAN}P95${NC}: ${p95}ms (all clients)"
+}
+
+# New ramp_uuid for one test configuration (shared by all its client-count steps)
+new_ramp_uuid() {
+    if command -v uuidgen >/dev/null 2>&1; then
+        uuidgen | tr '[:upper:]' '[:lower:]'
+    else
+        generate_uuid_from_hash "${RUN_UUID}_$1_$(date +%s)_${RANDOM}${RANDOM}"
+    fi
+}
+
+# Every test configuration as "bs|numjobs|pattern|direct|size|sync|iodepth|runtime"
+# (same order as run_all_tests)
+client_config_list() {
+    local dim combo value
+    local -a combos=("") next values
+    for dim in BLOCK_SIZES NUM_JOBS TEST_PATTERNS DIRECT TEST_SIZE SYNC IODEPTH RUNTIME; do
+        eval "values=(\"\${${dim}[@]}\")"
+        next=()
+        for combo in "${combos[@]}"; do
+            for value in "${values[@]}"; do next+=("${combo:+${combo}|}${value}"); done
+        done
+        combos=("${next[@]}")
+    done
+    printf '%s\n' "${combos[@]}"
+}
+
+# Server messages ("<host> error: ...") that fio writes before the JSON, joined with "; "
+client_output_messages() {
+    grep -m 3 '^<[^>]*> ' "$1" 2>/dev/null | LC_ALL=C tr -d '\000-\037\177' | paste -sd ';' - | sed 's/;/; /g'
+}
+
+# Run a job file on the first <n> clients: fio --client=... --output=<json> <job file>.
+# A server can refuse a job with a message and no results (e.g. "failed to setup shm
+# segment" right after the previous job): retried up to FIO_RETRY_MAX times.
+client_run_step() {
+    local n=$1 job_file=$2 output=$3 label=$4 error_file rc attempt=0 notes old_pwd=$PWD
+    error_file="${CLIENT_WORK_DIR}/${label}.err"
+    client_fio_args "$n"
+    # fio honours file requests from servers relative to the cwd: run in the private work dir
+    cd "$CLIENT_WORK_DIR" || return 1
+    while :; do
+        rc=0
+        rm -f "$output"
+        run_fio_with_retry "$label" "$error_file" "${CLIENT_FIO_ARGS[@]}" \
+            --output-format=json --output="$output" "$job_file" || rc=$?
+        notes=$(client_output_messages "$output")
+        if [ -s "$output" ]; then sanitize_fio_json "$output" >/dev/null 2>&1; fi
+        if [ "$rc" -ne 0 ] || [ -z "$notes" ] || [ "$attempt" -ge "$FIO_RETRY_MAX" ] \
+            || client_step_complete "$output" "$n"; then
+            break
+        fi
+        attempt=$((attempt + 1))
+        CLIENT_SERVER_RETRIES=$((${CLIENT_SERVER_RETRIES:-0} + 1))
+        print_warning "fio server refused ${label}, retry ${attempt}/${FIO_RETRY_MAX} in 2s: ${notes}"
+        sleep 2
+    done
+    if [ -n "$notes" ]; then print_warning "fio server message(s) for ${label}: ${notes}"; fi
+    if [ "$rc" -ne 0 ]; then
+        print_error "fio failed for ${label} (exit ${rc})"
+        head -5 "$error_file" 2>/dev/null | while IFS= read -r line; do
+            print_error "    ${line//[[:cntrl:]]/}"
+        done
+    fi
+    rm -f "$error_file"
+    cd "$old_pwd" || true
+    return "$rc"
+}
+
+# File name label of a ramp step (only [A-Za-z0-9_.+-])
+# Usage: client_step_label <n> <pattern> <bs> <numjobs> <direct> <size> <sync> <iodepth> <runtime>
+client_step_label() {
+    local label="${2}_${3}_${4}_${5}_${6}_${7}_${8}_${9}_clients${1}"
+    printf '%s' "${label//[^A-Za-z0-9_.+-]/}"
+}
+
+# One ramp step: run a test configuration on the first <n> clients and upload the result
+# Usage: client_run_ramp_step <n> <pattern> <bs> <numjobs> <direct> <size> <sync> <iodepth> <runtime>
+client_run_ramp_step() {
+    local n=$1 pattern=$2 block_size=$3 num_jobs=$4 direct=$5 test_size=$6 sync=$7 iodepth=$8 runtime=$9
+    local label job_file output base rc=0
+    label=$(client_step_label "$@")
+    job_file="${CLIENT_WORK_DIR}/${label}.fio" output="${CLIENT_WORK_DIR}/${label}.json"
+    base=$(data_file_base "fio_test_${pattern}_${block_size}" "$test_size")
+    STEP_CLIENTS=$n STEP_COMPLETE=1
+    build_description
+    client_write_job_file "$job_file" "$pattern" "$block_size" "$num_jobs" "$direct" "$test_size" \
+        "$sync" "$iodepth" "$runtime" "$base"
+    print_step "${pattern} bs=${block_size} jobs=${num_jobs} iodepth=${iodepth} on ${n} client(s): $(client_hosts_list "$n")"
+    client_run_step "$n" "$job_file" "$output" "$label" || rc=$?
+    if [ "$rc" -ne 0 ] || ! client_step_complete "$output" "$n"; then STEP_COMPLETE=0; fi
+    if ! jq -e '.client_stats | type == "array"' "$output" >/dev/null 2>&1; then
+        print_error "No fio client results for ${label} - not uploaded"
+        CLIENT_STEPS_FAILED=$((CLIENT_STEPS_FAILED + 1))
+        rm -f "$job_file" "$output"
+        return 1
+    fi
+    if [ "$STEP_COMPLETE" = 0 ]; then
+        print_warning "Step incomplete (fio error or a client missing in client_stats) - uploading with ramp_step_complete=0"
+        CLIENT_STEPS_INCOMPLETE=$((CLIENT_STEPS_INCOMPLETE + 1))
+        build_description
+    fi
+    keep_json_copy "$output"
+    display_client_step "$output"
+    STEP_CLIENT_HOSTS=$(client_hosts_list "$n")
+    STEP_CLIENT_STORAGE=$(client_storage_info_json "$n")
+    if upload_results "$output" "$label"; then
+        CLIENT_UPLOADS_OK=$((CLIENT_UPLOADS_OK + 1))
+    else
+        CLIENT_UPLOADS_FAILED=$((CLIENT_UPLOADS_FAILED + 1))
+    fi
+    rm -f "$job_file" "$output"
+    [ "$STEP_COMPLETE" = 1 ]
+}
+
+# One test configuration over all ramp steps, with its own ramp_uuid
+client_run_config() {
+    local n
+    RAMP_UUID=$(new_ramp_uuid "$*")
+    print_status "ramp_uuid: ${RAMP_UUID} (client counts: ${RAMP_STEPS[*]})"
+    for n in "${RAMP_STEPS[@]}"; do
+        client_run_ramp_step "$n" "$@"
+    done
+}
+
+# PREFILL=1: write the data files once on ALL clients before the first test
+client_prefill_all() {
+    local test_size base max_jobs job_file rc=0 n=${#CLIENT_KEY[@]}
+    max_jobs=$(get_max_value "${NUM_JOBS[@]}")
+    for test_size in "${TEST_SIZE[@]}"; do
+        base=$(data_file_base "" "$test_size")
+        job_file="${CLIENT_WORK_DIR}/prefill_${test_size}.fio"
+        client_write_prefill_job "$job_file" "$base" "$test_size" "$max_jobs" "${DIRECT[0]}"
+        print_status "Prefilling ${base} (${test_size}) on all ${n} client(s) - once for the whole run..."
+        if ! client_run_step "$n" "$job_file" "${CLIENT_WORK_DIR}/prefill_${test_size}.json" "prefill_${test_size}"; then
+            rc=1
+        fi
+    done
+    return "$rc"
+}
+
+# PREFILL=1: remove the data files on all clients after the last test
+client_cleanup_all() {
+    local test_size base max_jobs job_file n=${#CLIENT_KEY[@]}
+    if [ "$PREFILL" != 1 ] || [ "$TARGET_IS_DEVICE" = true ]; then return 0; fi
+    max_jobs=$(get_max_value "${NUM_JOBS[@]}")
+    for test_size in "${TEST_SIZE[@]}"; do
+        base=$(data_file_base "" "$test_size")
+        job_file="${CLIENT_WORK_DIR}/cleanup_${test_size}.fio"
+        client_write_cleanup_job "$job_file" "$base" "$test_size" "$max_jobs"
+        print_status "Removing ${base} data files on all ${n} client(s)..."
+        client_run_step "$n" "$job_file" "${CLIENT_WORK_DIR}/cleanup_${test_size}.json" "cleanup_${test_size}" \
+            || print_warning "Could not remove ${base} on every client - remove it manually from ${TARGET_DIR}"
+    done
+}
+
+# Client mode: every test configuration once per ramp step on the clients
+run_client_tests() {
+    local config pattern block_size num_jobs direct test_size sync iodepth runtime current=0
+    local -a configs=()
+    CLIENT_UPLOADS_OK=0 CLIENT_UPLOADS_FAILED=0 CLIENT_STEPS_FAILED=0 CLIENT_STEPS_INCOMPLETE=0
+    while IFS= read -r config; do configs+=("$config"); done < <(client_config_list)
+    print_status "Starting ${#configs[@]} test configuration(s) x ${#RAMP_STEPS[@]} ramp step(s) on ${#CLIENT_KEY[@]} client(s)..."
+    if [ "$PREFILL" = 1 ] && ! client_prefill_all; then
+        print_error "Prefill failed on the clients - stopping"
+        return 1
+    fi
+    for config in "${configs[@]}"; do
+        current=$((current + 1))
+        IFS='|' read -r block_size num_jobs pattern direct test_size sync iodepth runtime <<< "$config"
+        print_status "Test ${current}/${#configs[@]}: ${pattern} ${block_size} jobs=${num_jobs} direct=${direct} size=${test_size} sync=${sync} iodepth=${iodepth} runtime=${runtime}"
+        client_run_config "$pattern" "$block_size" "$num_jobs" "$direct" "$test_size" "$sync" "$iodepth" "$runtime"
+        echo
+    done
+    client_cleanup_all
+
+    echo "========================================="
+    echo "Client Test Summary"
+    echo "========================================="
+    echo "Configurations:   ${#configs[@]} x ramp steps ${RAMP_STEPS[*]}"
+    echo "Uploaded:         $CLIENT_UPLOADS_OK"
+    echo "Upload failures:  $CLIENT_UPLOADS_FAILED"
+    echo "Incomplete steps: $CLIENT_STEPS_INCOMPLETE"
+    echo "Failed steps:     $CLIENT_STEPS_FAILED (no results)"
+    echo "EAGAIN retries:   $FIO_RETRY_COUNT"
+    echo "Server retries:   ${CLIENT_SERVER_RETRIES:-0} (job refused by a fio server)"
+    echo "========================================="
+    [ $((CLIENT_UPLOADS_FAILED + CLIENT_STEPS_FAILED + CLIENT_STEPS_INCOMPLETE)) -eq 0 ]
+}
+
 # Main function
 main() {
     echo "FIO Performance Testing Script"
@@ -2694,14 +3827,39 @@ main() {
     
     # Parse command-line arguments
     local skip_confirmation=false
+    local server_action=""
     local env_files=()
     local args=()
-    
+
     while [[ $# -gt 0 ]]; do
         case $1 in
             -y|--yes)
                 skip_confirmation=true
                 shift
+                ;;
+            --server)
+                server_action=start
+                shift
+                ;;
+            --server-stop)
+                server_action=stop
+                shift
+                ;;
+            --clients)
+                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
+                    print_error "Option --clients requires a comma-separated list of fio servers"
+                    exit 1
+                fi
+                CLI_CLIENTS="$2"
+                shift 2
+                ;;
+            --ramp-clients)
+                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
+                    print_error "Option --ramp-clients requires ascending client counts, e.g. 1,2,4"
+                    exit 1
+                fi
+                CLI_RAMP_CLIENTS="$2"
+                shift 2
                 ;;
             -e|--env-file)
                 if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
@@ -2852,18 +4010,38 @@ main() {
     # Precedence: CLI flags > env vars / .env file > hardcoded defaults
     load_env_files "${env_files[@]}"
     clear_storage_overrides
+
+    # Server mode: this host serves fio jobs for a controller (no tests, no uploads)
+    if [ -n "$server_action" ]; then
+        define_defaults
+        apply_cli_overrides
+        if [ "$server_action" = stop ]; then run_server_stop_mode; fi
+        run_server_mode
+    fi
+
     init_config
+    warn_default_credentials
 
     # Check prerequisites
     check_fio
     check_curl
-    if [ "$SATURATION_MODE" = true ]; then check_jq; fi
-    
-    # Setup target (detect device vs directory mode)
-    setup_target_dir
+    if [ "$SATURATION_MODE" = true ] || [ "$CLIENT_MODE" = true ]; then check_jq; fi
 
-    # Detect the storage configuration once (uploaded with every result)
-    detect_storage
+    if [ "$CLIENT_MODE" = true ]; then
+        # Controller: TARGET_DIR lives on the clients; their storage comes from their info servers
+        CLIENT_WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/fio-clients.XXXXXX") || exit 1
+        # Tunnels and the job/result work dir go away however the script ends
+        trap 'client_close_tunnels; if [ -n "$CLIENT_WORK_DIR" ]; then rm -rf "$CLIENT_WORK_DIR"; fi' EXIT
+        print_client_security_warning
+        client_setup_connections || exit 1
+        client_fetch_info
+    else
+        # Setup target (detect device vs directory mode)
+        setup_target_dir
+
+        # Detect the storage configuration once (uploaded with every result)
+        detect_storage
+    fi
 
     # Show configuration
     show_config
@@ -2875,8 +4053,8 @@ main() {
         config_warnings=$?
     fi
 
-    # DRIVE_MODEL/DRIVE_TYPE vs. detected storage (warnings only)
-    storage_plausibility_checks
+    # DRIVE_MODEL/DRIVE_TYPE vs. detected storage (warnings only; not in client mode)
+    if [ "$CLIENT_MODE" = true ]; then STORAGE_WARNINGS=0; else storage_plausibility_checks; fi
     config_warnings=$((config_warnings + STORAGE_WARNINGS))
     if [ "$SATURATION_MODE" = true ] && [ "$STORAGE_WARNINGS" -gt 0 ]; then
         print_warning "Configuration warnings detected! Check DRIVE_MODEL/DRIVE_TYPE above."
@@ -2932,6 +4110,10 @@ main() {
         local max_runtime=$(get_max_value "${RUNTIME[@]}")
         print_status "  Test patterns: ${TEST_PATTERNS[*]}"
         print_status "  Test duration: ${RUNTIME[*]} (max: ${max_runtime}s) per test"
+        if [ "$CLIENT_MODE" = true ]; then
+            print_status "  Clients: ${#CLIENT_ENTRY[@]}, ramp steps: ${RAMP_STEPS[*]}"
+            total_tests=$((total_tests * ${#RAMP_STEPS[@]}))
+        fi
         print_status "  Estimated total time: $((total_tests * max_runtime / 60)) minutes"
         echo
         print_status "This will run $total_tests tests with the listed configurations!"
@@ -2948,6 +4130,9 @@ main() {
         echo
         print_error "⚠️  DESTRUCTIVE OPERATION WARNING!"
         print_error "   Target device: $TARGET_DIR"
+        if [ "$CLIENT_MODE" = true ]; then
+            print_error "   on EVERY client: ${CLIENT_ENTRY[*]}"
+        fi
         print_error "   ALL DATA ON THIS DEVICE WILL BE DESTROYED!"
     fi
     echo
@@ -2979,7 +4164,17 @@ main() {
     fi
 
     # Run tests based on mode
-    if [ "$SATURATION_MODE" = true ]; then
+    if [ "$CLIENT_MODE" = true ]; then
+        if run_client_tests; then
+            print_retry_summary
+            print_success "Client testing completed successfully!"
+        else
+            print_retry_summary
+            print_error "Client testing completed with errors or incomplete steps."
+            cleanup
+            exit 1
+        fi
+    elif [ "$SATURATION_MODE" = true ]; then
         run_saturation_runs
         print_retry_summary
     else
@@ -3158,6 +4353,60 @@ RUNTIME="60"
 #                                # (empty = no cap; adds satcap:<size> to the description)
 
 
+# ============================================================
+# Multi-client mode (fio client/server)
+# ============================================================
+# Load many hosts (e.g. all VMs of a hypervisor or all Ceph clients) at the same time
+# and upload the combined result. Each client runs './fio-test.sh --server'; the
+# controller sets CLIENTS and runs './fio-test.sh' as usual.
+#
+# --- On every client (server mode: ./fio-test.sh --server) ---
+# SECURITY: fio's server has NO authentication. Anyone who can reach the port can run
+# any fio job as that user: write files and block devices (as root: every disk) and run
+# commands (exec_prerun). Use only an isolated benchmark network and allow only the
+# controller, e.g. (8765 = FIO_SERVER_PORT, 8766 = FIO_SERVER_INFO_PORT):
+#   nft insert rule inet filter input tcp dport { 8765, 8766 } ip saddr != <CONTROLLER_IP> drop
+#   iptables -I INPUT -p tcp -m multiport --dports 8765,8766 ! -s <CONTROLLER_IP> -j DROP
+# FIO_SERVER_BIND=10.44.44.101   # Required: IP to listen on (0.0.0.0 / :: are refused).
+#                                # 127.0.0.1 = no network exposure; the controller then
+#                                # uses SSH tunnels (CLIENT_SSH=1)
+# FIO_SERVER_PORT=8765           # fio server port
+# FIO_SERVER_INFO_PORT=8766      # Read-only HTTP (python3) with storage.json + hostname.txt;
+#                                # default FIO_SERVER_PORT + 1
+# FIO_SERVER_TIMEOUT=2h          # Stop by itself after this (seconds or s/m/h, 0 = never)
+# FIO_SERVER_ALLOW_ROOT=0        # 1 = allow a 127.0.0.1/::1 server as root (every local
+#                                # user could then run jobs and commands as root)
+# FIO_SERVER_STATE_DIR=/run/fio-test  # PID files + published info (default: /run/fio-test,
+#                                # else \$XDG_RUNTIME_DIR/fio-test, else a temp dir);
+#                                # stop with ./fio-test.sh --server-stop (same dir)
+# TARGET_DIR on the client is the directory/device the controller's TARGET_DIR names
+# (created by --server when missing; its storage detection is what gets published).
+#
+# --- On the controller (client mode: CLIENTS set) ---
+# SECURITY: the controller trusts every client. fio's client/server protocol has no
+# authentication and no encryption, and a fio server can make the controller read or
+# write files. Use an isolated network or CLIENT_SSH=1, run the controller as an
+# unprivileged user on a single-user host, and keep this .env readable only by that
+# user (chmod 600 .env).
+# CLIENTS=10.44.44.101,10.44.44.102,10.44.44.103   # host[:port[:infoport]], [IPv6]:port
+# RAMP_CLIENTS=1,2,4,6,8,10      # Optional: each test runs with the first N clients per step
+#                                # (ascending); all steps of a test share one ramp_uuid
+# CLIENT_SSH=0                   # 1 = SSH tunnel per client (ssh -N -L, key login, BatchMode):
+#                                # for servers bound to 127.0.0.1, nothing open on the network
+# CLIENT_SSH_USER=root           # SSH user for the tunnels (default: ssh config / current user)
+# CLIENT_SSH_BASE_PORT=18765     # Local tunnel ports from here (2 per client)
+# CLIENT_IOENGINE=libaio         # I/O engine on the clients (io_uring faster when enabled,
+#                                # psync for non-Linux clients)
+# CLIENT_TARGET_IS_DEVICE=auto   # TARGET_DIR is a path ON THE CLIENTS (absolute, same on all);
+#                                # auto = block device when it starts with /dev/, 0/1 = force.
+#                                # e.g. TARGET_DIR=/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1
+#                                # (DESTRUCTIVE: the whole device on every client is overwritten)
+# HOSTNAME/PROTOCOL/DRIVE_TYPE/DRIVE_MODEL describe the group, e.g. HOSTNAME=px1-vms.
+# Uploads add clients, ramp_uuid, client_hosts, client_storage_info and ramp_step_complete;
+# the description gets clients:N, ramp:1 and incomplete:1 (a client missing or failed).
+# Not combinable with SATURATION_MODE / --saturation.
+
+
 # Backend Configuration
 BACKEND_URL=https://fio-analyzer.stylite-live.net
 USERNAME=xxxxxxx
@@ -3254,7 +4503,8 @@ Infrastructure Options:
                          Block device mode is DESTRUCTIVE (destroys all data!)
   --backend-url URL      Backend API URL (default: http://localhost:8000)
   -U, --username USER    Upload username (default: uploader)
-  -P, --password PASS    Upload password (default: uploader)
+  -P, --password PASS    Upload password (default: uploader). Visible in the process
+                         list (ps) - prefer PASSWORD in a .env readable only by you
 
 Saturation Test Options (use with -s):
   -s, --saturation       Enable saturation test mode
@@ -3292,6 +4542,63 @@ Advanced Settings (.env / environment only, all off by default):
                          mirror, raidz1/2/3, draid, stripe) do not match the detected ZFS
                          settings or pool layout
 
+Server Mode (this host runs fio jobs for a controller):
+  --server               Start 'fio --server' on FIO_SERVER_BIND:FIO_SERVER_PORT and publish
+                         this host's storage detection for TARGET_DIR (storage.json,
+                         hostname.txt) read-only on FIO_SERVER_BIND:FIO_SERVER_INFO_PORT
+                         (python3 -m http.server; skipped with a warning without python3).
+                         Runs in the foreground until Ctrl-C, --server-stop or FIO_SERVER_TIMEOUT.
+  --server-stop          Stop the server recorded in the state directory (only its own PIDs)
+  SECURITY: fio's server has NO authentication. Anyone who can reach the port can run any
+  fio job as this user: write files and block devices (as root: every disk) and run commands
+  (exec_prerun). Use it only on an isolated network and allow only the controller, e.g.
+    nft insert rule inet filter input tcp dport { 8765, 8766 } ip saddr != <CONTROLLER_IP> drop
+    iptables -I INPUT -p tcp -m multiport --dports 8765,8766 ! -s <CONTROLLER_IP> -j DROP
+  FIO_SERVER_BIND=IP     Address to listen on (required; 0.0.0.0 / :: are refused).
+                         127.0.0.1 or ::1 = no network exposure: the controller then reaches
+                         the server through SSH tunnels (CLIENT_SSH=1)
+  FIO_SERVER_PORT=N      fio server port (default: 8765)
+  FIO_SERVER_INFO_PORT=N Info HTTP port (default: FIO_SERVER_PORT + 1 = 8766)
+  FIO_SERVER_TIMEOUT=T   Stop after T (seconds or s/m/h suffix, 0 = never; default: 2h)
+  FIO_SERVER_ALLOW_ROOT=1
+                         Allow a loopback (127.0.0.1/::1) server as root; refused by default
+                         because every local user could then run jobs and commands as root
+  FIO_SERVER_STATE_DIR=D PID files and published info (default: /run/fio-test when writable,
+                         else \$XDG_RUNTIME_DIR/fio-test, else a new temp dir; --server-stop
+                         needs the same directory; use one per instance on the same host)
+
+Client Mode (this host is the controller; active when CLIENTS is set):
+  --clients LIST         = CLIENTS: fio servers, comma-separated host[:port[:infoport]]
+                         (IPv6 as [addr]:port; port default FIO_SERVER_PORT, info port default
+                         FIO_SERVER_INFO_PORT or port + 1). Every test runs on the clients at
+                         once with 'fio --client=... job.fio'; the combined JSON (client_stats
+                         with one entry per client plus "All clients") is uploaded per step.
+  --ramp-clients LIST    = RAMP_CLIENTS: ascending client counts, e.g. 1,2,4,8: each test runs
+                         with the first N clients per step. All steps of a test configuration
+                         share one ramp_uuid (run_uuid stays one per script run).
+  SECURITY: the controller trusts every client. fio's protocol has no authentication and no
+  encryption, and a fio server can make the controller read or write files. Use an isolated
+  network or CLIENT_SSH=1, run the controller as an unprivileged user on a single-user host
+  (tunnel ports on 127.0.0.1 are reachable by every local user) and keep its .env readable
+  only by that user (chmod 600).
+  CLIENT_SSH=0|1         1 = one SSH tunnel per client (ssh -N -L, key-based login, BatchMode);
+                         fio and the info server are then reached on 127.0.0.1 ports from
+                         CLIENT_SSH_BASE_PORT (default: 18765, 2 ports per client). Use it
+                         with servers bound to 127.0.0.1 (no open port on the network)
+  CLIENT_SSH_USER=USER   SSH user for the tunnels (default: current user / ssh config)
+  CLIENT_IOENGINE=ENG    I/O engine used on the clients (default: libaio; io_uring is faster
+                         but often disabled; psync for non-Linux clients)
+  CLIENT_TARGET_IS_DEVICE=auto|0|1
+                         TARGET_DIR is a path ON THE CLIENTS (same everywhere, absolute; not
+                         created or checked locally). auto = block device when it starts
+                         with /dev/ (e.g. /dev/disk/by-id/...drive-scsi1: DESTRUCTIVE!)
+  HOSTNAME/PROTOCOL/DRIVE_TYPE/DRIVE_MODEL describe the group, e.g. HOSTNAME=px1-vms.
+  Uploads add clients, ramp_uuid, client_hosts, client_storage_info (each client's
+  storage.json) and ramp_step_complete; description tags clients:N, ramp:1, incomplete:1.
+  A step is incomplete (still uploaded) when fio fails or a client is missing or reports
+  an error. PREFILL writes the data files once on all clients before the first test.
+  Not combinable with --saturation.
+
 Precedence:
   CLI flags > environment variables > .env file > hardcoded defaults
 
@@ -3324,6 +4631,14 @@ Examples:
 
   # Saturation with custom starting point
   $0 -e prod.env --saturation --initial-iodepth 32 --initial-numjobs 8
+
+  # Multi-client: on every VM (isolated network), then on the controller
+  FIO_SERVER_BIND=10.44.44.101 TARGET_DIR=/mnt/fio $0 --server
+  $0 --clients 10.44.44.101,10.44.44.102 --ramp-clients 1,2 --target-dir /mnt/fio -y
+
+  # Multi-client over SSH tunnels (servers bound to 127.0.0.1)
+  FIO_SERVER_BIND=127.0.0.1 $0 --server                  # on each client
+  CLIENT_SSH=1 CLIENT_SSH_USER=root $0 --clients vm1,vm2   # on the controller
 
 EOF
     exit 0

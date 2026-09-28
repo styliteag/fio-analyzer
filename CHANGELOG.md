@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `GET /api/ramp/runs/{ramp_uuid}` - all steps of a ramp with aggregate metrics and per-client results
   - `GET /api/ramp/runs/{ramp_uuid}/summary?threshold_ms=100` - highest client count within the P95 threshold, first count above it, highest aggregate IOPS, per-client IOPS drop and per-step fairness (slowest / fastest client)
   - `GET /api/raw/ramps/{ramp_uuid}` - ZIP with the raw fio JSON of every step of a ramp
+- **fio-test.sh server mode** (`./fio-test.sh --server`): starts `fio --server` on the address in `FIO_SERVER_BIND` (required; `0.0.0.0` and `::` are refused) and port `FIO_SERVER_PORT` (8765). It also publishes the storage detection of `TARGET_DIR` on a read-only info port (`FIO_SERVER_INFO_PORT`, default 8766). The server stops with Ctrl-C, `--server-stop` or after `FIO_SERVER_TIMEOUT` (default 2h). A warning at start explains that fio's server has no authentication and shows nftables/iptables rules that allow only the controller
+- **fio-test.sh controller mode** (`CLIENTS=host[:port[:infoport]],…`): runs every test with `fio --client` on all clients at once, using the usual `NUM_JOBS`, `IODEPTH`, `TEST_SIZE`, `RUNTIME`, `SYNC` and `PREFILL` per client. `TARGET_DIR` is a path on the clients and may be a block device. `RAMP_CLIENTS=1,2,4,…` repeats each test with a growing number of clients; all steps share one `ramp_uuid`. `PREFILL` runs once per client before the first step. A missing or failed client marks the step `incomplete:1`. Each step uploads fio's combined result plus every client's result and storage configuration
+- **fio-test.sh SSH tunnel mode** (`CLIENT_SSH=1`): for servers bound to `127.0.0.1`, the controller reaches each client through `ssh -N -L` (key login, BatchMode), so no port is open on the network
 
 ### Changed
 - **Database**: `test_runs` keeps one latest row per configuration *and* client count, so a 4-client step no longer replaces the single-host result of the same configuration
@@ -24,6 +27,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import**: fio JSON with `NaN`, `Infinity` or overflowing numbers, and metrics that are not numbers (e.g. `"iops": "1"`), are rejected with 400; stored, they made every response containing the row fail. Invalid UTF-8 now gives 400 instead of 500
 - **Ramps**: a `ramp_uuid` may only contain letters, digits and `_ . : -`, cannot be reused for another test configuration (409), and is limited to 500 steps / 20,000 client results (413)
 - **Bulk import**: `.info` metadata files can only set the known string fields (hostname, protocol, drive type/model, description, date, UUIDs)
+- **fio-test.sh server mode**:
+  - `FIO_SERVER_BIND` must be a concrete address. Every spelling of "all interfaces" (`0.0.0.0`, `::`, `0::0`, `::ffff:0.0.0.0`, leading zeros) is refused.
+  - A loopback bind as root is refused unless `FIO_SERVER_ALLOW_ROOT=1` is set; otherwise any local user could run commands as root through fio.
+  - The state directory must be owned by the user and not writable by others. Its files are written without following symlinks.
+  - `--server-stop` only kills processes whose start time and owner match the PID file.
+- **fio-test.sh controller mode**:
+  - fio's client/server protocol has no authentication, so a client can request files from the controller. The script warns about this without `CLIENT_SSH=1` and runs fio from a private work directory.
+  - SSH tunnels check that the local port is free and that ssh is still running.
+  - Client info downloads are size-limited and bypass proxies.
+  - `exec_*` options in `FIO_EXTRA_ARGS` and `external:` I/O engines are refused.
+  - A step only counts as complete with exactly one result per client.
+- **fio-test.sh**:
+  - Upload credentials are passed to curl through a config file descriptor instead of `-u user:password`, so they no longer show up in `ps`.
+  - The script warns when the default `uploader/uploader` login is still in use.
 
 ## [0.11.2] - 2026-09-28
 

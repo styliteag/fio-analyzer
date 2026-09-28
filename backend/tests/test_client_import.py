@@ -129,3 +129,26 @@ def test_ramp_size_is_capped(manager: DatabaseManager, monkeypatch: pytest.Monke
 def test_info_metadata_only_sets_known_string_fields() -> None:
     fields = imports.info_fields({"hostname": "h", "clients": "7", "iops": "x", "description": 5, "run_uuid": "r"})
     assert fields == {"hostname": "h", "run_uuid": "r"}
+
+
+@pytest.mark.parametrize("name, clients", [("fio_client_1client.json", 1), ("fio_client_2clients.json", 2)])
+def test_fio_test_sh_fixtures_import(manager: DatabaseManager, name: str, clients: int) -> None:
+    """Contract with scripts/fio-test.sh: its real fio client-mode fixtures and upload fields import cleanly."""
+    output = json.loads((Path(__file__).parents[2] / "scripts" / "tests" / "fixtures" / name).read_text())
+    storage = {"127.0.0.1:18801": {"fs_type": "apfs", "client_name": "127.0.0.1:18801"}}
+    response = upload(
+        manager,
+        output,
+        ramp_uuid="b4785b3c-94a5-4188-9084-a4fb58fb0382",
+        client_hosts=",".join(["vm"] * clients),
+        client_storage_info=json.dumps(storage),
+        ramp_step_complete="1",
+        clients=str(clients),
+        description=f"clients:{clients},ramp:1",
+    )
+    assert response.status_code == 200, response.text
+    db = manager.connection
+    assert db.execute("SELECT clients FROM test_runs").fetchone()[0] == clients
+    stored = db.execute("SELECT client_port, storage_info FROM client_results ORDER BY client_port").fetchall()
+    assert len(stored) == clients
+    assert json.loads(dict((row[0], row[1]) for row in stored)[18801])["fs_type"] == "apfs"
