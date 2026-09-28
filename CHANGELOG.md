@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.11.1] - 2026-09-28
+
+### Added
 - **Storage configuration per test run**: uploads can carry a `storage_info` JSON object (filesystem, ZFS dataset/volume properties, Ceph pool/image details, kernel, ioengine, fio version); it is stored with every test run, returned by `/api/test-runs`, `/api/test-runs/{id}` and `saturation-data`, and shown in the test run details and on the Saturation page
 - **Compare page** (`/compare`, admin and viewer): pick 2–10 targets (first = baseline) and see the difference per pattern × block size as coloured matrices (median of several configurations per cell, filters for jobs, IO depth, direct, sync mode, tags, date range), a summary per target and all configurations as a table; strict matching can be switched off. Saturation tab: best step within the P95 threshold of several saturation runs side by side
 - **fio-test.sh**: detects the storage configuration before the run (filesystem of `TARGET_DIR`; ZFS dataset or zvol with sync, recordsize/volblocksize, compression, primarycache, logbias; Ceph RBD image or CephFS with pool, replication/erasure coding; kernel, ioengine, fio version), shows it in the header and uploads it as `storage_info`. Warns when `DRIVE_MODEL`/`DRIVE_TYPE` contradict it, e.g. `-syncoff` but ZFS `sync=standard`, `-rs16k` but `recordsize=128K`, or `raidz`/`mirror` on a non-ZFS target. `STORAGE_DETECT=0` turns it off
