@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from config.settings import settings
 from database.connection import close_database, init_database
-from routers import compare, dashboard, import_log, imports, raw_data, saturation, test_runs, time_series, users, utils_router
+from routers import compare, dashboard, import_log, imports, ramp, raw_data, saturation, test_runs, time_series, users, utils_router
 from utils.logging import log_error, log_info, setup_logging
 
 # Setup logging
@@ -245,6 +245,15 @@ app.include_router(
     saturation.router,
     prefix="/api/saturation",
     tags=["Saturation"],
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Read access required"},
+    },
+)
+app.include_router(
+    ramp.router,
+    prefix="/api/ramp",
+    tags=["Client Ramps"],
     responses={
         401: {"description": "Authentication required"},
         403: {"description": "Read access required"},

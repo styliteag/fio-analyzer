@@ -38,6 +38,8 @@ Authenticated users without the required role get HTTP 403; missing or invalid c
 - `POST /api/import/` - Import FIO test data from JSON file
 - `POST /api/import/bulk` - Bulk import from server directory
 
+Multi-client runs (`fio --client=… job.fio`, sent by `fio-test.sh` in controller mode) are detected from fio's `client_stats`: the step is stored once with the metrics of fio's "All clients" result and `clients` = number of clients, plus one row per client. Optional form fields: `ramp_uuid` (≤ 64 chars, groups the client-count steps of one test configuration), `client_hosts` (comma list of client names) and `client_storage_info` (JSON object `"host:port"` or `"host"` → that client's storage_info, ≤ 256 KiB).
+
 ### Time Series Analytics
 - `GET /api/time-series/servers` - Get server list with statistics
 - `GET /api/time-series/all` - Get all historical data
@@ -54,9 +56,14 @@ Authenticated users without the required role get HTTP 403; missing or invalid c
 - `GET /api/saturation/runs/{run_uuid}/summary?threshold_ms=` - Per pattern: best step within the P95 threshold (highest IOPS) and the first step above it. Uses the stored threshold unless `threshold_ms` is given
 - `GET /api/test-runs/saturation-data?run_uuid=&threshold_ms=` - Chart data; `threshold_ms` defaults to the stored threshold (100 ms for older runs)
 
+### Client Ramps
+- `GET /api/ramp/runs?hostname=&run_uuid=&limit=` - Multi-client ramps (one per `ramp_uuid`), newest first, with test configuration, client counts and number of steps
+- `GET /api/ramp/runs/{ramp_uuid}` - All steps in client-count order: aggregate metrics plus per-client results (`clients_detail`, incl. each client's `storage_info`)
+- `GET /api/ramp/runs/{ramp_uuid}/summary?threshold_ms=100` - Highest client count whose P95 stays within the threshold (`best_within`), first count above it (`crossed_at`), highest aggregate IOPS (`max_iops`), drop of per-client IOPS from the smallest to the largest step (`per_client_iops_drop_pct`) and per-step `fairness` (slowest / fastest client IOPS). Incomplete steps (a client failed) are listed but not ranked
+
 ### Comparison
 - `GET /api/compare/targets?source=latest|history` - All Host-Protocol-Type-Model combinations with test runs, as `target` values
-- `GET /api/compare?target=A&target=B[&target=C…]` - Compare 2–10 targets side by side. By default (`strict=true`) only identical configurations are compared, including test size, duration and the layout tags `prefill`/`fileperjob`/`satcap`; `strict=false` matches loosely and reports differing fields in `mismatch`. A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted or `*`. The first target is the baseline; every other target gets `diff_pct` per metric (iops, bandwidth, avg/p95/p99 latency) and a `better` flag. Options: `source=latest|history`, `patterns`, `block_sizes`, `syncs`, `include_incomplete`, plus the run filters below
+- `GET /api/compare?target=A&target=B[&target=C…]` - Compare 2–10 targets side by side. By default (`strict=true`) only identical configurations are compared, including test size, duration, the layout tags `prefill`/`fileperjob`/`satcap` and the client count (`clients`); `strict=false` matches loosely and reports differing fields in `mismatch`. A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted or `*`. The first target is the baseline; every other target gets `diff_pct` per metric (iops, bandwidth, avg/p95/p99 latency) and a `better` flag. Options: `source=latest|history`, `patterns`, `block_sizes`, `syncs`, `include_incomplete`, plus the run filters below
 
 ### Import Log
 - `GET /api/import-log/runs/{run_uuid}` - Upload attempts per outcome (`imported`, `rejected`, `error`) plus rows stored for the run, and the failed attempts with reasons
@@ -65,6 +72,7 @@ Authenticated users without the required role get HTTP 403; missing or invalid c
 ### Raw Data
 - `GET /api/raw/test-runs/{id}?source=latest|history|saturation` - Download the uploaded fio JSON of one test run (`latest` = id returned by uploads)
 - `GET /api/raw/runs/{run_uuid}` - Download all fio JSON files of a script run (incl. saturation steps) as ZIP; `index.json` maps files to test runs and lists missing files
+- `GET /api/raw/ramps/{ramp_uuid}` - Download the fio JSON files of all steps of a multi-client ramp as ZIP
 
 ### Utilities
 - `GET /api/filters` - Get available filter options

@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> **Upgrade note - back up the database first.** On the first start the backend rebuilds the `test_runs` table so that the client count becomes part of its unique key (migration 9). Stop the container and copy `data/backend/db/storage_performance.db` (Docker) or `backend/db/storage_performance.db` before upgrading. The migration keeps every row, index and view; existing results get `clients = 1`.
+
 ### Added
-- 
+- **Multi-client runs**: uploads of `fio --client=… job.fio` output (fio client mode) are recognised. Each step is stored once with the metrics of fio's "All clients" result and `clients` = number of clients; per-client results (IOPS, bandwidth, latencies, error, storage_info of that client) go to the new `client_results` table. New optional upload fields: `ramp_uuid`, `client_hosts`, `client_storage_info`
+- **New endpoints** (viewer role is enough, all read-only):
+  - `GET /api/ramp/runs` - list of client ramps (per `ramp_uuid`) with configuration, client counts and step count; filters `hostname`, `run_uuid`, `limit`
+  - `GET /api/ramp/runs/{ramp_uuid}` - all steps of a ramp with aggregate metrics and per-client results
+  - `GET /api/ramp/runs/{ramp_uuid}/summary?threshold_ms=100` - highest client count within the P95 threshold, first count above it, highest aggregate IOPS, per-client IOPS drop and per-step fairness (slowest / fastest client)
+  - `GET /api/raw/ramps/{ramp_uuid}` - ZIP with the raw fio JSON of every step of a ramp
+
+### Changed
+- **Database**: `test_runs` keeps one latest row per configuration *and* client count, so a 4-client step no longer replaces the single-host result of the same configuration
+- **Comparison**: strict matching also requires the same client count; loose mode reports `clients` in `mismatch`, and the Compare page shows the client count of multi-client rows
+### Security
+- **Import**: fio JSON with `NaN`, `Infinity` or overflowing numbers, and metrics that are not numbers (e.g. `"iops": "1"`), are rejected with 400; stored, they made every response containing the row fail. Invalid UTF-8 now gives 400 instead of 500
+- **Ramps**: a `ramp_uuid` may only contain letters, digits and `_ . : -`, cannot be reused for another test configuration (409), and is limited to 500 steps / 20,000 client results (413)
+- **Bulk import**: `.info` metadata files can only set the known string fields (hostname, protocol, drive type/model, description, date, UUIDs)
 
 ## [0.11.2] - 2026-09-28
 

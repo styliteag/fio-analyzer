@@ -24,6 +24,7 @@ def calculate_unique_key(test_run: Dict[str, Any]) -> str:
         str(test_run.get("test_size", "")),
         str(test_run.get("sync", "")),
         str(test_run.get("iodepth", "")),
+        str(test_run.get("clients") or 1),
     ]
 
     key_string = "|".join(key_parts)

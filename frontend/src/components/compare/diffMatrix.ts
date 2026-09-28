@@ -28,6 +28,7 @@ export const describeConfig = (row: CompareRow): string => {
         row.test_size ?? null,
         row.duration != null ? `${row.duration}s` : null,
         row.layout || null,
+        row.clients && row.clients > 1 ? `${row.clients} clients` : null,
     ];
     return parts.filter((part): part is string => part !== null).join(' · ');
 };

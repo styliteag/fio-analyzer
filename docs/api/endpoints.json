@@ -62,6 +62,30 @@
     },
     {
       "method": "GET",
+      "path": "/api/ramp/runs",
+      "auth": "none",
+      "summary": "List Client Ramps"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ramp/runs/{ramp_uuid}",
+      "auth": "none",
+      "summary": "Client Ramp Details"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ramp/runs/{ramp_uuid}/summary",
+      "auth": "none",
+      "summary": "Client Ramp Summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/raw/ramps/{ramp_uuid}",
+      "auth": "none",
+      "summary": "Download Client Ramp as ZIP"
+    },
+    {
+      "method": "GET",
       "path": "/api/raw/runs/{run_uuid}",
       "auth": "none",
       "summary": "Download Run as ZIP"

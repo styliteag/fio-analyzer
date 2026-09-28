@@ -9,7 +9,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import (
     APIRouter,
@@ -26,7 +26,16 @@ from fastapi import (
 from auth.middleware import User, require_admin, require_uploader
 from config.settings import settings
 from database.connection import db_manager, get_db
+from database.client_results import check_ramp, insert_client_results, with_client_fields
 from database.import_log import record_import
+from utils.fio_client_mode import parse_client_mode
+from utils.fio_metrics import (
+    extract_bandwidth,
+    extract_iops,
+    extract_latency,
+    extract_percentile_latency,
+    load_fio_json,
+)
 from utils.logging import log_error, log_info
 from utils.storage_info import encode_storage_info
 from utils.sync_mode import normalize_sync
@@ -75,6 +84,14 @@ def threshold_from_form(value: Optional[str]) -> Optional[float]:
     except ValueError:
         return None
     return threshold if threshold is not None and 0 < threshold <= 100000 else None
+
+
+INFO_FIELDS = ("drive_model", "drive_type", "hostname", "protocol", "description", "test_date", "config_uuid", "run_uuid")
+
+
+def info_fields(metadata: Dict[str, Any]) -> Dict[str, str]:
+    """Fields a .info metadata file (or the upload path) may set on a re-imported test run."""
+    return {key: metadata[key] for key in INFO_FIELDS if isinstance(metadata.get(key), str)}
 
 
 def is_saturation_run(description: str) -> bool:
@@ -180,6 +197,21 @@ async def import_fio_data(
         description="Saturation runs only: P95 latency threshold in ms used by fio-test.sh (stored for the saturation summary)",
         example="20",
     ),
+    ramp_uuid: Optional[str] = Form(
+        None,
+        description="Multi-client ramps only: UUID grouping the client-count steps of one test configuration",
+        example="0b7c3f6e-2d1a-4c55-9a0e-6f1d2c3b4a59",
+        max_length=64,
+    ),
+    client_hosts: Optional[str] = Form(
+        None,
+        description="Multi-client runs only: comma-separated client names of this step, in CLIENTS order",
+        example="vm1,vm2,vm3,vm4",
+    ),
+    client_storage_info: Optional[str] = Form(
+        None,
+        description='Multi-client runs only: JSON object mapping the fio client address ("host:port" or "host") to that client\'s storage_info',
+    ),
     user: User = Depends(require_uploader),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -232,8 +264,8 @@ async def import_fio_data(
         # Read and parse JSON
         content = await file.read()
         try:
-            fio_data = json.loads(content.decode("utf-8"))
-        except json.JSONDecodeError as e:
+            fio_data = load_fio_json(content.decode("utf-8"))
+        except ValueError as e:  # JSONDecodeError, non-finite numbers, invalid UTF-8
             raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
 
         # Extract test run data from FIO JSON
@@ -282,6 +314,8 @@ async def import_fio_data(
 
         test_run_data["latency_threshold_ms"] = threshold_from_form(latency_threshold_ms)
         test_run_data["storage_info"] = storage_info_from_form(storage_info)
+        test_run_data = with_client_fields(test_run_data, ramp_uuid, client_hosts, client_storage_info)
+        check_ramp(db.cursor(), test_run_data)
 
         # Save uploaded file
         file_path = save_uploaded_file(content, file.filename, test_run_data)
@@ -487,7 +521,7 @@ async def bulk_import_fio_data(
             try:
                 # Read and parse JSON file
                 with open(json_file, "r", encoding="utf-8") as f:
-                    fio_data = json.load(f)
+                    fio_data = load_fio_json(f.read())
 
                 # Try to read metadata from .info file first
                 info_file = json_file.with_suffix(".info")
@@ -510,8 +544,8 @@ async def bulk_import_fio_data(
                 # Extract test run data
                 test_run_data = extract_test_run_data(fio_data, json_file.name)
 
-                # Update metadata with path info
-                test_run_data.update(metadata)
+                # Update metadata with path info (known string fields only)
+                test_run_data.update(info_fields(metadata))
 
                 # Use timestamp from .info file if available
                 if metadata.get("upload_timestamp"):
@@ -532,6 +566,13 @@ async def bulk_import_fio_data(
 
                 # Storage configuration detected by fio-test.sh at upload time
                 test_run_data["storage_info"] = storage_info_from_form(metadata.get("storage_info"))
+                test_run_data = with_client_fields(
+                    test_run_data,
+                    metadata.get("ramp_uuid"),
+                    metadata.get("client_hosts"),
+                    metadata.get("client_storage_info"),
+                )
+                check_ramp(db.cursor(), test_run_data)
 
                 # run_uuid: Use from metadata if provided, otherwise generate from hash seed
                 if metadata.get("run_uuid"):
@@ -705,12 +746,15 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
     Raises:
         HTTPException: If FIO data is invalid or missing required fields
     """
-    jobs = fio_data.get("jobs", [])
-    if not jobs:
-        raise HTTPException(status_code=400, detail="No jobs found in FIO data")
-
-    job = jobs[0]  # Use first job
-    global_opts = fio_data.get("global options", {})
+    client_mode = parse_client_mode(fio_data)
+    if client_mode:
+        job, global_opts = client_mode.job, client_mode.global_options
+    else:
+        jobs = fio_data.get("jobs", [])
+        if not jobs:
+            raise HTTPException(status_code=400, detail="No jobs found in FIO data")
+        job = jobs[0]  # Use first job
+        global_opts = fio_data.get("global options", {})
     job_opts = job.get("job options", {})
 
     # Extract basic information
@@ -781,6 +825,9 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
         "drive_model": "Unknown",
         "description": f"Imported from {filename}",
         "is_latest": 1,
+        # fio client mode: aggregate over all clients plus per-client results
+        "clients": len(client_mode.clients) if client_mode else 1,
+        "client_results": client_mode.clients if client_mode else (),
     }
 
     return test_run_data
@@ -795,113 +842,12 @@ def _extract_sync(job_opts: Dict[str, Any], global_opts: Dict[str, Any]) -> str:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-def extract_iops(job: Dict[str, Any]) -> float:
-    """
-    Extract total IOPS (Input/Output Operations Per Second) from FIO job data.
-
-    Combines read and write IOPS for total throughput measurement.
-
-    Args:
-        job: FIO job data containing read/write statistics
-
-    Returns:
-        Combined read + write IOPS value
-    """
-    read_iops = job.get("read", {}).get("iops", 0)
-    write_iops = job.get("write", {}).get("iops", 0)
-    return read_iops + write_iops
-
-
-def extract_latency(job: Dict[str, Any]) -> float:
-    """
-    Extract weighted average latency from FIO job data.
-
-    Calculates the I/O weighted average completion latency across read and write
-    operations, converting from nanoseconds to milliseconds.
-    Uses clat_ns (completion latency) for consistency with percentile metrics.
-
-    Why weighting by I/O count?
-    ---------------------------
-    Read and write operations often have different latencies AND different I/O counts.
-    A simple average (read_lat + write_lat) / 2 would be misleading because it treats
-    both operations equally, regardless of how many I/Os each performed.
-
-    Example:
-        - 1000 reads @ 1ms, 1 write @ 10ms
-        - Simple avg: (1 + 10) / 2 = 5.5 ms ❌ (misleading - most I/Os were fast!)
-        - Weighted:   (1×1000 + 10×1) / 1001 = 1.009 ms ✅ (accurate)
-
-    The weighted average gives the TRUE average latency experienced across all
-    I/O operations, accounting for the actual distribution of read vs write I/Os.
-
-    Formula: weighted_avg = (read_lat × read_ios + write_lat × write_ios) / total_ios
-
-    Args:
-        job: FIO job data containing latency statistics
-
-    Returns:
-        Weighted average completion latency in milliseconds
-    """
-    read_lat = job.get("read", {}).get("clat_ns", {}).get("mean", 0)
-    write_lat = job.get("write", {}).get("clat_ns", {}).get("mean", 0)
-
-    total_ios = job.get("read", {}).get("total_ios", 0) + job.get("write", {}).get("total_ios", 0)
-    if total_ios == 0:
-        return 0.0
-
-    read_ios = job.get("read", {}).get("total_ios", 0)
-    write_ios = job.get("write", {}).get("total_ios", 0)
-
-    # Weight by I/O count: multiply each latency by its I/O count, sum, then divide by total
-    weighted_lat = (read_lat * read_ios + write_lat * write_ios) / total_ios
-    return weighted_lat / 1000000  # Convert ns to ms
-
-
-def extract_bandwidth(job: Dict[str, Any]) -> float:
-    """
-    Extract total bandwidth from FIO job data.
-
-    Combines read and write bandwidth measurements and converts
-    from bytes per second to megabytes per second.
-
-    Args:
-        job: FIO job data containing bandwidth statistics
-
-    Returns:
-        Combined bandwidth in MB/s
-    """
-    read_bw = job.get("read", {}).get("bw_bytes", 0)
-    write_bw = job.get("write", {}).get("bw_bytes", 0)
-    return (read_bw + write_bw) / (1024 * 1024)  # Convert to MB/s
-
-
-def extract_percentile_latency(job: Dict[str, Any], percentile: float) -> float:
-    """
-    Extract percentile latency statistics from FIO job data.
-
-    Retrieves the specified percentile latency value (P1, P5, P95, P99, etc.)
-    and converts from nanoseconds to milliseconds. Uses the higher
-    value between read and write operations.
-
-    Args:
-        job: FIO job data containing latency percentile statistics
-        percentile: Percentile value to extract (e.g., 95 for P95, 99.5 for P99.5)
-
-    Returns:
-        Percentile latency in milliseconds
-    """
-    # Format percentile key to match FIO format (e.g., "1.000000", "99.500000")
-    percentile_key = f"{percentile:.6f}"
-    
-    read_lat = job.get("read", {}).get("clat_ns", {}).get("percentile", {}).get(percentile_key, 0)
-    write_lat = job.get("write", {}).get("clat_ns", {}).get("percentile", {}).get(percentile_key, 0)
-
-    # Use the higher of read/write latency
-    max_lat = max(read_lat, write_lat)
-    return max_lat / 1000000  # Convert ns to ms
-
-
 def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> int:
+    """Insert into test_runs_all and test_runs; returns the test_runs id (see insert_test_run_rows)."""
+    return insert_test_run_rows(db, test_run_data, file_path)[0]
+
+
+def insert_test_run_rows(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> Tuple[int, int]:
     """
     Insert test run data into both current and historical database tables.
 
@@ -914,7 +860,8 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
         file_path: Optional path to the source JSON file
 
     Returns:
-        ID of the inserted test run from the test_runs table
+        IDs of the inserted rows: (test_runs id, test_runs_all id). Per-client results of a
+        multi-client step reference the test_runs_all id, which a newer upload never replaces.
     """
     cursor = db.cursor()
 
@@ -942,6 +889,9 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
         "config_uuid",
         "run_uuid",
         "storage_info",
+        "clients",
+        "ramp_uuid",
+        "client_hosts",
         "output_file",
         "num_jobs",
         "direct",
@@ -972,6 +922,7 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
     ]
 
     values = [test_run_data.get(col) for col in columns]
+    values[columns.index("clients")] = test_run_data.get("clients") or 1
     placeholders = ", ".join(["?" for _ in columns])
 
     # Insert into test_runs_all first
@@ -999,8 +950,9 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
             (str(file_path), test_run_all_id),
         )
 
+    insert_client_results(cursor, test_run_all_id, test_run_data)
     db.commit()
-    return test_run_id
+    return test_run_id, test_run_all_id
 
 
 def insert_saturation_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> int:
@@ -1180,6 +1132,13 @@ def create_metadata_file(file_path: str, test_run_data: Dict[str, Any], username
         metadata["run_uuid"] = test_run_data.get("run_uuid")
     if test_run_data.get("storage_info"):
         metadata["storage_info"] = test_run_data.get("storage_info")
+    if test_run_data.get("ramp_uuid"):
+        metadata["ramp_uuid"] = test_run_data.get("ramp_uuid")
+    if test_run_data.get("client_hosts"):
+        metadata["client_hosts"] = ",".join(json.loads(test_run_data["client_hosts"]))
+    if test_run_data.get("client_storage"):
+        storage = {key: json.loads(value) for key, value in test_run_data["client_storage"].items()}
+        metadata["client_storage_info"] = json.dumps(storage, ensure_ascii=False)
 
     # Write metadata file
     with open(metadata_path, "w") as f:

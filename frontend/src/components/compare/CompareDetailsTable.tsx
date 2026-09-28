@@ -13,7 +13,7 @@ const TH = 'py-2 px-2 font-medium whitespace-nowrap';
 const TD = 'py-1.5 px-2 whitespace-nowrap';
 
 const layoutCell = (row: CompareRow, strict: boolean): string => {
-    if (strict) return [row.test_size, row.duration != null ? `${row.duration}s` : null, row.layout || null].filter(Boolean).join(' · ') || '–';
+    if (strict) return [row.test_size, row.duration != null ? `${row.duration}s` : null, row.layout || null, row.clients && row.clients > 1 ? `${row.clients} clients` : null].filter(Boolean).join(' · ') || '–';
     return row.mismatch && row.mismatch.length > 0 ? `⚠ ${row.mismatch.join(', ')}` : '–';
 };
 

@@ -28,6 +28,7 @@ export interface CompareCell {
     readonly test_size: string | null;
     readonly duration: number | null;
     readonly layout: string;
+    readonly clients: number;
 }
 
 export type MetricValues<T> = Readonly<Record<CompareMetric, T>>;
@@ -42,6 +43,7 @@ export interface CompareRow {
     readonly test_size?: string | null;
     readonly duration?: number | null;
     readonly layout?: string;
+    readonly clients?: number;
     readonly mismatch?: readonly string[];
     readonly results: Readonly<Record<string, CompareCell | null>>;
     readonly diff_pct: Readonly<Record<string, MetricValues<number | null>>>;

@@ -35,13 +35,14 @@ SOURCE_TABLES = {"newest": "test_runs_all", "history": "test_runs_all", "latest"
 ROW_LIMITS = {"test_runs": MAX_ROWS_PER_TARGET, "test_runs_all": MAX_HISTORY_ROWS_PER_TARGET}
 HIERARCHY_COLUMNS = ("hostname", "protocol", "drive_type", "drive_model")
 KEY_COLUMNS = ("read_write_pattern", "block_size", "sync", "direct", "num_jobs", "iodepth")
-# Strict matching also requires identical test size, runtime and file layout (prefill/fileperjob/satcap tags),
-# otherwise e.g. a 256M/5 s smoke test would be compared with a 10G/60 s run
-STRICT_FIELDS = ("test_size", "duration", "layout")
+# Strict matching also requires identical test size, runtime, file layout (prefill/fileperjob/satcap tags)
+# and client count, otherwise e.g. a 256M/5 s smoke test would be compared with a 10G/60 s run,
+# or the aggregate of 4 fio clients with a single host
+STRICT_FIELDS = ("test_size", "duration", "layout", "clients")
 LAYOUT_TAGS = ("prefill", "fileperjob", "satcap")
 METRICS = ("iops", "bandwidth", "avg_latency", "p95_latency", "p99_latency")
 HIGHER_IS_BETTER = frozenset({"iops", "bandwidth"})
-SELECT_COLUMNS = KEY_COLUMNS + METRICS + ("timestamp", "test_size", "duration", "description")
+SELECT_COLUMNS = KEY_COLUMNS + METRICS + ("timestamp", "test_size", "duration", "description", "clients")
 WILDCARD = "*"
 
 BLOCK_SIZE_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([kmgt]?)(?:i?b)?\s*$", re.IGNORECASE)
@@ -148,7 +149,7 @@ def normalize_size(value: Any) -> Any:
 def config_key(row: Dict[str, Any], strict: bool) -> ConfigKey:
     key = tuple(row[column] for column in KEY_COLUMNS)
     if strict:
-        key = key + (normalize_size(row["test_size"]), row["duration"], layout_signature(row["description"]))
+        key = key + (normalize_size(row["test_size"]), row["duration"], layout_signature(row["description"]), row.get("clients") or 1)
     return key
 
 
@@ -167,6 +168,7 @@ def newest_per_config(rows: List[Dict[str, Any]], strict: bool = True) -> Dict[C
             "test_size": normalize_size(newest["test_size"]),
             "duration": newest["duration"],
             "layout": layout_signature(newest["description"]),
+            "clients": newest.get("clients") or 1,
         }
     return cells
 

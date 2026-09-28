@@ -36,7 +36,7 @@ const CompareSummary: React.FC<CompareSummaryProps> = ({ data, metric }) => {
                                 <td className="py-2 pr-4 text-right theme-text-secondary whitespace-nowrap">
                                     {summary?.configs_compared ?? 0}
                                     {summary && summary.configs_mismatched > 0 && (
-                                        <span className="ml-1 text-amber-700 dark:text-amber-400" title="Configurations whose test size, duration or layout differ (loose mode)">
+                                        <span className="ml-1 text-amber-700 dark:text-amber-400" title="Configurations whose test size, duration, layout or client count differ (loose mode)">
                                             ({summary.configs_mismatched} ⚠)
                                         </span>
                                     )}

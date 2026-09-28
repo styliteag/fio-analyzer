@@ -89,7 +89,7 @@ const TestRunsCompare: React.FC = () => {
                     title="No comparable configurations"
                     description={
                         comparison.data?.hint ??
-                        'The targets share no identical test configuration. Turn off strict matching to ignore test size, duration and layout, or include incomplete configurations.'
+                        'The targets share no identical test configuration. Turn off strict matching to ignore test size, duration, layout and client count, or include incomplete configurations.'
                     }
                     action={
                         <div className="flex flex-wrap justify-center gap-2">

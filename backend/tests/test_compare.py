@@ -35,7 +35,8 @@ CREATE TABLE {table} (
     p95_latency REAL,
     p99_latency REAL,
     description TEXT,
-    run_uuid TEXT
+    run_uuid TEXT,
+    clients INTEGER DEFAULT 1
 );
 """
 
@@ -60,6 +61,7 @@ COLUMNS = (
     "p99_latency",
     "description",
     "run_uuid",
+    "clients",
 )
 
 DEFAULTS: dict[str, Any] = {
@@ -82,6 +84,7 @@ DEFAULTS: dict[str, Any] = {
     "p99_latency": 3.0,
     "description": "",
     "run_uuid": "run-1",
+    "clients": 1,
 }
 
 
@@ -433,6 +436,16 @@ def test_strict_keeps_prefill_runs_apart() -> None:
     assert call(db, targets("a", "b")).json()["rows"] == []
     rows = call(db, targets("a", "b", include_incomplete="true")).json()["rows"]
     assert sorted(r["layout"] for r in rows) == ["", "prefill:1"]
+
+
+def test_strict_keeps_client_counts_apart() -> None:
+    """The aggregate of 4 fio clients is not comparable with a single host."""
+    db = make_db([row("a", clients=4, iops=400.0), row("b", clients=1, iops=100.0), row("b", clients=4, iops=380.0)])
+    [compared] = call(db, targets("a", "b")).json()["rows"]
+    assert compared["clients"] == 4
+    assert compared["diff_pct"]["b"]["iops"] == -5.0
+    loose = call(db, targets("a", "b", strict="false")).json()["rows"]
+    assert any("clients" in r["mismatch"] for r in loose)
 
 
 def test_strict_compares_runs_with_identical_layout() -> None:

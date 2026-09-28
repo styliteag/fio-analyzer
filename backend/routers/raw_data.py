@@ -99,16 +99,43 @@ def download_run_zip(
     db: sqlite3.Connection = Depends(get_db),
 ) -> StreamingResponse:
     # Plain def: file reads and compression run in the threadpool, not on the event loop
-    rows = _run_rows(db, run_uuid)
+    return _zip_response(_run_rows(db, run_uuid), "run_uuid", run_uuid, "run")
+
+
+def _ramp_rows(db: sqlite3.Connection, ramp_uuid: str) -> List[dict]:
+    cursor = db.execute(
+        "SELECT id, hostname, read_write_pattern, block_size, queue_depth, clients, uploaded_file_path "
+        "FROM test_runs_all WHERE ramp_uuid = ? ORDER BY clients, id",
+        (ramp_uuid,),
+    )
+    return [{"source": "history", **dict(zip([c[0] for c in cursor.description], values))} for values in cursor.fetchall()]
+
+
+@router.get(
+    "/ramps/{ramp_uuid}",
+    summary="Download Client Ramp as ZIP",
+    description="Download the raw fio client-mode JSON files of all steps of one multi-client ramp (ramp_uuid) as a ZIP "
+    "archive. index.json maps every file to its test run (test_runs_all id) and client count.",
+    responses={200: {"content": {"application/zip": {}}}, 404: {"description": "Unknown ramp_uuid"}},
+)
+def download_ramp_zip(
+    ramp_uuid: str,
+    user: User = Depends(require_viewer),
+    db: sqlite3.Connection = Depends(get_db),
+) -> StreamingResponse:
+    return _zip_response(_ramp_rows(db, ramp_uuid), "ramp_uuid", ramp_uuid, "ramp")
+
+
+def _zip_response(rows: List[dict], key: str, value: str, prefix: str) -> StreamingResponse:
     if not rows:
-        raise HTTPException(status_code=404, detail="Unknown run_uuid")
+        raise HTTPException(status_code=404, detail=f"Unknown {key}")
     if len(rows) > MAX_ZIP_FILES:
         raise HTTPException(status_code=413, detail=f"Run has {len(rows)} files, more than {MAX_ZIP_FILES} per ZIP")
 
     spool = tempfile.SpooledTemporaryFile(max_size=64 * 1024**2)
-    _write_run_zip(spool, run_uuid, rows)
+    _write_run_zip(spool, {key: value}, rows)
     spool.seek(0)
-    filename = "run_" + re.sub(r"[^A-Za-z0-9-]", "", run_uuid)[:40] + ".zip"
+    filename = f"{prefix}_" + re.sub(r"[^A-Za-z0-9-]", "", value)[:40] + ".zip"
     return StreamingResponse(
         iter(lambda: spool.read(1024**2), b""),
         media_type="application/zip",
@@ -116,8 +143,8 @@ def download_run_zip(
     )
 
 
-def _write_run_zip(target, run_uuid: str, rows: List[dict]) -> None:
-    index = {"run_uuid": run_uuid, "files": [], "missing": []}
+def _write_run_zip(target, group: Dict[str, str], rows: List[dict]) -> None:
+    index = {**group, "files": [], "missing": []}
     written = {INDEX_NAME}  # reserved for the index
     total = 0
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:

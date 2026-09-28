@@ -57,7 +57,7 @@ const CompareResults: React.FC<CompareResultsProps> = ({ data, metric, filters, 
                         ))}
                         <span>Stronger colour = larger difference (5 / 20 / 50%)</span>
                         <span>×n = median of n configurations (hover for details)</span>
-                        {!data.strict && <span>⚠ = test size, duration or layout differ</span>}
+                        {!data.strict && <span>⚠ = test size, duration, layout or client count differ</span>}
                     </p>
                 </div>
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

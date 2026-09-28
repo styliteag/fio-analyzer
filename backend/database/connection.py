@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 from config.settings import settings
+from database.client_migration import migrate_clients
 from database.import_log import ensure_import_log_table
 from database.saturation_migration import add_threshold_column
 from database.storage_info_migration import add_storage_info_column
@@ -120,6 +121,10 @@ class DatabaseManager:
                 -- UUID fields
                 config_uuid TEXT,
                 run_uuid TEXT,
+                -- Multi-client runs (fio client mode)
+                clients INTEGER DEFAULT 1,
+                ramp_uuid TEXT,
+                client_hosts TEXT,
                 -- Uniqueness tracking
                 is_latest INTEGER DEFAULT 1
             )
@@ -182,10 +187,14 @@ class DatabaseManager:
                 -- UUID fields
                 config_uuid TEXT,
                 run_uuid TEXT,
+                -- Multi-client runs (fio client mode)
+                clients INTEGER DEFAULT 1,
+                ramp_uuid TEXT,
+                client_hosts TEXT,
                 -- Uniqueness tracking
                 is_latest INTEGER DEFAULT 1,
                 -- Unique constraint
-                UNIQUE(hostname, protocol, drive_type, drive_model, block_size, read_write_pattern, queue_depth, num_jobs, direct, test_size, sync, iodepth, duration)
+                UNIQUE(hostname, protocol, drive_type, drive_model, block_size, read_write_pattern, queue_depth, num_jobs, direct, test_size, sync, iodepth, duration, clients)
             )
         """
         )
@@ -455,6 +464,9 @@ class DatabaseManager:
         # Migration 8: storage configuration detected by fio-test.sh (JSON)
         add_storage_info_column(cursor)
 
+        # Migration 9: multi-client runs (clients in the latest unique key, ramp_uuid, per-client results)
+        migrate_clients(cursor, self._create_views)
+
         self.connection.commit()
 
     async def _populate_sample_data(self, cursor: sqlite3.Cursor):
@@ -599,7 +611,7 @@ class DatabaseManager:
             SET is_latest = 0
             WHERE drive_type = ? AND drive_model = ? AND hostname = ? AND protocol = ?
             AND block_size = ? AND read_write_pattern = ? AND output_file = ? AND num_jobs = ?
-            AND direct = ? AND test_size = ? AND sync = ? AND iodepth = ?
+            AND direct = ? AND test_size = ? AND sync = ? AND iodepth = ? AND COALESCE(clients, 1) = ?
         """,
             (
                 test_run_data.get("drive_type"),
@@ -614,6 +626,7 @@ class DatabaseManager:
                 test_run_data.get("test_size"),
                 test_run_data.get("sync"),
                 test_run_data.get("iodepth"),
+                test_run_data.get("clients") or 1,
             ),
         )
 
