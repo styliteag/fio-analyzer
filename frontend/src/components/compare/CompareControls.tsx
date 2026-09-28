@@ -62,8 +62,8 @@ const CompareControls: React.FC<CompareControlsProps> = ({ settings, onChange })
             <div>
                 <label htmlFor="compare-source" className={LABEL}>Source</label>
                 <select id="compare-source" className={FIELD} value={settings.source} onChange={(e) => onChange({ source: e.target.value as CompareSource })}>
-                    <option value="latest">Latest runs</option>
-                    <option value="history">Full history</option>
+                    <option value="newest">Newest comparable run</option>
+                    <option value="latest">Latest-results table</option>
                 </select>
             </div>
             <fieldset>

@@ -1,7 +1,7 @@
 // "Test runs" tab: targets and settings live in the URL, the comparison is fetched from /api/compare
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { GitCompare } from 'lucide-react';
+import { GitCompare, Info } from 'lucide-react';
 import { Button, Card, EmptyState, ErrorDisplay, Loading } from '../ui';
 import { useUpdateUrlParams, writeList, writeValue } from '../../hooks/useUrlState';
 import { buildCompareParams, type CompareMetric } from '../../services/api/compare';
@@ -18,7 +18,7 @@ const readSettings = (params: URLSearchParams): CompareSettings => {
     const metric = params.get('metric') as CompareMetric | null;
     return {
         metric: metric && METRIC_VALUES.includes(metric) ? metric : 'iops',
-        source: params.get('source') === 'history' ? 'history' : 'latest',
+        source: params.get('source') === 'latest' ? 'latest' : 'newest',
         strict: params.get('strict') !== '0',
         syncs: params.getAll('sync').filter((mode) => SYNC_MODE_ORDER.includes(mode)),
         tags: params.get('tags') ?? '',
@@ -30,7 +30,7 @@ const readSettings = (params: URLSearchParams): CompareSettings => {
 
 const writeSettings = (params: URLSearchParams, changes: Partial<CompareSettings>): void => {
     if (changes.metric !== undefined) writeValue(params, 'metric', changes.metric, 'iops');
-    if (changes.source !== undefined) writeValue(params, 'source', changes.source, 'latest');
+    if (changes.source !== undefined) writeValue(params, 'source', changes.source, 'newest');
     if (changes.strict !== undefined) writeValue(params, 'strict', changes.strict ? null : '0');
     if (changes.syncs !== undefined) writeList(params, 'sync', SYNC_MODE_ORDER.filter((mode) => changes.syncs?.includes(mode)));
     if (changes.tags !== undefined) writeValue(params, 'tags', changes.tags);
@@ -87,9 +87,15 @@ const TestRunsCompare: React.FC = () => {
                 <EmptyState
                     icon={<GitCompare className="h-12 w-12" />}
                     title="No comparable configurations"
-                    description="The targets share no identical test configuration. Turn off strict matching to ignore test size, duration and layout, or include incomplete configurations."
+                    description={
+                        comparison.data?.hint ??
+                        'The targets share no identical test configuration. Turn off strict matching to ignore test size, duration and layout, or include incomplete configurations.'
+                    }
                     action={
                         <div className="flex flex-wrap justify-center gap-2">
+                            {settings.source === 'latest' && (
+                                <Button variant="outline" size="sm" onClick={() => changeSettings({ source: 'newest' })}>Use newest comparable runs</Button>
+                            )}
                             {settings.strict && (
                                 <Button variant="outline" size="sm" onClick={() => changeSettings({ strict: false })}>Turn strict matching off</Button>
                             )}
@@ -101,7 +107,24 @@ const TestRunsCompare: React.FC = () => {
                 />
             );
         }
-        return <CompareResults data={comparison.data} metric={settings.metric} filters={filters} onFiltersChange={changeFilters} />;
+        return (
+            <>
+                {comparison.data.hint && (
+                    <p role="status" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                        <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>
+                            {comparison.data.hint}
+                            {settings.strict && (
+                                <button type="button" className="ml-2 underline" onClick={() => changeSettings({ strict: false })}>
+                                    Turn strict matching off
+                                </button>
+                            )}
+                        </span>
+                    </p>
+                )}
+                <CompareResults data={comparison.data} metric={settings.metric} filters={filters} onFiltersChange={changeFilters} />
+            </>
+        );
     };
 
     return (

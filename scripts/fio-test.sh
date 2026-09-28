@@ -964,10 +964,51 @@ storage_zfs_dataset() {
     done < <(si_run zfs list -H -o name -t volume)
 }
 
+# Data vdev layout of a ZFS pool from `zpool status -P` as "<layout> <vdevs>":
+# mirror, raidz1-3, draid<parity>, stripe (plain disks) or mixed. Only the top-level
+# vdevs below the pool line count; logs/cache/spares/special/dedup end the data section.
+storage_zpool_layout() {
+    local pool=$1 line name indent pool_indent="" kind layout="" count=0 in_config=false
+    local re='^([[:space:]]*)([^[:space:]]+)'
+    si_safe_arg "$pool" || return 0
+    command -v zpool >/dev/null 2>&1 || return 0
+    while IFS= read -r line; do
+        if [ "$in_config" = false ]; then
+            [[ "$line" =~ ^[[:space:]]*config: ]] && in_config=true
+            continue
+        fi
+        if ! [[ "$line" =~ $re ]]; then
+            if [ -n "$pool_indent" ]; then break; fi
+            continue
+        fi
+        indent=${#BASH_REMATCH[1]} name=${BASH_REMATCH[2]}
+        if [ -z "$pool_indent" ]; then
+            if [ "$name" = "$pool" ]; then pool_indent=$indent; fi
+            continue
+        fi
+        if [ "$indent" -le "$pool_indent" ]; then break; fi
+        if [ "$indent" -ne $((pool_indent + 2)) ]; then continue; fi
+        case "$name" in
+            indirect-*) continue ;;
+            mirror-*) kind=mirror ;;
+            raidz-*|raidz1-*) kind=raidz1 ;;
+            raidz2-*) kind=raidz2 ;;
+            raidz3-*) kind=raidz3 ;;
+            draid*) kind=${name%%[:-]*} ;;
+            *) kind=stripe ;;
+        esac
+        if [ -z "$layout" ]; then layout=$kind; elif [ "$layout" != "$kind" ]; then layout=mixed; fi
+        count=$((count + 1))
+    done < <(si_run zpool status -P "$pool")
+    if [ -n "$layout" ]; then echo "$layout $count"; fi
+    return 0
+}
+
 # Read ZFS properties of $1 (type filesystem|volume in $2) into SI_ZFS_* and SI_ZFS_JSON
 storage_zfs_props() {
     local name=$1 type=$2 prop value compression="" primarycache="" logbias=""
     SI_ZFS_DATASET=$name SI_ZFS_TYPE=$type SI_ZFS_SYNC="" SI_ZFS_RECORDSIZE="" SI_ZFS_VOLBLOCKSIZE=""
+    SI_ZFS_POOL="" SI_ZFS_POOL_LAYOUT="" SI_ZFS_POOL_VDEVS=""
     if ! si_safe_arg "$name"; then SI_ZFS_JSON=""; return 0; fi
     if command -v zfs >/dev/null 2>&1; then
         while read -r prop value _; do
@@ -982,10 +1023,13 @@ storage_zfs_props() {
             esac
         done < <(si_run zfs get -H -o property,value sync,recordsize,volblocksize,compression,primarycache,logbias "$name")
     fi
-    SI_ZFS_COMPRESSION=$compression SI_ZFS_LOGBIAS=$logbias
+    SI_ZFS_COMPRESSION=$compression SI_ZFS_PRIMARYCACHE=$primarycache SI_ZFS_LOGBIAS=$logbias
+    SI_ZFS_POOL=${name%%/*}
+    read -r SI_ZFS_POOL_LAYOUT SI_ZFS_POOL_VDEVS <<< "$(storage_zpool_layout "$SI_ZFS_POOL")"
     SI_ZFS_JSON=$(json_object dataset "$name" type "$type" sync "$SI_ZFS_SYNC" \
         recordsize "$SI_ZFS_RECORDSIZE" volblocksize "$SI_ZFS_VOLBLOCKSIZE" \
-        compression "$compression" primarycache "$primarycache" logbias "$logbias")
+        compression "$compression" primarycache "$primarycache" logbias "$logbias" \
+        pool "$SI_ZFS_POOL" pool_layout "$SI_ZFS_POOL_LAYOUT" pool_vdevs:n "$SI_ZFS_POOL_VDEVS")
 }
 
 # Pool and image of a mapped RBD device as "pool image" (empty if not RBD)
@@ -1064,28 +1108,176 @@ storage_ceph_info() {
     if [ -n "${data_pool:-$pool}" ]; then
         IFS='|' read -r pool_type pool_size min_size <<< "$(storage_ceph_pool "${data_pool:-$pool}")"
     fi
-    SI_CEPH_KIND=$kind SI_CEPH_POOL=$pool
+    SI_CEPH_KIND=$kind SI_CEPH_POOL=$pool SI_CEPH_IMAGE=$image SI_CEPH_OBJECT_SIZE=$object_size
+    SI_CEPH_DATA_POOL=$data_pool SI_CEPH_POOL_TYPE=$pool_type SI_CEPH_POOL_SIZE=$pool_size
+    SI_CEPH_MIN_SIZE=$min_size
     SI_CEPH_JSON=$(json_object kind "$kind" pool "$pool" image "$image" object_size:n "$object_size" \
         data_pool "$data_pool" pool_type "$pool_type" pool_size:n "$pool_size" min_size:n "$min_size")
+}
+
+# First line of a (sysfs) file with surrounding whitespace trimmed; empty if unreadable
+si_read_file() {
+    local v=""
+    if [ -r "$1" ]; then IFS= read -r v < "$1" 2>/dev/null; fi
+    v=${v//[[:cntrl:]]/}  # values end up on root's terminal: no escape sequences
+    v=${v#"${v%%[![:space:]]*}"}
+    printf '%s' "${v%"${v##*[![:space:]]}"}"
+}
+
+# Whole disk below a kernel block device name: partitions and single-slave
+# device-mapper devices are followed via sysfs (lsblk PKNAME when sysfs has no entry)
+# SI_* are test hooks (sysfs roots) and detection results: never take them from .env
+clear_storage_overrides() {
+    local name
+    for name in "${!SI_@}"; do unset "$name"; done
+}
+
+storage_parent_disk() {
+    local dev=$1 sys=${SI_SYS_ROOT:-}/sys/class/block parent i
+    local slaves=()
+    for ((i = 0; i < 4; i++)); do
+        if [ -e "$sys/$dev/partition" ]; then
+            parent=$(readlink -f "$sys/$dev" 2>/dev/null)
+            parent=${parent%/*}
+            parent=${parent##*/}
+        elif [ -d "$sys/$dev/slaves" ]; then
+            slaves=("$sys/$dev/slaves"/*)
+            if [ ${#slaves[@]} -ne 1 ] || [ ! -e "${slaves[0]}" ]; then break; fi
+            parent=${slaves[0]##*/}
+        elif [ ! -e "$sys/$dev" ] && si_safe_arg "$dev" && command -v lsblk >/dev/null 2>&1; then
+            parent=$(si_run lsblk -no PKNAME "/dev/$dev" | head -n 1)
+        else
+            break
+        fi
+        if [ -z "$parent" ] || [ "$parent" = "$dev" ]; then break; fi
+        # Only plain device names: never walk the sysfs tree with '..' or '/'
+        if ! [[ "$parent" =~ ^[A-Za-z0-9._:+-]+$ ]] || [ "$parent" = . ] || [ "$parent" = .. ]; then break; fi
+        dev=$parent
+    done
+    echo "$dev"
+}
+
+# Driver of a disk: the first driver link above /sys/block/<disk>/device that is not
+# the generic sd/sr driver (virtio_blk, virtio_scsi, nvme, ahci, mpt3sas, ...)
+storage_disk_driver() {
+    local disk=$1 sys dir drv fallback="" i
+    sys=$(readlink -f "${SI_SYS_ROOT:-}/sys" 2>/dev/null) || return 0
+    dir=$(readlink -f "${SI_SYS_ROOT:-}/sys/block/$disk/device" 2>/dev/null) || return 0
+    for ((i = 0; i < 8; i++)); do
+        [[ "$dir" == "$sys"/devices/* ]] || break
+        if [ -L "$dir/driver" ]; then
+            drv=$(readlink "$dir/driver")
+            drv=${drv##*/}
+            case "$drv" in
+                sd|sr|"") fallback=${fallback:-$drv} ;;
+                *) echo "$drv"; return 0 ;;
+            esac
+        fi
+        dir=${dir%/*}
+    done
+    if [ -n "$fallback" ]; then echo "$fallback"; fi
+    return 0
+}
+
+# Model, vendor, serial, transport, rotational and size of /dev/$1 via `lsblk -P`
+# into SI_DISK_* (values trimmed; lsblk escapes spaces in some versions as \x20)
+storage_disk_lsblk() {
+    local disk=$1 out key value re='([A-Z]+)="([^"]*)"(.*)'
+    command -v lsblk >/dev/null 2>&1 || return 0
+    out=$(si_run lsblk -dn -P -o MODEL,VENDOR,SERIAL,TRAN,ROTA,SIZE "/dev/$disk" | head -n 1)
+    while [[ "$out" =~ $re ]]; do
+        key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]//\\x20/ } out=${BASH_REMATCH[3]}
+        value=${value#"${value%%[![:space:]]*}"}
+        value=${value%"${value##*[![:space:]]}"}
+        case "$key" in
+            MODEL) SI_DISK_MODEL=$value ;;
+            VENDOR) SI_DISK_VENDOR=$value ;;
+            SERIAL) SI_DISK_SERIAL=$value ;;
+            TRAN) SI_DISK_TRAN=$value ;;
+            ROTA) SI_DISK_ROTA=$value ;;
+            SIZE) SI_DISK_SIZE=$value ;;
+        esac
+    done
+}
+
+# Disk below the target (Linux; not for ZFS, Ceph or network filesystems) into
+# SI_DISK_* and SI_DISK_JSON. Directory targets use the mount source from findmnt.
+storage_disk_info() {
+    local src dev disk sys=${SI_SYS_ROOT:-}/sys/block
+    SI_DISK_JSON="" SI_DISK_NAME="" SI_DISK_MODEL="" SI_DISK_VENDOR="" SI_DISK_SERIAL=""
+    SI_DISK_TRAN="" SI_DISK_DRIVER="" SI_DISK_ROTA="" SI_DISK_SIZE=""
+    [ "$(uname -s)" = Linux ] || return 0
+    if [ -n "${SI_ZFS_DATASET:-}" ] || [ -n "${SI_CEPH_KIND:-}" ]; then return 0; fi
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        src=$TARGET_DIR
+    else
+        src=${SI_FS_SOURCE%%\[*}
+        case "$src" in /dev/*) ;; *) return 0 ;; esac
+    fi
+    dev=$(readlink -f "$src" 2>/dev/null) || dev=$src
+    dev=${dev:-$src}
+    disk=$(storage_parent_disk "${dev##*/}")
+    si_safe_arg "$disk" || return 0
+    storage_disk_lsblk "$disk"
+    [ -n "$SI_DISK_MODEL" ] || SI_DISK_MODEL=$(si_read_file "$sys/$disk/device/model")
+    [ -n "$SI_DISK_VENDOR" ] || SI_DISK_VENDOR=$(si_read_file "$sys/$disk/device/vendor")
+    [ -n "$SI_DISK_ROTA" ] || SI_DISK_ROTA=$(si_read_file "$sys/$disk/queue/rotational")
+    SI_DISK_DRIVER=$(storage_disk_driver "$disk")
+    if [ -z "$SI_DISK_MODEL$SI_DISK_VENDOR$SI_DISK_SERIAL$SI_DISK_TRAN$SI_DISK_ROTA$SI_DISK_SIZE$SI_DISK_DRIVER" ]; then
+        return 0
+    fi
+    SI_DISK_NAME=$disk
+    SI_DISK_JSON=$(json_object name "$disk" model "$SI_DISK_MODEL" vendor "$SI_DISK_VENDOR" \
+        serial "$SI_DISK_SERIAL" transport "$SI_DISK_TRAN" driver "$SI_DISK_DRIVER" \
+        rotational:n "$SI_DISK_ROTA" size "$SI_DISK_SIZE")
+}
+
+# Virtualization type (systemd-detect-virt) plus DMI vendor/product into SI_VIRT_* and
+# SI_VIRT_JSON; nothing on bare metal. Containers see the host's DMI, so it is skipped.
+storage_virt_info() {
+    local dmi=${SI_SYS_ROOT:-}/sys/class/dmi/id type
+    SI_VIRT_JSON="" SI_VIRT_TYPE="" SI_VIRT_VENDOR="" SI_VIRT_PRODUCT=""
+    [ "$(uname -s)" = Linux ] || return 0
+    command -v systemd-detect-virt >/dev/null 2>&1 || return 0
+    type=$(si_run systemd-detect-virt | head -n 1)
+    case "$type" in ""|none) return 0 ;; esac
+    SI_VIRT_TYPE=$type
+    case "$type" in
+        lxc*|systemd-nspawn|docker|podman|rkt|wsl|proot|pouch|openvz) ;;
+        *)
+            SI_VIRT_VENDOR=$(si_read_file "$dmi/sys_vendor")
+            SI_VIRT_PRODUCT=$(si_read_file "$dmi/product_name")
+            ;;
+    esac
+    SI_VIRT_JSON=$(json_object type "$type" vendor "$SI_VIRT_VENDOR" product "$SI_VIRT_PRODUCT")
+}
+
+# STORAGE_INFO JSON from the detected SI_* values
+storage_info_json() {
+    json_object fs_type "${SI_FS_TYPE:-}" kernel "${SI_KERNEL:-}" os "${SI_OS:-}" \
+        ioengine "${IOENGINE:-}" fio_version "${SI_FIO_VERSION:-}" zfs:o "${SI_ZFS_JSON:-}" \
+        ceph:o "${SI_CEPH_JSON:-}" disk:o "${SI_DISK_JSON:-}" virt:o "${SI_VIRT_JSON:-}"
 }
 
 # Detect the storage below TARGET_DIR and build STORAGE_INFO (single-line JSON, < 4 KB).
 # Never fails; unknown fields are omitted. STORAGE_DETECT=0 disables detection.
 detect_storage() {
-    local fs_type fio_version zfs_name
+    local zfs_name part
     STORAGE_INFO="" SI_FS_TYPE="" SI_FS_SOURCE="" SI_ZFS_JSON="" SI_CEPH_JSON=""
     SI_ZFS_DATASET="" SI_ZFS_TYPE="" SI_ZFS_SYNC="" SI_ZFS_RECORDSIZE="" SI_ZFS_VOLBLOCKSIZE=""
-    SI_ZFS_COMPRESSION="" SI_ZFS_LOGBIAS="" SI_CEPH_KIND="" SI_CEPH_POOL=""
+    SI_ZFS_COMPRESSION="" SI_ZFS_PRIMARYCACHE="" SI_ZFS_LOGBIAS="" SI_ZFS_POOL=""
+    SI_ZFS_POOL_LAYOUT="" SI_ZFS_POOL_VDEVS="" SI_CEPH_KIND="" SI_CEPH_POOL="" SI_CEPH_IMAGE=""
+    SI_CEPH_OBJECT_SIZE="" SI_CEPH_DATA_POOL="" SI_CEPH_POOL_TYPE="" SI_CEPH_POOL_SIZE=""
+    SI_CEPH_MIN_SIZE="" SI_DISK_JSON="" SI_DISK_NAME="" SI_VIRT_JSON="" SI_VIRT_TYPE=""
+    SI_KERNEL="" SI_OS="" SI_FIO_VERSION=""
     case "${STORAGE_DETECT:-1}" in 0|false|no|off) return 0 ;; esac
 
     if [ "$TARGET_IS_DEVICE" = true ]; then
-        fs_type=block
         SI_FS_TYPE=block
     else
         storage_fs_info "$TARGET_DIR"
-        fs_type=$SI_FS_TYPE
     fi
-    if [ "$TARGET_IS_DEVICE" = true ] || [ "$fs_type" = zfs ]; then
+    if [ "$TARGET_IS_DEVICE" = true ] || [ "$SI_FS_TYPE" = zfs ]; then
         zfs_name=$(storage_zfs_dataset "$TARGET_DIR")
         if [ -n "$zfs_name" ]; then
             if [ "$TARGET_IS_DEVICE" = true ]; then
@@ -1096,23 +1288,22 @@ detect_storage() {
         fi
     fi
     if [ -z "$SI_ZFS_JSON" ]; then storage_ceph_info "$TARGET_DIR"; fi
+    storage_disk_info
+    storage_virt_info
     if command -v fio >/dev/null 2>&1; then
-        fio_version=$(si_run fio --version | head -n 1)
+        SI_FIO_VERSION=$(si_run fio --version | head -n 1)
     fi
+    SI_KERNEL=$(uname -r 2>/dev/null) SI_OS=$(uname -s 2>/dev/null)
 
-    STORAGE_INFO=$(json_object fs_type "$fs_type" kernel "$(uname -r 2>/dev/null)" \
-        os "$(uname -s 2>/dev/null)" ioengine "${IOENGINE:-}" fio_version "${fio_version:-}" \
-        zfs:o "$SI_ZFS_JSON" ceph:o "$SI_CEPH_JSON")
-    # Keep the upload small: drop Ceph, then ZFS details when over 4 KB
+    STORAGE_INFO=$(storage_info_json)
+    # Keep the upload small: drop Ceph, disk, virtualization, then ZFS details when over 4 KB
+    for part in SI_CEPH_JSON SI_DISK_JSON SI_VIRT_JSON SI_ZFS_JSON; do
+        [ "$(LC_ALL=C; echo "${#STORAGE_INFO}")" -ge 4096 ] || break
+        printf -v "$part" '%s' ""
+        STORAGE_INFO=$(storage_info_json)
+    done
     if [ "$(LC_ALL=C; echo "${#STORAGE_INFO}")" -ge 4096 ]; then
-        SI_CEPH_JSON=""
-        STORAGE_INFO=$(json_object fs_type "$fs_type" kernel "$(uname -r 2>/dev/null)" \
-            os "$(uname -s 2>/dev/null)" ioengine "${IOENGINE:-}" fio_version "${fio_version:-}" \
-            zfs:o "$SI_ZFS_JSON")
-    fi
-    if [ "$(LC_ALL=C; echo "${#STORAGE_INFO}")" -ge 4096 ]; then
-        SI_ZFS_JSON=""
-        STORAGE_INFO=$(json_object fs_type "$fs_type" os "$(uname -s 2>/dev/null)" ioengine "${IOENGINE:-}")
+        STORAGE_INFO=$(json_object fs_type "$SI_FS_TYPE" os "$SI_OS" ioengine "${IOENGINE:-}")
     fi
 }
 
@@ -1126,6 +1317,23 @@ storage_size_matches() {
 
 # Compare DRIVE_MODEL / DRIVE_TYPE naming conventions with the detected storage.
 # Warnings only (never aborts); count in STORAGE_WARNINGS.
+# DRIVE_TYPE layout (mirror, raidz, raidz1-3, draid, draid1-3, stripe; lower case in $1)
+# against the detected pool layout: "raidz"/"draid" alone match any raidz/draid parity
+storage_pool_layout_check() {
+    local type=$1 want vdevs re='(draid[1-3]?|raidz[1-3]?|mirror|stripe)'
+    [ -n "${SI_ZFS_POOL_LAYOUT:-}" ] || return 0
+    [[ "$type" =~ $re ]] || return 0
+    want=${BASH_REMATCH[1]}
+    case "$want:$SI_ZFS_POOL_LAYOUT" in
+        raidz:raidz[123]|draid:draid*) return 0 ;;
+    esac
+    if [ "$want" = "$SI_ZFS_POOL_LAYOUT" ]; then return 0; fi
+    vdevs="${SI_ZFS_POOL_VDEVS:-?} vdevs"
+    if [ "${SI_ZFS_POOL_VDEVS:-}" = 1 ]; then vdevs="1 vdev"; fi
+    print_warning "DRIVE_TYPE '$DRIVE_TYPE' but pool $SI_ZFS_POOL is $SI_ZFS_POOL_LAYOUT ($vdevs)"
+    STORAGE_WARNINGS=$((STORAGE_WARNINGS + 1))
+}
+
 storage_plausibility_checks() {
     local model type proto want tag detected
     STORAGE_WARNINGS=0
@@ -1156,11 +1364,13 @@ storage_plausibility_checks() {
                 STORAGE_WARNINGS=$((STORAGE_WARNINGS + 1))
             fi
         done
+        # The pool is visible here, so the layout is compared even for vm- types
+        storage_pool_layout_check "$type"
     fi
 
     # ZFS pool layouts in DRIVE_TYPE on local storage that is not ZFS
     # (skipped for vm- types and network protocols: the client cannot see the server's ZFS)
-    case "$type" in *mirror*|*raidz*) ;; *) return 0 ;; esac
+    case "$type" in *mirror*|*raidz*|*draid*) ;; *) return 0 ;; esac
     case "$type" in vm-*) return 0 ;; esac
     case "$proto" in ""|local|unknown) ;; *) return 0 ;; esac
     if [ "$TARGET_IS_DEVICE" = true ]; then
@@ -1175,26 +1385,82 @@ storage_plausibility_checks() {
     STORAGE_WARNINGS=$((STORAGE_WARNINGS + 1))
 }
 
-# Compact one-line description of the detected storage for show_config
-storage_summary() {
-    local s=""
-    case "${STORAGE_DETECT:-1}" in 0|false|no|off) echo "detection disabled (STORAGE_DETECT=0)"; return 0 ;; esac
-    [ -n "${SI_FS_TYPE:-}" ] && s+=" fs=$SI_FS_TYPE"
+# Append "key=value" to SI_TOKENS (value quoted when it contains spaces; skipped if empty)
+si_token() {
+    local value=${2//[[:cntrl:]]/}  # printed to the terminal: strip escape sequences
+    if [ -z "$value" ]; then return 0; fi
+    case "$value" in
+        *" "*) SI_TOKENS+=("$1=\"$value\"") ;;
+        *) SI_TOKENS+=("$1=$value") ;;
+    esac
+}
+
+# Every detected value as summary tokens in SI_TOKENS
+storage_summary_tokens() {
+    local dmi
+    SI_TOKENS=()
+    si_token fs "${SI_FS_TYPE:-}"
     if [ -n "${SI_ZFS_DATASET:-}" ]; then
-        s+=" zfs=$SI_ZFS_DATASET"
-        [ "$SI_ZFS_TYPE" = volume ] && s+=" (zvol)"
-        [ -n "$SI_ZFS_SYNC" ] && s+=" sync=$SI_ZFS_SYNC"
-        [ -n "$SI_ZFS_RECORDSIZE" ] && s+=" recordsize=$SI_ZFS_RECORDSIZE"
-        [ -n "$SI_ZFS_VOLBLOCKSIZE" ] && s+=" volblocksize=$SI_ZFS_VOLBLOCKSIZE"
-        [ -n "$SI_ZFS_COMPRESSION" ] && s+=" compression=$SI_ZFS_COMPRESSION"
-        [ -n "$SI_ZFS_LOGBIAS" ] && s+=" logbias=$SI_ZFS_LOGBIAS"
+        si_token zfs "$SI_ZFS_DATASET"
+        if [ "${SI_ZFS_TYPE:-}" = volume ]; then SI_TOKENS+=("(zvol)"); fi
+        si_token sync "${SI_ZFS_SYNC:-}"
+        si_token recordsize "${SI_ZFS_RECORDSIZE:-}"
+        si_token volblocksize "${SI_ZFS_VOLBLOCKSIZE:-}"
+        si_token compression "${SI_ZFS_COMPRESSION:-}"
+        si_token primarycache "${SI_ZFS_PRIMARYCACHE:-}"
+        si_token logbias "${SI_ZFS_LOGBIAS:-}"
+        si_token pool "${SI_ZFS_POOL:-}"
+        si_token layout "${SI_ZFS_POOL_LAYOUT:-}"
+        si_token vdevs "${SI_ZFS_POOL_VDEVS:-}"
     fi
     if [ -n "${SI_CEPH_KIND:-}" ]; then
-        s+=" ceph=$SI_CEPH_KIND"
-        [ -n "$SI_CEPH_POOL" ] && s+=" pool=$SI_CEPH_POOL"
+        si_token ceph "$SI_CEPH_KIND"
+        si_token pool "${SI_CEPH_POOL:-}"
+        si_token image "${SI_CEPH_IMAGE:-}"
+        si_token object_size "${SI_CEPH_OBJECT_SIZE:-}"
+        si_token data_pool "${SI_CEPH_DATA_POOL:-}"
+        si_token pool_type "${SI_CEPH_POOL_TYPE:-}"
+        si_token pool_size "${SI_CEPH_POOL_SIZE:-}"
+        si_token min_size "${SI_CEPH_MIN_SIZE:-}"
     fi
-    s=${s# }
-    echo "${s:-unknown}"
+    if [ -n "${SI_DISK_NAME:-}" ]; then
+        si_token disk "$SI_DISK_NAME"
+        si_token model "${SI_DISK_MODEL:-}"
+        si_token vendor "${SI_DISK_VENDOR:-}"
+        si_token serial "${SI_DISK_SERIAL:-}"
+        si_token tran "${SI_DISK_TRAN:-}"
+        si_token driver "${SI_DISK_DRIVER:-}"
+        si_token rotational "${SI_DISK_ROTA:-}"
+        si_token size "${SI_DISK_SIZE:-}"
+    fi
+    if [ -n "${SI_VIRT_TYPE:-}" ]; then
+        si_token virt "$SI_VIRT_TYPE"
+        dmi="${SI_VIRT_VENDOR:-} ${SI_VIRT_PRODUCT:-}"
+        dmi=${dmi# }
+        si_token dmi "${dmi% }"
+    fi
+    si_token kernel "${SI_KERNEL:-}"
+    si_token ioengine "${IOENGINE:-}"
+    si_token fio "${SI_FIO_VERSION#fio-}"
+}
+
+# Description of the detected storage for show_config's "Storage:" line, wrapped at
+# 110 columns (including the 14-column label) onto lines indented by 14 spaces
+storage_summary() {
+    local out="" line="" tok pad="              "
+    case "${STORAGE_DETECT:-1}" in 0|false|no|off) echo "detection disabled (STORAGE_DETECT=0)"; return 0 ;; esac
+    storage_summary_tokens
+    for tok in ${SI_TOKENS[@]+"${SI_TOKENS[@]}"}; do
+        if [ -z "$line" ]; then
+            line=$tok
+        elif [ $(( ${#pad} + ${#line} + 1 + ${#tok} )) -gt 110 ]; then
+            out+="$line"$'\n'"$pad"
+            line=$tok
+        else
+            line+=" $tok"
+        fi
+    done
+    echo "${out}${line:-unknown}"
 }
 
 # Function to run FIO test
@@ -2585,6 +2851,7 @@ main() {
     # Load configuration (supports multiple env files and INCLUDE directives)
     # Precedence: CLI flags > env vars / .env file > hardcoded defaults
     load_env_files "${env_files[@]}"
+    clear_storage_overrides
     init_config
 
     # Check prerequisites
@@ -2862,9 +3129,11 @@ RUNTIME="60"
 # reads at the end of the test file); other errors are never retried. 0 = off
 # FIO_RETRY_MAX=2
 # Detect the storage below TARGET_DIR (filesystem, ZFS dataset/zvol properties such as
-# sync/recordsize/volblocksize, CephFS/RBD pool) and upload it as storage_info with every
-# result. Warns when DRIVE_MODEL tags (syncoff, syncall, syncstd, rs16k, vbs16k) or
-# DRIVE_TYPE (mirror, raidz*) do not match the detected ZFS settings. 0 = off
+# sync/recordsize/volblocksize and the pool layout, CephFS/RBD pool, the disk with model,
+# serial and driver, e.g. QEMU HARDDISK / drive-scsi1 / virtio_scsi, and the hypervisor
+# inside VMs) and upload it as storage_info with every result. Warns when DRIVE_MODEL tags
+# (syncoff, syncall, syncstd, rs16k, vbs16k) or DRIVE_TYPE (mirror, raidz1/2/3, draid,
+# stripe) do not match the detected ZFS settings or pool layout. 0 = off
 # STORAGE_DETECT=1
 
 # ============================================================
@@ -3016,10 +3285,12 @@ Advanced Settings (.env / environment only, all off by default):
                          rounded down to whole MiB, minimum 1M. Empty = no cap (default).
                          Adds satcap:<SZ> to the description
   STORAGE_DETECT=0|1     Detect the storage below the target (filesystem, kernel, fio version,
-                         ZFS dataset/zvol properties, CephFS/RBD pool) and upload it as
+                         ZFS dataset/zvol properties and pool layout, CephFS/RBD pool, disk
+                         model/serial/driver, hypervisor inside VMs) and upload it as
                          storage_info with every result (default: 1). Also warns when
                          DRIVE_MODEL/DRIVE_TYPE tags (syncoff, syncall, syncstd, rs16k, vbs16k,
-                         mirror, raidz*) do not match the detected ZFS settings
+                         mirror, raidz1/2/3, draid, stripe) do not match the detected ZFS
+                         settings or pool layout
 
 Precedence:
   CLI flags > environment variables > .env file > hardcoded defaults

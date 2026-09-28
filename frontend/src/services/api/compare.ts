@@ -4,7 +4,8 @@ import { authenticatedFetch, type ApiResponse } from './base';
 import type { SaturationSummary } from './testRuns';
 
 export type CompareMetric = 'iops' | 'bandwidth' | 'avg_latency' | 'p95_latency' | 'p99_latency';
-export type CompareSource = 'latest' | 'history';
+/** newest: newest comparable run per configuration (full history); latest: latest-results table only */
+export type CompareSource = 'newest' | 'latest';
 
 export interface CompareTarget {
     readonly hostname: string;
@@ -59,6 +60,11 @@ export interface CompareResponse {
     readonly strict: boolean;
     readonly rows: readonly CompareRow[];
     readonly summary: Readonly<Record<string, CompareTargetSummary>>;
+    readonly source?: string;
+    /** Configurations matching exactly vs. ignoring test size, runtime and layout */
+    readonly match_counts?: { readonly strict: number; readonly loose: number };
+    /** Explanation when strict matching finds fewer configurations than loose matching */
+    readonly hint?: string | null;
 }
 
 export interface CompareQuery {
@@ -89,7 +95,7 @@ const getJson = async <T>(endpoint: string, signal?: AbortSignal): Promise<ApiRe
 };
 
 export const fetchCompareTargets = (source: CompareSource, signal?: AbortSignal) =>
-    getJson<{ targets: CompareTarget[] }>(`/api/compare/targets?source=${source}`, signal);
+    getJson<{ targets: CompareTarget[] }>(`/api/compare/targets?source=${source === 'latest' ? 'latest' : 'history'}`, signal);
 
 export const buildCompareParams = (query: CompareQuery): URLSearchParams => {
     const params = new URLSearchParams();

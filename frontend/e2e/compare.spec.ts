@@ -213,3 +213,49 @@ test.describe('compare page: saturation tab', () => {
         await expect.poll(() => thresholds.at(-1)).toBe('3');
     });
 });
+
+test.describe('compare page hints', () => {
+    test.skip(!admin, 'E2E_USER / E2E_PASSWORD not set');
+
+    test('empty strict result on the latest table explains why and offers the newest comparable runs', async ({ page }) => {
+        const sources: string[] = [];
+        await page.route(/\/api\/compare\/targets/, (route) =>
+            route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ targets }) }),
+        );
+        await page.route(/\/api\/compare\?/, (route) => {
+            const source = new URL(route.request().url()).searchParams.get('source') ?? '';
+            sources.push(source);
+            const empty = source === 'latest';
+            const body = empty
+                ? { ...comparison(true), rows: [], match_counts: { strict: 0, loose: 3 }, hint: '0 configurations match exactly, 3 match when test size, runtime and file layout are ignored.' }
+                : { ...comparison(true), match_counts: { strict: 3, loose: 3 }, hint: null };
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+        });
+        await login(page, admin!);
+        await page.goto(compareUrl('source=latest'));
+
+        await expect(page.getByText('0 configurations match exactly, 3 match')).toBeVisible();
+        await page.getByRole('button', { name: 'Use newest comparable runs' }).click();
+        await expect(page).not.toHaveURL(/source=latest/);
+        await expect(page.getByText('+25').first()).toBeVisible();
+        expect(sources).toContain('newest');
+    });
+
+    test('shows the hint above results when strict matching drops configurations', async ({ page }) => {
+        await page.route(/\/api\/compare\/targets/, (route) =>
+            route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ targets }) }),
+        );
+        await page.route(/\/api\/compare\?/, (route) =>
+            route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ ...comparison(true), match_counts: { strict: 3, loose: 5 }, hint: '3 configurations match exactly, 5 match when ignoring layout.' }),
+            }),
+        );
+        await login(page, admin!);
+        await page.goto(compareUrl());
+        await expect(page.getByRole('status').filter({ hasText: '3 configurations match exactly' })).toBeVisible();
+        await page.getByRole('button', { name: 'Turn strict matching off' }).click();
+        await expect(page).toHaveURL(/strict=0/);
+    });
+});

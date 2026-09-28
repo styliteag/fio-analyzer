@@ -2,56 +2,13 @@
 # Tests for storage detection (STORAGE_INFO), plausibility warnings and the
 # storage_info upload field of fio-test.sh
 # (run: bash scripts/tests/test_storage_info.sh)
-# Loads only the needed functions from the script. External commands (zfs, ceph, rbd,
-# getfattr, findmnt, uname, fio, df, mount, curl) are bash function stubs; si_run calls
-# functions directly (without timeout), so the stubs are used even where timeout exists.
-# MISSING lists commands that `command -v` must report as not installed.
+# Setup, stubs and fixtures: storage_test_lib.bash (df, mount and curl are stubbed here).
+# Pool layout, disk and virtualization detection: test_storage_hw.sh
 
 # shellcheck disable=SC2034,SC2329  # config vars and stubs are used by the sourced functions
 
-set -u
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/fio-test.sh"
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
-
-FUNCS="fio_size_to_bytes json_escape json_object si_run si_safe_arg storage_fs_info storage_zfs_dataset
-storage_zfs_props storage_rbd_device storage_ceph_pool storage_ceph_info detect_storage
-storage_size_matches storage_plausibility_checks storage_summary upload_results"
-SED_EXPR=""
-for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
-# shellcheck source=/dev/null
-source <(sed -n "$SED_EXPR" "$SCRIPT")
-for f in $FUNCS; do
-    declare -F "$f" >/dev/null || { echo "function $f not found in $SCRIPT"; exit 1; }
-done
-
-print_status() { :; }
-print_success() { :; }
-print_error() { :; }
-print_warning() { echo "WARN: $*" >>"$TMP/warnings"; }
-warn_count() { grep -c "$1" "$TMP/warnings" 2>/dev/null || true; }
-
-MISSING=""
-command() {
-    if [ "$1" = -v ] && [[ " $MISSING " == *" $2 "* ]]; then return 1; fi
-    builtin command "$@"
-}
-
-failures=0
-check() {  # check <description> <expected> <actual>
-    if [ "$2" = "$3" ]; then
-        echo "ok   - $1"
-    else
-        echo "FAIL - $1 (expected '$2', got '$3')"
-        failures=$((failures + 1))
-    fi
-}
-valid_json() {  # prints ok when $1 parses as a JSON object
-    python3 -c 'import json,sys; o=json.loads(sys.argv[1]); assert isinstance(o, dict); print("ok")' "$1" 2>/dev/null || echo "invalid"
-}
-json_get() {  # json_get <json> <python path expression, e.g. ["zfs"]["sync"]>
-    python3 -c "import json,sys; print(json.loads(sys.argv[1])$2)" "$1" 2>/dev/null || echo "<none>"
-}
+# shellcheck source=storage_test_lib.bash
+source "$(dirname "$0")/storage_test_lib.bash"
 
 # --- json_escape / json_object ----------------------------------------------------
 check "plain string" 'abc' "$(json_escape 'abc')"
@@ -70,70 +27,12 @@ nasty=$'we"ird\\na\nme\t<@x>'
 check "escaped object is valid JSON" ok "$(valid_json "$(json_object name "$nasty")")"
 check "escaped value round-trips" "$nasty" "$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["name"], end="")' "$(json_object name "$nasty")")"
 
-# --- common stubs for detect_storage ------------------------------------------------
-reset_stubs() {
-    MISSING="timeout gtimeout"
-    FINDMNT_OUT="" ZFS_LIST_DIR="" ZFS_LIST_VOLS="" ZFS_PROPS="" GETFATTR_OUT=""
-    CEPH_DETAIL="" CEPH_SIZE="" CEPH_MIN_SIZE="" RBD_INFO="" RBD_SHOWMAPPED=""
-    UNAME_S=Linux
-    : >"$TMP/calls"
-}
-uname() { case "$1" in -s) echo "$UNAME_S" ;; -r) echo "6.8.0-test" ;; esac; }
-fio() { echo "fio $*" >>"$TMP/calls"; echo "fio-3.36"; }
-findmnt() { echo "findmnt $*" >>"$TMP/calls"; [ -n "$FINDMNT_OUT" ] && echo "$FINDMNT_OUT"; }
-stat() { echo "stat $*" >>"$TMP/calls"; return 1; }
-zfs() {
-    echo "zfs $*" >>"$TMP/calls"
-    case "$1 $2" in
-        "list -H")
-            if [[ " $* " == *" -t volume "* ]]; then
-                [ -n "$ZFS_LIST_VOLS" ] && echo "$ZFS_LIST_VOLS"
-            else
-                [ -n "$ZFS_LIST_DIR" ] && echo "$ZFS_LIST_DIR"
-            fi
-            ;;
-        "get -H") [ -n "$ZFS_PROPS" ] && printf '%s\n' "$ZFS_PROPS" ;;
-    esac
-    return 0
-}
-getfattr() { echo "getfattr $*" >>"$TMP/calls"; [ -n "$GETFATTR_OUT" ] && echo "$GETFATTR_OUT"; }
-ceph() {
-    echo "ceph $*" >>"$TMP/calls"
-    case "$*" in
-        "osd pool ls detail") [ -n "$CEPH_DETAIL" ] && printf '%s\n' "$CEPH_DETAIL" ;;
-        "osd pool get "*" size") [ -n "$CEPH_SIZE" ] && echo "size: $CEPH_SIZE" ;;
-        "osd pool get "*" min_size") [ -n "$CEPH_MIN_SIZE" ] && echo "min_size: $CEPH_MIN_SIZE" ;;
-    esac
-    return 0
-}
-rbd() {
-    echo "rbd $*" >>"$TMP/calls"
-    case "$1" in
-        info) [ -n "$RBD_INFO" ] && printf '%s\n' "$RBD_INFO" ;;
-        showmapped) [ -n "$RBD_SHOWMAPPED" ] && printf '%s\n' "$RBD_SHOWMAPPED" ;;
-    esac
-    return 0
-}
-
-ZFS_FS_PROPS=$'sync\tdisabled\nrecordsize\t16K\nvolblocksize\t-\ncompression\tlz4\nprimarycache\tall\nlogbias\tlatency'
-ZFS_VOL_PROPS=$'sync\talways\nrecordsize\t-\nvolblocksize\t64K\ncompression\toff\nprimarycache\tmetadata\nlogbias\tthroughput'
-CEPH_DETAIL_OUT="pool 1 '.mgr' replicated size 3 min_size 2 crush_rule 0 object_hash rjenkins
-pool 2 'rbdpool' replicated size 3 min_size 2 crush_rule 0 object_hash rjenkins pg_num 32
-pool 3 'ecdata' erasure profile k2m1 size 3 min_size 2 crush_rule 1
-pool 4 'cephfs_data' replicated size 2 min_size 1 crush_rule 0"
-
-STORAGE_DETECT=1 IOENGINE=io_uring TARGET_IS_DEVICE=false
-TARGET_DIR="$TMP/target"
-mkdir -p "$TARGET_DIR"
-SI_ZVOL_DIR="$TMP/zvol" SI_RBD_DEV_DIR="$TMP/rbddev" SI_RBD_SYSFS="$TMP/sysrbd"
-mkdir -p "$TMP/dev" "$SI_ZVOL_DIR/tank" "$SI_RBD_DEV_DIR/rbdpool" "$SI_RBD_SYSFS/0"
-
 # --- ZFS filesystem ------------------------------------------------------------------
 reset_stubs
-FINDMNT_OUT="zfs    tank/fio" ZFS_LIST_DIR="tank/fio" ZFS_PROPS="$ZFS_FS_PROPS"
+FINDMNT_OUT="zfs    tank/fio" ZFS_LIST_DIR="tank/fio" ZFS_PROPS="$ZFS_FS_PROPS" ZPOOL_STATUS="$ZPOOL_MIRROR"
 detect_storage
 check "zfs filesystem: exact JSON" \
-    '{"fs_type":"zfs","kernel":"6.8.0-test","os":"Linux","ioengine":"io_uring","fio_version":"fio-3.36","zfs":{"dataset":"tank/fio","type":"filesystem","sync":"disabled","recordsize":"16K","compression":"lz4","primarycache":"all","logbias":"latency"}}' \
+    '{"fs_type":"zfs","kernel":"6.8.0-test","os":"Linux","ioengine":"io_uring","fio_version":"fio-3.36","zfs":{"dataset":"tank/fio","type":"filesystem","sync":"disabled","recordsize":"16K","compression":"lz4","primarycache":"all","logbias":"latency","pool":"tank","pool_layout":"mirror","pool_vdevs":1}}' \
     "$STORAGE_INFO"
 check "zfs filesystem: valid JSON" ok "$(valid_json "$STORAGE_INFO")"
 check "zfs filesystem: volblocksize '-' skipped" "<none>" "$(json_get "$STORAGE_INFO" '["zfs"]["volblocksize"]')"
@@ -145,10 +44,10 @@ detect_storage
 check "zfs dataset falls back to the mount source" tank/from-mount "$(json_get "$STORAGE_INFO" '["zfs"]["dataset"]')"
 
 reset_stubs
-MISSING="timeout gtimeout zfs"
+MISSING="timeout gtimeout zfs zpool"
 FINDMNT_OUT="zfs tank/nocli"
 detect_storage
-check "zfs without CLI: dataset and type only" '{"dataset":"tank/nocli","type":"filesystem"}' \
+check "zfs without CLI: dataset, type and pool name only" '{"dataset":"tank/nocli","type":"filesystem","pool":"tank"}' \
     "$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["zfs"], separators=(",",":")))' "$STORAGE_INFO")"
 
 reset_stubs
@@ -257,6 +156,7 @@ detect_storage
 check "darwin: fs type from mount" apfs "$(json_get "$STORAGE_INFO" '["fs_type"]')"
 check "darwin: os" Darwin "$(json_get "$STORAGE_INFO" '["os"]')"
 check "darwin: stat not used" 0 "$(grep -c '^stat' "$TMP/calls")"
+check "darwin: no lsblk/zpool/systemd-detect-virt" 0 "$(grep -Ec '^(lsblk|zpool|systemd-detect-virt)' "$TMP/calls")"
 
 reset_stubs
 MISSING="timeout gtimeout findmnt"
@@ -281,9 +181,16 @@ STORAGE_DETECT=1
 
 # --- storage_summary -----------------------------------------------------------------------------
 reset_stubs
-FINDMNT_OUT="zfs tank/fio" ZFS_LIST_DIR="tank/fio" ZFS_PROPS="$ZFS_FS_PROPS"
+FINDMNT_OUT="zfs tank/fio" ZFS_LIST_DIR="tank/fio" ZFS_PROPS="$ZFS_FS_PROPS" ZPOOL_STATUS="$ZPOOL_MIRROR"
 detect_storage
-check "summary: zfs filesystem" "fs=zfs zfs=tank/fio sync=disabled recordsize=16K compression=lz4 logbias=latency" "$(storage_summary)"
+SUMMARY=$(storage_summary)
+check "summary: zfs filesystem, all values in order" \
+    "fs=zfs zfs=tank/fio sync=disabled recordsize=16K compression=lz4 primarycache=all logbias=latency pool=tank layout=mirror vdevs=1 kernel=6.8.0-test ioengine=io_uring fio=3.36" \
+    "$(printf '%s' "$SUMMARY" | tr '\n' ' ' | tr -s ' ')"
+check "summary: zfs filesystem: every line fits 110 columns with the label" 0 \
+    "$(printf 'Storage:      %s\n' "$SUMMARY" | awk 'length > 110' | wc -l | tr -d ' ')"
+check "summary: zfs filesystem: continuation lines indented 14 spaces" "$(( $(printf '%s\n' "$SUMMARY" | wc -l) - 1 ))" \
+    "$(printf '%s\n' "$SUMMARY" | sed -n '2,$p' | grep -c '^              [^ ]')"
 
 # --- storage_size_matches ------------------------------------------------------------------------
 storage_size_matches 16K 16k; check "16K == 16k" 0 "$?"
@@ -300,7 +207,7 @@ plaus() {  # plaus <drive_model> <drive_type>; uses SI_* set by the caller
 }
 zfs_fs() {  # zfs_fs <sync> <recordsize>
     SI_FS_TYPE=zfs SI_ZFS_DATASET=tank/fio SI_ZFS_TYPE=filesystem SI_ZFS_SYNC=$1
-    SI_ZFS_RECORDSIZE=$2 SI_ZFS_VOLBLOCKSIZE=""
+    SI_ZFS_RECORDSIZE=$2 SI_ZFS_VOLBLOCKSIZE="" SI_ZFS_POOL="" SI_ZFS_POOL_LAYOUT="" SI_ZFS_POOL_VDEVS=""
 }
 PROTOCOL=local TARGET_IS_DEVICE=false
 
@@ -345,7 +252,7 @@ plaus users16k mirror
 check "rs inside a word is not a recordsize tag" 0 "$STORAGE_WARNINGS"
 
 SI_FS_TYPE=block SI_ZFS_DATASET=tank/vol SI_ZFS_TYPE=volume SI_ZFS_SYNC=standard
-SI_ZFS_RECORDSIZE="" SI_ZFS_VOLBLOCKSIZE=16K
+SI_ZFS_RECORDSIZE="" SI_ZFS_VOLBLOCKSIZE=16K SI_ZFS_POOL="" SI_ZFS_POOL_LAYOUT="" SI_ZFS_POOL_VDEVS=""
 TARGET_IS_DEVICE=true
 plaus tank-vbs64k raidz1
 check "vbs64k with volblocksize=16K warns" 1 "$STORAGE_WARNINGS"
@@ -411,13 +318,9 @@ unset -f curl date
 # --- values starting with '-' are never passed to zfs/ceph (option injection) -------
 : >"$TMP/calls"
 storage_zfs_props "-o" filesystem
-check "zfs props: dash value not passed to zfs" 0 "$(grep -c '^zfs ' "$TMP/calls")"
+check "zfs props: dash value not passed to zfs/zpool" 0 "$(grep -Ec '^(zfs|zpool) ' "$TMP/calls")"
 : >"$TMP/calls"
 storage_ceph_pool "--cluster=evil"
 check "ceph pool: dash value not passed to ceph" 0 "$(grep -c '^ceph ' "$TMP/calls")"
 
-if [ "$failures" -gt 0 ]; then
-    echo "$failures test(s) failed"
-    exit 1
-fi
-echo "all tests passed"
+finish

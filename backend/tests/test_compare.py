@@ -173,7 +173,7 @@ def test_requires_authentication(basic_db: sqlite3.Connection) -> None:
 
 
 def test_row_cap_returns_413(basic_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(compare, "MAX_ROWS_PER_TARGET", 0)
+    monkeypatch.setattr(compare, "ROW_LIMITS", {"test_runs": 0, "test_runs_all": 0})
     response = call(basic_db, targets("zfs", "ceph"))
     assert response.status_code == 413
 
@@ -381,7 +381,7 @@ def test_history_source_picks_newest() -> None:
     ]
     connection = make_db(latest, history)
 
-    latest_body = call(connection, targets("a", "b")).json()
+    latest_body = call(connection, targets("a", "b", source="latest")).json()
     assert latest_body["rows"][0]["results"]["b"]["iops"] == 100.0
 
     history_body = call(connection, targets("a", "b", source="history")).json()
@@ -473,3 +473,58 @@ def test_targets_lists_hierarchy_combinations_with_counts() -> None:
 
 def test_targets_requires_authentication() -> None:
     assert call(make_db([row("a")]), [], user=None, path="/api/compare/targets").status_code == 401
+
+
+# --- default source: newest comparable run per target; hints when strict finds less ---------------------
+
+
+def replaced_by_prefill_db() -> sqlite3.Connection:
+    """The latest table only keeps a's newer prefill run; history still has a's plain run."""
+    latest = [row("a", description="x,prefill:1", iops=900.0, timestamp="2026-09-03T10:00:00+00:00"), row("b", iops=1000.0)]
+    history = [
+        row("a", iops=800.0, timestamp="2026-09-01T10:00:00+00:00"),
+        row("a", description="x,prefill:1", iops=900.0, timestamp="2026-09-03T10:00:00+00:00"),
+        row("b", iops=1000.0),
+    ]
+    return make_db(latest, history)
+
+
+def test_default_source_uses_newest_comparable_run_from_history() -> None:
+    body = call(replaced_by_prefill_db(), targets("a", "b")).json()
+    assert body["source"] == "newest"
+    [compared] = body["rows"]
+    assert compared["results"]["a"]["iops"] == 800.0
+    assert compared["diff_pct"]["b"]["iops"] == 25.0
+
+
+def test_latest_source_keeps_old_behaviour_and_explains_empty_result() -> None:
+    body = call(replaced_by_prefill_db(), targets("a", "b", source="latest")).json()
+    assert body["rows"] == []
+    assert body["match_counts"] == {"strict": 0, "loose": 1}
+    assert "source=newest" in body["hint"] and "strict=false" in body["hint"]
+
+
+def test_no_hint_when_strict_finds_everything() -> None:
+    body = call(make_db([row("a"), row("b")]), targets("a", "b")).json()
+    assert body["match_counts"] == {"strict": 1, "loose": 1}
+    assert body["hint"] is None
+
+
+def test_history_is_an_alias_of_newest() -> None:
+    assert call(replaced_by_prefill_db(), targets("a", "b", source="history")).json()["rows"][0]["results"]["a"]["iops"] == 800.0
+
+
+def test_total_row_cap_across_targets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Many wide targets must not pull an unbounded number of history rows into memory."""
+    monkeypatch.setattr(compare, "MAX_TOTAL_ROWS", 3)
+    db = make_db([row("a"), row("a", block_size="64K"), row("b"), row("b", block_size="64K")])
+    response = call(db, targets("a", "b"))
+    assert response.status_code == 413
+    assert "all targets" in response.json()["detail"]
+
+
+def test_compare_handler_runs_in_threadpool() -> None:
+    """sqlite work must not block the event loop."""
+    import inspect
+
+    assert not inspect.iscoroutinefunction(compare.compare_targets)

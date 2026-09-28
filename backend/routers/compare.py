@@ -25,8 +25,14 @@ router = APIRouter()
 MIN_TARGETS = 2
 MAX_TARGETS = 10
 MAX_ROWS_PER_TARGET = 5000
+MAX_HISTORY_ROWS_PER_TARGET = 50000
+MAX_TOTAL_ROWS = 200000  # across all targets of one request, bounds memory for wide targets
 
-SOURCE_TABLES = {"latest": "test_runs", "history": "test_runs_all"}
+# newest (default): newest comparable run per configuration from the full history.
+# latest: only the test_runs table, which keeps one row per host/config regardless of layout tags,
+# so a newer prefill run hides the plain run there and strict matching can come back empty.
+SOURCE_TABLES = {"newest": "test_runs_all", "history": "test_runs_all", "latest": "test_runs"}
+ROW_LIMITS = {"test_runs": MAX_ROWS_PER_TARGET, "test_runs_all": MAX_HISTORY_ROWS_PER_TARGET}
 HIERARCHY_COLUMNS = ("hostname", "protocol", "drive_type", "drive_model")
 KEY_COLUMNS = ("read_write_pattern", "block_size", "sync", "direct", "num_jobs", "iodepth")
 # Strict matching also requires identical test size, runtime and file layout (prefill/fileperjob/satcap tags),
@@ -110,11 +116,12 @@ def fetch_target_rows(db: sqlite3.Connection, table: str, label: str, shared: Tu
     params = [*params, *shared[1]]
     where = " AND ".join(conditions) if conditions else "1 = 1"
     sql = f"SELECT {', '.join(SELECT_COLUMNS)} FROM {table} WHERE {where} LIMIT ?"
-    cursor = db.execute(sql, [*params, MAX_ROWS_PER_TARGET + 1])
+    limit = ROW_LIMITS[table]
+    cursor = db.execute(sql, [*params, limit + 1])
     names = [description[0] for description in cursor.description]
     rows = [dict(zip(names, values)) for values in cursor.fetchall()]
-    if len(rows) > MAX_ROWS_PER_TARGET:
-        raise HTTPException(status_code=413, detail=f"Target {label!r} matches more than {MAX_ROWS_PER_TARGET} rows; narrow it or add filters")
+    if len(rows) > limit:
+        raise HTTPException(status_code=413, detail=f"Target {label!r} matches more than {limit} rows; narrow it or add filters")
     if not rows:
         raise HTTPException(status_code=404, detail=f"No test runs found for target {label!r}")
     return rows
@@ -253,6 +260,34 @@ def build_comparison(
     return {"baseline": labels[0], "targets": labels, "strict": strict, "rows": rows, "summary": build_summary(rows, labels)}
 
 
+def _comparable_keys(labels: List[str], cells: Dict[str, Dict[ConfigKey, Dict[str, Any]]]) -> int:
+    baseline = set(cells[labels[0]])
+    return len(baseline & set().union(*(cells[label] for label in labels[1:])))
+
+
+def match_counts(
+    labels: List[str], rows: Dict[str, List[Dict[str, Any]]], cells: Dict[str, Dict[ConfigKey, Dict[str, Any]]], strict: bool
+) -> Dict[str, int]:
+    """How many configurations match strictly vs. loosely (pattern/bs/sync/direct/jobs/iodepth only)."""
+    loose_cells = {label: newest_per_config(target_rows, False) for label, target_rows in rows.items()}
+    loose = _comparable_keys(labels, loose_cells)
+    strict_cells = cells if strict else {label: newest_per_config(target_rows, True) for label, target_rows in rows.items()}
+    strict_count = _comparable_keys(labels, strict_cells)
+    return {"strict": strict_count, "loose": loose}
+
+
+def comparison_hint(counts: Dict[str, int], source: str, strict: bool) -> Optional[str]:
+    """Explain why strict matching found fewer configurations than loose matching."""
+    if not strict or counts["strict"] >= counts["loose"]:
+        return None
+    advice = ["source=newest to use the newest comparable run of each target"] if source == "latest" else []
+    advice.append("strict=false to compare anyway (differences are listed per row)")
+    return (
+        f"{counts['strict']} configurations match exactly, {counts['loose']} match when test size, runtime and file layout "
+        f"(prefill/fileperjob/satcap) are ignored. Try " + " or ".join(advice) + "."
+    )
+
+
 COMPARE_EXAMPLE = {
     "baseline": "zfs-host|local",
     "targets": ["zfs-host|local", "ceph-node1|*|*|rbd-pool"],
@@ -306,7 +341,7 @@ COMPARE_EXAMPLE = {
     summary="List Comparable Targets",
     description="All Host-Protocol-Type-Model combinations with test runs, as ready-to-use `target` values for /api/compare.",
 )
-async def list_targets(
+def list_targets(
     source: str = Query("latest", description="`latest` (test_runs) or `history` (test_runs_all)"),
     user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
@@ -348,13 +383,17 @@ async def list_targets(
         401: {"description": "Authentication required"},
         403: {"description": "Read access required"},
         404: {"description": "A target matches no test runs"},
-        413: {"description": f"A target matches more than {MAX_ROWS_PER_TARGET} rows"},
+        413: {"description": f"A target matches more than {MAX_ROWS_PER_TARGET} (latest) / {MAX_HISTORY_ROWS_PER_TARGET} (newest, history) rows"},
     },
 )
 @router.get("/", include_in_schema=False)  # Handle with trailing slash but hide from docs
-async def compare_targets(
+def compare_targets(
     target: Optional[List[str]] = Query(None, description="Repeatable, 2-10: hostname|protocol|drive_type|drive_model (trailing parts optional, `*` = any)"),
-    source: str = Query("latest", description="`latest` (test_runs) or `history` (test_runs_all, newest row per configuration)"),
+    source: str = Query(
+        "newest",
+        description="`newest` (default): newest comparable run per configuration from the full history; "
+        "`history`: same; `latest`: only the latest-results table (a newer run with another layout hides older ones)",
+    ),
     tags: Optional[str] = Query(None, description="Comma-separated description tags, e.g. prefill:1"),
     since: Optional[str] = Query(None, description="Only runs at or after this date/datetime"),
     until: Optional[str] = Query(None, description="Only runs up to this date (inclusive) or datetime"),
@@ -379,8 +418,17 @@ async def compare_targets(
         raise _bad_request(f"Invalid source {source[:40]!r}: expected one of {', '.join(SOURCE_TABLES)}")
     shared = build_shared_filters(tags, since, until, run_uuid, patterns, block_sizes, syncs)
     try:
-        cells = {label: newest_per_config(fetch_target_rows(db, SOURCE_TABLES[source], label, shared), strict) for label in labels}
+        rows: Dict[str, List[Dict[str, Any]]] = {}
+        for label in labels:
+            rows[label] = fetch_target_rows(db, SOURCE_TABLES[source], label, shared)
+            if sum(len(target_rows) for target_rows in rows.values()) > MAX_TOTAL_ROWS:
+                raise HTTPException(
+                    status_code=413, detail=f"The targets match more than {MAX_TOTAL_ROWS} rows across all targets; narrow them or add filters"
+                )
     except sqlite3.Error as error:
         log_error("Error computing comparison", error, {"user": user.username})
         raise HTTPException(status_code=500, detail="Failed to compute comparison")
-    return build_comparison(labels, cells, include_incomplete, strict)
+    cells = {label: newest_per_config(target_rows, strict) for label, target_rows in rows.items()}
+    comparison = build_comparison(labels, cells, include_incomplete, strict)
+    counts = match_counts(labels, rows, cells, strict)
+    return {**comparison, "source": source, "match_counts": counts, "hint": comparison_hint(counts, source, strict)}

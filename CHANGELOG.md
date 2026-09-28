@@ -8,7 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **Comparison**: responses include `match_counts` (strict vs. loose) and a `hint` when strict matching finds fewer configurations, e.g. "0 configurations match exactly, 26 match when test size, runtime and file layout are ignored"; the Compare page shows it with one-click fixes
+- **fio-test.sh**: storage detection also records the ZFS pool layout (`pool`, `pool_layout` mirror/raidz1-3/draid/stripe/mixed, `pool_vdevs`) and warns when `DRIVE_TYPE` contradicts it (e.g. `mirror` on a raidz2 pool)
+- **fio-test.sh**: storage detection records the disk below the target (model, vendor, serial, transport, driver such as virtio_scsi/virtio_blk/nvme, rotational, size) and, inside VMs, the hypervisor (`systemd-detect-virt`, DMI vendor/product), so VM runs can be told apart without relying on `DRIVE_MODEL`
+
+### Changed
+- **fio-test.sh**: the `Storage:` header line shows every detected value (also primarycache, pool layout, disk, hypervisor, kernel, ioengine, fio version) and wraps at 110 columns
+- **Comparison**: the default source is now `newest` - the newest comparable run of each target from the full history. With the old default (`latest`, still available) a newer run with another layout (e.g. prefill) hid the older comparable run, so strict comparisons could come back empty
+### Security
+- **fio-test.sh**: values from sysfs, DMI and storage tools are stripped of control characters before they are printed (no terminal escape sequences from a crafted disk model or VM product name); device names from `lsblk`/sysfs must be plain names; `SI_*` detection variables can no longer be set from `.env`
+- **Comparison**: the handler runs in a worker thread and a request is limited to 200,000 rows across all targets (50,000 per target from the history)
 
 ## [0.11.1] - 2026-09-28
 
