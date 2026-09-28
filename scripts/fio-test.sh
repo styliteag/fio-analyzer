@@ -220,6 +220,9 @@ define_defaults() {
     KEEP_JSON_DIR="${KEEP_JSON_DIR:-}"
     FILE_PER_JOB="${FILE_PER_JOB:-0}"
     PREFILL="${PREFILL:-0}"
+    # Retries for transient EAGAIN errors (io_uring can return EAGAIN at the end of a file)
+    FIO_RETRY_MAX="${FIO_RETRY_MAX:-2}"
+    FIO_RETRY_COUNT=0
 }
 
 # Apply CLI overrides (CLI flags take highest priority over env/.env/defaults)
@@ -369,6 +372,11 @@ validate_advanced_options() {
         print_warning "PREFILL/FILE_PER_JOB only apply to directory targets - ignored for block device $TARGET_DIR"
         FILE_PER_JOB=0
         PREFILL=0
+    fi
+
+    if ! [[ "$FIO_RETRY_MAX" =~ ^[0-9]+$ ]] || [ "${#FIO_RETRY_MAX}" -gt 2 ] || [ "$FIO_RETRY_MAX" -gt 10 ]; then
+        print_warning "FIO_RETRY_MAX must be a number from 0 to 10 (got '$FIO_RETRY_MAX'), using 2"
+        FIO_RETRY_MAX=2
     fi
 
     FIO_EXTRA_ARGS_ARR=()
@@ -838,6 +846,42 @@ keep_json_copy() {
     cp "$json_file" "$dest" || print_warning "Failed to copy $json_file to $KEEP_JSON_DIR"
 }
 
+# First transient fio error line in a stderr file: EAGAIN (e.g. io_uring reads ending at the end of the file)
+transient_fio_error_line() {
+    grep -m1 -E 'Resource temporarily unavailable|EAGAIN|err=11/' "$1" 2>/dev/null
+}
+
+is_transient_fio_error() {
+    [ -n "$(transient_fio_error_line "$1")" ]
+}
+
+# Run fio with the given arguments; retry up to FIO_RETRY_MAX times on transient EAGAIN errors.
+# Usage: run_fio_with_retry <label> <error_file> <fio args...>  (stderr of the last attempt stays in error_file)
+run_fio_with_retry() {
+    local label=$1 error_file=$2
+    shift 2
+    local attempt=0 rc
+    while :; do
+        fio "$@" 2>"$error_file" && return 0
+        rc=$?
+        if [ "$attempt" -ge "$FIO_RETRY_MAX" ] || ! is_transient_fio_error "$error_file"; then
+            return "$rc"
+        fi
+        attempt=$((attempt + 1))
+        FIO_RETRY_COUNT=$((FIO_RETRY_COUNT + 1))
+        print_warning "Transient fio error in ${label}, retry ${attempt}/${FIO_RETRY_MAX} in 5s: $(transient_fio_error_line "$error_file" | tr -d '\000-\037\\')"
+        sleep 5
+    done
+}
+
+# Report how many fio runs needed a retry, so the underlying problem stays visible
+print_retry_summary() {
+    if [ "$FIO_RETRY_COUNT" -gt 0 ]; then
+        print_warning "Transient fio errors (EAGAIN) were retried ${FIO_RETRY_COUNT} time(s). Results are from the successful attempt."
+        print_warning "  If this keeps happening with io_uring, try IOENGINE=libaio."
+    fi
+}
+
 run_fio_test() {
     local block_size=$1
     local pattern=$2
@@ -852,7 +896,8 @@ run_fio_test() {
     print_status "Running FIO test: ${pattern} with ${block_size} block size, ${num_jobs} jobs"
     
     # Capture stderr to detect specific errors
-    local error_file="/tmp/fio_error_$$_$(date +%s).txt"
+    local error_file
+    error_file=$(mktemp "${TMPDIR:-/tmp}/fio_error.XXXXXX") || return 1
     
     # Determine file target based on target type (device vs directory) and PREFILL/FILE_PER_JOB
     local data_base
@@ -863,7 +908,8 @@ run_fio_test() {
         return 1
     fi
 
-    fio --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
+    run_fio_with_retry "${pattern} ${block_size}" "$error_file" \
+        --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
         --description="${DESCRIPTION}" \
         --rw="$pattern" \
         --bs="$block_size" \
@@ -881,7 +927,7 @@ run_fio_test() {
         --ioengine="$IOENGINE" \
         --norandommap \
         --randrepeat=0 \
-        --thread "${FIO_EXTRA_ARGS_ARR[@]}" 2>"$error_file"
+        --thread "${FIO_EXTRA_ARGS_ARR[@]}"
 
     local fio_exit_code=$?
 
@@ -1113,7 +1159,8 @@ run_fio_step() {
     local total_qd=$((iodepth * num_jobs))
     print_step "Running ${pattern} bs=${block_size} | iodepth=${iodepth} numjobs=${num_jobs} (Total QD: ${total_qd})"
 
-    local error_file="/tmp/fio_sat_error_$$_$(date +%s).txt"
+    local error_file
+    error_file=$(mktemp "${TMPDIR:-/tmp}/fio_sat_error.XXXXXX") || return 1
 
     local data_base
     data_base=$(data_file_base "fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}" "$SAT_TEST_SIZE")
@@ -1122,7 +1169,8 @@ run_fio_step() {
         return 1
     fi
 
-    fio --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
+    run_fio_with_retry "${pattern} bs=${block_size} QD=${total_qd}" "$error_file" \
+        --name="hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL}" \
         --description="${DESCRIPTION}" \
         --rw="$pattern" \
         --bs="$block_size" \
@@ -1140,7 +1188,7 @@ run_fio_step() {
         --ioengine="$IOENGINE" \
         --norandommap \
         --randrepeat=0 \
-        --thread "${FIO_EXTRA_ARGS_ARR[@]}" 2>"$error_file"
+        --thread "${FIO_EXTRA_ARGS_ARR[@]}"
 
     local fio_exit_code=$?
 
@@ -1794,6 +1842,7 @@ run_all_tests() {
     echo "Total tests:      $total_tests"
     echo "Successful:       $successful_uploads"
     echo "Failed:           $failed_uploads"
+    echo "EAGAIN retries:   $FIO_RETRY_COUNT"
     
     # Display IOPS statistics if available
     if [ $iops_count -gt 0 ]; then
@@ -2117,8 +2166,10 @@ main() {
             saturation_loop "$sat_bs"
             print_saturation_summary "$sat_bs"
         done
+        print_retry_summary
     else
         if run_all_tests; then
+            print_retry_summary
             print_success "Performance testing completed successfully!"
         else
             print_error "Performance testing completed with errors."
@@ -2259,6 +2310,9 @@ RUNTIME="60"
 # 1 = write test files once with incompressible data and reuse them across tests
 #     (realistic reads on ext4/xfs fallocated files and ZFS compression; directories only)
 # PREFILL=0
+# Retries when fio fails with a transient EAGAIN error (io_uring can return it on
+# reads at the end of the test file); other errors are never retried. 0 = off
+# FIO_RETRY_MAX=2
 
 # ============================================================
 # Saturation Test Mode (use with --saturation flag)
@@ -2394,6 +2448,8 @@ Advanced Settings (.env / environment only, all off by default):
   PREFILL=0|1            Write test files once with incompressible data and reuse
                          them across tests; removed at the end (directory targets only)
                          PREFILL/FILE_PER_JOB add prefill:1 / fileperjob:1 to the description
+  FIO_RETRY_MAX=N        Retry a fio run up to N times when it fails with a transient
+                         EAGAIN error (default: 2, 0 = off); other errors are not retried
 
 Precedence:
   CLI flags > environment variables > .env file > hardcoded defaults

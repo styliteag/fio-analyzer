@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **fio-test.sh**: fio runs that fail with a transient EAGAIN error (seen with io_uring on reads ending at the end of the test file) are retried up to `FIO_RETRY_MAX` times (default 2, `0` = off); other errors are never retried, and the summary shows how many retries were needed
 
 ## [0.10.8] - 2026-09-27
 
