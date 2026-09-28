@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ConfirmProvider } from "./contexts/ConfirmContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import Admin from "./pages/Admin";
+import Compare from "./pages/Compare";
 import History from "./pages/History";
 import Home from "./pages/Home";
 import Host from "./pages/Host";
@@ -44,6 +45,7 @@ const ProtectedApp = () => {
 				<Route path="/host" element={readersOnly(<Host />)} />
 				<Route path="/history" element={readersOnly(<History />)} />
 				<Route path="/saturation" element={readersOnly(<Saturation />)} />
+				<Route path="/compare" element={readersOnly(<Compare />)} />
 				<Route path="/upload" element={<RequireRole roles={UPLOADERS}><Upload /></RequireRole>} />
 				<Route path="/admin" element={adminOnly(<Admin />)} />
 				<Route path="/users" element={adminOnly(<UserManager />)} />

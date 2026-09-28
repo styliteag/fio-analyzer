@@ -1,4 +1,5 @@
 // Test runs API service
+import type { StorageInfo } from '../../types';
 import type { TestRun, FilterOptions, UUIDGroup } from '../../types';
 import type { ActiveFilters } from '../../hooks/useTestRunFilters';
 import { apiCall, buildFilterParams } from './base';
@@ -359,6 +360,7 @@ export interface SaturationData {
     drive_model: string;
     block_size: string | null;
     threshold_ms: number;
+    storage_info?: StorageInfo | null;
     patterns: Record<string, SaturationPatternData>;
 }
 

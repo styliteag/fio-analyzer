@@ -24,6 +24,8 @@ export interface TestRun {
 	direct?: number;
 	test_size?: string;
 	sync?: string;
+	/** Storage configuration detected by fio-test.sh */
+	storage_info?: StorageInfo | null;
 	iodepth?: number;
 	// Uniqueness tracking
 	is_latest?: number;
@@ -257,3 +259,15 @@ export type {
   AsyncHookReturn,
   MutationHookReturn
 } from './hooks';
+
+/** Storage configuration detected by fio-test.sh and stored with each test run */
+export interface StorageInfo {
+	fs_type?: string;
+	os?: string;
+	kernel?: string;
+	ioengine?: string;
+	fio_version?: string;
+	zfs?: Record<string, string | undefined> & { dataset?: string; type?: string };
+	ceph?: Record<string, string | number | undefined> & { kind?: string; pool?: string };
+	[key: string]: unknown;
+}

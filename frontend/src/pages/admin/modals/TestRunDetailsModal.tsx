@@ -1,6 +1,7 @@
 import { formatSyncMode } from '../../../utils/syncMode';
 import type { ReactNode } from 'react';
 import { Download } from 'lucide-react';
+import StorageInfo from '../../../components/shared/StorageInfo';
 import { useToast } from '../../../contexts/ToastContext';
 import { downloadTestRunJson } from '../../../services/api/rawData';
 import Button from '../../../components/ui/Button';
@@ -58,6 +59,9 @@ const InfoSections: React.FC<{ readonly run: TestRun }> = ({ run }) => (
                 <Row label="Drive Type">{run.drive_type}</Row>
                 <Row label="Drive Model">{run.drive_model}</Row>
             </div>
+        </Section>
+        <Section title="Detected by fio-test.sh">
+            <StorageInfo info={run.storage_info} />
         </Section>
     </>
 );

@@ -27,6 +27,8 @@ CREATE TABLE {table} (
     direct INTEGER,
     num_jobs INTEGER,
     iodepth INTEGER,
+    test_size TEXT,
+    duration INTEGER,
     iops REAL,
     bandwidth REAL,
     avg_latency REAL,
@@ -49,6 +51,8 @@ COLUMNS = (
     "direct",
     "num_jobs",
     "iodepth",
+    "test_size",
+    "duration",
     "iops",
     "bandwidth",
     "avg_latency",
@@ -69,6 +73,8 @@ DEFAULTS: dict[str, Any] = {
     "direct": 1,
     "num_jobs": 1,
     "iodepth": 1,
+    "test_size": "10G",
+    "duration": 60,
     "iops": 1000.0,
     "bandwidth": 100.0,
     "avg_latency": 1.0,
@@ -391,3 +397,79 @@ def test_run_uuid_filter() -> None:
     )
     body = call(connection, targets("a", "b", source="history", run_uuid="run-1,old")).json()
     assert body["rows"][0]["results"]["b"]["iops"] == 100.0
+
+
+# --- strict matching: only comparable runs (test size, duration, layout tags) ---------------------------
+
+
+def test_layout_signature_uses_only_layout_tags() -> None:
+    assert compare.layout_signature("tester,hostname:h,prefill:1,fileperjob:1,satcap:100G,date:x") == "fileperjob:1,prefill:1,satcap:100G"
+    assert compare.layout_signature("hostname:h,run_uuid:abc") == ""
+    assert compare.layout_signature(None) == ""
+
+
+def mixed_db() -> sqlite3.Connection:
+    """Host a has a real 10G/60 s run and a newer 256M/5 s smoke test; host b only the real run."""
+    return make_db(
+        [
+            row("a", iops=1000.0),
+            row("a", test_size="256M", duration=5, iops=3490.0, timestamp="2026-09-02T10:00:00+00:00"),
+            row("b", iops=1100.0),
+        ]
+    )
+
+
+def test_strict_is_default_and_never_mixes_test_sizes() -> None:
+    body = call(mixed_db(), targets("a", "b")).json()
+    assert len(body["rows"]) == 1
+    [compared] = body["rows"]
+    assert (compared["test_size"], compared["duration"], compared["layout"]) == ("10G", 60, "")
+    assert compared["results"]["a"]["iops"] == 1000.0
+    assert compared["diff_pct"]["b"]["iops"] == 10.0
+
+
+def test_strict_keeps_prefill_runs_apart() -> None:
+    db = make_db([row("a", description="hostname:a,prefill:1"), row("b", description="hostname:b")])
+    assert call(db, targets("a", "b")).json()["rows"] == []
+    rows = call(db, targets("a", "b", include_incomplete="true")).json()["rows"]
+    assert sorted(r["layout"] for r in rows) == ["", "prefill:1"]
+
+
+def test_strict_compares_runs_with_identical_layout() -> None:
+    db = make_db([row("a", description="x,prefill:1", iops=100.0), row("b", description="y,prefill:1", iops=150.0)])
+    [compared] = call(db, targets("a", "b")).json()["rows"]
+    assert compared["layout"] == "prefill:1"
+    assert compared["diff_pct"]["b"]["iops"] == 50.0
+
+
+def test_loose_mode_marks_mismatched_rows() -> None:
+    body = call(mixed_db(), targets("a", "b", strict="false")).json()
+    [compared] = body["rows"]
+    assert "test_size" not in compared
+    assert compared["mismatch"] == ["test_size", "duration"]
+    assert compared["results"]["a"]["test_size"] == "256M"
+    assert body["summary"]["b"]["configs_mismatched"] == 1
+
+
+def test_loose_mode_without_differences_has_empty_mismatch() -> None:
+    db = make_db([row("a"), row("b")])
+    [compared] = call(db, targets("a", "b", strict="false")).json()["rows"]
+    assert compared["mismatch"] == []
+
+
+def test_test_size_spelling_is_normalized() -> None:
+    db = make_db([row("a", test_size="10g"), row("b", test_size="10G")])
+    assert len(call(db, targets("a", "b")).json()["rows"]) == 1
+
+
+def test_targets_lists_hierarchy_combinations_with_counts() -> None:
+    db = make_db([row("a"), row("a", block_size="64K"), row("b", drive_model="m2")])
+    body = call(db, [], path="/api/compare/targets").json()
+    assert body["targets"] == [
+        {"hostname": "a", "protocol": "local", "drive_type": "ssd", "drive_model": "m1", "target": "a|local|ssd|m1", "test_runs": 2, "last_run": "2026-09-01T10:00:00+00:00"},
+        {"hostname": "b", "protocol": "local", "drive_type": "ssd", "drive_model": "m2", "target": "b|local|ssd|m2", "test_runs": 1, "last_run": "2026-09-01T10:00:00+00:00"},
+    ]
+
+
+def test_targets_requires_authentication() -> None:
+    assert call(make_db([row("a")]), [], user=None, path="/api/compare/targets").status_code == 401

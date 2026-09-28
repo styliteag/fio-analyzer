@@ -142,7 +142,7 @@ def saturation_data(threshold: float | None, query: str = "") -> dict:
         "CREATE TABLE saturation_runs (id INTEGER PRIMARY KEY, timestamp TEXT, hostname TEXT, protocol TEXT, drive_type TEXT, "
         "drive_model TEXT, block_size TEXT, read_write_pattern TEXT, iodepth INTEGER, num_jobs INTEGER, iops REAL, "
         "avg_latency REAL, bandwidth REAL, p95_latency REAL, p99_latency REAL, config_uuid TEXT, run_uuid TEXT, "
-        "description TEXT, latency_threshold_ms REAL)"
+        "description TEXT, latency_threshold_ms REAL, storage_info TEXT)"
     )
     for qd, p95 in ((1, 5.0), (2, 25.0)):
         db.execute(

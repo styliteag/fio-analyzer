@@ -28,6 +28,7 @@ from config.settings import settings
 from database.connection import db_manager, get_db
 from database.import_log import record_import
 from utils.logging import log_error, log_info
+from utils.storage_info import encode_storage_info
 from utils.sync_mode import normalize_sync
 
 router = APIRouter()
@@ -60,6 +61,11 @@ def generate_uuid_from_hash(input_string: str) -> str:
 
     # Convert to UUID object and return as string
     return str(uuid.UUID(bytes=bytes(uuid_bytes)))
+
+
+def storage_info_from_form(value: Optional[str]) -> Optional[str]:
+    """Storage configuration JSON from fio-test.sh; invalid values are ignored rather than failing the upload."""
+    return encode_storage_info(value)
 
 
 def threshold_from_form(value: Optional[str]) -> Optional[float]:
@@ -164,6 +170,10 @@ async def import_fio_data(
         description="Run UUID - unique per script execution (generated from hostname+date if not provided)",
         example="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
         max_length=64,
+    ),
+    storage_info: Optional[str] = Form(
+        None,
+        description="JSON object with the storage configuration detected by fio-test.sh (filesystem, ZFS/Ceph properties, kernel, ioengine)",
     ),
     latency_threshold_ms: Optional[str] = Form(
         None,
@@ -271,6 +281,7 @@ async def import_fio_data(
             test_run_data["run_uuid"] = generate_uuid_from_hash(hash_seed)
 
         test_run_data["latency_threshold_ms"] = threshold_from_form(latency_threshold_ms)
+        test_run_data["storage_info"] = storage_info_from_form(storage_info)
 
         # Save uploaded file
         file_path = save_uploaded_file(content, file.filename, test_run_data)
@@ -518,6 +529,9 @@ async def bulk_import_fio_data(
                     test_run_data["config_uuid"] = metadata["config_uuid"]
                 elif not test_run_data.get("config_uuid"):
                     test_run_data["config_uuid"] = generate_uuid_from_hash(hostname)
+
+                # Storage configuration detected by fio-test.sh at upload time
+                test_run_data["storage_info"] = storage_info_from_form(metadata.get("storage_info"))
 
                 # run_uuid: Use from metadata if provided, otherwise generate from hash seed
                 if metadata.get("run_uuid"):
@@ -927,6 +941,7 @@ def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_
         "description",
         "config_uuid",
         "run_uuid",
+        "storage_info",
         "output_file",
         "num_jobs",
         "direct",
@@ -1027,6 +1042,7 @@ def insert_saturation_run(db: sqlite3.Connection, test_run_data: Dict[str, Any],
         "description",
         "config_uuid",
         "run_uuid",
+        "storage_info",
         "latency_threshold_ms",
         "output_file",
         "num_jobs",
@@ -1162,6 +1178,8 @@ def create_metadata_file(file_path: str, test_run_data: Dict[str, Any], username
         metadata["config_uuid"] = test_run_data.get("config_uuid")
     if test_run_data.get("run_uuid"):
         metadata["run_uuid"] = test_run_data.get("run_uuid")
+    if test_run_data.get("storage_info"):
+        metadata["storage_info"] = test_run_data.get("storage_info")
 
     # Write metadata file
     with open(metadata_path, "w") as f:

@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from config.settings import settings
 from database.import_log import ensure_import_log_table
 from database.saturation_migration import add_threshold_column
+from database.storage_info_migration import add_storage_info_column
 from database.sync_migration import migrate_sync_to_text
 from utils.helpers import (
     calculate_unique_key,
@@ -450,6 +451,9 @@ class DatabaseManager:
 
         # Migration 7: latency threshold used by saturation runs
         add_threshold_column(cursor)
+
+        # Migration 8: storage configuration detected by fio-test.sh (JSON)
+        add_storage_info_column(cursor)
 
         self.connection.commit()
 

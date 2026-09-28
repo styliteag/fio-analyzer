@@ -14,6 +14,12 @@
     },
     {
       "method": "GET",
+      "path": "/api/compare/targets",
+      "auth": "none",
+      "summary": "List Comparable Targets"
+    },
+    {
+      "method": "GET",
       "path": "/api/dashboard/stats",
       "auth": "none",
       "summary": "Get Dashboard Statistics"

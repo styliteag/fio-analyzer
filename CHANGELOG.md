@@ -8,7 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **Storage configuration per test run**: uploads can carry a `storage_info` JSON object (filesystem, ZFS dataset/volume properties, Ceph pool/image details, kernel, ioengine, fio version); it is stored with every test run, returned by `/api/test-runs`, `/api/test-runs/{id}` and `saturation-data`, and shown in the test run details and on the Saturation page
+- **Compare page** (`/compare`, admin and viewer): pick 2–10 targets (first = baseline) and see the difference per pattern × block size as coloured matrices (median of several configurations per cell, filters for jobs, IO depth, direct, sync mode, tags, date range), a summary per target and all configurations as a table; strict matching can be switched off. Saturation tab: best step within the P95 threshold of several saturation runs side by side
+- **fio-test.sh**: detects the storage configuration before the run (filesystem of `TARGET_DIR`; ZFS dataset or zvol with sync, recordsize/volblocksize, compression, primarycache, logbias; Ceph RBD image or CephFS with pool, replication/erasure coding; kernel, ioengine, fio version), shows it in the header and uploads it as `storage_info`. Warns when `DRIVE_MODEL`/`DRIVE_TYPE` contradict it, e.g. `-syncoff` but ZFS `sync=standard`, `-rs16k` but `recordsize=128K`, or `raidz`/`mirror` on a non-ZFS target. `STORAGE_DETECT=0` turns it off
+- **API**: `GET /api/compare/targets` lists every Host-Protocol-Type-Model combination with test runs as ready-to-use `target` values
+
+### Changed
+- **fio-test.sh**: With several saturation runs (block sizes × `SAT_SYNC`), the header no longer shows a run_uuid that is never used; the real run_uuids are listed at the end
+- **Comparison**: `/api/compare` now only matches identical configurations by default (`strict=true`): test size, duration and the file layout tags (`prefill`, `fileperjob`, `satcap`) must match too, so smoke tests or prefilled runs are no longer compared with regular runs. `strict=false` restores the looser matching and lists differing fields per row in `mismatch`; the summary reports `configs_mismatched`
+### Security
+- **API**: `storage_info` values that cannot be served as JSON (`NaN`, `Infinity`, extreme nesting) are rejected; one such upload could otherwise break the test-run list for every user
+- **fio-test.sh**: all upload metadata is sent with `--form-string`; before, a value starting with `@` or `<` (e.g. in `DRIVE_MODEL`) made curl read and upload a local file
+- **fio-test.sh**: storage detection never passes values starting with `-` to `zfs`, `ceph` or `rbd`
+
 
 ## [0.11.0] - 2026-09-28
 

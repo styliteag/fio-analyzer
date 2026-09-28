@@ -22,6 +22,7 @@ from database.models import BulkUpdateRequest
 from routers.saturation import stored_threshold
 from utils.logging import log_error, log_info
 from utils.run_filters import build_run_filters
+from utils.storage_info import decode_storage_info
 from utils.sync_mode import parse_sync_filter
 
 router = APIRouter()
@@ -275,7 +276,7 @@ async def get_test_runs(
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
                    output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
                    avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency,
-                   config_uuid, run_uuid
+                   config_uuid, run_uuid, storage_info
             FROM test_runs
             WHERE {where_clause}
             ORDER BY timestamp DESC
@@ -289,6 +290,7 @@ async def get_test_runs(
         for row in rows:
             test_run_data = dict(row)
             test_run_data["block_size"] = str(test_run_data["block_size"])  # Ensure string
+            test_run_data["storage_info"] = decode_storage_info(test_run_data["storage_info"])
             test_runs.append(test_run_data)
 
         log_info(
@@ -911,7 +913,7 @@ async def get_saturation_data(
             SELECT id, timestamp, hostname, protocol, drive_type, drive_model,
                    block_size, read_write_pattern, iodepth, num_jobs,
                    iops, avg_latency, bandwidth, p95_latency, p99_latency,
-                   config_uuid, run_uuid, description, latency_threshold_ms
+                   config_uuid, run_uuid, description, latency_threshold_ms, storage_info
             FROM saturation_runs
             WHERE run_uuid = ?
             ORDER BY (iodepth * num_jobs) ASC
@@ -995,6 +997,7 @@ async def get_saturation_data(
             "drive_model": drive_model,
             "block_size": block_size,
             "threshold_ms": threshold_ms,
+            "storage_info": decode_storage_info(next((row["storage_info"] for row in rows if row["storage_info"]), None)),
             "patterns": patterns,
         }
 
@@ -1411,7 +1414,7 @@ async def get_test_run(
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
                    output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
                    avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency,
-                   config_uuid, run_uuid
+                   config_uuid, run_uuid, storage_info
             FROM test_runs WHERE id = ?
         """,
             (test_run_id,),
@@ -1423,6 +1426,7 @@ async def get_test_run(
 
         test_run_data = dict(row)
         test_run_data["block_size"] = str(test_run_data["block_size"])  # Ensure string
+        test_run_data["storage_info"] = decode_storage_info(test_run_data["storage_info"])
 
         log_info(
             "Test run retrieved successfully",

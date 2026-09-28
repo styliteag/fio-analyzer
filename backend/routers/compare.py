@@ -29,9 +29,13 @@ MAX_ROWS_PER_TARGET = 5000
 SOURCE_TABLES = {"latest": "test_runs", "history": "test_runs_all"}
 HIERARCHY_COLUMNS = ("hostname", "protocol", "drive_type", "drive_model")
 KEY_COLUMNS = ("read_write_pattern", "block_size", "sync", "direct", "num_jobs", "iodepth")
+# Strict matching also requires identical test size, runtime and file layout (prefill/fileperjob/satcap tags),
+# otherwise e.g. a 256M/5 s smoke test would be compared with a 10G/60 s run
+STRICT_FIELDS = ("test_size", "duration", "layout")
+LAYOUT_TAGS = ("prefill", "fileperjob", "satcap")
 METRICS = ("iops", "bandwidth", "avg_latency", "p95_latency", "p99_latency")
 HIGHER_IS_BETTER = frozenset({"iops", "bandwidth"})
-SELECT_COLUMNS = KEY_COLUMNS + METRICS + ("timestamp",)
+SELECT_COLUMNS = KEY_COLUMNS + METRICS + ("timestamp", "test_size", "duration", "description")
 WILDCARD = "*"
 
 BLOCK_SIZE_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([kmgt]?)(?:i?b)?\s*$", re.IGNORECASE)
@@ -116,15 +120,47 @@ def fetch_target_rows(db: sqlite3.Connection, table: str, label: str, shared: Tu
     return rows
 
 
-def newest_per_config(rows: List[Dict[str, Any]]) -> Dict[ConfigKey, Dict[str, Any]]:
+def layout_signature(description: Optional[str]) -> str:
+    """File-layout tags from the description (e.g. 'fileperjob:1,prefill:1'); '' for plain runs."""
+    elements = [element.strip() for element in (description or "").split(",")]
+    return ",".join(sorted(element for element in elements if element.split(":", 1)[0] in LAYOUT_TAGS and ":" in element))
+
+
+def normalize_size(value: Any) -> Any:
+    """Canonical fio size string (10g, 10G and 10240M all become 10G); unparseable values stay as they are."""
+    size = block_size_bytes(value)
+    if size == float("inf") or size <= 0:
+        return value
+    for unit in ("T", "G", "M", "K"):
+        factor = UNIT_FACTORS[unit.lower()]
+        if size % factor == 0:
+            return f"{int(size // factor)}{unit}"
+    return str(int(size))
+
+
+def config_key(row: Dict[str, Any], strict: bool) -> ConfigKey:
+    key = tuple(row[column] for column in KEY_COLUMNS)
+    if strict:
+        key = key + (normalize_size(row["test_size"]), row["duration"], layout_signature(row["description"]))
+    return key
+
+
+def newest_per_config(rows: List[Dict[str, Any]], strict: bool = True) -> Dict[ConfigKey, Dict[str, Any]]:
     """Keep the newest row per config key and count how many rows were merged."""
     grouped: Dict[ConfigKey, List[Dict[str, Any]]] = {}
     for row in rows:
-        grouped.setdefault(tuple(row[column] for column in KEY_COLUMNS), []).append(row)
+        grouped.setdefault(config_key(row, strict), []).append(row)
     cells: Dict[ConfigKey, Dict[str, Any]] = {}
     for key, group in grouped.items():
         newest = max(group, key=lambda item: item["timestamp"] or "")
-        cells[key] = {**{metric: newest[metric] for metric in METRICS}, "timestamp": newest["timestamp"], "rows_merged": len(group)}
+        cells[key] = {
+            **{metric: newest[metric] for metric in METRICS},
+            "timestamp": newest["timestamp"],
+            "rows_merged": len(group),
+            "test_size": normalize_size(newest["test_size"]),
+            "duration": newest["duration"],
+            "layout": layout_signature(newest["description"]),
+        }
     return cells
 
 
@@ -152,7 +188,8 @@ def _nullable(value: Any) -> Tuple[bool, Any]:
 
 
 def sort_key(key: ConfigKey) -> Tuple[Any, ...]:
-    pattern, block_size, sync, direct, num_jobs, iodepth = key
+    pattern, block_size, sync, direct, num_jobs, iodepth = key[: len(KEY_COLUMNS)]
+    extra = tuple(str(value) for value in key[len(KEY_COLUMNS) :])
     sync_rank = SYNC_MODES.index(sync) if sync in SYNC_MODES else len(SYNC_MODES)
     return (
         str(pattern or ""),
@@ -163,6 +200,7 @@ def sort_key(key: ConfigKey) -> Tuple[Any, ...]:
         _nullable(num_jobs),
         _nullable(iodepth),
         _nullable(direct),
+        extra,
     )
 
 
@@ -171,12 +209,21 @@ def _compare_cells(base: Optional[Dict[str, Any]], cell: Optional[Dict[str, Any]
     return diffs, {metric: is_better(metric, diffs[metric]) for metric in METRICS}
 
 
-def build_row(key: ConfigKey, labels: List[str], cells: Dict[str, Dict[ConfigKey, Dict[str, Any]]]) -> Dict[str, Any]:
+def mismatched_fields(cells: List[Optional[Dict[str, Any]]]) -> List[str]:
+    """Strict fields that differ between the present cells (only possible in loose mode)."""
+    present = [cell for cell in cells if cell]
+    return [field for field in STRICT_FIELDS if len({str(cell[field]) for cell in present}) > 1]
+
+
+def build_row(key: ConfigKey, labels: List[str], cells: Dict[str, Dict[ConfigKey, Dict[str, Any]]], strict: bool) -> Dict[str, Any]:
     results = {label: cells[label].get(key) for label in labels}
     base = results[labels[0]]
     compared = {label: _compare_cells(base, results[label]) for label in labels[1:]}
+    identity = dict(zip(KEY_COLUMNS + (STRICT_FIELDS if strict else ()), key))
+    if not strict:
+        identity["mismatch"] = mismatched_fields(list(results.values()))
     return {
-        **dict(zip(KEY_COLUMNS, key)),
+        **identity,
         "results": results,
         "diff_pct": {label: pair[0] for label, pair in compared.items()},
         "better": {label: pair[1] for label, pair in compared.items()},
@@ -191,16 +238,19 @@ def build_summary(rows: List[Dict[str, Any]], labels: List[str]) -> Dict[str, An
         for metric in METRICS:
             values = [row["diff_pct"][label][metric] for row in compared if row["diff_pct"][label][metric] is not None]
             medians[metric] = round(statistics.median(values), 1) if values else None
-        summary[label] = {"configs_compared": len(compared), "median_diff_pct": medians}
+        mismatched = sum(1 for row in compared if mismatched_fields([row["results"][labels[0]], row["results"][label]]))
+        summary[label] = {"configs_compared": len(compared), "configs_mismatched": mismatched, "median_diff_pct": medians}
     return summary
 
 
-def build_comparison(labels: List[str], cells: Dict[str, Dict[ConfigKey, Dict[str, Any]]], include_incomplete: bool) -> Dict[str, Any]:
+def build_comparison(
+    labels: List[str], cells: Dict[str, Dict[ConfigKey, Dict[str, Any]]], include_incomplete: bool, strict: bool = True
+) -> Dict[str, Any]:
     baseline_keys = set(cells[labels[0]])
     other_keys = set().union(*(cells[label] for label in labels[1:]))
     keys = baseline_keys | other_keys if include_incomplete else baseline_keys & other_keys
-    rows = [build_row(key, labels, cells) for key in sorted(keys, key=sort_key)]
-    return {"baseline": labels[0], "targets": labels, "rows": rows, "summary": build_summary(rows, labels)}
+    rows = [build_row(key, labels, cells, strict) for key in sorted(keys, key=sort_key)]
+    return {"baseline": labels[0], "targets": labels, "strict": strict, "rows": rows, "summary": build_summary(rows, labels)}
 
 
 COMPARE_EXAMPLE = {
@@ -214,6 +264,9 @@ COMPARE_EXAMPLE = {
             "direct": 1,
             "num_jobs": 1,
             "iodepth": 32,
+            "test_size": "10G",
+            "duration": 60,
+            "layout": "prefill:1",
             "results": {
                 "zfs-host|local": {
                     "iops": 85000.0,
@@ -241,6 +294,7 @@ COMPARE_EXAMPLE = {
     "summary": {
         "ceph-node1|*|*|rbd-pool": {
             "configs_compared": 1,
+            "configs_mismatched": 0,
             "median_diff_pct": {"iops": -50.6, "bandwidth": -50.6, "avg_latency": 105.4, "p95_latency": 130.8, "p99_latency": 159.3},
         }
     },
@@ -248,11 +302,38 @@ COMPARE_EXAMPLE = {
 
 
 @router.get(
+    "/targets",
+    summary="List Comparable Targets",
+    description="All Host-Protocol-Type-Model combinations with test runs, as ready-to-use `target` values for /api/compare.",
+)
+async def list_targets(
+    source: str = Query("latest", description="`latest` (test_runs) or `history` (test_runs_all)"),
+    user: User = Depends(require_viewer),
+    db: sqlite3.Connection = Depends(get_db),
+) -> Dict[str, Any]:
+    if source not in SOURCE_TABLES:
+        raise _bad_request(f"Invalid source {source[:40]!r}: expected one of {', '.join(SOURCE_TABLES)}")
+    columns = ", ".join(HIERARCHY_COLUMNS)
+    cursor = db.execute(
+        f"SELECT {columns}, COUNT(*), MAX(timestamp) FROM {SOURCE_TABLES[source]} "
+        f"WHERE hostname IS NOT NULL GROUP BY {columns} ORDER BY {columns}"
+    )
+    targets = []
+    for *hierarchy, count, last_run in cursor.fetchall():
+        entry = dict(zip(HIERARCHY_COLUMNS, hierarchy))
+        entry["target"] = "|".join(str(value or WILDCARD) for value in hierarchy)
+        targets.append({**entry, "test_runs": count, "last_run": last_run})
+    return {"targets": targets}
+
+
+@router.get(
     "",
     summary="Compare Storage Combinations",
     description=(
         "Compare 2-10 storage combinations side by side per test configuration "
-        "(read_write_pattern, block_size, sync, direct, num_jobs, iodepth). The first target is the baseline; "
+        "(read_write_pattern, block_size, sync, direct, num_jobs, iodepth and - by default (`strict=true`) - test_size, "
+        "duration and the file layout tags prefill/fileperjob/satcap, so smoke tests or prefilled runs are never mixed "
+        "with regular runs). The first target is the baseline; "
         "every other target gets `diff_pct` = (value - baseline) / baseline * 100 (1 decimal, null if the baseline "
         "is missing or 0) and a `better` flag per metric (higher is better for iops/bandwidth, lower for latencies).\n\n"
         "A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted and any part may be `*`, "
@@ -282,6 +363,12 @@ async def compare_targets(
     block_sizes: Optional[str] = Query(None, description="Comma-separated block sizes, e.g. 4K,1M"),
     syncs: Optional[str] = Query(None, description="Comma-separated sync modes: none, sync, dsync"),
     include_incomplete: bool = Query(False, description="Return every configuration, with null for missing targets"),
+    strict: bool = Query(
+        True,
+        description="Only compare identical configurations incl. test_size, duration and file layout tags "
+        "(prefill/fileperjob/satcap). strict=false matches on pattern/block size/sync/direct/num_jobs/iodepth only "
+        "and lists differing fields per row in `mismatch`",
+    ),
     user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ) -> Dict[str, Any]:
@@ -292,8 +379,8 @@ async def compare_targets(
         raise _bad_request(f"Invalid source {source[:40]!r}: expected one of {', '.join(SOURCE_TABLES)}")
     shared = build_shared_filters(tags, since, until, run_uuid, patterns, block_sizes, syncs)
     try:
-        cells = {label: newest_per_config(fetch_target_rows(db, SOURCE_TABLES[source], label, shared)) for label in labels}
+        cells = {label: newest_per_config(fetch_target_rows(db, SOURCE_TABLES[source], label, shared), strict) for label in labels}
     except sqlite3.Error as error:
         log_error("Error computing comparison", error, {"user": user.username})
         raise HTTPException(status_code=500, detail="Failed to compute comparison")
-    return build_comparison(labels, cells, include_incomplete)
+    return build_comparison(labels, cells, include_incomplete, strict)

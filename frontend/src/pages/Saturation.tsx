@@ -10,6 +10,7 @@ import { useUpdateUrlParams, writeValue } from '../hooks/useUrlState';
 import { TESTING_SCRIPT_URL } from '../utils/apiDocs';
 import SaturationChart from '../components/saturation/SaturationChart';
 import SaturationSummaryTable from '../components/saturation/SaturationSummaryTable';
+import { storageInfoSummary } from '../components/shared/StorageInfo';
 import { useSaturationRuns, useSaturationRunData } from '../hooks/useSaturationData';
 import type { SaturationRun, SaturationData } from '../services/api/testRuns';
 
@@ -351,6 +352,11 @@ export default function Saturation() {
                                     loading={primaryLoading}
                                     error={primaryError}
                                 />
+                                {primaryData && storageInfoSummary(primaryData.storage_info) && (
+                                    <p className="text-sm theme-text-secondary">
+                                        <span className="font-medium theme-text-primary">Storage:</span> {storageInfoSummary(primaryData.storage_info)}
+                                    </p>
+                                )}
                                 {selectedRunUuid && primaryData && (
                                     <SaturationSummaryTable runUuid={selectedRunUuid} thresholdMs={primaryData.threshold_ms} />
                                 )}

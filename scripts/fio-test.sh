@@ -258,6 +258,10 @@ define_defaults() {
     # Retries for transient EAGAIN errors (io_uring can return EAGAIN at the end of a file)
     FIO_RETRY_MAX="${FIO_RETRY_MAX:-2}"
     FIO_RETRY_COUNT=0
+    # Storage detection (filesystem, ZFS, Ceph), uploaded as storage_info; 0 = off
+    STORAGE_DETECT="${STORAGE_DETECT:-1}"
+    STORAGE_INFO=""
+    STORAGE_WARNINGS=0
 }
 
 # Apply CLI overrides (CLI flags take highest priority over env/.env/defaults)
@@ -857,6 +861,342 @@ setup_target_dir() {
     fi
 }
 
+# ============================================================
+# Storage detection (STORAGE_INFO, uploaded as storage_info)
+# ============================================================
+
+# Escape a string for use inside a JSON string literal (without the quotes)
+json_escape() {
+    local s=$1
+    # Quoted replacements behave the same with and without bash 5.2 patsub_replacement
+    s=${s//\\/'\\'}
+    s=${s//\"/'\"'}
+    s=${s//$'\t'/'\t'}
+    s=${s//$'\n'/'\n'}
+    s=${s//$'\r'/'\r'}
+    printf '%s' "$s" | LC_ALL=C tr -d '\001-\010\013\014\016-\037\177'
+}
+
+# Build a compact JSON object from key/value pairs; empty values are skipped.
+# Key suffixes: "key:n" = integer (skipped if not numeric), "key:o" = raw JSON object.
+json_object() {
+    local out="" key value
+    while [ $# -ge 2 ]; do
+        key=$1 value=$2
+        shift 2
+        if [ -z "$value" ]; then continue; fi
+        case "$key" in
+            *:n) if [[ "$value" =~ ^(0|[1-9][0-9]*)$ ]]; then out+=",\"${key%:n}\":$value"; fi ;;
+            *:o) if [ "$value" != "{}" ]; then out+=",\"${key%:o}\":$value"; fi ;;
+            *) out+=",\"$(json_escape "$key")\":\"$(json_escape "$value")\"" ;;
+        esac
+    done
+    printf '{%s}' "${out#,}"
+}
+
+# Run a detection command time-limited (timeout/gtimeout 5s when available), stdin
+# closed and stderr discarded. Shell functions run directly (test stubs).
+si_run() {
+    if declare -F "$1" >/dev/null; then
+        "$@" 2>/dev/null </dev/null
+    elif command -v timeout >/dev/null 2>&1; then
+        timeout 5 "$@" 2>/dev/null </dev/null
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout 5 "$@" 2>/dev/null </dev/null
+    else
+        "$@" 2>/dev/null </dev/null
+    fi
+}
+
+# Filesystem type and mount source of a directory into SI_FS_TYPE / SI_FS_SOURCE
+# (findmnt, Linux stat -f, or df + mount on macOS/BSD)
+storage_fs_info() {
+    local dir=$1 out mp line
+    SI_FS_TYPE="" SI_FS_SOURCE=""
+    if command -v findmnt >/dev/null 2>&1; then
+        out=$(si_run findmnt -n -o FSTYPE,SOURCE -T "$dir" | head -n 1)
+        read -r SI_FS_TYPE SI_FS_SOURCE <<< "$out"
+    fi
+    if [ -z "$SI_FS_TYPE" ] && [ "$(uname -s)" = Linux ]; then
+        SI_FS_TYPE=$(si_run stat -f -c %T "$dir")
+    fi
+    if [ -z "$SI_FS_TYPE" ] && [ "$(uname -s)" != Linux ] \
+        && command -v df >/dev/null 2>&1 && command -v mount >/dev/null 2>&1; then
+        mp=$(si_run df -P "$dir" | awk 'NR == 2 {print $NF}')
+        if [ -n "$mp" ]; then
+            line=$(si_run mount | grep -F " on $mp (" | tail -n 1)
+            if [ -n "$line" ]; then
+                SI_FS_SOURCE=${line%% on *}
+                SI_FS_TYPE=${line#* on "$mp" (}
+                SI_FS_TYPE=${SI_FS_TYPE%%[,)]*}
+            fi
+        fi
+    fi
+    SI_FS_TYPE=${SI_FS_TYPE%%$'\n'*}
+}
+
+# ZFS name of the target: dataset for directories, zvol for block devices (empty if none)
+# Values from paths or tool output must not be read as options by zfs/ceph/rbd
+si_safe_arg() {
+    case "$1" in -*) return 1 ;; esac
+    return 0
+}
+
+storage_zfs_dataset() {
+    local target=$1 name resolved zvol_dir=${SI_ZVOL_DIR:-/dev/zvol}
+    if [ "$TARGET_IS_DEVICE" != true ]; then
+        if command -v zfs >/dev/null 2>&1; then
+            si_safe_arg "$target" && name=$(si_run zfs list -H -o name "$target" | head -n 1)
+        fi
+        echo "${name:-$SI_FS_SOURCE}"
+        return 0
+    fi
+    case "$target" in
+        "$zvol_dir"/*) echo "${target#"$zvol_dir"/}"; return 0 ;;
+    esac
+    command -v zfs >/dev/null 2>&1 || return 0
+    resolved=$(readlink -f "$target" 2>/dev/null || echo "$target")
+    while IFS= read -r name; do
+        if [ -n "$name" ] && [ "$(readlink -f "$zvol_dir/$name" 2>/dev/null)" = "$resolved" ]; then
+            echo "$name"
+            return 0
+        fi
+    done < <(si_run zfs list -H -o name -t volume)
+}
+
+# Read ZFS properties of $1 (type filesystem|volume in $2) into SI_ZFS_* and SI_ZFS_JSON
+storage_zfs_props() {
+    local name=$1 type=$2 prop value compression="" primarycache="" logbias=""
+    SI_ZFS_DATASET=$name SI_ZFS_TYPE=$type SI_ZFS_SYNC="" SI_ZFS_RECORDSIZE="" SI_ZFS_VOLBLOCKSIZE=""
+    if ! si_safe_arg "$name"; then SI_ZFS_JSON=""; return 0; fi
+    if command -v zfs >/dev/null 2>&1; then
+        while read -r prop value _; do
+            if [ -z "$value" ] || [ "$value" = "-" ]; then continue; fi
+            case "$prop" in
+                sync) SI_ZFS_SYNC=$value ;;
+                recordsize) SI_ZFS_RECORDSIZE=$value ;;
+                volblocksize) SI_ZFS_VOLBLOCKSIZE=$value ;;
+                compression) compression=$value ;;
+                primarycache) primarycache=$value ;;
+                logbias) logbias=$value ;;
+            esac
+        done < <(si_run zfs get -H -o property,value sync,recordsize,volblocksize,compression,primarycache,logbias "$name")
+    fi
+    SI_ZFS_COMPRESSION=$compression SI_ZFS_LOGBIAS=$logbias
+    SI_ZFS_JSON=$(json_object dataset "$name" type "$type" sync "$SI_ZFS_SYNC" \
+        recordsize "$SI_ZFS_RECORDSIZE" volblocksize "$SI_ZFS_VOLBLOCKSIZE" \
+        compression "$compression" primarycache "$primarycache" logbias "$logbias")
+}
+
+# Pool and image of a mapped RBD device as "pool image" (empty if not RBD)
+storage_rbd_device() {
+    local target=$1 rbd_dir=${SI_RBD_DEV_DIR:-/dev/rbd} sysfs=${SI_RBD_SYSFS:-/sys/bus/rbd/devices}
+    local rest resolved base id cols
+    case "$target" in
+        "$rbd_dir"/*/*)
+            rest=${target#"$rbd_dir"/}
+            echo "${rest%%/*} ${rest##*/}"
+            return 0
+            ;;
+    esac
+    resolved=$(readlink -f "$target" 2>/dev/null || echo "$target")
+    base=${resolved##*/}
+    [[ "$base" =~ ^rbd([0-9]+)$ ]] || return 0
+    id=${BASH_REMATCH[1]}
+    if [ -r "$sysfs/$id/pool" ] && [ -r "$sysfs/$id/name" ]; then
+        echo "$(cat "$sysfs/$id/pool") $(cat "$sysfs/$id/name")"
+        return 0
+    fi
+    command -v rbd >/dev/null 2>&1 || { echo "? ?"; return 0; }
+    # rbd showmapped columns: id pool [namespace] image snap device (namespace may be empty)
+    cols=$(si_run rbd showmapped \
+        | awk -v dev="$resolved" -v tgt="$target" '$NF == dev || $NF == tgt {print $2, $(NF-2); exit}')
+    echo "${cols:-? ?}"
+}
+
+# Replication details of a Ceph pool as JSON fields (pool_type, pool_size, min_size)
+storage_ceph_pool() {
+    local pool=$1 line type="" size="" min_size=""
+    si_safe_arg "$pool" || return 0
+    command -v ceph >/dev/null 2>&1 || return 0
+    line=$(si_run ceph osd pool ls detail | grep -F "'$pool' " | head -n 1)
+    if [ -n "$line" ]; then
+        [[ "$line" =~ \ (replicated|erasure)\  ]] && type=${BASH_REMATCH[1]}
+        [[ "$line" =~ \ size\ ([0-9]+) ]] && size=${BASH_REMATCH[1]}
+        [[ "$line" =~ \ min_size\ ([0-9]+) ]] && min_size=${BASH_REMATCH[1]}
+    fi
+    if [ -z "$size" ]; then
+        size=$(si_run ceph osd pool get "$pool" size | awk '/^size:/ {print $2}')
+    fi
+    if [ -z "$min_size" ]; then
+        min_size=$(si_run ceph osd pool get "$pool" min_size | awk '/^min_size:/ {print $2}')
+    fi
+    printf '%s|%s|%s' "$type" "$size" "$min_size"
+}
+
+# Best-effort Ceph details (CephFS or mapped RBD) into SI_CEPH_JSON
+storage_ceph_info() {
+    local target=$1 kind="" pool="" image="" data_pool="" object_size="" info order
+    local pool_type pool_size min_size
+    SI_CEPH_JSON="" SI_CEPH_KIND="" SI_CEPH_POOL=""
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        read -r pool image <<< "$(storage_rbd_device "$target")"
+        [ -n "$pool" ] || return 0
+        kind=rbd
+        [ "$pool" = "?" ] && pool="" && image=""
+        if [ -n "$pool" ] && command -v rbd >/dev/null 2>&1; then
+            si_safe_arg "$pool" && info=$(si_run rbd info "$pool/$image")
+            order=$(sed -n 's/^[[:space:]]*order \([0-9]*\).*/\1/p' <<< "$info" | head -n 1)
+            if [ -n "$order" ] && [ "$order" -lt 63 ]; then object_size=$((1 << order)); fi
+            data_pool=$(sed -n 's/^[[:space:]]*data_pool: *//p' <<< "$info" | head -n 1)
+        fi
+    else
+        case "$SI_FS_TYPE" in
+            ceph|fuse.ceph-fuse|fuse.ceph) kind=cephfs ;;
+            *) return 0 ;;
+        esac
+        if command -v getfattr >/dev/null 2>&1; then
+            pool=$(si_run getfattr -n ceph.dir.layout.pool --only-values "$target" | head -n 1)
+        fi
+    fi
+    # Replication of the pool holding the data (RBD images may use a separate data pool)
+    pool_type="" pool_size="" min_size=""
+    if [ -n "${data_pool:-$pool}" ]; then
+        IFS='|' read -r pool_type pool_size min_size <<< "$(storage_ceph_pool "${data_pool:-$pool}")"
+    fi
+    SI_CEPH_KIND=$kind SI_CEPH_POOL=$pool
+    SI_CEPH_JSON=$(json_object kind "$kind" pool "$pool" image "$image" object_size:n "$object_size" \
+        data_pool "$data_pool" pool_type "$pool_type" pool_size:n "$pool_size" min_size:n "$min_size")
+}
+
+# Detect the storage below TARGET_DIR and build STORAGE_INFO (single-line JSON, < 4 KB).
+# Never fails; unknown fields are omitted. STORAGE_DETECT=0 disables detection.
+detect_storage() {
+    local fs_type fio_version zfs_name
+    STORAGE_INFO="" SI_FS_TYPE="" SI_FS_SOURCE="" SI_ZFS_JSON="" SI_CEPH_JSON=""
+    SI_ZFS_DATASET="" SI_ZFS_TYPE="" SI_ZFS_SYNC="" SI_ZFS_RECORDSIZE="" SI_ZFS_VOLBLOCKSIZE=""
+    SI_ZFS_COMPRESSION="" SI_ZFS_LOGBIAS="" SI_CEPH_KIND="" SI_CEPH_POOL=""
+    case "${STORAGE_DETECT:-1}" in 0|false|no|off) return 0 ;; esac
+
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        fs_type=block
+        SI_FS_TYPE=block
+    else
+        storage_fs_info "$TARGET_DIR"
+        fs_type=$SI_FS_TYPE
+    fi
+    if [ "$TARGET_IS_DEVICE" = true ] || [ "$fs_type" = zfs ]; then
+        zfs_name=$(storage_zfs_dataset "$TARGET_DIR")
+        if [ -n "$zfs_name" ]; then
+            if [ "$TARGET_IS_DEVICE" = true ]; then
+                storage_zfs_props "$zfs_name" volume
+            else
+                storage_zfs_props "$zfs_name" filesystem
+            fi
+        fi
+    fi
+    if [ -z "$SI_ZFS_JSON" ]; then storage_ceph_info "$TARGET_DIR"; fi
+    if command -v fio >/dev/null 2>&1; then
+        fio_version=$(si_run fio --version | head -n 1)
+    fi
+
+    STORAGE_INFO=$(json_object fs_type "$fs_type" kernel "$(uname -r 2>/dev/null)" \
+        os "$(uname -s 2>/dev/null)" ioengine "${IOENGINE:-}" fio_version "${fio_version:-}" \
+        zfs:o "$SI_ZFS_JSON" ceph:o "$SI_CEPH_JSON")
+    # Keep the upload small: drop Ceph, then ZFS details when over 4 KB
+    if [ "$(LC_ALL=C; echo "${#STORAGE_INFO}")" -ge 4096 ]; then
+        SI_CEPH_JSON=""
+        STORAGE_INFO=$(json_object fs_type "$fs_type" kernel "$(uname -r 2>/dev/null)" \
+            os "$(uname -s 2>/dev/null)" ioengine "${IOENGINE:-}" fio_version "${fio_version:-}" \
+            zfs:o "$SI_ZFS_JSON")
+    fi
+    if [ "$(LC_ALL=C; echo "${#STORAGE_INFO}")" -ge 4096 ]; then
+        SI_ZFS_JSON=""
+        STORAGE_INFO=$(json_object fs_type "$fs_type" os "$(uname -s 2>/dev/null)" ioengine "${IOENGINE:-}")
+    fi
+}
+
+# True when two sizes (16K, 16k, 16384, 1M ...) are the same number of bytes
+storage_size_matches() {
+    local a b
+    a=$(fio_size_to_bytes "$1") || return 1
+    b=$(fio_size_to_bytes "$2") || return 1
+    [ "$a" = "$b" ]
+}
+
+# Compare DRIVE_MODEL / DRIVE_TYPE naming conventions with the detected storage.
+# Warnings only (never aborts); count in STORAGE_WARNINGS.
+storage_plausibility_checks() {
+    local model type proto want tag detected
+    STORAGE_WARNINGS=0
+    case "${STORAGE_DETECT:-1}" in 0|false|no|off) return 0 ;; esac
+    model=$(printf '%s' "$DRIVE_MODEL" | tr '[:upper:]' '[:lower:]')
+    type=$(printf '%s' "$DRIVE_TYPE" | tr '[:upper:]' '[:lower:]')
+    proto=$(printf '%s' "$PROTOCOL" | tr '[:upper:]' '[:lower:]')
+
+    # Sync / recordsize / volblocksize tags are only checked when a ZFS dataset was detected
+    if [ -n "$SI_ZFS_DATASET" ]; then
+        want=""
+        case "$model" in
+            *syncoff*) want=disabled ;;
+            *syncalways*|*syncall*) want=always ;;
+            *syncstandard*|*syncstd*) want=standard ;;
+        esac
+        if [ -n "$want" ] && [ -n "$SI_ZFS_SYNC" ] && [ "$SI_ZFS_SYNC" != "$want" ]; then
+            print_warning "DRIVE_MODEL '$DRIVE_MODEL' implies ZFS sync=$want, but $SI_ZFS_DATASET has sync=$SI_ZFS_SYNC"
+            STORAGE_WARNINGS=$((STORAGE_WARNINGS + 1))
+        fi
+        for tag in rs vbs; do
+            [[ "$model" =~ (^|[^a-z0-9])${tag}([0-9]+[km])([^a-z0-9]|$) ]] || continue
+            want=${BASH_REMATCH[2]}
+            if [ "$tag" = rs ]; then detected=$SI_ZFS_RECORDSIZE; else detected=$SI_ZFS_VOLBLOCKSIZE; fi
+            if [ -n "$detected" ] && ! storage_size_matches "$want" "$detected"; then
+                if [ "$tag" = rs ]; then tag=recordsize; else tag=volblocksize; fi
+                print_warning "DRIVE_MODEL '$DRIVE_MODEL' implies ZFS $tag=$want, but $SI_ZFS_DATASET has $tag=$detected"
+                STORAGE_WARNINGS=$((STORAGE_WARNINGS + 1))
+            fi
+        done
+    fi
+
+    # ZFS pool layouts in DRIVE_TYPE on local storage that is not ZFS
+    # (skipped for vm- types and network protocols: the client cannot see the server's ZFS)
+    case "$type" in *mirror*|*raidz*) ;; *) return 0 ;; esac
+    case "$type" in vm-*) return 0 ;; esac
+    case "$proto" in ""|local|unknown) ;; *) return 0 ;; esac
+    if [ "$TARGET_IS_DEVICE" = true ]; then
+        if [ "$SI_ZFS_TYPE" != volume ]; then
+            print_warning "DRIVE_TYPE '$DRIVE_TYPE' suggests ZFS, but block device $TARGET_DIR is not a zvol"
+            STORAGE_WARNINGS=$((STORAGE_WARNINGS + 1))
+        fi
+        return 0
+    fi
+    case "$SI_FS_TYPE" in ""|zfs|nfs*|cifs|smb*|ceph|fuse*|9p|virtiofs) return 0 ;; esac
+    print_warning "DRIVE_TYPE '$DRIVE_TYPE' suggests ZFS, but $TARGET_DIR is on $SI_FS_TYPE"
+    STORAGE_WARNINGS=$((STORAGE_WARNINGS + 1))
+}
+
+# Compact one-line description of the detected storage for show_config
+storage_summary() {
+    local s=""
+    case "${STORAGE_DETECT:-1}" in 0|false|no|off) echo "detection disabled (STORAGE_DETECT=0)"; return 0 ;; esac
+    [ -n "${SI_FS_TYPE:-}" ] && s+=" fs=$SI_FS_TYPE"
+    if [ -n "${SI_ZFS_DATASET:-}" ]; then
+        s+=" zfs=$SI_ZFS_DATASET"
+        [ "$SI_ZFS_TYPE" = volume ] && s+=" (zvol)"
+        [ -n "$SI_ZFS_SYNC" ] && s+=" sync=$SI_ZFS_SYNC"
+        [ -n "$SI_ZFS_RECORDSIZE" ] && s+=" recordsize=$SI_ZFS_RECORDSIZE"
+        [ -n "$SI_ZFS_VOLBLOCKSIZE" ] && s+=" volblocksize=$SI_ZFS_VOLBLOCKSIZE"
+        [ -n "$SI_ZFS_COMPRESSION" ] && s+=" compression=$SI_ZFS_COMPRESSION"
+        [ -n "$SI_ZFS_LOGBIAS" ] && s+=" logbias=$SI_ZFS_LOGBIAS"
+    fi
+    if [ -n "${SI_CEPH_KIND:-}" ]; then
+        s+=" ceph=$SI_CEPH_KIND"
+        [ -n "$SI_CEPH_POOL" ] && s+=" pool=$SI_CEPH_POOL"
+    fi
+    s=${s# }
+    echo "${s:-unknown}"
+}
+
 # Function to run FIO test
 
 
@@ -1246,21 +1586,25 @@ upload_results() {
     # (older servers ignore the extra field)
     local -a extra_fields=()
     if [ "$SATURATION_MODE" = true ]; then
-        extra_fields+=(-F "latency_threshold_ms=$LATENCY_THRESHOLD_MS")
+        extra_fields+=(--form-string "latency_threshold_ms=$LATENCY_THRESHOLD_MS")
+    fi
+    # Detected storage configuration (JSON); --form-string so '@'/'<' are never read as files
+    if [ -n "${STORAGE_INFO:-}" ]; then
+        extra_fields+=(--form-string "storage_info=$STORAGE_INFO")
     fi
 
     response=$(curl -s -w "%{http_code}" \
         -X POST \
         -u "$USERNAME:$PASSWORD" \
         -F "file=@$json_file" \
-        -F "drive_model=$DRIVE_MODEL" \
-        -F "drive_type=$DRIVE_TYPE" \
-        -F "hostname=$HOSTNAME" \
-        -F "protocol=$PROTOCOL" \
-        -F "description=$DESCRIPTION" \
-        -F "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        -F "config_uuid=$CONFIG_UUID" \
-        -F "run_uuid=$RUN_UUID" \
+        --form-string "drive_model=$DRIVE_MODEL" \
+        --form-string "drive_type=$DRIVE_TYPE" \
+        --form-string "hostname=$HOSTNAME" \
+        --form-string "protocol=$PROTOCOL" \
+        --form-string "description=$DESCRIPTION" \
+        --form-string "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --form-string "config_uuid=$CONFIG_UUID" \
+        --form-string "run_uuid=$RUN_UUID" \
         "${extra_fields[@]}" \
         "$BACKEND_URL/api/import")
     
@@ -1841,9 +2185,11 @@ print_saturation_summary() {
     echo
 }
 
-# Run one saturation loop per (block size x sync mode), each with its own RUN_UUID
+# Run one saturation loop per (block size x sync mode), each with its own RUN_UUID.
+# With several runs, every run's block size, sync mode and RUN_UUID is listed at the end.
 run_saturation_runs() {
-    local sat_bs sat_sync banner
+    local sat_bs sat_sync banner entry
+    local -a run_uuids=()
     for sat_bs in "${SAT_BLOCK_SIZES_ARR[@]}"; do
         for sat_sync in "${SAT_SYNC_ARR[@]}"; do
             SAT_SYNC="$sat_sync"
@@ -1854,6 +2200,7 @@ run_saturation_runs() {
                 RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_$(date -u +%Y-%m-%dT%H:%M:%S)_${sat_bs}_${sat_sync}")
             fi
             build_description
+            run_uuids+=("${sat_bs}|${sat_sync}|${RUN_UUID}")
 
             if [ ${#SAT_BLOCK_SIZES_ARR[@]} -gt 1 ] || [ ${#SAT_SYNC_ARR[@]} -gt 1 ]; then
                 banner="Block Size: $sat_bs"
@@ -1868,6 +2215,14 @@ run_saturation_runs() {
             print_saturation_summary "$sat_bs"
         done
     done
+
+    if [ ${#run_uuids[@]} -gt 1 ]; then
+        echo "Run UUIDs:"
+        for entry in "${run_uuids[@]}"; do
+            IFS='|' read -r sat_bs sat_sync banner <<< "$entry"
+            printf '  bs=%-8s sync=%-6s %s\n' "$sat_bs" "$sat_sync" "$banner"
+        done
+    fi
 }
 
 # ============================================================
@@ -1911,7 +2266,12 @@ show_config() {
     echo "Drive Model:  $DRIVE_MODEL"
     echo "Drive Type:   $DRIVE_TYPE"
     echo "Config UUID:  $CONFIG_UUID"
-    echo "Run UUID:     $RUN_UUID"
+    # Several saturation runs each generate their own RUN_UUID (listed after the runs)
+    if [ "$SATURATION_MODE" = true ] && [ $(( ${#SAT_BLOCK_SIZES_ARR[@]} * ${#SAT_SYNC_ARR[@]} )) -gt 1 ]; then
+        echo "Run UUID:     one per block size × sync mode (listed at the end)"
+    else
+        echo "Run UUID:     $RUN_UUID"
+    fi
     echo "Test Size:    $TEST_SIZE"
     echo "Num Jobs:     $NUM_JOBS"
     echo "Runtime:      ${RUNTIME[*]} (max: ${max_runtime}s)"
@@ -1925,6 +2285,7 @@ show_config() {
         echo "Target Dir:   $TARGET_DIR"
     fi
     echo "Username:     $USERNAME"
+    echo "Storage:      $(storage_summary)"
     if [ -n "$FIO_EXTRA_ARGS" ]; then
         echo "FIO Extra:    ${FIO_EXTRA_ARGS_ARR[*]}"
     fi
@@ -2233,15 +2594,25 @@ main() {
     
     # Setup target (detect device vs directory mode)
     setup_target_dir
-    
+
+    # Detect the storage configuration once (uploaded with every result)
+    detect_storage
+
     # Show configuration
     show_config
-    
+
     # Validate test configuration for potential issues (skip in saturation mode)
     local config_warnings=0
     if [ "$SATURATION_MODE" != true ]; then
         validate_test_config
         config_warnings=$?
+    fi
+
+    # DRIVE_MODEL/DRIVE_TYPE vs. detected storage (warnings only)
+    storage_plausibility_checks
+    config_warnings=$((config_warnings + STORAGE_WARNINGS))
+    if [ "$SATURATION_MODE" = true ] && [ "$STORAGE_WARNINGS" -gt 0 ]; then
+        print_warning "Configuration warnings detected! Check DRIVE_MODEL/DRIVE_TYPE above."
     fi
 
     # Validate API connectivity and credentials (skip if --yes flag is used)
@@ -2490,6 +2861,11 @@ RUNTIME="60"
 # Retries when fio fails with a transient EAGAIN error (io_uring can return it on
 # reads at the end of the test file); other errors are never retried. 0 = off
 # FIO_RETRY_MAX=2
+# Detect the storage below TARGET_DIR (filesystem, ZFS dataset/zvol properties such as
+# sync/recordsize/volblocksize, CephFS/RBD pool) and upload it as storage_info with every
+# result. Warns when DRIVE_MODEL tags (syncoff, syncall, syncstd, rs16k, vbs16k) or
+# DRIVE_TYPE (mirror, raidz*) do not match the detected ZFS settings. 0 = off
+# STORAGE_DETECT=1
 
 # ============================================================
 # Saturation Test Mode (use with --saturation flag)
@@ -2639,6 +3015,11 @@ Advanced Settings (.env / environment only, all off by default):
                          of a step (e.g. 100G). Per-job size = min(TEST_SIZE, SZ / numjobs),
                          rounded down to whole MiB, minimum 1M. Empty = no cap (default).
                          Adds satcap:<SZ> to the description
+  STORAGE_DETECT=0|1     Detect the storage below the target (filesystem, kernel, fio version,
+                         ZFS dataset/zvol properties, CephFS/RBD pool) and upload it as
+                         storage_info with every result (default: 1). Also warns when
+                         DRIVE_MODEL/DRIVE_TYPE tags (syncoff, syncall, syncstd, rs16k, vbs16k,
+                         mirror, raidz*) do not match the detected ZFS settings
 
 Precedence:
   CLI flags > environment variables > .env file > hardcoded defaults

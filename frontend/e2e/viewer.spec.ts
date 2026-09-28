@@ -12,7 +12,7 @@ test.describe('viewer role (read-only)', () => {
         await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible();
 
         const nav = page.getByRole('navigation', { name: 'Main' });
-        await expect(nav.getByRole('link')).toHaveText(['Dashboard', 'Hosts', 'History', 'Saturation']);
+        await expect(nav.getByRole('link')).toHaveText(['Dashboard', 'Hosts', 'History', 'Saturation', 'Compare']);
         await expect(page.getByRole('link', { name: /Add results/ })).toHaveCount(0);
 
         for (const path of ['/upload', '/admin', '/users']) {
