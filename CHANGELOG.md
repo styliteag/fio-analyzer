@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.11.0] - 2026-09-28
+
+### Added
 - **fio-test.sh**: fio runs that fail with a transient EAGAIN error (seen with io_uring on reads ending at the end of the test file) are retried up to `FIO_RETRY_MAX` times (default 2, `0` = off); other errors are never retried, and the summary shows how many retries were needed
 - **Viewer role (read-only)**: viewers see all analysis pages and data but cannot upload, edit or delete. Stored in `.htviewers`; create with `manage_users.py add --viewer` or in User Management. Docker: run `touch data/auth/.htviewers` before upgrading, otherwise Docker creates a directory for the new mount
 - **API**: `tags` (e.g. `prefill:1,fileperjob:1`), `since`/`until` and `run_uuid` filters on `/api/test-runs` and `/api/time-series/all`; `tags` and `run_uuid` on `/api/time-series/history`
