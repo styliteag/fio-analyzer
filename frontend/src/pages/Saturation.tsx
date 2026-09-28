@@ -9,6 +9,7 @@ import { Loading, ErrorDisplay, EmptyState } from '../components/ui';
 import { useUpdateUrlParams, writeValue } from '../hooks/useUrlState';
 import { TESTING_SCRIPT_URL } from '../utils/apiDocs';
 import SaturationChart from '../components/saturation/SaturationChart';
+import SaturationSummaryTable from '../components/saturation/SaturationSummaryTable';
 import { useSaturationRuns, useSaturationRunData } from '../hooks/useSaturationData';
 import type { SaturationRun, SaturationData } from '../services/api/testRuns';
 
@@ -68,6 +69,9 @@ export default function Saturation() {
     const compareHost = searchParams.get('chost');
     const urlCompareRun = searchParams.get('crun');
     const showCompare = searchParams.get('compare') === '1';
+    // Optional P95 threshold override (ms); empty = the threshold stored with the run
+    const thresholdParam = Number(searchParams.get('threshold'));
+    const thresholdOverride = thresholdParam > 0 ? thresholdParam : undefined;
 
     // Default to the first host and its newest run until the user picks something
     const selectedHost = urlHost ?? hostnames[0] ?? null;
@@ -90,8 +94,8 @@ export default function Saturation() {
     const [compareHidden, setCompareHidden] = useState<Set<string>>(new Set());
 
     // Fetch data for selected runs
-    const { saturationData: primaryData, loading: primaryLoading, error: primaryError } = useSaturationRunData(selectedRunUuid);
-    const { saturationData: compareData, loading: compareLoading, error: compareError } = useSaturationRunData(compareRunUuid);
+    const { saturationData: primaryData, loading: primaryLoading, error: primaryError } = useSaturationRunData(selectedRunUuid, thresholdOverride);
+    const { saturationData: compareData, loading: compareLoading, error: compareError } = useSaturationRunData(compareRunUuid, thresholdOverride);
 
     // Handlers
     const handleHostChange = useCallback((host: string | null) => {
@@ -289,6 +293,19 @@ export default function Saturation() {
                                         <Download className="h-4 w-4" aria-hidden="true" />
                                         Raw JSON (ZIP)
                                     </button>
+                                    <label className="inline-flex items-center gap-2 text-sm theme-text-secondary" title="Empty = the threshold fio-test.sh used for this run (100 ms for older runs)">
+                                        P95 threshold
+                                        <input
+                                            type="number"
+                                            min="0.01"
+                                            step="any"
+                                            value={searchParams.get('threshold') ?? ''}
+                                            placeholder={primaryData ? String(primaryData.threshold_ms) : ''}
+                                            onChange={(e) => updateParams((params) => writeValue(params, 'threshold', e.target.value))}
+                                            className="w-24 px-2 py-1.5 border rounded-lg theme-bg-primary theme-text-primary theme-border-primary"
+                                        />
+                                        ms
+                                    </label>
                                 </div>
                             )}
                         </div>
@@ -328,12 +345,15 @@ export default function Saturation() {
                                 </Card>
                             </div>
                         ) : (
-                            <Card className="p-6">
+                            <Card className="p-6 space-y-6">
                                 <SaturationChart
                                     saturationData={primaryData}
                                     loading={primaryLoading}
                                     error={primaryError}
                                 />
+                                {selectedRunUuid && primaryData && (
+                                    <SaturationSummaryTable runUuid={selectedRunUuid} thresholdMs={primaryData.threshold_ms} />
+                                )}
                             </Card>
                         )}
                     </>

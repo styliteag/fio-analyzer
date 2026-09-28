@@ -8,6 +8,12 @@
   "endpoints": [
     {
       "method": "GET",
+      "path": "/api/compare",
+      "auth": "none",
+      "summary": "Compare Storage Combinations"
+    },
+    {
+      "method": "GET",
       "path": "/api/dashboard/stats",
       "auth": "none",
       "summary": "Get Dashboard Statistics"
@@ -23,6 +29,18 @@
       "path": "/api/import",
       "auth": "uploader",
       "summary": "Import FIO Test Data"
+    },
+    {
+      "method": "GET",
+      "path": "/api/import-log",
+      "auth": "none",
+      "summary": "List Upload Attempts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/import-log/runs/{run_uuid}",
+      "auth": "none",
+      "summary": "Upload Completeness of a Run"
     },
     {
       "method": "POST",
@@ -47,6 +65,12 @@
       "path": "/api/raw/test-runs/{test_run_id}",
       "auth": "none",
       "summary": "Download Raw FIO JSON"
+    },
+    {
+      "method": "GET",
+      "path": "/api/saturation/runs/{run_uuid}/summary",
+      "auth": "none",
+      "summary": "Saturation Summary of a Run"
     },
     {
       "method": "GET",

@@ -50,6 +50,17 @@ Authenticated users without the required role get HTTP 403; missing or invalid c
 ### Dashboard
 - `GET /api/dashboard/stats` - Aggregated counts, averages and last upload time (admin only; computed in SQL, a few hundred bytes)
 
+### Saturation
+- `GET /api/saturation/runs/{run_uuid}/summary?threshold_ms=` - Per pattern: best step within the P95 threshold (highest IOPS) and the first step above it. Uses the stored threshold unless `threshold_ms` is given
+- `GET /api/test-runs/saturation-data?run_uuid=&threshold_ms=` - Chart data; `threshold_ms` defaults to the stored threshold (100 ms for older runs)
+
+### Comparison
+- `GET /api/compare?target=A&target=B[&target=C…]` - Compare 2–10 targets side by side. A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted or `*`. The first target is the baseline; every other target gets `diff_pct` per metric (iops, bandwidth, avg/p95/p99 latency) and a `better` flag. Options: `source=latest|history`, `patterns`, `block_sizes`, `syncs`, `include_incomplete`, plus the run filters below
+
+### Import Log
+- `GET /api/import-log/runs/{run_uuid}` - Upload attempts per outcome (`imported`, `rejected`, `error`) plus rows stored for the run, and the failed attempts with reasons
+- `GET /api/import-log/?run_uuid=&status=&hostname=&since=&until=&limit=` - List upload attempts, newest first
+
 ### Raw Data
 - `GET /api/raw/test-runs/{id}?source=latest|history|saturation` - Download the uploaded fio JSON of one test run (`latest` = id returned by uploads)
 - `GET /api/raw/runs/{run_uuid}` - Download all fio JSON files of a script run (incl. saturation steps) as ZIP; `index.json` maps files to test runs and lists missing files

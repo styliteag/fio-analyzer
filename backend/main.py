@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from config.settings import settings
 from database.connection import close_database, init_database
-from routers import dashboard, imports, raw_data, test_runs, time_series, users, utils_router
+from routers import compare, dashboard, import_log, imports, raw_data, saturation, test_runs, time_series, users, utils_router
 from utils.logging import log_error, log_info, setup_logging
 
 # Setup logging
@@ -230,6 +230,33 @@ app.include_router(
         401: {"description": "Authentication required"},
         403: {"description": "Admin access required"},
         500: {"description": "Internal server error"},
+    },
+)
+app.include_router(
+    compare.router,
+    prefix="/api/compare",
+    tags=["Comparison"],
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Read access required"},
+    },
+)
+app.include_router(
+    saturation.router,
+    prefix="/api/saturation",
+    tags=["Saturation"],
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Read access required"},
+    },
+)
+app.include_router(
+    import_log.router,
+    prefix="/api/import-log",
+    tags=["Import Log"],
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Read access required"},
     },
 )
 app.include_router(

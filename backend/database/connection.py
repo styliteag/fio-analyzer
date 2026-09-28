@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 from config.settings import settings
+from database.import_log import ensure_import_log_table
+from database.saturation_migration import add_threshold_column
 from database.sync_migration import migrate_sync_to_text
 from utils.helpers import (
     calculate_unique_key,
@@ -442,6 +444,12 @@ class DatabaseManager:
 
         # Migration 5: fio sync mode as text (none, sync, dsync) instead of 0/1
         migrate_sync_to_text(cursor)
+
+        # Migration 6: import log (every upload attempt, incl. rejected ones)
+        ensure_import_log_table(cursor)
+
+        # Migration 7: latency threshold used by saturation runs
+        add_threshold_column(cursor)
 
         self.connection.commit()
 

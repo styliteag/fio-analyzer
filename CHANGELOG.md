@@ -13,9 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **API**: `tags` (e.g. `prefill:1,fileperjob:1`), `since`/`until` and `run_uuid` filters on `/api/test-runs` and `/api/time-series/all`; `tags` and `run_uuid` on `/api/time-series/history`
 - **API**: Download raw fio JSON: `GET /api/raw/test-runs/{id}` (one test run, `source=latest|history|saturation`) and `GET /api/raw/runs/{run_uuid}` (whole run incl. saturation steps as ZIP with `index.json`). UI: "Raw JSON" in the test run details and "Raw JSON (ZIP)" on the Saturation page
 - **fio-test.sh**: `SAT_SYNC` accepts a list (e.g. `sync,dsync`); each block size × sync mode is its own saturation run
+- **Saturation summary**: `GET /api/saturation/runs/{run_uuid}/summary` returns per pattern the step with the highest IOPS within the P95 threshold and the first step that crossed it; also shown as a table on the Saturation page. fio-test.sh now sends the threshold with saturation uploads and the server stores it (older runs: pass `threshold_ms`)
+- **Comparison**: `GET /api/compare?target=…&target=…` compares 2–10 Host-Protocol-Type-Model combinations (partial or `*`) per pattern, block size, sync mode, direct, numjobs and iodepth, with the difference in % to the first target and a median summary; supports `source=history` and the tag/date/run filters
+- **Import log**: every upload attempt is recorded (imported, rejected with reason, or error). `GET /api/import-log/runs/{run_uuid}` counts attempts and stored rows per run; `GET /api/import-log/` lists attempts with filters
 - **fio-test.sh**: `SAT_MAX_TOTAL_SIZE` caps the total file size with `FILE_PER_JOB=1` in saturation mode (per-job size = cap / numjobs, at least 1M); tagged `satcap:<size>` in the description
 
 ### Changed
+- **Saturation page**: the chart uses the threshold stored with the run instead of always 100 ms (runs from fio-test.sh with `--threshold 20` were shown against the wrong line); a "P95 threshold" field overrides it
 - **API**: Authenticated users without the required role now get HTTP 403 instead of 401, so the web UI no longer logs them out
 
 ### Security

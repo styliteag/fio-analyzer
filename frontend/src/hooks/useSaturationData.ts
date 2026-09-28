@@ -144,7 +144,8 @@ export interface UseSaturationRunDataReturn {
     error: string | null;
 }
 
-export const useSaturationRunData = (runUuid: string | null): UseSaturationRunDataReturn => {
+/** thresholdMs: explicit P95 threshold; undefined = the one stored with the run (server default) */
+export const useSaturationRunData = (runUuid: string | null, thresholdMs?: number): UseSaturationRunDataReturn => {
     const [saturationData, setSaturationData] = useState<SaturationData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -164,7 +165,7 @@ export const useSaturationRunData = (runUuid: string | null): UseSaturationRunDa
         setError(null);
 
         try {
-            const response = await fetchSaturationData(runUuid, undefined, controller.signal);
+            const response = await fetchSaturationData(runUuid, thresholdMs, controller.signal);
             if (controller.signal.aborted) return;
             if (response.data) {
                 setSaturationData(response.data);
@@ -179,7 +180,7 @@ export const useSaturationRunData = (runUuid: string | null): UseSaturationRunDa
                 setLoading(false);
             }
         }
-    }, [runUuid]);
+    }, [runUuid, thresholdMs]);
 
     useEffect(() => {
         loadData();

@@ -185,6 +185,12 @@ docker build \
   - `GET /api/time-series/servers`, `GET /api/time-series/all`
   - `GET /api/time-series/latest`, `GET /api/time-series/history`, `GET /api/time-series/trends`
   - `PUT /api/time-series/bulk`, `DELETE /api/time-series/delete`
+- Dashboard, analysis and raw data (viewer or admin):
+  - `GET /api/dashboard/stats`
+  - `GET /api/saturation/runs/{run_uuid}/summary`
+  - `GET /api/compare?target=…&target=…`
+  - `GET /api/import-log/runs/{run_uuid}`, `GET /api/import-log/`
+  - `GET /api/raw/test-runs/{id}`, `GET /api/raw/runs/{run_uuid}` (ZIP)
 - Users:
   - `GET /api/users/`, `GET /api/users/me`, `POST /api/users/`
   - `GET /api/users/{username}`, `PUT /api/users/{username}`, `DELETE /api/users/{username}`

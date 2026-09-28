@@ -26,6 +26,7 @@ from fastapi import (
 from auth.middleware import User, require_admin, require_uploader
 from config.settings import settings
 from database.connection import db_manager, get_db
+from database.import_log import record_import
 from utils.logging import log_error, log_info
 from utils.sync_mode import normalize_sync
 
@@ -59,6 +60,15 @@ def generate_uuid_from_hash(input_string: str) -> str:
 
     # Convert to UUID object and return as string
     return str(uuid.UUID(bytes=bytes(uuid_bytes)))
+
+
+def threshold_from_form(value: Optional[str]) -> Optional[float]:
+    """Parse the optional latency threshold form field; invalid values are ignored rather than failing the upload."""
+    try:
+        threshold = float(value) if value else None
+    except ValueError:
+        return None
+    return threshold if threshold is not None and 0 < threshold <= 100000 else None
 
 
 def is_saturation_run(description: str) -> bool:
@@ -147,11 +157,18 @@ async def import_fio_data(
         None,
         description="Configuration UUID - fixed per host-config (generated from hostname if not provided)",
         example="550e8400-e29b-41d4-a716-446655440000",
+        max_length=64,
     ),
     run_uuid: Optional[str] = Form(
         None,
         description="Run UUID - unique per script execution (generated from hostname+date if not provided)",
         example="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+        max_length=64,
+    ),
+    latency_threshold_ms: Optional[str] = Form(
+        None,
+        description="Saturation runs only: P95 latency threshold in ms used by fio-test.sh (stored for the saturation summary)",
+        example="20",
     ),
     user: User = Depends(require_uploader),
     db: sqlite3.Connection = Depends(get_db),
@@ -191,6 +208,8 @@ async def import_fio_data(
     future reference and potential re-import.
     """
     request_id = getattr(request.state, "request_id", "unknown")
+    # Every attempt goes to the import log, so completeness per run_uuid can be checked later
+    attempt = {"username": user.username, "run_uuid": run_uuid, "config_uuid": config_uuid, "hostname": hostname, "filename": file.filename}
 
     try:
         # Validate file
@@ -251,6 +270,8 @@ async def import_fio_data(
             hash_seed = "_".join(meta_fields)
             test_run_data["run_uuid"] = generate_uuid_from_hash(hash_seed)
 
+        test_run_data["latency_threshold_ms"] = threshold_from_form(latency_threshold_ms)
+
         # Save uploaded file
         file_path = save_uploaded_file(content, file.filename, test_run_data)
 
@@ -259,10 +280,21 @@ async def import_fio_data(
 
         # Route to appropriate table based on description
         if is_saturation_run(description):
+            target_table = "saturation_runs"
             test_run_id = insert_saturation_run(db, test_run_data, file_path)
         else:
+            target_table = "test_runs"
             await db_manager.update_latest_flags(test_run_data)
             test_run_id = insert_test_run(db, test_run_data, file_path)
+
+        record_import(
+            db,
+            **{**attempt, "run_uuid": test_run_data.get("run_uuid"), "config_uuid": test_run_data.get("config_uuid")},
+            status="imported",
+            http_status=200,
+            target_table=target_table,
+            test_run_id=test_run_id,
+        )
 
         log_info(
             "FIO data imported successfully",
@@ -284,10 +316,14 @@ async def import_fio_data(
             "filename": file.filename,
         }
 
-    except HTTPException:
+    except HTTPException as error:
+        db.rollback()  # never commit a half-finished import together with the log entry
+        record_import(db, **attempt, status="rejected", http_status=error.status_code, detail=str(error.detail))
         raise
     except Exception as e:
         log_error("Error importing FIO data", e, {"request_id": request_id})
+        db.rollback()
+        record_import(db, **attempt, status="error", http_status=500, detail=type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to import FIO data")
 
 
@@ -991,6 +1027,7 @@ def insert_saturation_run(db: sqlite3.Connection, test_run_data: Dict[str, Any],
         "description",
         "config_uuid",
         "run_uuid",
+        "latency_threshold_ms",
         "output_file",
         "num_jobs",
         "direct",

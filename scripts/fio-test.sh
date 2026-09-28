@@ -1241,7 +1241,14 @@ upload_results() {
     print_status "      Description: $DESCRIPTION"
     print_status "         Run UUID: $RUN_UUID"
     print_status "      config_uuid: $CONFIG_UUID"
-    
+
+    # Saturation uploads carry the P95 threshold so the server can summarize saturation points
+    # (older servers ignore the extra field)
+    local -a extra_fields=()
+    if [ "$SATURATION_MODE" = true ]; then
+        extra_fields+=(-F "latency_threshold_ms=$LATENCY_THRESHOLD_MS")
+    fi
+
     response=$(curl -s -w "%{http_code}" \
         -X POST \
         -u "$USERNAME:$PASSWORD" \
@@ -1254,6 +1261,7 @@ upload_results() {
         -F "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         -F "config_uuid=$CONFIG_UUID" \
         -F "run_uuid=$RUN_UUID" \
+        "${extra_fields[@]}" \
         "$BACKEND_URL/api/import")
     
     http_code="${response: -3}"

@@ -316,6 +316,41 @@ export interface SaturationPatternData {
     saturation_point: SaturationStep | null;
 }
 
+export interface SaturationSummaryStep {
+    id: number;
+    total_qd: number;
+    iodepth: number;
+    num_jobs: number;
+    iops: number | null;
+    bandwidth: number | null;
+    p95_latency: number | null;
+}
+
+/** Per-pattern result of GET /api/saturation/runs/{run_uuid}/summary */
+export interface SaturationPatternSummary {
+    read_write_pattern: string;
+    block_size: string;
+    sync: string | null;
+    status: 'saturated' | 'not_reached';
+    steps: number;
+    best_within: SaturationSummaryStep | null;
+    crossed_at: SaturationSummaryStep | null;
+}
+
+export interface SaturationSummary {
+    run_uuid: string;
+    hostname: string;
+    threshold_ms: number;
+    threshold_source: 'query' | 'stored';
+    patterns: SaturationPatternSummary[];
+}
+
+export const fetchSaturationSummary = async (runUuid: string, thresholdMs: number, abortSignal?: AbortSignal) =>
+    apiCall<SaturationSummary>(
+        `/api/saturation/runs/${encodeURIComponent(runUuid)}/summary?threshold_ms=${thresholdMs}`,
+        { signal: abortSignal },
+    );
+
 export interface SaturationData {
     run_uuid: string;
     hostname: string;

@@ -19,6 +19,7 @@ from fastapi import (
 from auth.middleware import User, require_admin, require_viewer
 from database.connection import get_db
 from database.models import BulkUpdateRequest
+from routers.saturation import stored_threshold
 from utils.logging import log_error, log_info
 from utils.run_filters import build_run_filters
 from utils.sync_mode import parse_sync_filter
@@ -881,12 +882,13 @@ async def get_saturation_data(
         description="The run_uuid of the saturation test run",
         example="550e8400-e29b-41d4-a716-446655440000",
     ),
-    threshold_ms: float = Query(
-        100.0,
+    threshold_ms: Optional[float] = Query(
+        None,
         ge=0.01,
         le=100000.0,
-        description="P95 latency threshold in milliseconds for saturation point calculation",
-        example=100.0,
+        description="P95 latency threshold in milliseconds for saturation point calculation. "
+        "Default: the threshold stored with the run (sent by fio-test.sh), else 100 ms",
+        example=20.0,
     ),
     user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
@@ -909,7 +911,7 @@ async def get_saturation_data(
             SELECT id, timestamp, hostname, protocol, drive_type, drive_model,
                    block_size, read_write_pattern, iodepth, num_jobs,
                    iops, avg_latency, bandwidth, p95_latency, p99_latency,
-                   config_uuid, run_uuid, description
+                   config_uuid, run_uuid, description, latency_threshold_ms
             FROM saturation_runs
             WHERE run_uuid = ?
             ORDER BY (iodepth * num_jobs) ASC
@@ -922,6 +924,11 @@ async def get_saturation_data(
                 status_code=404,
                 detail=f"No saturation data found for run_uuid: {run_uuid}"
             )
+
+        # Threshold: query > stored with the run > historical default of 100 ms
+        stored = stored_threshold([dict(row) for row in rows])
+        if threshold_ms is None:
+            threshold_ms = stored if stored is not None else 100.0
 
         # Group by pattern
         patterns: dict = {}
