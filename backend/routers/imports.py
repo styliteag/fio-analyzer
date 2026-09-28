@@ -4,6 +4,7 @@ Import API router
 
 import hashlib
 import json
+import re
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -193,7 +194,7 @@ async def import_fio_data(
 
     try:
         # Validate file
-        if not file.filename.endswith(".json"):
+        if not file.filename or not file.filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Only JSON files are supported")
 
         if file.size and file.size > settings.max_upload_size:
@@ -1037,6 +1038,13 @@ def insert_saturation_run(db: sqlite3.Connection, test_run_data: Dict[str, Any],
     return run_id
 
 
+def safe_path_component(value: Any, fallback: str) -> str:
+    """Reduce a client-supplied name to one safe path component (no separators, no '..')."""
+    name = Path(str(value or "")).name
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", name).strip(".")
+    return name[:100] or fallback
+
+
 def save_uploaded_file(content: bytes, filename: str, test_run_data: Dict[str, Any]) -> str:
     """
     Save uploaded file to organized directory structure on disk.
@@ -1055,18 +1063,20 @@ def save_uploaded_file(content: bytes, filename: str, test_run_data: Dict[str, A
         Full path to the saved file
     """
 
-    # Create directory structure
-    hostname = test_run_data.get("hostname", "unknown")
-    protocol = test_run_data.get("protocol", "unknown")
+    # Create directory structure (client-supplied names are sanitized: no path traversal)
+    hostname = safe_path_component(test_run_data.get("hostname"), "unknown")
+    protocol = safe_path_component(test_run_data.get("protocol"), "unknown")
     timestamp = datetime.now(timezone.utc)
 
     dir_path = settings.upload_dir / hostname / protocol / timestamp.strftime("%Y-%m-%d") / timestamp.strftime("%H-%M")
 
-    dir_path.mkdir(parents=True, exist_ok=True)
-
     # Save file
-    unique_filename = f"{uuid.uuid4().hex}_{filename}"
+    unique_filename = f"{uuid.uuid4().hex}_{safe_path_component(filename, 'upload.json')}"
     file_path = dir_path / unique_filename
+    if not file_path.resolve().is_relative_to(settings.upload_dir.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid upload path")
+
+    dir_path.mkdir(parents=True, exist_ok=True)
 
     with open(file_path, "wb") as f:
         f.write(content)

@@ -16,10 +16,11 @@ from fastapi import (
     Request,
 )
 
-from auth.middleware import User, require_admin
+from auth.middleware import User, require_admin, require_viewer
 from database.connection import get_db
 from database.models import BulkUpdateRequest
 from utils.logging import log_error, log_info
+from utils.run_filters import build_run_filters
 from utils.sync_mode import parse_sync_filter
 
 router = APIRouter()
@@ -135,7 +136,15 @@ async def get_test_runs(
         description="Include total count and pagination metadata in response",
         example=False,
     ),
-    user: User = Depends(require_admin),
+    tags: Optional[str] = Query(
+        None,
+        description="Comma-separated description tags that must all be present (key:value), e.g. prefill:1,fileperjob:1",
+        example="prefill:1",
+    ),
+    since: Optional[str] = Query(None, description="Only runs at or after this date/time (YYYY-MM-DD or ISO datetime)", example="2026-09-01"),
+    until: Optional[str] = Query(None, description="Only runs up to this date (whole day) or ISO datetime", example="2026-09-30"),
+    run_uuid: Optional[str] = Query(None, description="Comma-separated run_uuid values"),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
@@ -244,6 +253,11 @@ async def get_test_runs(
             placeholders = ",".join(["?" for _ in duration_list])
             where_conditions.append(f"duration IN ({placeholders})")
             params.extend(duration_list)
+
+        # Tag, date-range and run_uuid filters (shared with other test-run endpoints)
+        extra_conditions, extra_params = build_run_filters(tags=tags, since=since, until=until, run_uuids=run_uuid)
+        where_conditions.extend(extra_conditions)
+        params.extend(extra_params)
 
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
@@ -629,7 +643,7 @@ async def get_performance_data(
         description="Comma-separated list of test run IDs to retrieve performance data for",
         example="1,2,3,15,42",
     ),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
@@ -780,7 +794,7 @@ async def get_saturation_runs(
         ge=0,
         description="Number of runs to skip",
     ),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
@@ -874,7 +888,7 @@ async def get_saturation_data(
         description="P95 latency threshold in milliseconds for saturation point calculation",
         example=100.0,
     ),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
@@ -1195,7 +1209,7 @@ async def get_test_runs_grouped_by_uuid(
         description="Field to group by (config_uuid or run_uuid)",
         example="config_uuid",
     ),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
@@ -1361,7 +1375,7 @@ async def get_test_run(
         example=1,
         gt=0,
     ),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """

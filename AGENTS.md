@@ -81,7 +81,9 @@ Update `CHANGELOG.md` in every commit, because releases are cut from the `[Unrel
 ## Authentication & Roles
 - Admins: full access to UI and management actions. Stored in `backend/.htpasswd`.
 - Uploaders: can upload FIO results only. Stored in `backend/.htuploaders`.
-- Manage users: `cd backend && uv run python scripts/manage_users.py add --username <u> --password <p> [--uploader]` (use `list`/`remove` accordingly, e.g. `list --uploader`, `remove --username <u> --uploader`).
+- Viewers: read-only access to all data and raw JSON downloads, no uploads or changes. Stored in `backend/.htviewers`.
+- Backend guards: `require_viewer` (admin or viewer) for read endpoints, `require_admin` for changes, `require_uploader` for imports. Authenticated users without the role get 403, never 401 (the frontend logs out on 401).
+- Manage users: `cd backend && uv run python scripts/manage_users.py add --username <u> --password <p> [--uploader|--viewer]` (use `list`/`remove` accordingly, e.g. `list --viewer`, `remove --username <u> --uploader`).
 
 ## Database
 - SQLite with a simplified schema: performance metrics (iops, latency, bandwidth, p95/p99 latency) are stored directly in the main tables; there are no separate performance_metrics tables.
@@ -93,6 +95,7 @@ Update `CHANGELOG.md` in every commit, because releases are cut from the `[Unrel
   - `./data/backend/uploads:/app/uploads` (uploaded files)
   - `./data/auth/.htpasswd:/app/.htpasswd` (admin users)
   - `./data/auth/.htuploaders:/app/.htuploaders` (upload-only users)
+  - `./data/auth/.htviewers:/app/.htviewers` (read-only users; the file must exist before `docker compose up`)
 
 ### UUID Tracking
 - `config_uuid`: fixed per host configuration. Set as `CONFIG_UUID` in `.env` (optional); otherwise generated from a hostname hash. Groups all tests from one host configuration.

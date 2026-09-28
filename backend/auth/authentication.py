@@ -18,9 +18,25 @@ _auth_cache: Dict[str, Tuple[str, float]] = {}
 _cache_duration = 300  # 5 minutes cache
 
 
+def _role_files_version() -> str:
+    """Modification times of all role files, so edits (also by manage_users.py) invalidate the cache."""
+    versions = []
+    for path in (settings.htpasswd_path, settings.htuploaders_path, settings.htviewers_path):
+        try:
+            versions.append(str(path.stat().st_mtime_ns))
+        except OSError:
+            versions.append("-")
+    return ",".join(versions)
+
+
 def _get_cache_key(username: str, password: str) -> str:
-    """Generate cache key for username/password combination"""
-    return hashlib.sha256(f"{username}:{password}".encode()).hexdigest()
+    """Generate cache key for username/password combination and the current role files"""
+    return hashlib.sha256(f"{username}:{password}:{_role_files_version()}".encode()).hexdigest()
+
+
+def clear_auth_cache() -> None:
+    """Forget cached roles, e.g. after users or roles changed."""
+    _auth_cache.clear()
 
 
 def parse_htpasswd(file_path: Path) -> Optional[Dict[str, str]]:
@@ -124,6 +140,16 @@ def is_uploader_user(username: str, password: str) -> bool:
     return is_valid
 
 
+def is_viewer_user(username: str, password: str) -> bool:
+    """Check if user has read-only (viewer) privileges"""
+    viewers = parse_htpasswd(settings.htviewers_path)
+    if not viewers or username not in viewers:
+        return False
+    is_valid = verify_password(password, viewers[username])
+    log_debug("Viewer authentication attempt", {"username": username, "success": is_valid})
+    return is_valid
+
+
 def get_user_role(username: str, password: str) -> Optional[str]:
     """Get user role with caching"""
     cache_key = _get_cache_key(username, password)
@@ -154,6 +180,8 @@ def get_user_role(username: str, password: str) -> Optional[str]:
         role = "admin"
     elif is_uploader_user(username, password):
         role = "uploader"
+    elif is_viewer_user(username, password):
+        role = "viewer"
 
     # Cache the result (even if None, to avoid repeated bcrypt calls for invalid users)
     _auth_cache[cache_key] = (role, current_time)

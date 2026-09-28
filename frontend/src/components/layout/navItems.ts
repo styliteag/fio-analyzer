@@ -9,8 +9,9 @@ import {
     Upload,
     Users,
 } from 'lucide-react';
+import type { UserRole } from '../../services/api/users';
 
-export type NavRole = 'admin' | 'uploader';
+export type NavRole = UserRole;
 
 export interface NavItem {
     readonly to: string;
@@ -21,10 +22,10 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: readonly NavItem[] = [
-    { to: '/', label: 'Dashboard', icon: LayoutDashboard, description: 'Overview of all benchmark data', roles: ['admin'] },
-    { to: '/host', label: 'Hosts', icon: Server, description: 'Compare hosts and drives', roles: ['admin'] },
-    { to: '/history', label: 'History', icon: History, description: 'Metrics over time', roles: ['admin'] },
-    { to: '/saturation', label: 'Saturation', icon: Gauge, description: 'Queue depth saturation tests', roles: ['admin'] },
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard, description: 'Overview of all benchmark data', roles: ['admin', 'viewer'] },
+    { to: '/host', label: 'Hosts', icon: Server, description: 'Compare hosts and drives', roles: ['admin', 'viewer'] },
+    { to: '/history', label: 'History', icon: History, description: 'Metrics over time', roles: ['admin', 'viewer'] },
+    { to: '/saturation', label: 'Saturation', icon: Gauge, description: 'Queue depth saturation tests', roles: ['admin', 'viewer'] },
     { to: '/upload', label: 'Upload', icon: Upload, description: 'Import FIO JSON results', roles: ['admin', 'uploader'] },
     { to: '/admin', label: 'Admin', icon: Settings, description: 'Manage test runs', roles: ['admin'] },
     { to: '/users', label: 'Users', icon: Users, description: 'Manage user accounts', roles: ['admin'] },

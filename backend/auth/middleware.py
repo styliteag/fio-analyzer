@@ -29,7 +29,10 @@ def get_current_user(request: Request) -> Optional[User]:
     # Log all headers for debugging
     log_debug(
         "Auth check - all headers",
-        {"request_id": request_id, "headers": dict(request.headers)},
+        {
+            "request_id": request_id,
+            "headers": {k: ("<redacted>" if k.lower() == "authorization" else v) for k, v in request.headers.items()},
+        },
     )
 
     auth_header = request.headers.get("authorization")
@@ -50,7 +53,7 @@ def get_current_user(request: Request) -> Optional[User]:
     if not credentials:
         log_debug(
             "Auth check - failed to parse auth header",
-            {"request_id": request_id, "auth_header": auth_header},
+            {"request_id": request_id, "auth_header_prefix": auth_header.split(" ", 1)[0]},
         )
         return None
 
@@ -147,8 +150,9 @@ def require_admin(request: Request) -> User:
                 "ip": request.client.host if request.client else "unknown",
             },
         )
+        # 403 (not 401): the user is authenticated, and clients log out on 401
         raise HTTPException(
-            status_code=401,
+            status_code=403,
             detail="Admin access required",
         )
 
@@ -206,5 +210,29 @@ def require_uploader(request: Request) -> User:
             "ip": request.client.host if request.client else "unknown",
         },
     )
+
+    return user
+
+
+READ_ROLES = ("admin", "viewer")
+
+
+def require_viewer(request: Request) -> User:
+    """Require read access (admin or read-only viewer users)"""
+    user = get_current_user(request)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    if user.role not in READ_ROLES:
+        log_info(
+            "Read access denied - insufficient privileges",
+            {
+                "request_id": getattr(request.state, "request_id", "unknown"),
+                "username": user.username,
+                "role": user.role,
+            },
+        )
+        raise HTTPException(status_code=403, detail="Read access required")
 
     return user

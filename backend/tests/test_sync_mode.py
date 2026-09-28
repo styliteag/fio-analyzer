@@ -105,12 +105,13 @@ def call_route(router_module, prefix: str, path: str) -> int:
     import httpx
     from fastapi import FastAPI
 
-    from auth.middleware import User, require_admin
+    from auth.middleware import User, require_admin, require_viewer
     from database.connection import get_db
 
     app = FastAPI()
     app.include_router(router_module.router, prefix=prefix)
     app.dependency_overrides[require_admin] = lambda: User("admin", "admin")
+    app.dependency_overrides[require_viewer] = lambda: User("admin", "admin")
     app.dependency_overrides[get_db] = lambda: sqlite3.connect(":memory:", check_same_thread=False)
 
     async def call() -> int:

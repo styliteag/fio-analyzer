@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Gauge } from 'lucide-react';
+import { Download, Gauge } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
+import { downloadRunZip } from '../services/api/rawData';
 import { PageHeader } from '../components/layout';
 import Card from '../components/ui/Card';
 import { Loading, ErrorDisplay, EmptyState } from '../components/ui';
@@ -120,6 +122,11 @@ export default function Saturation() {
         updateParams((params) => ['compare', 'chost', 'crun'].forEach((key) => params.delete(key)));
         setCompareHidden(new Set());
     }, [updateParams]);
+
+    const toast = useToast();
+    const handleDownloadRun = useCallback((runUuid: string) => {
+        downloadRunZip(runUuid).catch((error: Error) => toast.error(error.message));
+    }, [toast]);
 
     const handleAddCompare = useCallback(() => {
         updateParams((params) => params.set('compare', '1'));
@@ -263,14 +270,24 @@ export default function Saturation() {
                                 </div>
                             )}
 
-                            {/* Add compare button */}
-                            {!showCompare && selectedRunUuid && (
-                                <div>
+                            {selectedRunUuid && (
+                                <div className="flex flex-wrap gap-2">
+                                    {/* Add compare button */}
+                                    {!showCompare && (
+                                        <button
+                                            onClick={handleAddCompare}
+                                            className="px-4 py-2 text-sm font-medium theme-text-secondary hover:theme-text-primary hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg border theme-border-primary transition-colors"
+                                        >
+                                            + Compare with another run
+                                        </button>
+                                    )}
                                     <button
-                                        onClick={handleAddCompare}
-                                        className="px-4 py-2 text-sm font-medium theme-text-secondary hover:theme-text-primary hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg border theme-border-primary transition-colors"
+                                        onClick={() => handleDownloadRun(selectedRunUuid)}
+                                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium theme-text-secondary hover:theme-text-primary hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg border theme-border-primary transition-colors"
+                                        title="All raw fio JSON files of this run as a ZIP"
                                     >
-                                        + Compare with another run
+                                        <Download className="h-4 w-4" aria-hidden="true" />
+                                        Raw JSON (ZIP)
                                     </button>
                                 </div>
                             )}

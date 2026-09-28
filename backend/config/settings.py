@@ -19,6 +19,7 @@ class Settings:
         # Authentication configuration
         self.htpasswd_path = self.base_dir / ".htpasswd"
         self.htuploaders_path = self.base_dir / ".htuploaders"
+        self.htviewers_path = self.base_dir / ".htviewers"  # read-only users
 
         # Server configuration
         self.port = int(os.getenv("PORT", "8000"))

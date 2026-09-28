@@ -8,10 +8,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
-from auth.middleware import User, require_admin
+from auth.middleware import User, require_admin, require_viewer
 from database.connection import get_db
 from database.models import TrendData
 from utils.logging import log_error, log_info
+from utils.run_filters import build_run_filters
 from utils.sync_mode import parse_sync_filter
 
 router = APIRouter()
@@ -56,7 +57,7 @@ router = APIRouter()
 @router.get("/servers/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_servers(
     request: Request,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
@@ -244,7 +245,15 @@ async def get_all_time_series(
         example=500,
     ),
     offset: int = Query(0, ge=0, description="Number of records to skip for pagination", example=0),
-    user: User = Depends(require_admin),
+    tags: Optional[str] = Query(
+        None,
+        description="Comma-separated description tags that must all be present (key:value), e.g. prefill:1,fileperjob:1",
+        example="prefill:1",
+    ),
+    since: Optional[str] = Query(None, description="Only runs at or after this date/time (YYYY-MM-DD or ISO datetime)", example="2026-09-01"),
+    until: Optional[str] = Query(None, description="Only runs up to this date (whole day) or ISO datetime", example="2026-09-30"),
+    run_uuid: Optional[str] = Query(None, description="Comma-separated run_uuid values"),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
@@ -354,6 +363,11 @@ async def get_all_time_series(
             placeholders = ",".join(["?" for _ in duration_list])
             where_conditions.append(f"duration IN ({placeholders})")
             params.extend(duration_list)
+
+        # Tag, date-range and run_uuid filters (shared with other test-run endpoints)
+        extra_conditions, extra_params = build_run_filters(tags=tags, since=since, until=until, run_uuids=run_uuid)
+        where_conditions.extend(extra_conditions)
+        params.extend(extra_params)
 
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
 
@@ -473,7 +487,7 @@ async def get_latest_time_series(
         description="Maximum number of test runs to process (before metric expansion)",
         example=50,
     ),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
@@ -690,7 +704,13 @@ async def get_historical_time_series(
         example=1000,
     ),
     offset: int = Query(0, ge=0, description="Number of records to skip for pagination", example=0),
-    user: User = Depends(require_admin),
+    tags: Optional[str] = Query(
+        None,
+        description="Comma-separated description tags that must all be present (key:value), e.g. prefill:1,fileperjob:1",
+        example="prefill:1",
+    ),
+    run_uuid: Optional[str] = Query(None, description="Comma-separated run_uuid values"),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
@@ -811,6 +831,11 @@ async def get_historical_time_series(
             if end_date:
                 where_conditions.append("timestamp <= ?")
                 params.append(end_date)
+
+        # Tag, date-range and run_uuid filters (shared with other test-run endpoints)
+        extra_conditions, extra_params = build_run_filters(tags=tags, run_uuids=run_uuid)
+        where_conditions.extend(extra_conditions)
+        params.extend(extra_params)
 
         where_clause = " AND ".join(where_conditions)
 
@@ -973,7 +998,7 @@ async def get_trends(
         description="Number of days to analyze for trend calculation",
         example=30,
     ),
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """

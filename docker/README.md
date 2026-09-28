@@ -103,6 +103,7 @@ volumes:
   - ./data/backend/uploads:/app/uploads          # Uploaded FIO files
   - ./data/auth/.htpasswd:/app/.htpasswd         # Admin users
   - ./data/auth/.htuploaders:/app/.htuploaders   # Upload-only users
+  - ./data/auth/.htviewers:/app/.htviewers       # Read-only users
 ```
 
 ## Authentication Management
@@ -110,6 +111,11 @@ volumes:
 ### User Roles
 - **Admin Users** (`.htpasswd`): Full access - view data, upload tests, manage system
 - **Upload-Only Users** (`.htuploaders`): Restricted access - upload FIO test results only
+- **Viewer Users** (`.htviewers`): Read-only access - view all data and download raw FIO JSON, no uploads or changes
+
+> **Upgrading to a version with viewer users:** create the file before starting the container,
+> otherwise Docker creates a directory in its place:
+> `touch docker/data/auth/.htviewers` (or `touch data/auth/.htviewers` next to your compose file).
 
 ### User Management
 ```bash
@@ -122,6 +128,7 @@ docker exec -it fio-app python scripts/manage_users.py add --username uploader -
 # View current users
 docker exec fio-app cat /app/.htpasswd          # Admin users
 docker exec fio-app cat /app/.htuploaders       # Upload-only users
+docker exec fio-app cat /app/.htviewers         # Read-only users
 ```
 
 ### Security Features

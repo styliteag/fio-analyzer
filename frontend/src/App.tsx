@@ -14,12 +14,14 @@ import Upload from "./pages/Upload";
 import UserManager from "./pages/UserManager";
 
 const ADMIN = ["admin"] as const;
-const ANY_ROLE = ["admin", "uploader"] as const;
+const READERS = ["admin", "viewer"] as const;
+const UPLOADERS = ["admin", "uploader"] as const;
 
 const adminOnly = (page: React.ReactNode) => <RequireRole roles={ADMIN}>{page}</RequireRole>;
+const readersOnly = (page: React.ReactNode) => <RequireRole roles={READERS}>{page}</RequireRole>;
 
 const ProtectedApp = () => {
-	const { isAuthenticated, isAdmin, login, loading, error } = useAuth();
+	const { isAuthenticated, canRead, login, loading, error } = useAuth();
 
 	if (loading) {
 		return (
@@ -38,11 +40,11 @@ const ProtectedApp = () => {
 	return (
 		<Routes>
 			<Route element={<AppShell />}>
-				<Route path="/" element={isAdmin ? <Home /> : <Navigate to="/upload" replace />} />
-				<Route path="/host" element={adminOnly(<Host />)} />
-				<Route path="/history" element={adminOnly(<History />)} />
-				<Route path="/saturation" element={adminOnly(<Saturation />)} />
-				<Route path="/upload" element={<RequireRole roles={ANY_ROLE}><Upload /></RequireRole>} />
+				<Route path="/" element={canRead ? <Home /> : <Navigate to="/upload" replace />} />
+				<Route path="/host" element={readersOnly(<Host />)} />
+				<Route path="/history" element={readersOnly(<History />)} />
+				<Route path="/saturation" element={readersOnly(<Saturation />)} />
+				<Route path="/upload" element={<RequireRole roles={UPLOADERS}><Upload /></RequireRole>} />
 				<Route path="/admin" element={adminOnly(<Admin />)} />
 				<Route path="/users" element={adminOnly(<UserManager />)} />
 				<Route path="*" element={<NotFound />} />

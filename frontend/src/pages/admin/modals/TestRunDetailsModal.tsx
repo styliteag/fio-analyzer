@@ -1,5 +1,8 @@
 import { formatSyncMode } from '../../../utils/syncMode';
 import type { ReactNode } from 'react';
+import { Download } from 'lucide-react';
+import { useToast } from '../../../contexts/ToastContext';
+import { downloadTestRunJson } from '../../../services/api/rawData';
 import Button from '../../../components/ui/Button';
 import Loading from '../../../components/ui/Loading';
 import Modal from '../../../components/ui/Modal';
@@ -135,6 +138,17 @@ const UUIDSection: React.FC<{ readonly run: TestRun }> = ({ run }) => (
     </Section>
 );
 
+// Details show rows of test_runs (the "latest" table), so the raw file is looked up there
+const DownloadRawButton: React.FC<{ readonly id: number }> = ({ id }) => {
+    const toast = useToast();
+    return (
+        <Button variant="outline" className="flex-1" onClick={() => downloadTestRunJson(id).catch((error: Error) => toast.error(error.message))}>
+            <Download className="h-4 w-4" aria-hidden="true" />
+            Raw JSON
+        </Button>
+    );
+};
+
 const Details: React.FC<{ readonly run: TestRun; readonly onClose: () => void }> = ({ run, onClose }) => (
     <div className="space-y-4">
         <InfoSections run={run} />
@@ -149,6 +163,7 @@ const Details: React.FC<{ readonly run: TestRun; readonly onClose: () => void }>
             </Section>
         )}
         <div className="flex gap-2 pt-4 border-t theme-border-primary">
+            <DownloadRawButton id={run.id} />
             <Button variant="outline" onClick={onClose} className="flex-1">
                 Close
             </Button>

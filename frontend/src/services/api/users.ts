@@ -2,25 +2,28 @@
  * User management API service
  */
 
+/** admin: full access, uploader: upload only, viewer: read-only */
+export type UserRole = 'admin' | 'uploader' | 'viewer';
+
 export interface User {
 	username: string;
-	role: 'admin' | 'uploader';
+	role: UserRole;
 }
 
 export interface UserCreate {
 	username: string;
 	password: string;
-	role: 'admin' | 'uploader';
+	role: UserRole;
 }
 
 export interface UserUpdate {
 	password?: string;
-	role?: 'admin' | 'uploader';
+	role?: UserRole;
 }
 
 export interface CurrentUser {
 	username: string;
-	role: 'admin' | 'uploader';
+	role: UserRole;
 }
 
 /**

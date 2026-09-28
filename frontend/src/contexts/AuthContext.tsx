@@ -7,13 +7,16 @@ import {
 	useEffect,
 	useState,
 } from "react";
+import type { UserRole } from "../services/api/users";
 
 interface AuthContextType {
 	isAuthenticated: boolean;
 	username: string | null;
-	userRole: 'admin' | 'uploader' | null;
+	userRole: UserRole | null;
 	isAdmin: boolean;
 	isUploader: boolean;
+	/** Can open the analysis pages (admin or read-only viewer) */
+	canRead: boolean;
 	login: (username: string, password: string) => Promise<void>;
 	logout: () => void;
 	loading: boolean;
@@ -37,11 +40,11 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [username, setUsername] = useState<string | null>(null);
-	const [userRole, setUserRole] = useState<'admin' | 'uploader' | null>(null);
+	const [userRole, setUserRole] = useState<UserRole | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	const verifyCredentials = useCallback(async (credentials: string): Promise<{valid: boolean, role?: 'admin' | 'uploader'}> => {
+	const verifyCredentials = useCallback(async (credentials: string): Promise<{valid: boolean, role?: UserRole}> => {
 		try {
 			const response = await fetch(
 				`${import.meta.env.VITE_API_URL || ""}/api/users/me`,
@@ -142,6 +145,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 		userRole,
 		isAdmin: userRole === 'admin',
 		isUploader: userRole === 'uploader' || userRole === 'admin',
+		canRead: userRole === 'admin' || userRole === 'viewer',
 		login,
 		logout,
 		loading,

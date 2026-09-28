@@ -9,8 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **fio-test.sh**: fio runs that fail with a transient EAGAIN error (seen with io_uring on reads ending at the end of the test file) are retried up to `FIO_RETRY_MAX` times (default 2, `0` = off); other errors are never retried, and the summary shows how many retries were needed
+- **Viewer role (read-only)**: viewers see all analysis pages and data but cannot upload, edit or delete. Stored in `.htviewers`; create with `manage_users.py add --viewer` or in User Management. Docker: run `touch data/auth/.htviewers` before upgrading, otherwise Docker creates a directory for the new mount
+- **API**: `tags` (e.g. `prefill:1,fileperjob:1`), `since`/`until` and `run_uuid` filters on `/api/test-runs` and `/api/time-series/all`; `tags` and `run_uuid` on `/api/time-series/history`
+- **API**: Download raw fio JSON: `GET /api/raw/test-runs/{id}` (one test run, `source=latest|history|saturation`) and `GET /api/raw/runs/{run_uuid}` (whole run incl. saturation steps as ZIP with `index.json`). UI: "Raw JSON" in the test run details and "Raw JSON (ZIP)" on the Saturation page
 - **fio-test.sh**: `SAT_SYNC` accepts a list (e.g. `sync,dsync`); each block size × sync mode is its own saturation run
 - **fio-test.sh**: `SAT_MAX_TOTAL_SIZE` caps the total file size with `FILE_PER_JOB=1` in saturation mode (per-job size = cap / numjobs, at least 1M); tagged `satcap:<size>` in the description
+
+### Changed
+- **API**: Authenticated users without the required role now get HTTP 403 instead of 401, so the web UI no longer logs them out
+
+### Security
+- **Upload**: `hostname`, `protocol` and the file name are sanitized before they are used in the storage path; before, an uploader account could write files outside the uploads directory (path traversal)
 
 ### Fixed
 - **fio-test.sh**: With an explicitly chosen sync engine (`-i psync`), saturation mode escalated iodepth instead of numjobs

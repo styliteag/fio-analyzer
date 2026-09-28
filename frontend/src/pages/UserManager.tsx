@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { User, getUsers, createUser, updateUser, deleteUser, UserCreate, UserUpdate } from '../services/api/users';
+import { User, getUsers, createUser, updateUser, deleteUser, UserCreate, UserUpdate, type UserRole } from '../services/api/users';
 import { useAuth } from '../contexts/AuthContext';
 import { PageHeader } from '../components/layout';
 import { ErrorDisplay, Loading } from '../components/ui';
@@ -14,7 +14,7 @@ interface UserFormData {
 	username: string;
 	password: string;
 	confirmPassword: string;
-	role: 'admin' | 'uploader';
+	role: UserRole;
 }
 
 const UserManager: React.FC = () => {
@@ -186,7 +186,7 @@ const UserManager: React.FC = () => {
 		<div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 					<PageHeader
 						title="User Management"
-						description="Admins can view and manage all data. Uploaders can only upload FIO results (for example from fio-test.sh)."
+						description="Admins can view and manage all data. Viewers can see all data but change nothing. Uploaders can only upload FIO results (for example from fio-test.sh)."
 					/>
 
 					{error && (
@@ -251,10 +251,11 @@ const UserManager: React.FC = () => {
 									<select
 										id="role"
 										value={formData.role}
-										onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as 'admin' | 'uploader' }))}
+										onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as UserRole }))}
 										className="mt-1 block w-full border theme-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 theme-bg-card theme-text-primary"
 										disabled={editingUser?.username === currentUsername} // Can't change your own role
 									>
+										<option value="viewer">Viewer (read-only)</option>
 										<option value="uploader">Uploader</option>
 										<option value="admin">Admin</option>
 									</select>

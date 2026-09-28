@@ -7,7 +7,7 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 # Removed FilterOptions import - using plain dictionary
-from auth.middleware import User, require_admin
+from auth.middleware import User, require_viewer
 from config.settings import settings
 from database.connection import get_db
 from utils.logging import log_error, log_info
@@ -58,7 +58,7 @@ router = APIRouter()
 @router.get("/filters/", include_in_schema=False)  # Handle with trailing slash but hide from docs
 async def get_filters(
     request: Request,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """

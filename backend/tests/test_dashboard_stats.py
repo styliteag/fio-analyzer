@@ -8,7 +8,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from auth.middleware import User, require_admin
+from auth.middleware import User, require_viewer
 from database.connection import get_db
 from routers import dashboard
 from routers.dashboard import compute_dashboard_stats
@@ -101,7 +101,7 @@ def get_stats(connection: sqlite3.Connection, user: User | None, override_auth: 
     app.include_router(dashboard.router, prefix="/api/dashboard")
     app.dependency_overrides[get_db] = lambda: connection
     if user is not None and override_auth:
-        app.dependency_overrides[require_admin] = lambda: user
+        app.dependency_overrides[require_viewer] = lambda: user
 
     async def call() -> httpx.Response:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -124,13 +124,13 @@ def test_stats_route_requires_authentication(populated_db: sqlite3.Connection) -
 
 
 def test_stats_route_rejects_uploader_role(populated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Runs the real require_admin check with an authenticated non-admin user."""
+    """Runs the real require_viewer check with an authenticated uploader (no read access)."""
     monkeypatch.setattr("auth.middleware.get_current_user", lambda request: User("uploader", "uploader"))
 
     response = get_stats(populated_db, User("uploader", "uploader"), override_auth=False)
 
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Admin access required"
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Read access required"
 
 
 def test_active_servers_count_full_hierarchy() -> None:

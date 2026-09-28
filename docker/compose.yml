@@ -13,6 +13,7 @@ services:
       - ./data/backend/uploads:/app/uploads
       - ./data/auth/.htpasswd:/app/.htpasswd
       - ./data/auth/.htuploaders:/app/.htuploaders
+      - ./data/auth/.htviewers:/app/.htviewers  # create first: touch data/auth/.htviewers
     networks:
       - fio-network
     restart: unless-stopped

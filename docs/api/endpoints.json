@@ -9,13 +9,13 @@
     {
       "method": "GET",
       "path": "/api/dashboard/stats",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Dashboard Statistics"
     },
     {
       "method": "GET",
       "path": "/api/filters",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Filter Options"
     },
     {
@@ -38,8 +38,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/raw/runs/{run_uuid}",
+      "auth": "none",
+      "summary": "Download Run as ZIP"
+    },
+    {
+      "method": "GET",
+      "path": "/api/raw/test-runs/{test_run_id}",
+      "auth": "none",
+      "summary": "Download Raw FIO JSON"
+    },
+    {
+      "method": "GET",
       "path": "/api/test-runs",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Test Runs"
     },
     {
@@ -57,25 +69,25 @@
     {
       "method": "GET",
       "path": "/api/test-runs/grouped-by-uuid",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Test Runs Grouped by UUID"
     },
     {
       "method": "GET",
       "path": "/api/test-runs/performance-data",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Performance Data"
     },
     {
       "method": "GET",
       "path": "/api/test-runs/saturation-data",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Saturation Test Data"
     },
     {
       "method": "GET",
       "path": "/api/test-runs/saturation-runs",
-      "auth": "admin",
+      "auth": "none",
       "summary": "List Saturation Test Runs"
     },
     {
@@ -99,7 +111,7 @@
     {
       "method": "GET",
       "path": "/api/test-runs/{test_run_id}",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Single Test Run"
     },
     {
@@ -111,7 +123,7 @@
     {
       "method": "GET",
       "path": "/api/time-series/all",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get All Historical Data"
     },
     {
@@ -129,7 +141,7 @@
     {
       "method": "GET",
       "path": "/api/time-series/history",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Historical Time Series"
     },
     {
@@ -147,19 +159,19 @@
     {
       "method": "GET",
       "path": "/api/time-series/latest",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Latest Time Series Data"
     },
     {
       "method": "GET",
       "path": "/api/time-series/servers",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Server List"
     },
     {
       "method": "GET",
       "path": "/api/time-series/trends",
-      "auth": "admin",
+      "auth": "none",
       "summary": "Get Performance Trends"
     },
     {

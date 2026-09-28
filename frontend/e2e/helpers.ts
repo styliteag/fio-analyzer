@@ -13,6 +13,11 @@ export const uploaderCredentials = (): Credentials | null =>
         ? { user: process.env.E2E_UPLOADER_USER, password: process.env.E2E_UPLOADER_PASSWORD }
         : null;
 
+export const viewerCredentials = (): Credentials | null =>
+    process.env.E2E_VIEWER_USER && process.env.E2E_VIEWER_PASSWORD
+        ? { user: process.env.E2E_VIEWER_USER, password: process.env.E2E_VIEWER_PASSWORD }
+        : null;
+
 export const login = async (page: Page, credentials: Credentials): Promise<void> => {
     await page.goto('/');
     await page.fill('#username', credentials.user);

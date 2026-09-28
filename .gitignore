@@ -86,3 +86,6 @@ backup/
 # Playwright artifacts
 frontend/test-results/
 frontend/playwright-report/
+
+# Viewer accounts (password hashes); docker/data/auth/.htviewers is tracked empty for the bind mount
+backend/.htviewers

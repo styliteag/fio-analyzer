@@ -14,9 +14,12 @@ The API provides three ways to access documentation:
 
 ## Authentication
 
-The API uses HTTP Basic Authentication with two user roles:
+The API uses HTTP Basic Authentication with three user roles:
 - **Admin**: Full access to all endpoints and user management
-- **Uploader**: Can upload test data and view results
+- **Viewer**: Read-only access to all read endpoints, including raw JSON downloads
+- **Uploader**: Can only upload test data (`POST /api/import`)
+
+Authenticated users without the required role get HTTP 403; missing or invalid credentials get HTTP 401.
 
 ## API Endpoints
 
@@ -47,6 +50,10 @@ The API uses HTTP Basic Authentication with two user roles:
 ### Dashboard
 - `GET /api/dashboard/stats` - Aggregated counts, averages and last upload time (admin only; computed in SQL, a few hundred bytes)
 
+### Raw Data
+- `GET /api/raw/test-runs/{id}?source=latest|history|saturation` - Download the uploaded fio JSON of one test run (`latest` = id returned by uploads)
+- `GET /api/raw/runs/{run_uuid}` - Download all fio JSON files of a script run (incl. saturation steps) as ZIP; `index.json` maps files to test runs and lists missing files
+
 ### Utilities
 - `GET /api/filters` - Get available filter options
 - `GET /api/info` - Get API information and metadata
@@ -72,6 +79,11 @@ Most endpoints support filtering with these common parameters:
 - `queue_depths` - Queue depths (1, 8, 32, 64)
 - `syncs` - fio sync modes: `none`, `sync`, `dsync` (legacy `0`/`1` accepted)
 - `directs` - Direct I/O flags (0=buffered, 1=direct)
+
+### Run Filters
+- `tags` - Comma-separated description tags that must all be present, e.g. `prefill:1,fileperjob:1` (`/api/test-runs`, `/api/time-series/all`, `/api/time-series/history`)
+- `since` / `until` - Date (`YYYY-MM-DD`, `until` includes the whole day) or ISO datetime (`/api/test-runs`, `/api/time-series/all`; `/history` uses `start_date`/`end_date`)
+- `run_uuid` - Comma-separated run UUIDs
 
 ### Pagination
 - `limit` - Maximum number of results (default: 1000, max: 10000)

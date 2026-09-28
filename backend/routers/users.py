@@ -9,7 +9,7 @@ import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from auth.authentication import parse_htpasswd
+from auth.authentication import clear_auth_cache, parse_htpasswd
 from auth.middleware import require_admin, require_auth
 from config.settings import settings
 from utils.logging import log_error, log_info
@@ -20,12 +20,12 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=1, max_length=50, pattern="^[a-zA-Z0-9_-]+$")
     password: str = Field(..., min_length=4, max_length=100)
-    role: str = Field(..., pattern="^(admin|uploader)$")
+    role: str = Field(..., pattern="^(admin|uploader|viewer)$")
 
 
 class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=4, max_length=100)
-    role: Optional[str] = Field(None, pattern="^(admin|uploader)$")
+    role: Optional[str] = Field(None, pattern="^(admin|uploader|viewer)$")
 
 
 class UserResponse(BaseModel):
@@ -43,25 +43,25 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
+ROLES = ("admin", "uploader", "viewer")
+
+
 def get_file_path_for_role(role: str) -> Path:
-    """Get the appropriate file path for user role"""
-    return settings.htpasswd_path if role == "admin" else settings.htuploaders_path
+    """Get the htpasswd-style file that stores users of a role"""
+    return {
+        "admin": settings.htpasswd_path,
+        "uploader": settings.htuploaders_path,
+        "viewer": settings.htviewers_path,
+    }[role]
 
 
 def get_all_users() -> List[UserResponse]:
-    """Get all users from both admin and uploader files"""
-    users = []
-
-    # Get admin users
-    admin_users = parse_htpasswd(settings.htpasswd_path) or {}
-    for username in admin_users.keys():
-        users.append(UserResponse(username=username, role="admin"))
-
-    # Get uploader users
-    uploader_users = parse_htpasswd(settings.htuploaders_path) or {}
-    for username in uploader_users.keys():
-        users.append(UserResponse(username=username, role="uploader"))
-
+    """Get all users from the admin, uploader and viewer files"""
+    users = [
+        UserResponse(username=username, role=role)
+        for role in ROLES
+        for username in (parse_htpasswd(get_file_path_for_role(role)) or {})
+    ]
     return sorted(users, key=lambda x: x.username)
 
 
@@ -72,6 +72,7 @@ def write_users_to_file(users: dict, file_path: Path):
         with open(file_path, "w") as f:
             for username, password_hash in users.items():
                 f.write(f"{username}:{password_hash}\n")
+        clear_auth_cache()  # role or password changes must apply immediately
     except Exception as e:
         log_error(f"Failed to write users to {file_path}", e)
         raise HTTPException(status_code=500, detail="Failed to save user data")
@@ -114,11 +115,8 @@ async def get_current_user(current_user=Depends(require_auth)):
 async def create_user(user_data: UserCreate, current_user=Depends(require_admin)):
     """Create a new user (admin only)"""
     try:
-        # Check if user already exists in either file
-        admin_users = parse_htpasswd(settings.htpasswd_path) or {}
-        uploader_users = parse_htpasswd(settings.htuploaders_path) or {}
-
-        if user_data.username in admin_users or user_data.username in uploader_users:
+        # Check if user already exists in any role file
+        if any(user.username == user_data.username for user in get_all_users()):
             raise HTTPException(status_code=400, detail=f"User '{user_data.username}' already exists")
 
         # Hash password and add user to appropriate file

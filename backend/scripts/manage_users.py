@@ -75,16 +75,27 @@ def main():
     parser.add_argument("action", choices=["add", "remove", "list"], help="Action to perform")
     parser.add_argument("--username", "-u", help="Username")
     parser.add_argument("--password", "-p", help="Password")
-    parser.add_argument(
+    role = parser.add_mutually_exclusive_group()
+    role.add_argument(
         "--uploader",
         action="store_true",
-        help="Manage uploader users (default: admin users)",
+        help="Manage uploader users (upload only; default: admin users)",
+    )
+    role.add_argument(
+        "--viewer",
+        action="store_true",
+        help="Manage viewer users (read-only access; default: admin users)",
     )
 
     args = parser.parse_args()
 
     # Determine which file to use
-    file_path = settings.htuploaders_path if args.uploader else settings.htpasswd_path
+    if args.uploader:
+        file_path = settings.htuploaders_path
+    elif args.viewer:
+        file_path = settings.htviewers_path
+    else:
+        file_path = settings.htpasswd_path
 
     if args.action == "add":
         if not args.username or not args.password:

@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from auth.middleware import User, require_admin
+from auth.middleware import User, require_viewer
 from database.connection import get_db
 from utils.logging import log_error
 
@@ -69,7 +69,7 @@ def compute_dashboard_stats(db: sqlite3.Connection) -> dict[str, Any]:
     },
 )
 async def get_dashboard_stats(
-    user: User = Depends(require_admin),
+    user: User = Depends(require_viewer),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict[str, Any]:
     try:
