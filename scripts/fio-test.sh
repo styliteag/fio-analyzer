@@ -176,6 +176,35 @@ parse_csv_to_array() {
     eval "${var_name}=(\"\${arr[@]}\")"
 }
 
+# Convert a fio size string (4096, 512K, 10M, 8G, 1T, 2P; optional i/B suffix,
+# case-insensitive, powers of 1024 like fio's default kb_base) to bytes.
+# Prints the byte count; returns 1 for invalid or zero sizes.
+fio_size_to_bytes() {
+    local size=$1
+    local re='^([0-9]+)([kKmMgGtTpP]?)([iI]?[bB])?$'
+    if ! [[ "$size" =~ $re ]]; then
+        return 1
+    fi
+    local num=$((10#${BASH_REMATCH[1]})) unit shift_bits=0
+    unit=$(printf '%s' "${BASH_REMATCH[2]}" | tr '[:lower:]' '[:upper:]')
+    case "$unit" in
+        K) shift_bits=10 ;;
+        M) shift_bits=20 ;;
+        G) shift_bits=30 ;;
+        T) shift_bits=40 ;;
+        P) shift_bits=50 ;;
+    esac
+    if [ "$num" -le 0 ]; then
+        return 1
+    fi
+    echo $((num << shift_bits))
+}
+
+# Convert bytes to a whole-MiB fio size string ("<N>M"), rounding down
+bytes_to_mib_size() {
+    echo "$(($1 / 1048576))M"
+}
+
 # ============================================================
 # Configuration Functions
 # ============================================================
@@ -214,6 +243,12 @@ define_defaults() {
     INITIAL_NUMJOBS="${INITIAL_NUMJOBS:-4}"
     MAX_STEPS="${MAX_STEPS:-20}"
     MAX_TOTAL_QD="${MAX_TOTAL_QD:-16384}"
+    # Sync modes for saturation (comma-separated list, one run per value); empty = SYNC
+    SAT_SYNC="${SAT_SYNC:-}"
+    # Cap for all per-job files of one saturation step (FILE_PER_JOB=1 only); empty = no cap
+    SAT_MAX_TOTAL_SIZE="${SAT_MAX_TOTAL_SIZE:-}"
+    SAT_CAP_MIN_WARNED=false
+    SAT_PREFILL_BASE=""
 
     # Advanced fio options (.env only, all off by default)
     FIO_EXTRA_ARGS="${FIO_EXTRA_ARGS:-}"
@@ -297,6 +332,7 @@ build_description() {
     local tags=""
     if [ "$PREFILL" = 1 ]; then tags+=",prefill:1"; fi
     if [ "$FILE_PER_JOB" = 1 ]; then tags+=",fileperjob:1"; fi
+    if [ "$SATURATION_MODE" = true ] && sat_cap_active; then tags+=",satcap:${SAT_MAX_TOTAL_SIZE}"; fi
 
     DESCRIPTION="${prefix:+${prefix},}hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)${tags}"
 
@@ -331,14 +367,110 @@ validate_saturation_config() {
         fi
         seen_patterns="$seen_patterns $p"
     done
+
+    # Sync modes: SAT_SYNC list, or SYNC when SAT_SYNC is unset (one run per value)
+    parse_sat_sync_list "${SAT_SYNC:-$SYNC}" || exit 1
+}
+
+# Parse a comma-separated sync list into SAT_SYNC_ARR (spaces trimmed)
+# Valid: none, sync, dsync and legacy 0/1 (passed to fio --sync as given)
+parse_sat_sync_list() {
+    local list=$1 value
+    local -a raw
+    SAT_SYNC_ARR=()
+    IFS=',' read -ra raw <<< "$list"
+    if [ ${#raw[@]} -eq 0 ]; then
+        print_error "SAT_SYNC is empty (valid: none, sync, dsync, 0, 1)"
+        return 1
+    fi
+    for value in "${raw[@]}"; do
+        value="${value//[[:space:]]/}"
+        case "$value" in
+            none|sync|dsync|0|1) SAT_SYNC_ARR+=("$value") ;;
+            *)
+                print_error "Invalid saturation sync mode: '$value' (valid: none, sync, dsync, 0, 1)"
+                return 1
+                ;;
+        esac
+    done
+}
+
+# Run label for saturation headers: "bs=<bs>", plus " sync=<mode>" when several sync modes run
+sat_run_label() {
+    local label="bs=$1"
+    if [ "${#SAT_SYNC_ARR[@]}" -gt 1 ]; then
+        label+=" sync=${SAT_SYNC}"
+    fi
+    echo "$label"
+}
+
+# True when the saturation size cap applies (SAT_MAX_TOTAL_SIZE set and FILE_PER_JOB=1)
+sat_cap_active() {
+    [ -n "$SAT_MAX_TOTAL_SIZE" ] && [ "$FILE_PER_JOB" = 1 ]
+}
+
+# Validate SAT_MAX_TOTAL_SIZE (warn and disable when invalid or without FILE_PER_JOB=1)
+validate_sat_cap() {
+    if [ -z "$SAT_MAX_TOTAL_SIZE" ]; then
+        return 0
+    fi
+    if ! fio_size_to_bytes "$SAT_MAX_TOTAL_SIZE" >/dev/null; then
+        print_warning "SAT_MAX_TOTAL_SIZE must be a size like 512M, 8G or 1T (got '$SAT_MAX_TOTAL_SIZE'), disabling"
+        SAT_MAX_TOTAL_SIZE=""
+    elif [ "$FILE_PER_JOB" != 1 ]; then
+        print_warning "SAT_MAX_TOTAL_SIZE only applies with FILE_PER_JOB=1 - ignored"
+        SAT_MAX_TOTAL_SIZE=""
+    fi
+}
+
+# Per-job file size for a saturation step into SAT_STEP_SIZE:
+# min(SAT_TEST_SIZE, SAT_MAX_TOTAL_SIZE / numjobs), rounded down to whole MiB, at least 1M.
+# SAT_TEST_SIZE is used unchanged when the cap is off or not needed.
+sat_step_size() {
+    local num_jobs=$1 test_bytes cap_bytes share
+    SAT_STEP_SIZE="$SAT_TEST_SIZE"
+    if ! sat_cap_active; then
+        return 0
+    fi
+    if ! test_bytes=$(fio_size_to_bytes "$SAT_TEST_SIZE"); then
+        return 0
+    fi
+    cap_bytes=$(fio_size_to_bytes "$SAT_MAX_TOTAL_SIZE") || return 0
+    share=$((cap_bytes / num_jobs))
+    if [ "$test_bytes" -le "$share" ]; then
+        return 0
+    fi
+    if [ "$share" -lt 1048576 ]; then
+        SAT_STEP_SIZE="1M"
+        if [ "$SAT_CAP_MIN_WARNED" != true ]; then
+            print_warning "SAT_MAX_TOTAL_SIZE=${SAT_MAX_TOTAL_SIZE} / ${num_jobs} jobs is below the 1M minimum per job - using 1M (total exceeds the cap)"
+            SAT_CAP_MIN_WARNED=true
+        fi
+        return 0
+    fi
+    SAT_STEP_SIZE=$(bytes_to_mib_size "$share")
+}
+
+# PREFILL: remove the previous step's data files when the base name (size) changes,
+# so files of other sizes do not pile up beyond SAT_MAX_TOTAL_SIZE
+sat_drop_stale_prefill() {
+    local base=$1
+    if [ "$PREFILL" != 1 ] || [ "$TARGET_IS_DEVICE" = true ]; then
+        return 0
+    fi
+    if [ -n "$SAT_PREFILL_BASE" ] && [ "$SAT_PREFILL_BASE" != "$base" ]; then
+        rm -f "${TARGET_DIR}/${SAT_PREFILL_BASE}" "${TARGET_DIR}/${SAT_PREFILL_BASE}."* 2>/dev/null || true
+    fi
+    SAT_PREFILL_BASE="$base"
 }
 
 # Convert scalar values to arrays for multi-value iteration
 convert_scalars_to_arrays() {
     # Freeze scalar values for saturation mode BEFORE array conversion
+    # (SAT_SYNC becomes the current sync mode; SAT_SYNC_ARR holds the list)
     if [ "$SATURATION_MODE" = true ]; then
         SAT_DIRECT="${DIRECT}"
-        SAT_SYNC="${SYNC}"
+        SAT_SYNC="${SAT_SYNC_ARR[0]}"
         SAT_RUNTIME="${RUNTIME}"
         SAT_TEST_SIZE="${TEST_SIZE}"
     fi
@@ -373,6 +505,7 @@ validate_advanced_options() {
         FILE_PER_JOB=0
         PREFILL=0
     fi
+    validate_sat_cap
 
     if ! [[ "$FIO_RETRY_MAX" =~ ^[0-9]+$ ]] || [ "${#FIO_RETRY_MAX}" -gt 2 ] || [ "$FIO_RETRY_MAX" -gt 10 ]; then
         print_warning "FIO_RETRY_MAX must be a number from 0 to 10 (got '$FIO_RETRY_MAX'), using 2"
@@ -453,12 +586,25 @@ test_ioengine() {
 }
 
 # Function to detect the best available I/O engine
+# Detect sync engines where iodepth is always effectively 1 (saturation then escalates numjobs only)
+set_sync_engine_flag() {
+    case "$IOENGINE" in
+        psync|sync|vsync)
+            IS_SYNC_ENGINE=true
+            ;;
+        *)
+            IS_SYNC_ENGINE=false
+            ;;
+    esac
+}
+
 detect_ioengine() {
     # If IOENGINE is already set (from env or command line), validate it
     if [ -n "$IOENGINE" ]; then
         print_status "Testing specified I/O engine: $IOENGINE"
         if test_ioengine "$IOENGINE"; then
             print_success "I/O engine '$IOENGINE' is available"
+            set_sync_engine_flag
             return 0
         else
             print_error "Specified I/O engine '$IOENGINE' is not available"
@@ -484,15 +630,7 @@ detect_ioengine() {
         print_status "psync uses POSIX pwrite() - synchronous I/O only"
     fi
 
-    # Detect sync engines where iodepth is always effectively 1
-    case "$IOENGINE" in
-        psync|sync|vsync)
-            IS_SYNC_ENGINE=true
-            ;;
-        *)
-            IS_SYNC_ENGINE=false
-            ;;
-    esac
+    set_sync_engine_flag
 }
 
 # Function to validate test configuration
@@ -1162,10 +1300,18 @@ run_fio_step() {
     local error_file
     error_file=$(mktemp "${TMPDIR:-/tmp}/fio_sat_error.XXXXXX") || return 1
 
+    # Per-job file size (capped by SAT_MAX_TOTAL_SIZE with FILE_PER_JOB=1)
+    sat_step_size "$num_jobs"
+    local step_size=$SAT_STEP_SIZE
+    if sat_cap_active; then
+        print_status "  per-job file size: ${step_size} (cap ${SAT_MAX_TOTAL_SIZE} / ${num_jobs} jobs, test size ${SAT_TEST_SIZE})"
+    fi
+
     local data_base
-    data_base=$(data_file_base "fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}" "$SAT_TEST_SIZE")
+    data_base=$(data_file_base "fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}" "$step_size")
+    sat_drop_stale_prefill "$data_base"
     build_fio_target_args "$data_base"
-    if ! prefill_test_files "$data_base" "$SAT_TEST_SIZE" "$num_jobs" "$SAT_DIRECT"; then
+    if ! prefill_test_files "$data_base" "$step_size" "$num_jobs" "$SAT_DIRECT"; then
         return 1
     fi
 
@@ -1174,7 +1320,7 @@ run_fio_step() {
         --description="${DESCRIPTION}" \
         --rw="$pattern" \
         --bs="$block_size" \
-        --size="$SAT_TEST_SIZE" \
+        --size="$step_size" \
         --numjobs="$num_jobs" \
         --runtime="$SAT_RUNTIME" \
         --time_based \
@@ -1392,7 +1538,7 @@ saturation_loop() {
     local active_patterns="${SAT_PATTERNS_ARR[*]}"
 
     echo
-    print_status "Starting saturation test loop [bs=$block_size]..."
+    print_status "Starting saturation test loop [$(sat_run_label "$block_size")]..."
     print_status "Patterns: ${active_patterns// /, } (independent QD escalation)"
     print_status "Threshold: P95 completion latency > ${LATENCY_THRESHOLD_MS}ms"
     print_status "Max steps: $MAX_STEPS | Max QD: $MAX_TOTAL_QD | Runtime per step: ${SAT_RUNTIME}s"
@@ -1417,7 +1563,7 @@ saturation_loop() {
 
         echo
         echo "========================================="
-        print_step "STEP $step [bs=$block_size]"
+        print_step "STEP $step [$(sat_run_label "$block_size")]"
         for ((pi=0; pi<n; pi++)); do
             if [ "${SAT_P_SATURATED[$pi]}" = false ]; then
                 local total_qd=$((SAT_P_IODEPTH[$pi] * SAT_P_NUMJOBS[$pi]))
@@ -1611,7 +1757,7 @@ saturation_loop() {
 print_saturation_summary() {
     local block_size=${1:-}
     local bs_label=""
-    if [ -n "$block_size" ]; then bs_label=" [bs=$block_size]"; fi
+    if [ -n "$block_size" ]; then bs_label=" [$(sat_run_label "$block_size")]"; fi
 
     local n=${#SAT_PATTERNS_ARR[@]}
 
@@ -1687,6 +1833,35 @@ print_saturation_summary() {
     echo
 }
 
+# Run one saturation loop per (block size x sync mode), each with its own RUN_UUID
+run_saturation_runs() {
+    local sat_bs sat_sync banner
+    for sat_bs in "${SAT_BLOCK_SIZES_ARR[@]}"; do
+        for sat_sync in "${SAT_SYNC_ARR[@]}"; do
+            SAT_SYNC="$sat_sync"
+            # Generate a fresh RUN_UUID for each run
+            if command -v uuidgen &> /dev/null; then
+                RUN_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+            else
+                RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_$(date -u +%Y-%m-%dT%H:%M:%S)_${sat_bs}_${sat_sync}")
+            fi
+            build_description
+
+            if [ ${#SAT_BLOCK_SIZES_ARR[@]} -gt 1 ] || [ ${#SAT_SYNC_ARR[@]} -gt 1 ]; then
+                banner="Block Size: $sat_bs"
+                if [ ${#SAT_SYNC_ARR[@]} -gt 1 ]; then banner+="  Sync: $sat_sync"; fi
+                echo
+                echo "╔══════════════════════════════════════════════════╗"
+                echo "║  ${banner}  (run_uuid: ${RUN_UUID:0:8}…)"
+                echo "╚══════════════════════════════════════════════════╝"
+            fi
+            reset_sat_results
+            saturation_loop "$sat_bs"
+            print_saturation_summary "$sat_bs"
+        done
+    done
+}
+
 # ============================================================
 # End of Saturation Test Functions
 # ============================================================
@@ -1759,6 +1934,12 @@ show_config() {
         echo "Mode:         SATURATION TEST"
         echo "Patterns:     ${SAT_PATTERNS_ARR[*]}"
         echo "Block Sizes:  ${SAT_BLOCK_SIZES_ARR[*]}"
+        if [ ${#SAT_SYNC_ARR[@]} -gt 1 ]; then
+            echo "Sync Modes:   ${SAT_SYNC_ARR[*]} (one run each)"
+        fi
+        if sat_cap_active; then
+            echo "Size Cap:     ${SAT_MAX_TOTAL_SIZE} total per step (per-job size = min(${SAT_TEST_SIZE}, cap / numjobs))"
+        fi
         echo "P95 Threshold:${LATENCY_THRESHOLD_MS}ms"
         echo "Init IODepth: $INITIAL_IODEPTH"
         echo "Init NumJobs: $INITIAL_NUMJOBS"
@@ -2070,16 +2251,22 @@ main() {
         local initial_qd=$((INITIAL_IODEPTH * INITIAL_NUMJOBS))
         local num_patterns=${#SAT_PATTERNS_ARR[@]}
         local num_block_sizes=${#SAT_BLOCK_SIZES_ARR[@]}
-        local est_tests=$((MAX_STEPS * num_patterns * num_block_sizes))
+        local num_syncs=${#SAT_SYNC_ARR[@]}
+        local est_tests=$((MAX_STEPS * num_patterns * num_block_sizes * num_syncs))
         local est_minutes=$((est_tests * SAT_RUNTIME / 60))
+        local sync_note=""
+        if [ "$num_syncs" -gt 1 ]; then sync_note=" x $num_syncs sync modes"; fi
         print_status "Starting saturation test:"
         print_status "  Patterns: ${SAT_PATTERNS_ARR[*]} (independent QD escalation)"
         print_status "  Block sizes: ${SAT_BLOCK_SIZES_ARR[*]}"
+        if [ "$num_syncs" -gt 1 ]; then
+            print_status "  Sync modes: ${SAT_SYNC_ARR[*]} (one run each)"
+        fi
         print_status "  Initial QD: $initial_qd (iodepth=$INITIAL_IODEPTH x numjobs=$INITIAL_NUMJOBS)"
         print_status "  P95 threshold: ${LATENCY_THRESHOLD_MS}ms"
         print_status "  Max total QD: ${MAX_TOTAL_QD}"
         print_status "  Runtime per step: ${SAT_RUNTIME}s"
-        print_status "  Max estimated time: ~${est_minutes} minutes (if all $MAX_STEPS steps x $num_patterns patterns x $num_block_sizes block sizes run)"
+        print_status "  Max estimated time: ~${est_minutes} minutes (if all $MAX_STEPS steps x $num_patterns patterns x $num_block_sizes block sizes${sync_note} run)"
     else
         # Standard mode confirmation
         if [ "$config_warnings" -eq 0 ]; then
@@ -2147,25 +2334,7 @@ main() {
 
     # Run tests based on mode
     if [ "$SATURATION_MODE" = true ]; then
-        for sat_bs in "${SAT_BLOCK_SIZES_ARR[@]}"; do
-            # Generate a fresh RUN_UUID for each block size run
-            if command -v uuidgen &> /dev/null; then
-                RUN_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-            else
-                RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_$(date -u +%Y-%m-%dT%H:%M:%S)_${sat_bs}")
-            fi
-            build_description
-
-            if [ ${#SAT_BLOCK_SIZES_ARR[@]} -gt 1 ]; then
-                echo
-                echo "╔══════════════════════════════════════════════════╗"
-                echo "║  Block Size: $sat_bs  (run_uuid: ${RUN_UUID:0:8}…)"
-                echo "╚══════════════════════════════════════════════════╝"
-            fi
-            reset_sat_results
-            saturation_loop "$sat_bs"
-            print_saturation_summary "$sat_bs"
-        done
+        run_saturation_runs
         print_retry_summary
     else
         if run_all_tests; then
@@ -2329,6 +2498,11 @@ RUNTIME="60"
 # INITIAL_NUMJOBS=4              # Starting number of jobs
 # MAX_STEPS=20                   # Safety limit for maximum steps
 # MAX_TOTAL_QD=16384             # Max total QD before auto-stop (prevents shm issues)
+# SAT_SYNC=sync,dsync            # Sync modes (comma-separated, none|sync|dsync or legacy 0|1);
+#                                # one run (own run_uuid) per block size x sync mode; default: SYNC
+# SAT_MAX_TOTAL_SIZE=100G        # FILE_PER_JOB=1 only: cap for all job files of one step;
+#                                # per-job size = min(TEST_SIZE, cap / numjobs), whole MiB, min 1M
+#                                # (empty = no cap; adds satcap:<size> to the description)
 
 
 # Backend Configuration
@@ -2450,6 +2624,13 @@ Advanced Settings (.env / environment only, all off by default):
                          PREFILL/FILE_PER_JOB add prefill:1 / fileperjob:1 to the description
   FIO_RETRY_MAX=N        Retry a fio run up to N times when it fails with a transient
                          EAGAIN error (default: 2, 0 = off); other errors are not retried
+  SAT_SYNC=LIST          Saturation sync modes, comma-separated (none, sync, dsync, legacy 0/1;
+                         default: SYNC). Each block size x sync mode is its own run with its
+                         own run_uuid, e.g. SAT_SYNC=sync,dsync
+  SAT_MAX_TOTAL_SIZE=SZ  Saturation with FILE_PER_JOB=1: cap the total size of all job files
+                         of a step (e.g. 100G). Per-job size = min(TEST_SIZE, SZ / numjobs),
+                         rounded down to whole MiB, minimum 1M. Empty = no cap (default).
+                         Adds satcap:<SZ> to the description
 
 Precedence:
   CLI flags > environment variables > .env file > hardcoded defaults

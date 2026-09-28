@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **fio-test.sh**: fio runs that fail with a transient EAGAIN error (seen with io_uring on reads ending at the end of the test file) are retried up to `FIO_RETRY_MAX` times (default 2, `0` = off); other errors are never retried, and the summary shows how many retries were needed
+- **fio-test.sh**: `SAT_SYNC` accepts a list (e.g. `sync,dsync`); each block size × sync mode is its own saturation run
+- **fio-test.sh**: `SAT_MAX_TOTAL_SIZE` caps the total file size with `FILE_PER_JOB=1` in saturation mode (per-job size = cap / numjobs, at least 1M); tagged `satcap:<size>` in the description
+
+### Fixed
+- **fio-test.sh**: With an explicitly chosen sync engine (`-i psync`), saturation mode escalated iodepth instead of numjobs
 
 ## [0.10.8] - 2026-09-27
 
