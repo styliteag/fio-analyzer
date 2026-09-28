@@ -60,6 +60,9 @@ check "file per job: directory" 1 "$(has_line "$J" "directory=/mnt/fio")"
 # shellcheck disable=SC2016  # literal $ on purpose
 check "file per job: literal \$jobnum" 1 "$(has_line "$J" 'filename_format=fio_test_write_64k.$jobnum')"
 check "file per job: no filename=" 0 "$(grep -c '^filename=' "$J")"
+# fio prefixes files made from directory= with the controller address (127.0.0.1 via SSH
+# tunnels) unless unique_filename=0: the tests would then miss the prefilled files
+check "file per job: unique_filename=0" 1 "$(has_line "$J" "unique_filename=0")"
 FILE_PER_JOB=0
 
 # --- PREFILL keeps the files (no unlink) -------------------------------------------------------

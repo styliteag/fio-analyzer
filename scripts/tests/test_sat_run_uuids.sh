@@ -75,7 +75,7 @@ check "several sync modes: placeholder" 1 "$(grep -cxF "$PLACEHOLDER" "$TMP/out"
 check "storage line in header" 1 "$(grep -cx 'Storage:      fs=stub' "$TMP/out")"
 
 # --- run_saturation_runs: list of run UUIDs --------------------------------------
-SAT_BLOCK_SIZES_ARR=(4k 64k) SAT_SYNC_ARR=(none sync)
+SAT_BLOCK_SIZES_ARR=(4k 64k) SAT_SYNC_ARR=(none sync) RUN_UUID="header-uuid-1234"
 run_saturation_runs >"$TMP/out" 2>"$TMP/err"
 check "no errors on stderr" "" "$(cat "$TMP/err")"
 check "list header printed once" 1 "$(grep -c '^Run UUIDs:' "$TMP/out")"
@@ -84,22 +84,29 @@ check "list comes after the last summary" \
     "$(( $(grep -n '^Run UUIDs:' "$TMP/out" | cut -d: -f1) - 1 ))"
 list=$(sed -n '/^Run UUIDs:/,$p' "$TMP/out" | tail -n +2)
 check "four list entries" 4 "$(grep -c 'uuid-' <<<"$list")"
-check "entry 1: bs, sync and full uuid" 1 "$(grep -Ec 'bs=4k +sync=none +uuid-1-abcdef$' <<<"$list")"
-check "entry 4: bs, sync and full uuid" 1 "$(grep -Ec 'bs=64k +sync=sync +uuid-4-abcdef$' <<<"$list")"
+check "three new uuids generated" 3 "$(cat "$TMP/uuid_n")"
+# The first run uses the RUN_UUID generated at start (shown in the header and first description)
+check "entry 1: first run keeps the start RUN_UUID" 1 "$(grep -Ec 'bs=4k +sync=none +header-uuid-1234$' <<<"$list")"
+check "entry 4: bs, sync and full uuid" 1 "$(grep -Ec 'bs=64k +sync=sync +uuid-3-abcdef$' <<<"$list")"
 check "list uuids match the runs" \
     "$(grep '^LOOP' "$TMP/out" | awk '{print $4}' | tr '\n' ' ')" \
     "$(awk '{print $NF}' <<<"$list" | tr '\n' ' ')"
-check "banner unchanged" 1 "$(grep -c '║  Block Size: 64k  Sync: sync  (run_uuid: uuid-4-a…)' "$TMP/out")"
+check "banner unchanged" 1 "$(grep -c '║  Block Size: 64k  Sync: sync  (run_uuid: uuid-3-a…)' "$TMP/out")"
 
 SAT_BLOCK_SIZES_ARR=(4k 64k) SAT_SYNC_ARR=(1)
 run_saturation_runs >"$TMP/out" 2>"$TMP/err"
 check "several block sizes, one sync: list printed" 1 "$(grep -c '^Run UUIDs:' "$TMP/out")"
 check "sync shown in list" 2 "$(grep -Ec 'bs=(4k|64k) +sync=1 ' "$TMP/out")"
 
-SAT_BLOCK_SIZES_ARR=(64k) SAT_SYNC_ARR=(1)
+SAT_BLOCK_SIZES_ARR=(64k) SAT_SYNC_ARR=(1) RUN_UUID="header-uuid-1234"
 run_saturation_runs >"$TMP/out" 2>"$TMP/err"
 check "single run: no list" 0 "$(grep -c 'Run UUIDs' "$TMP/out")"
+check "single run: uploads use the header RUN_UUID" "LOOP 64k 1 header-uuid-1234" "$(grep '^LOOP' "$TMP/out")"
 check "single run: no errors" "" "$(cat "$TMP/err")"
+
+SAT_BLOCK_SIZES_ARR=(4k 64k) SAT_SYNC_ARR=(1) RUN_UUID=""
+run_saturation_runs >"$TMP/out" 2>"$TMP/err"
+check "no start RUN_UUID: every run gets a distinct one" 2 "$(grep '^LOOP' "$TMP/out" | awk '{print $4}' | sort -u | grep -c 'uuid-')"
 
 if [ "$failures" -gt 0 ]; then
     echo "$failures test(s) failed"

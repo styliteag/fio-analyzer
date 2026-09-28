@@ -44,6 +44,7 @@ EMPTY='{ "fio version" : "fio-3.43", "global options" : {}, "client_stats" : [],
 fio() {
     local out="" arg calls var
     for arg in "$@"; do case "$arg" in --output=*) out=${arg#--output=} ;; esac; done
+    printf '%s\n' "$@" >"$TMP/args"
     calls=$(( $(cat "$TMP/calls") + 1 ))
     echo "$calls" >"$TMP/calls"
     var="FIO_OUT_$calls"
@@ -67,6 +68,16 @@ check "fio ran twice" 2 "$(cat "$TMP/calls")"
 check "retry counted" 1 "$CLIENT_SERVER_RETRIES"
 check "server message shown" 1 "$(grep -c 'failed to setup shm segment' "$TMP/warnings")"
 client_step_complete "$TMP/out.json" 2; check "final JSON is complete" 0 "$?"
+
+# fio forwards options that follow a --client= to that server: the output options must come
+# first, otherwise every server tries to open the controller's output path
+first_client=$(grep -n -m 1 '^--client=' "$TMP/args" | cut -d: -f1)
+check "--output before the first --client" 1 "$([ "$(grep -n -m 1 '^--output=' "$TMP/args" | cut -d: -f1)" -lt "$first_client" ] && echo 1)"
+check "--output-format before the first --client" 1 "$([ "$(grep -n -m 1 '^--output-format=' "$TMP/args" | cut -d: -f1)" -lt "$first_client" ] && echo 1)"
+check "no --output= after a --client" 0 "$(sed -n "${first_client},\$p" "$TMP/args" | grep -c '^--output=')"
+# ...but every server gets --output-format=json, otherwise it sends text status lines
+check "each --client followed by --output-format=json" 2 "$(grep -A1 '^--client=' "$TMP/args" | grep -cx -- '--output-format=json')"
+check "job file is the last argument" "$TMP/job.fio" "$(tail -n 1 "$TMP/args")"
 
 # 2. server keeps refusing: gives up after FIO_RETRY_MAX retries, JSON stays for the upload
 FIO_RETRY_MAX=2 FIO_RETRY_COUNT=0 FIO_OUT_1=shm FIO_OUT_2=shm FIO_OUT_3=shm

@@ -342,7 +342,11 @@ generate_uuids() {
         current_date=$(date -u +%Y-%m-%d)
         RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_${current_date}")
     fi
-    print_status "Generated RUN_UUID for this script run: $RUN_UUID"
+    if [ "$SATURATION_MODE" = true ]; then
+        print_status "Generated RUN_UUID for the first saturation run: $RUN_UUID (every further block size / sync mode gets its own)"
+    else
+        print_status "Generated RUN_UUID for this script run: $RUN_UUID"
+    fi
 }
 
 # Build description string (single location, no duplication)
@@ -2529,20 +2533,24 @@ print_saturation_summary() {
     echo
 }
 
-# Run one saturation loop per (block size x sync mode), each with its own RUN_UUID.
+# Run one saturation loop per (block size x sync mode), each with its own RUN_UUID
+# (the first run uses the RUN_UUID generated at start, shown in the header).
 # With several runs, every run's block size, sync mode and RUN_UUID is listed at the end.
 run_saturation_runs() {
-    local sat_bs sat_sync banner entry
+    local sat_bs sat_sync banner entry first=true
     local -a run_uuids=()
     for sat_bs in "${SAT_BLOCK_SIZES_ARR[@]}"; do
         for sat_sync in "${SAT_SYNC_ARR[@]}"; do
             SAT_SYNC="$sat_sync"
-            # Generate a fresh RUN_UUID for each run
-            if command -v uuidgen &> /dev/null; then
+            # Fresh RUN_UUID for every further run
+            if [ "$first" = true ] && [ -n "${RUN_UUID:-}" ]; then
+                :
+            elif command -v uuidgen &> /dev/null; then
                 RUN_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
             else
                 RUN_UUID=$(generate_uuid_from_hash "${HOSTNAME}_$(date -u +%Y-%m-%dT%H:%M:%S)_${sat_bs}_${sat_sync}")
             fi
+            first=false
             build_description
             run_uuids+=("${sat_bs}|${sat_sync}|${RUN_UUID}")
 
@@ -3405,7 +3413,8 @@ client_fio_args() {
     local i
     CLIENT_FIO_ARGS=()
     for ((i = 0; i < $1; i++)); do
-        CLIENT_FIO_ARGS+=("--client=$(fio_server_address "${CLIENT_CONN_HOST[$i]}" "${CLIENT_CONN_PORT[$i]}")")
+        # Options after a --client= go to that server: JSON there too, so it sends no text status lines
+        CLIENT_FIO_ARGS+=("--client=$(fio_server_address "${CLIENT_CONN_HOST[$i]}" "${CLIENT_CONN_PORT[$i]}")" --output-format=json)
     done
 }
 
@@ -3497,6 +3506,9 @@ client_job_target_lines() {
     elif [ "$FILE_PER_JOB" = 1 ]; then
         echo "directory=${dir//:/\\:}"
         echo "filename_format=${base}.\$jobnum"
+        # Otherwise fio prefixes the files with the controller address (127.0.0.1 through SSH
+        # tunnels) and the tests miss the files written by the prefill job
+        echo "unique_filename=0"
     else
         echo "filename=${dir//:/\\:}/${base}"
     fi
@@ -3661,7 +3673,9 @@ client_output_messages() {
     grep -m 3 '^<[^>]*> ' "$1" 2>/dev/null | LC_ALL=C tr -d '\000-\037\177' | paste -sd ';' - | sed 's/;/; /g'
 }
 
-# Run a job file on the first <n> clients: fio --client=... --output=<json> <job file>.
+# Run a job file on the first <n> clients: fio --output=<json> --client=... <job file>.
+# The output options come first: fio forwards options that follow a --client= to that
+# server, which then tries to open the controller's output path.
 # A server can refuse a job with a message and no results (e.g. "failed to setup shm
 # segment" right after the previous job): retried up to FIO_RETRY_MAX times.
 client_run_step() {
@@ -3673,8 +3687,8 @@ client_run_step() {
     while :; do
         rc=0
         rm -f "$output"
-        run_fio_with_retry "$label" "$error_file" "${CLIENT_FIO_ARGS[@]}" \
-            --output-format=json --output="$output" "$job_file" || rc=$?
+        run_fio_with_retry "$label" "$error_file" --output-format=json --output="$output" \
+            "${CLIENT_FIO_ARGS[@]}" "$job_file" || rc=$?
         notes=$(client_output_messages "$output")
         if [ -s "$output" ]; then sanitize_fio_json "$output" >/dev/null 2>&1; fi
         if [ "$rc" -ne 0 ] || [ -z "$notes" ] || [ "$attempt" -ge "$FIO_RETRY_MAX" ] \

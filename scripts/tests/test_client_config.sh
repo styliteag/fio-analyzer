@@ -21,6 +21,7 @@ for f in $FUNCS; do
     declare -F "$f" >/dev/null || { echo "function $f not found in $SCRIPT"; exit 1; }
 done
 
+client_port_in_use() { return 1; }  # local tunnel ports are free (tested in test_client_security.sh)
 print_status() { :; }
 print_success() { :; }
 print_warning() { echo "WARN: $*" >>"$TMP/out"; }
@@ -113,9 +114,9 @@ check "direct: connection hosts" "10.0.0.1 10.0.0.2" "${CLIENT_CONN_HOST[*]}"
 check "direct: connection ports" "8765 8765" "${CLIENT_CONN_PORT[*]}"
 check "direct: info ports" "8766 8766" "${CLIENT_CONN_INFO_PORT[*]}"
 client_fio_args 1
-check "fio args for the first client" "--client=ip:10.0.0.1,8765" "${CLIENT_FIO_ARGS[*]}"
+check "fio args for the first client" "--client=ip:10.0.0.1,8765 --output-format=json" "${CLIENT_FIO_ARGS[*]}"
 client_fio_args 2
-check "fio args for two clients" "--client=ip:10.0.0.1,8765 --client=ip:10.0.0.2,8765" "${CLIENT_FIO_ARGS[*]}"
+check "fio args for two clients" "--client=ip:10.0.0.1,8765 --output-format=json --client=ip:10.0.0.2,8765 --output-format=json" "${CLIENT_FIO_ARGS[*]}"
 check "client keys (host:port as fio reports)" "10.0.0.1:8765 10.0.0.2:8765" "${CLIENT_KEY[*]}"
 
 # --- SSH tunnels ---------------------------------------------------------------------------
@@ -145,7 +146,7 @@ check "tunnel: connection hosts are local" "127.0.0.1 127.0.0.1" "${CLIENT_CONN_
 check "tunnel: local fio ports from CLIENT_SSH_BASE_PORT" "18765 18767" "${CLIENT_CONN_PORT[*]}"
 check "tunnel: local info ports" "18766 18768" "${CLIENT_CONN_INFO_PORT[*]}"
 client_fio_args 2
-check "tunnel: fio talks to the local ports" "--client=ip:127.0.0.1,18765 --client=ip:127.0.0.1,18767" "${CLIENT_FIO_ARGS[*]}"
+check "tunnel: fio talks to the local ports" "--client=ip:127.0.0.1,18765 --output-format=json --client=ip:127.0.0.1,18767 --output-format=json" "${CLIENT_FIO_ARGS[*]}"
 check "tunnel: client keys" "127.0.0.1:18765 127.0.0.1:18767" "${CLIENT_KEY[*]}"
 pids=("${CLIENT_SSH_PIDS[@]}")
 client_close_tunnels
