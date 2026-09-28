@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- 
+
+## [0.12.1] - 2026-09-28
+
 ### Fixed
 - **fio-test.sh controller mode, `FILE_PER_JOB=1`**: The test jobs now use the files written by `PREFILL`. fio names files created from `directory=` with the controller's address in front (`127.0.0.1.` through SSH tunnels), so the tests used to create a second set of files. On small disks this ended in `ENOSPC`, and the reads ran on files that were only partly laid out. Job files now set `unique_filename=0`.
 - **fio-test.sh controller mode**: Every step no longer fails with `fio: output file open error` and is no longer uploaded as `incomplete:1`. fio forwards options that follow `--client=` to that server, so each server tried to open the controller's output path. `--output` now comes before the client list, and every server only gets `--output-format=json`.
