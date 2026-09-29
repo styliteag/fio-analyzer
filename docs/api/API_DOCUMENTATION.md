@@ -40,6 +40,8 @@ Authenticated users without the required role get HTTP 403; missing or invalid c
 
 Multi-client runs (`fio --client=… job.fio`, sent by `fio-test.sh` in controller mode) are detected from fio's `client_stats`: the step is stored once with the metrics of fio's "All clients" result and `clients` = number of clients, plus one row per client. Optional form fields: `ramp_uuid` (≤ 64 chars, groups the client-count steps of one test configuration), `client_hosts` (comma list of client names) and `client_storage_info` (JSON object `"host:port"` or `"host"` → that client's storage_info, ≤ 256 KiB).
 
+Every import stores the fio I/O engine as `ioengine` (lower-case): from the fio JSON (`job options.ioengine` of a local run, `global options.ioengine` of a client-mode run), else from `storage_info.ioengine`, else null. Test-run responses (`/api/test-runs/`, `/api/test-runs/{id}`, `/api/test-runs/performance-data`, `/api/time-series/all`) include it. Existing databases get the column on startup, backfilled from `storage_info` and, once, from the stored fio JSON uploads.
+
 ### Time Series Analytics
 - `GET /api/time-series/servers` - Get server list with statistics
 - `GET /api/time-series/all` - Get all historical data
@@ -63,7 +65,7 @@ Multi-client runs (`fio --client=… job.fio`, sent by `fio-test.sh` in controll
 
 ### Comparison
 - `GET /api/compare/targets?source=latest|history` - All Host-Protocol-Type-Model combinations with test runs, as `target` values
-- `GET /api/compare?target=A&target=B[&target=C…]` - Compare 2–10 targets side by side. By default (`strict=true`) only identical configurations are compared, including test size, duration, the layout tags `prefill`/`fileperjob`/`satcap` and the client count (`clients`); `strict=false` matches loosely and reports differing fields in `mismatch`. A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted or `*`. The first target is the baseline; every other target gets `diff_pct` per metric (iops, bandwidth, avg/p95/p99 latency) and a `better` flag. Options: `source=latest|history`, `patterns`, `block_sizes`, `syncs`, `include_incomplete`, plus the run filters below
+- `GET /api/compare?target=A&target=B[&target=C…]` - Compare 2–10 targets side by side. By default (`strict=true`) only identical configurations are compared, including test size, duration, the layout tags `prefill`/`fileperjob`/`satcap`, the client count (`clients`) and the fio I/O engine (`ioengine`, e.g. libaio vs. io_uring; runs without a recorded engine only match each other); `strict=false` matches loosely and reports differing fields in `mismatch`. A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted or `*`. The first target is the baseline; every other target gets `diff_pct` per metric (iops, bandwidth, avg/p95/p99 latency) and a `better` flag. Options: `source=latest|history`, `patterns`, `block_sizes`, `syncs`, `include_incomplete`, plus the run filters below
 
 ### Import Log
 - `GET /api/import-log/runs/{run_uuid}` - Upload attempts per outcome (`imported`, `rejected`, `error`) plus rows stored for the run, and the failed attempts with reasons
