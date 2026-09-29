@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.13.3] - 2026-09-29
+
+### Added
 - **fio-test.sh retries failed uploads**: when the server is unreachable or restarting (for example during an update), an upload is retried up to `UPLOAD_RETRY_MAX` times (default 5) instead of being lost. Retried: no connection and HTTP 404/408/429/502/503/504; the delay starts at `UPLOAD_RETRY_DELAY` seconds (default 10) and doubles up to 60 s, about 3 minutes in total. Client errors (400/401/403/409/413/422) and 500 fail at once as before. Each retry is printed as a warning. The upload now also has a connect timeout of 10 s and a total timeout of 300 s.
 
 ## [0.13.2] - 2026-09-29
