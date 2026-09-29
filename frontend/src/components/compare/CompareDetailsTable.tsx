@@ -1,6 +1,7 @@
 // Collapsible table of every compared configuration with absolute values and diffs for one metric
 import type { CompareMetric, CompareResponse, CompareRow } from '../../services/api/compare';
 import { cellValue, diffTone, formatDiff, formatMetric, metricLabel, targetLabel } from './compareUtils';
+import { engineLabel } from './diffMatrix';
 
 interface CompareDetailsTableProps {
     readonly data: CompareResponse;
@@ -13,7 +14,10 @@ const TH = 'py-2 px-2 font-medium whitespace-nowrap';
 const TD = 'py-1.5 px-2 whitespace-nowrap';
 
 const layoutCell = (row: CompareRow, strict: boolean): string => {
-    if (strict) return [row.test_size, row.duration != null ? `${row.duration}s` : null, row.layout || null, row.clients && row.clients > 1 ? `${row.clients} clients` : null].filter(Boolean).join(' · ') || '–';
+    if (strict) {
+        const clients = row.clients && row.clients > 1 ? `${row.clients} clients` : null;
+        return [row.test_size, row.duration != null ? `${row.duration}s` : null, row.layout || null, clients, engineLabel(row)].filter(Boolean).join(' · ') || '–';
+    }
     return row.mismatch && row.mismatch.length > 0 ? `⚠ ${row.mismatch.join(', ')}` : '–';
 };
 

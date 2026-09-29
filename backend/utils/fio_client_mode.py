@@ -4,12 +4,14 @@ fio client mode (fio --client=a --client=b job.fio) JSON output.
 Unlike a local run there is no "jobs" list: "client_stats" holds one entry per client
 (with hostname/port) plus an "All clients" entry with merged metrics, and "global options"
 is a list with one dict per client. The "All clients" entry has no "job options" and sums
-job_runtime over the clients, so those come from the first client entry.
+job_runtime over the clients, so those come from the first client entry. Older fio versions
+(e.g. 3.36) also leave the latency percentiles out of "All clients"; the worst client's
+percentiles stand in for them.
 """
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 
@@ -72,6 +74,24 @@ def _client_result(index: int, entry: Dict[str, Any]) -> ClientResult:
     )
 
 
+def _with_client_percentiles(merged: Dict[str, Any], clients: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Older fio (e.g. 3.36) writes no clat percentiles into "All clients" (P95 would read as 0):
+    use the worst client's value per percentile, an upper bound of the combined percentile."""
+    result = dict(merged)
+    for direction in ("read", "write"):
+        stats = section(merged, direction)
+        clat = section(stats, "clat_ns")
+        if not stats or clat.get("percentile"):
+            continue
+        worst: Dict[str, float] = {}
+        for client in clients:
+            for key, value in section(client, direction, "clat_ns", "percentile").items():
+                worst[key] = max(worst.get(key, 0), number({key: value}, key))
+        if worst:
+            result[direction] = {**stats, "clat_ns": {**clat, "percentile": worst}}
+    return result
+
+
 def _global_options(fio_data: Dict[str, Any]) -> Dict[str, Any]:
     raw = fio_data.get("global options") or {}
     first = raw[0] if isinstance(raw, list) and raw else raw
@@ -92,6 +112,7 @@ def parse_client_mode(fio_data: Dict[str, Any]) -> Optional[ClientModeRun]:
     if len(clients) > MAX_CLIENTS:
         raise HTTPException(status_code=400, detail=f"Too many clients (max {MAX_CLIENTS})")
     merged = next((entry for entry in entries if entry.get("jobname") == AGGREGATE_JOBNAME), clients[0])
+    merged = _with_client_percentiles(merged, clients)
     first = clients[0]
     job = {
         **merged,

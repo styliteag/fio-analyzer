@@ -1,6 +1,7 @@
 // Per pattern: best step within the P95 threshold and the step that crossed it
 import { useEffect, useState } from 'react';
 import { fetchSaturationSummary, type SaturationSummary, type SaturationSummaryStep } from '../../services/api/testRuns';
+import { formatClientCount } from '../../utils/clientCount';
 import { formatSyncMode } from '../../utils/syncMode';
 
 interface SaturationSummaryTableProps {
@@ -49,11 +50,12 @@ const SaturationSummaryTable: React.FC<SaturationSummaryTableProps> = ({ runUuid
                 </thead>
                 <tbody>
                     {summary.patterns.map((pattern) => (
-                        <tr key={`${pattern.read_write_pattern}-${pattern.block_size}-${pattern.sync}`} className="border-b last:border-0 theme-border-primary">
+                        <tr key={`${pattern.read_write_pattern}-${pattern.block_size}-${pattern.sync}-${pattern.clients ?? 1}`} className="border-b last:border-0 theme-border-primary">
                             <td className="py-2 pr-4 theme-text-primary font-medium">
                                 {pattern.read_write_pattern}
                                 <span className="ml-2 text-xs theme-text-tertiary">
                                     {pattern.block_size} · {formatSyncMode(pattern.sync)}
+                                    {formatClientCount(pattern.clients) && ` · ${formatClientCount(pattern.clients)}`}
                                 </span>
                             </td>
                             <td className="py-2 pr-4">

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from auth.middleware import User, require_viewer
 from database.connection import get_db
+from database.client_migration import add_saturation_client_columns
 from database.saturation_migration import add_threshold_column
 from routers import saturation
 
@@ -22,6 +23,7 @@ def make_db(threshold: float | None = 20.0) -> sqlite3.Connection:
         "block_size TEXT, sync TEXT, iodepth INTEGER, num_jobs INTEGER, iops REAL, p95_latency REAL, bandwidth REAL)"
     )
     add_threshold_column(db.cursor())
+    add_saturation_client_columns(db.cursor())
     steps = [
         # randread: best within 20 ms is step 3 (QD 16), step 4 crosses
         ("run-1", "randread", 1, 4, 1000.0, 1.0),
@@ -144,6 +146,7 @@ def saturation_data(threshold: float | None, query: str = "") -> dict:
         "avg_latency REAL, bandwidth REAL, p95_latency REAL, p99_latency REAL, config_uuid TEXT, run_uuid TEXT, "
         "description TEXT, latency_threshold_ms REAL, storage_info TEXT)"
     )
+    add_saturation_client_columns(db.cursor())
     for qd, p95 in ((1, 5.0), (2, 25.0)):
         db.execute(
             "INSERT INTO saturation_runs (timestamp, hostname, read_write_pattern, block_size, iodepth, num_jobs, iops, p95_latency, "
@@ -182,3 +185,81 @@ def test_stored_threshold_is_taken_from_the_first_uploaded_step() -> None:
     rows = [{"id": 5, "latency_threshold_ms": 50.0}, {"id": 2, "latency_threshold_ms": None}, {"id": 3, "latency_threshold_ms": 20.0}]
     assert stored_threshold(rows) == 20.0
     assert stored_threshold([{"id": 1, "latency_threshold_ms": None}]) is None
+
+
+def add_client_steps(db: sqlite3.Connection, run: str = "run-1", clients: int = 4) -> None:
+    """Steps of a multi-client saturation run (fio-test.sh with CLIENTS) under the same run_uuid."""
+    for index, (iodepth, iops, p95) in enumerate(((1, 4000.0, 2.0), (2, 7000.0, 8.0), (4, 7200.0, 30.0)), start=100):
+        db.execute(
+            f"INSERT INTO saturation_runs ({COLUMNS}, clients, client_hosts) "
+            "VALUES (?, ?, 'px1', 'randread', '4K', 'sync', ?, 4, ?, ?, ?, 20.0, ?, ?)",
+            (index, run, iodepth, iops, p95, iops * 4 / 1024, clients, '["vm1", "vm2", "vm3", "vm4"]'),
+        )
+
+
+def test_single_host_steps_default_to_one_client() -> None:
+    body = get(make_db(), "/api/saturation/runs/run-1/summary").json()
+    assert {entry["clients"] for entry in body["patterns"]} == {1}
+
+
+def test_multi_client_steps_are_a_separate_group() -> None:
+    db = make_db()
+    add_client_steps(db)
+    patterns = get(db, "/api/saturation/runs/run-1/summary").json()["patterns"]
+    randread = {entry["clients"]: entry for entry in patterns if entry["read_write_pattern"] == "randread"}
+    assert set(randread) == {1, 4}
+    # single-host group unchanged by the client steps
+    assert randread[1]["steps"] == 4
+    assert randread[1]["best_within"]["iops"] == 3000.0
+    # 4-client group: best within 20 ms is QD 8 per client, crossed at QD 16
+    assert randread[4]["steps"] == 3
+    assert (randread[4]["best_within"]["total_qd"], randread[4]["best_within"]["iops"]) == (8, 7000.0)
+    assert randread[4]["crossed_at"]["total_qd"] == 16
+    assert randread[4]["status"] == "saturated"
+
+
+def test_saturation_client_columns_migration_is_idempotent() -> None:
+    db = make_db()
+    add_saturation_client_columns(db.cursor())
+    columns = [row[1] for row in db.execute("PRAGMA table_info(saturation_runs)")]
+    assert (columns.count("clients"), columns.count("client_hosts"), columns.count("ramp_uuid")) == (1, 1, 0)
+    add_saturation_client_columns(sqlite3.connect(":memory:").cursor())  # no table: no-op
+
+
+def test_chart_data_reports_client_count() -> None:
+    body = saturation_data(20.0)
+    assert body["clients"] == 1
+    assert all(step["clients"] == 1 for step in body["patterns"]["randread"]["steps"])
+
+
+def test_real_schema_stores_client_count_of_saturation_steps(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Full schema + migrations: a client-mode saturation upload keeps clients and client_hosts."""
+    from database.connection import DatabaseManager
+    from routers.imports import insert_saturation_run
+
+    manager = DatabaseManager()
+    manager.db_path = tmp_path / "test.db"
+    monkeypatch.setattr(DatabaseManager, "_populate_sample_data", lambda self, cursor: asyncio.sleep(0))
+    asyncio.run(manager.connect())
+    db = manager.connection
+    data = {
+        "timestamp": "2025-06-31T20:00:00+00:00",
+        "test_name": "t",
+        "hostname": "px1-vms",
+        "drive_type": "ssd",
+        "drive_model": "m",
+        "block_size": "4K",
+        "read_write_pattern": "randread",
+        "queue_depth": 16,
+        "duration": 30,
+        "iodepth": 16,
+        "num_jobs": 4,
+        "run_uuid": "r",
+        "clients": 3,
+        "client_hosts": '["vm1", "vm2", "vm3"]',
+    }
+    insert_saturation_run(db, data, "/tmp/sat.json")
+    insert_saturation_run(db, {**data, "clients": None, "client_hosts": None}, "/tmp/sat2.json")
+    rows = db.execute("SELECT clients, client_hosts FROM saturation_runs ORDER BY id").fetchall()
+    assert [tuple(row) for row in rows] == [(3, '["vm1", "vm2", "vm3"]'), (1, None)]
+    asyncio.run(manager.close())

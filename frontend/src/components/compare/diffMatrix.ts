@@ -18,6 +18,12 @@ export interface DiffMatrix {
 
 export const cellKey = (pattern: string, blockSize: string): string => `${pattern}\u0000${blockSize}`;
 
+/** Strict rows carry the I/O engine; a row without a recorded engine says so (it only matches such rows) */
+export const engineLabel = (row: CompareRow): string | null => {
+    if (row.ioengine === undefined) return null;
+    return row.ioengine ?? 'engine unknown';
+};
+
 /** Short config description of a row, e.g. "jobs 4 · QD 32 · direct · sync" */
 export const describeConfig = (row: CompareRow): string => {
     const parts = [
@@ -29,6 +35,7 @@ export const describeConfig = (row: CompareRow): string => {
         row.duration != null ? `${row.duration}s` : null,
         row.layout || null,
         row.clients && row.clients > 1 ? `${row.clients} clients` : null,
+        engineLabel(row),
     ];
     return parts.filter((part): part is string => part !== null).join(' · ');
 };

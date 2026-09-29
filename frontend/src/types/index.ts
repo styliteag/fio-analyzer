@@ -27,6 +27,8 @@ export interface TestRun {
 	/** Storage configuration detected by fio-test.sh */
 	storage_info?: StorageInfo | null;
 	iodepth?: number;
+	/** fio I/O engine (libaio, io_uring, ...); null when the upload did not record one */
+	ioengine?: string | null;
 	// Uniqueness tracking
 	is_latest?: number;
 	// UUID fields

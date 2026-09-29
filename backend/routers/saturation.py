@@ -13,8 +13,13 @@ from database.connection import get_db
 
 router = APIRouter()
 
-STEP_COLUMNS = "id, hostname, read_write_pattern, block_size, sync, iodepth, num_jobs, iops, bandwidth, p95_latency, latency_threshold_ms"
-GROUP_KEYS = ("read_write_pattern", "block_size", "sync")
+STEP_COLUMNS = (
+    "id, hostname, read_write_pattern, block_size, sync, iodepth, num_jobs, iops, bandwidth, p95_latency, "
+    "latency_threshold_ms, COALESCE(clients, 1) AS clients"
+)
+# clients: a multi-client saturation run (fio-test.sh with CLIENTS, every step on all clients)
+# is never merged with single-host steps that share its run_uuid
+GROUP_KEYS = ("read_write_pattern", "block_size", "sync", "clients")
 
 
 def stored_threshold(rows: List[Dict[str, Any]]) -> Optional[float]:
@@ -54,8 +59,10 @@ def summarize_pattern(rows: List[Dict[str, Any]], threshold_ms: float) -> Dict[s
 @router.get(
     "/runs/{run_uuid}/summary",
     summary="Saturation Summary of a Run",
-    description="For each pattern (and block size / sync mode) of one saturation run: the step with the highest IOPS whose "
-    "P95 latency stays within the threshold, and the first step that crossed it. The threshold is the one stored at upload "
+    description="For each pattern (and block size / sync mode / client count) of one saturation run: the step with the highest "
+    "IOPS whose P95 latency stays within the threshold, and the first step that crossed it. `clients` > 1 marks a multi-client "
+    "run (every step on all clients, iodepth/num_jobs per client, metrics of fio's \"All clients\" result). "
+    "The threshold is the one stored at upload "
     "(sent by fio-test.sh) unless `threshold_ms` is given; older runs have no stored threshold and need the parameter.",
     responses={
         200: {
@@ -71,6 +78,7 @@ def summarize_pattern(rows: List[Dict[str, Any]], threshold_ms: float) -> Dict[s
                                 "read_write_pattern": "randread",
                                 "block_size": "4K",
                                 "sync": "sync",
+                                "clients": 1,
                                 "status": "saturated",
                                 "steps": 12,
                                 "best_within": {"total_qd": 256, "iodepth": 64, "num_jobs": 4, "iops": 412000.0, "p95_latency": 18.2},
@@ -103,7 +111,7 @@ async def get_saturation_summary(
         raise HTTPException(status_code=400, detail="This run has no stored threshold; pass threshold_ms")
 
     def key(row: Dict[str, Any]) -> tuple:
-        return tuple(str(row[k]) for k in GROUP_KEYS)
+        return tuple(row[k] if k == "clients" else str(row[k]) for k in GROUP_KEYS)
 
     groups = [list(group) for _, group in groupby(sorted(rows, key=lambda r: (key(r), r["id"])), key=key)]
     return {

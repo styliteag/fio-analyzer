@@ -249,6 +249,8 @@ define_defaults() {
     SAT_MAX_TOTAL_SIZE="${SAT_MAX_TOTAL_SIZE:-}"
     SAT_CAP_MIN_WARNED=false
     SAT_PREFILL_BASE=""
+    # Client mode: data files prefilled on the clients ("<base>|<size>|<files>")
+    SAT_CLIENT_PREFILL=""
 
     # Advanced fio options (.env only, all off by default)
     FIO_EXTRA_ARGS="${FIO_EXTRA_ARGS:-}"
@@ -258,6 +260,12 @@ define_defaults() {
     # Retries for transient EAGAIN errors (io_uring can return EAGAIN at the end of a file)
     FIO_RETRY_MAX="${FIO_RETRY_MAX:-2}"
     FIO_RETRY_COUNT=0
+    # Retries of the current test (uploaded as description tag retried:N), one line per
+    # retried fio run for the summaries, job parameters/kernel override for the warning
+    FIO_TEST_RETRIES=0
+    FIO_RETRY_LOG=()
+    FIO_RETRY_PARAMS=""
+    FIO_RETRY_KERNEL=""
     # Storage detection (filesystem, ZFS, Ceph), uploaded as storage_info; 0 = off
     STORAGE_DETECT="${STORAGE_DETECT:-1}"
     STORAGE_INFO=""
@@ -278,7 +286,8 @@ define_defaults() {
     CLIENT_SSH="${CLIENT_SSH:-0}"
     CLIENT_SSH_USER="${CLIENT_SSH_USER:-}"
     CLIENT_SSH_BASE_PORT="${CLIENT_SSH_BASE_PORT:-18765}"
-    CLIENT_IOENGINE="${CLIENT_IOENGINE:-libaio}"
+    # Empty = the best engine every client supports (client_choose_ioengine)
+    CLIENT_IOENGINE="${CLIENT_IOENGINE:-}"
     CLIENT_TARGET_IS_DEVICE="${CLIENT_TARGET_IS_DEVICE:-auto}"
     CLIENT_MODE=false
     CLIENT_SSH_PIDS=()
@@ -373,8 +382,8 @@ build_description() {
 
     DESCRIPTION="${prefix:+${prefix},}hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)${tags}"
 
-    # Sanitize: spaces to underscores, remove special chars
-    DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
+    # Sanitize: spaces to underscores, remove special chars (dots stay: versions, FQDNs)
+    DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_.,;:]//g')
 }
 
 # Validate saturation-specific configuration
@@ -571,11 +580,13 @@ init_config() {
     validate_advanced_options
 
     # Step 3: Detect I/O engine (before array conversion so psync fallback works).
-    # Client mode: the clients run the jobs with CLIENT_IOENGINE, nothing is detected here.
+    # Client mode: the clients run the jobs with CLIENT_IOENGINE (--engine wins); when neither
+    # is set, client_choose_ioengine picks it from the clients' storage.json after connecting.
     if [ "$CLIENT_MODE" = true ]; then
+        if [ -n "${CLI_IOENGINE:-}" ]; then CLIENT_IOENGINE="$CLI_IOENGINE"; fi
         validate_client_config || exit 1
         STEP_CLIENTS=${RAMP_STEPS[${#RAMP_STEPS[@]} - 1]}
-        IOENGINE="$CLIENT_IOENGINE"
+        IOENGINE="${CLIENT_IOENGINE:-libaio}"
         set_sync_engine_flag
     else
         detect_ioengine
@@ -1664,30 +1675,102 @@ is_transient_fio_error() {
     [ -n "$(transient_fio_error_line "$1")" ]
 }
 
+# Text for terminal output: no control characters, no backslashes (print_* use echo -e)
+retry_clean_text() {
+    LC_ALL=C tr -d '\000-\037\177\\'
+}
+
+# Job parameters of a fio run for the retry diagnostics: FIO_RETRY_PARAMS when set
+# (client mode: the parameters are in a job file), otherwise taken from the fio arguments
+fio_retry_params() {
+    if [ -n "${FIO_RETRY_PARAMS:-}" ]; then
+        printf '%s' "$FIO_RETRY_PARAMS"
+        return 0
+    fi
+    local arg key out=""
+    for arg in "$@"; do
+        case "$arg" in
+            --rw=* | --bs=* | --size=* | --numjobs=* | --iodepth=* | --direct=* | --ioengine=*)
+                key=${arg#--}
+                out+="${out:+ }${key}"
+                ;;
+        esac
+    done
+    printf '%s' "$out"
+}
+
+# Kernel of the host(s) running the fio jobs: FIO_RETRY_KERNEL, in client mode the
+# kernels of all clients, otherwise SI_KERNEL (storage detection) or uname -r
+fio_retry_kernel() {
+    local kernel=${FIO_RETRY_KERNEL:-}
+    if [ -z "$kernel" ] && [ "${CLIENT_MODE:-false}" = true ] && declare -F client_kernels >/dev/null; then
+        kernel=$(client_kernels "${#CLIENT_STORAGE[@]}")
+    fi
+    kernel=${kernel:-${SI_KERNEL:-}}
+    if [ -z "$kernel" ]; then kernel=$(uname -r 2>/dev/null); fi
+    printf '%s' "${kernel:-unknown}"
+}
+
 # Run fio with the given arguments; retry up to FIO_RETRY_MAX times on transient EAGAIN errors.
+# Every retry counts in FIO_RETRY_COUNT (whole run) and FIO_TEST_RETRIES (current test,
+# uploaded as description tag retried:N); a retried run gets one line in FIO_RETRY_LOG.
 # Usage: run_fio_with_retry <label> <error_file> <fio args...>  (stderr of the last attempt stays in error_file)
 run_fio_with_retry() {
     local label=$1 error_file=$2
     shift 2
-    local attempt=0 rc
+    local attempt=0 rc info
     while :; do
-        fio "$@" 2>"$error_file" && return 0
-        rc=$?
-        if [ "$attempt" -ge "$FIO_RETRY_MAX" ] || ! is_transient_fio_error "$error_file"; then
+        rc=0
+        fio "$@" 2>"$error_file" || rc=$?
+        if [ "$rc" -eq 0 ] || [ "$attempt" -ge "$FIO_RETRY_MAX" ] || ! is_transient_fio_error "$error_file"; then
+            if [ "$attempt" -gt 0 ]; then
+                local result="ok"
+                if [ "$rc" -ne 0 ]; then result="failed"; fi
+                FIO_RETRY_LOG+=("$(printf '%s: %s, kernel=%s, retries=%s, %s' \
+                    "$label" "$info" "$(fio_retry_kernel)" "$attempt" "$result" | retry_clean_text)")
+            fi
             return "$rc"
         fi
         attempt=$((attempt + 1))
         FIO_RETRY_COUNT=$((FIO_RETRY_COUNT + 1))
-        print_warning "Transient fio error in ${label}, retry ${attempt}/${FIO_RETRY_MAX} in 5s: $(transient_fio_error_line "$error_file" | tr -d '\000-\037\\')"
+        FIO_TEST_RETRIES=$((${FIO_TEST_RETRIES:-0} + 1))
+        info=$(fio_retry_params "$@")
+        info=${info:-parameters unknown}
+        print_warning "$(printf 'Transient fio error in %s (%s, kernel=%s), retry %s/%s in 5s: %s' \
+            "$label" "$info" "$(fio_retry_kernel)" "$attempt" "$FIO_RETRY_MAX" \
+            "$(transient_fio_error_line "$error_file")" | retry_clean_text)"
         sleep 5
+    done
+}
+
+# Retried fio runs, one per line with the given indent (empty when there were none)
+print_retry_log() {
+    local entry
+    for entry in "${FIO_RETRY_LOG[@]}"; do
+        printf '%s%s\n' "$1" "$entry"
     done
 }
 
 # Report how many fio runs needed a retry, so the underlying problem stays visible
 print_retry_summary() {
     if [ "$FIO_RETRY_COUNT" -gt 0 ]; then
-        print_warning "Transient fio errors (EAGAIN) were retried ${FIO_RETRY_COUNT} time(s). Results are from the successful attempt."
+        print_warning "Transient fio errors (EAGAIN) were retried ${FIO_RETRY_COUNT} time(s). Results are from the successful attempt and are tagged retried:N."
+        print_warning "  Retried fio runs (${#FIO_RETRY_LOG[@]}):"
+        local entry
+        for entry in "${FIO_RETRY_LOG[@]}"; do
+            print_warning "    ${entry}"
+        done
         print_warning "  If this keeps happening with io_uring, try IOENGINE=libaio."
+    fi
+}
+
+# Description for the upload of the current test: DESCRIPTION plus retried:N when the
+# test needed a retry (FIO_TEST_RETRIES is reset at the start of every test)
+upload_description() {
+    if [ "${FIO_TEST_RETRIES:-0}" -gt 0 ]; then
+        printf '%s,retried:%s' "$DESCRIPTION" "$FIO_TEST_RETRIES"
+    else
+        printf '%s' "$DESCRIPTION"
     fi
 }
 
@@ -1703,6 +1786,7 @@ run_fio_test() {
     local runtime=$9
 
     print_status "Running FIO test: ${pattern} with ${block_size} block size, ${num_jobs} jobs"
+    FIO_TEST_RETRIES=0
     
     # Capture stderr to detect specific errors
     local error_file
@@ -1784,6 +1868,12 @@ run_fio_test() {
     fi
 }
 
+# jq path of the result the extract_* functions read: the job of a local run, or fio's
+# "All clients" aggregate of a client-mode run (the only entry with a single client)
+fio_result_jq() {
+    printf '%s' '(.jobs[0] // ((.client_stats // []) | (map(select(.jobname == "All clients"))[0] // .[0])))'
+}
+
 # Function to extract IOPS from FIO JSON output
 extract_iops() {
     local json_file=$1
@@ -1791,8 +1881,8 @@ extract_iops() {
     # Use jq if available, otherwise fall back to grep (normal mode may not require jq)
     local read_iops write_iops
     if command -v jq &> /dev/null; then
-        read_iops=$(jq -r '.jobs[0].read.iops // 0' "$json_file" 2>/dev/null)
-        write_iops=$(jq -r '.jobs[0].write.iops // 0' "$json_file" 2>/dev/null)
+        read_iops=$(jq -r "$(fio_result_jq).read.iops // 0" "$json_file" 2>/dev/null)
+        write_iops=$(jq -r "$(fio_result_jq).write.iops // 0" "$json_file" 2>/dev/null)
     else
         read_iops=$(grep -E '"iops"\s*:' "$json_file" 2>/dev/null | head -1 | awk -F: '{print $2}' | tr -d ' ,' || echo "0")
         write_iops=$(grep -E '"iops"\s*:' "$json_file" 2>/dev/null | head -2 | tail -1 | awk -F: '{print $2}' | tr -d ' ,' || echo "0")
@@ -1816,7 +1906,7 @@ extract_avg_clat_ms() {
     if [ ! -f "$json_file" ]; then echo "-"; return; fi
 
     local clat_mean_ns
-    clat_mean_ns=$(jq -r ".jobs[0].${section}.clat_ns.mean // empty" "$json_file" 2>/dev/null)
+    clat_mean_ns=$(jq -r "$(fio_result_jq).${section}.clat_ns.mean // empty" "$json_file" 2>/dev/null)
 
     if [ -z "$clat_mean_ns" ] || [ "$clat_mean_ns" = "null" ]; then
         echo "-"
@@ -1837,7 +1927,7 @@ extract_p70_clat_ms() {
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
     local p70_ns
-    p70_ns=$(jq -r ".jobs[0].${section}.clat_ns.percentile[\"70.000000\"] // empty" "$json_file" 2>/dev/null)
+    p70_ns=$(jq -r "$(fio_result_jq).${section}.clat_ns.percentile[\"70.000000\"] // empty" "$json_file" 2>/dev/null)
 
     if [ -z "$p70_ns" ] || [ "$p70_ns" = "null" ]; then
         echo "-"
@@ -1858,7 +1948,7 @@ extract_p99_clat_ms() {
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
     local p99_ns
-    p99_ns=$(jq -r ".jobs[0].${section}.clat_ns.percentile[\"99.000000\"] // empty" "$json_file" 2>/dev/null)
+    p99_ns=$(jq -r "$(fio_result_jq).${section}.clat_ns.percentile[\"99.000000\"] // empty" "$json_file" 2>/dev/null)
 
     if [ -z "$p99_ns" ] || [ "$p99_ns" = "null" ]; then
         echo "-"
@@ -1906,10 +1996,12 @@ display_iops() {
 upload_results() {
     local json_file=$1
     local test_name=$2
+    local description
+    description=$(upload_description)
     
     print_status "Uploading results: $test_name"
     print_status "         Hostname: $HOSTNAME"
-    print_status "      Description: $DESCRIPTION"
+    print_status "      Description: $description"
     print_status "         Run UUID: $RUN_UUID"
     print_status "      config_uuid: $CONFIG_UUID"
 
@@ -1939,7 +2031,7 @@ upload_results() {
         --form-string "drive_type=$DRIVE_TYPE" \
         --form-string "hostname=$HOSTNAME" \
         --form-string "protocol=$PROTOCOL" \
-        --form-string "description=$DESCRIPTION" \
+        --form-string "description=$description" \
         --form-string "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --form-string "config_uuid=$CONFIG_UUID" \
         --form-string "run_uuid=$RUN_UUID" \
@@ -1994,8 +2086,15 @@ run_fio_step() {
     local output_file=$4
     local block_size=${5:-$SAT_CURRENT_BS}
 
+    # Client mode: the same step on all clients at once (saturation_loop stays unchanged)
+    if [ "${CLIENT_MODE:-false}" = true ]; then
+        client_run_sat_step "$pattern" "$iodepth" "$num_jobs" "$output_file" "$block_size"
+        return
+    fi
+
     local total_qd=$((iodepth * num_jobs))
     print_step "Running ${pattern} bs=${block_size} | iodepth=${iodepth} numjobs=${num_jobs} (Total QD: ${total_qd})"
+    FIO_TEST_RETRIES=0
 
     local error_file
     error_file=$(mktemp "${TMPDIR:-/tmp}/fio_sat_error.XXXXXX") || return 1
@@ -2071,8 +2170,12 @@ extract_p95_clat_ms() {
     local section
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
+    # Client mode: older fio (e.g. 3.36) has no percentiles in "All clients" - then the
+    # worst client's P95 (an upper bound of the combined P95) is used
     local p95_ns
-    p95_ns=$(jq -r ".jobs[0].${section}.clat_ns.percentile[\"95.000000\"] // empty" "$json_file" 2>/dev/null)
+    p95_ns=$(jq -r "$(fio_result_jq).${section}.clat_ns.percentile[\"95.000000\"]
+        // ([.client_stats[]? | select(.jobname != \"All clients\")
+            | .${section}.clat_ns.percentile[\"95.000000\"] // empty] | max) // empty" "$json_file" 2>/dev/null)
 
     if [ -z "$p95_ns" ] || [ "$p95_ns" = "null" ]; then
         echo "ERR"
@@ -2102,7 +2205,7 @@ extract_iops_value() {
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
     local iops
-    iops=$(jq -r ".jobs[0].${section}.iops // empty" "$json_file" 2>/dev/null)
+    iops=$(jq -r "$(fio_result_jq).${section}.iops // empty" "$json_file" 2>/dev/null)
 
     # Validate numeric (integer or float)
     if [ -z "$iops" ] || [ "$iops" = "null" ] || ! [[ "$iops" =~ ^[0-9]+\.?[0-9]*$ ]]; then
@@ -2127,7 +2230,7 @@ extract_bw_mbs() {
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
     local bw_bytes
-    bw_bytes=$(jq -r ".jobs[0].${section}.bw_bytes // empty" "$json_file" 2>/dev/null)
+    bw_bytes=$(jq -r "$(fio_result_jq).${section}.bw_bytes // empty" "$json_file" 2>/dev/null)
 
     # Validate numeric
     if [ -z "$bw_bytes" ] || [ "$bw_bytes" = "null" ] || ! [[ "$bw_bytes" =~ ^[0-9]+$ ]]; then
@@ -2773,6 +2876,7 @@ run_all_tests() {
     echo "Successful:       $successful_uploads"
     echo "Failed:           $failed_uploads"
     echo "EAGAIN retries:   $FIO_RETRY_COUNT"
+    print_retry_log "  retried: "
     
     # Display IOPS statistics if available
     if [ $iops_count -gt 0 ]; then
@@ -2981,12 +3085,13 @@ server_write_file() {
     mv -f "$tmp" "$dir/$name"
 }
 
-# Write the published files into <state dir>/info: storage.json and hostname.txt only
+# Write the published files into <state dir>/info: storage.json and hostname.txt only.
+# Without storage detection (STORAGE_DETECT=0) storage.json still names the I/O engine.
 server_write_info() {
     local dir="$1/info" info=${STORAGE_INFO:-} name
     if [ -L "$dir" ]; then return 1; fi
     mkdir -p "$dir" || return 1
-    if [ -z "$info" ]; then info='{}'; fi
+    if [ -z "$info" ]; then info=$(json_object ioengine "${IOENGINE:-}"); fi
     name=$(hostname -s 2>/dev/null || hostname 2>/dev/null)
     name=${name//[^A-Za-z0-9._-]/}
     server_write_file "$dir" storage.json "$info" || return 1
@@ -3146,6 +3251,8 @@ run_server_mode() {
         print_warning "TARGET_DIR '$TARGET_DIR' is relative - the controller needs an absolute path (same on every client)"
     fi
     setup_target_dir
+    # Published in storage.json: the controller picks the engine every client supports
+    detect_ioengine
     detect_storage
     server_write_info "$SERVER_STATE_DIR" || { print_error "Cannot write $SERVER_STATE_DIR/info"; exit 1; }
 
@@ -3266,9 +3373,10 @@ parse_ramp_clients() {
 # Check the client-mode settings; TARGET_IS_DEVICE from CLIENT_TARGET_IS_DEVICE
 # (auto = the path starts with /dev/). TARGET_DIR is never looked at locally.
 validate_client_config() {
-    local var value n
-    if [ "$SATURATION_MODE" = true ]; then
-        print_error "SATURATION_MODE (--saturation) cannot be combined with CLIENTS (client mode) - run them separately"
+    local var value n ramp=${RAMP_CLIENTS:-}
+    # Saturation in client mode runs every step on all clients: no client-count ramp
+    if [ "${SATURATION_MODE:-false}" = true ] && [ -n "${ramp//[[:space:]]/}" ]; then
+        print_error "RAMP_CLIENTS (--ramp-clients) cannot be combined with SATURATION_MODE (--saturation) - saturation steps always run on all CLIENTS; unset RAMP_CLIENTS or run the ramp separately"
         return 1
     fi
     parse_clients "$CLIENTS" || return 1
@@ -3294,11 +3402,13 @@ validate_client_config() {
         print_error "In client mode TARGET_DIR must be an absolute path on the clients (got '$TARGET_DIR')"
         return 1
     fi
-    if ! [[ "$CLIENT_IOENGINE" =~ ^[A-Za-z0-9_.:-]+$ ]] || [[ "$CLIENT_IOENGINE" == external* ]]; then
+    # Empty = chosen from the clients' storage.json (client_choose_ioengine)
+    if [ -n "$CLIENT_IOENGINE" ] && { ! [[ "$CLIENT_IOENGINE" =~ ^[A-Za-z0-9_.:-]+$ ]] || [[ "$CLIENT_IOENGINE" == external* ]]; }; then
         print_error "Invalid CLIENT_IOENGINE '$CLIENT_IOENGINE'"
         return 1
     fi
-    for var in BLOCK_SIZES TEST_PATTERNS NUM_JOBS DIRECT TEST_SIZE SYNC IODEPTH RUNTIME; do
+    for var in BLOCK_SIZES TEST_PATTERNS NUM_JOBS DIRECT TEST_SIZE SYNC IODEPTH RUNTIME \
+        SAT_BLOCK_SIZES SAT_PATTERNS SAT_SYNC SAT_MAX_TOTAL_SIZE; do
         value=${!var:-}
         if [[ "$value" == *[[:cntrl:]]* ]]; then print_error "Invalid $var '$value'"; return 1; fi
     done
@@ -3452,6 +3562,56 @@ client_fetch_info() {
     done
 }
 
+# Rank of an engine for client_choose_ioengine (higher = faster); 0 = not one of the three
+client_ioengine_rank() {
+    case "$1" in
+        io_uring) echo 3 ;;
+        libaio) echo 2 ;;
+        psync) echo 1 ;;
+        *) echo 0 ;;
+    esac
+}
+
+# Set CLIENT_IOENGINE/IOENGINE/IS_SYNC_ENGINE for client mode (after client_fetch_info).
+# CLIENT_IOENGINE or --engine set: used as is. Otherwise the best engine that EVERY client
+# supports (io_uring > libaio > psync), from the ioengine each client's --server publishes in
+# storage.json; libaio (the former default) when a client publishes none or another engine.
+client_choose_ioengine() {
+    local i n=${#CLIENT_STORAGE[@]} engine rank best=3 unknown=()
+    local names=("" psync libaio io_uring)
+    if [ -n "$CLIENT_IOENGINE" ]; then
+        IOENGINE=$CLIENT_IOENGINE
+        set_sync_engine_flag
+        print_status "Client I/O engine: $CLIENT_IOENGINE (set by CLIENT_IOENGINE or --engine)"
+        return 0
+    fi
+    for ((i = 0; i < n; i++)); do
+        engine=$(jq -r 'if (.ioengine | type) == "string" then .ioengine else "" end' \
+            <<< "${CLIENT_STORAGE[$i]:-}" 2>/dev/null)
+        engine=${engine//[^A-Za-z0-9_.:-]/}
+        rank=$(client_ioengine_rank "$engine")
+        if [ "$rank" -eq 0 ]; then
+            unknown+=("${CLIENT_ENTRY[$i]}${engine:+ ($engine)}")
+        elif [ "$rank" -lt "$best" ]; then
+            best=$rank
+        fi
+    done
+    if [ "$n" -eq 0 ] || [ "${#unknown[@]}" -gt 0 ]; then
+        CLIENT_IOENGINE=libaio
+        print_warning "Client I/O engine: libaio (no usable ioengine in storage.json of: ${unknown[*]:-all clients})"
+        print_warning "  Run fio-test.sh --server of this version on the clients or set CLIENT_IOENGINE"
+    else
+        CLIENT_IOENGINE=${names[$best]}
+        print_status "Client I/O engine: $CLIENT_IOENGINE (best engine supported by all ${n} clients)"
+    fi
+    IOENGINE=$CLIENT_IOENGINE
+    set_sync_engine_flag
+    if [ "$IS_SYNC_ENGINE" = true ]; then
+        IODEPTH=(1)
+        print_warning "psync is synchronous - using iodepth=1"
+    fi
+}
+
 # Comma-separated names of the first <n> clients (client_hosts upload field)
 client_hosts_list() {
     local IFS=,
@@ -3476,6 +3636,14 @@ client_storage_info_json() {
         out=$(jq -c 'map_values({client_name, fs_type})' <<< "$out")
     fi
     echo "$out"
+}
+
+# Kernels of the first <n> clients from their storage.json, unique, joined with "/"
+client_kernels() {
+    local out
+    out=$(printf '%s\n' "${CLIENT_STORAGE[@]:0:$1}" | jq -r '.kernel // empty | tostring | gsub("[[:cntrl:]]"; "")' 2>/dev/null \
+        | sort -u | paste -sd '/' - | retry_clean_text)
+    printf '%s' "${out:-unknown (clients)}"
 }
 
 # One-line summary of a client's storage.json for show_config
@@ -3574,15 +3742,16 @@ client_write_job_file() {
 }
 
 # Job file that writes the PREFILL data files (incompressible) on every client
-# Usage: client_write_prefill_job <file> <data base> <size> <files per job> <direct>
+# (FILE_PER_JOB=1: files <first>..<files per job>-1; first defaults to 0)
+# Usage: client_write_prefill_job <file> <data base> <size> <files per job> <direct> [first]
 client_write_prefill_job() {
-    local file=$1 base=$2 test_size=$3 num_jobs=$4 direct=$5 dir=${TARGET_DIR%/} j
+    local file=$1 base=$2 test_size=$3 num_jobs=$4 direct=$5 first=${6:-0} dir=${TARGET_DIR%/} j
     dir=${dir//:/\\:}
     {
         printf '%s\n' "[global]" "rw=write" "bs=1M" "size=${test_size}" "refill_buffers" "randrepeat=0" \
             "end_fsync=1" "ioengine=${CLIENT_IOENGINE}" "direct=${direct}" "thread"
         if [ "$FILE_PER_JOB" = 1 ]; then
-            for ((j = 0; j < num_jobs; j++)); do
+            for ((j = first; j < num_jobs; j++)); do
                 printf '\n%s\n%s\n' "[prefill_${j}]" "filename=${dir}/${base}.${j}"
             done
         else
@@ -3727,12 +3896,17 @@ client_run_ramp_step() {
     label=$(client_step_label "$@")
     job_file="${CLIENT_WORK_DIR}/${label}.fio" output="${CLIENT_WORK_DIR}/${label}.json"
     base=$(data_file_base "fio_test_${pattern}_${block_size}" "$test_size")
-    STEP_CLIENTS=$n STEP_COMPLETE=1
+    STEP_CLIENTS=$n STEP_COMPLETE=1 FIO_TEST_RETRIES=0
     build_description
+    # The job parameters are in the job file: name them (and the clients' kernels) for
+    # the retry diagnostics
+    FIO_RETRY_PARAMS="rw=${pattern} bs=${block_size} size=${test_size} numjobs=${num_jobs} iodepth=${iodepth} direct=${direct} ioengine=${CLIENT_IOENGINE}"
+    FIO_RETRY_KERNEL=$(client_kernels "$n")
     client_write_job_file "$job_file" "$pattern" "$block_size" "$num_jobs" "$direct" "$test_size" \
         "$sync" "$iodepth" "$runtime" "$base"
     print_step "${pattern} bs=${block_size} jobs=${num_jobs} iodepth=${iodepth} on ${n} client(s): $(client_hosts_list "$n")"
     client_run_step "$n" "$job_file" "$output" "$label" || rc=$?
+    FIO_RETRY_PARAMS="" FIO_RETRY_KERNEL=""
     if [ "$rc" -ne 0 ] || ! client_step_complete "$output" "$n"; then STEP_COMPLETE=0; fi
     if ! jq -e '.client_stats | type == "array"' "$output" >/dev/null 2>&1; then
         print_error "No fio client results for ${label} - not uploaded"
@@ -3799,6 +3973,126 @@ client_cleanup_all() {
     done
 }
 
+# Saturation mode with CLIENTS: run_fio_step's counterpart. The step runs on ALL clients
+# at once; iodepth/numjobs (and SAT_MAX_TOTAL_SIZE) apply per client. fio's client JSON is
+# left in <output file>: saturation_loop evaluates the "All clients" aggregate (P95 against
+# LATENCY_THRESHOLD_MS) and uploads it with the client fields. A step that is incomplete
+# (fio error, a client missing or reporting an error) fails and is not uploaded, since
+# its aggregate would not describe the load of all clients.
+# Usage: client_run_sat_step <pattern> <iodepth> <numjobs> <output file> <bs>
+client_run_sat_step() {
+    local pattern=$1 iodepth=$2 num_jobs=$3 output=$4 block_size=$5
+    local n=${#CLIENT_KEY[@]} label job_file base rc=0
+    print_step "Running ${pattern} bs=${block_size} | iodepth=${iodepth} numjobs=${num_jobs} (QD per client: $((iodepth * num_jobs))) on ${n} client(s)"
+    sat_step_size "$num_jobs"
+    if sat_cap_active; then
+        print_status "  per-job file size: ${SAT_STEP_SIZE} (cap ${SAT_MAX_TOTAL_SIZE} per client / ${num_jobs} jobs, test size ${SAT_TEST_SIZE})"
+    fi
+    label="sat_${pattern}_${block_size}_${SAT_SYNC}_${iodepth}x${num_jobs}_clients${n}"
+    label=${label//[^A-Za-z0-9_.+-]/}
+    job_file="${CLIENT_WORK_DIR}/${label}.fio"
+    base=$(data_file_base "fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}" "$SAT_STEP_SIZE")
+    client_sat_prefill "$base" "$SAT_STEP_SIZE" "$num_jobs" || return 1
+    STEP_CLIENTS=$n STEP_COMPLETE=1 RAMP_UUID=""
+    build_description
+    client_write_job_file "$job_file" "$pattern" "$block_size" "$num_jobs" "$SAT_DIRECT" "$SAT_STEP_SIZE" \
+        "$SAT_SYNC" "$iodepth" "$SAT_RUNTIME" "$base"
+    # retried:N counts this step only; name the job parameters and the clients' kernels
+    # for the retry diagnostics (the job parameters are in the job file)
+    FIO_TEST_RETRIES=0
+    FIO_RETRY_PARAMS="rw=${pattern} bs=${block_size} size=${SAT_STEP_SIZE} numjobs=${num_jobs} iodepth=${iodepth} direct=${SAT_DIRECT} ioengine=${CLIENT_IOENGINE}"
+    FIO_RETRY_KERNEL=$(client_kernels "$n")
+    client_run_step "$n" "$job_file" "$output" "$label" || rc=$?
+    FIO_RETRY_PARAMS="" FIO_RETRY_KERNEL=""
+    rm -f "$job_file"
+    if [ -s "$output" ]; then keep_json_copy "$output"; fi
+    if [ "$rc" -ne 0 ] || ! client_step_complete "$output" "$n"; then
+        STEP_COMPLETE=0
+        print_error "Step incomplete on the clients (fio error or a client missing in client_stats) - not evaluated, not uploaded"
+        return 1
+    fi
+    STEP_CLIENT_HOSTS=$(client_hosts_list "$n")
+    STEP_CLIENT_STORAGE=$(client_storage_info_json "$n")
+    client_print_p95 "$output" "$pattern"
+    if [ "$n" -gt 1 ] && [ "${SAT_CLIENT_P95_WARNED:-false}" != true ] && ! jq -e \
+        'any(.client_stats[] | select(.jobname == "All clients") | .read, .write; .clat_ns.percentile != null)' \
+        "$output" >/dev/null 2>&1; then
+        print_warning "fio's \"All clients\" result has no latency percentiles (older fio) - the threshold is checked on the worst client's P95"
+        SAT_CLIENT_P95_WARNED=true
+    fi
+    return 0
+}
+
+# Print each client's P95 completion latency of a step (worst of read/write for mixed
+# patterns), e.g. "  P95 per client: vm1=1.20ms vm2=3.40ms". The threshold is checked on
+# the "All clients" aggregate; this line shows which client is the slow one.
+client_print_p95() {
+    local json=$1 pattern=$2 sections i j key value out="" p95 name
+    local -a keys=() values=()
+    case "$pattern" in
+        read|randread) sections='[.read]' ;;
+        write|randwrite) sections='[.write]' ;;
+        *) sections='[.read, .write]' ;;
+    esac
+    while IFS=$'\t' read -r key value; do
+        keys+=("$key") values+=("$value")
+    done < <(jq -r '.client_stats[] | select(.jobname != "All clients")
+        | ["\(.hostname):\(.port)", ('"$sections"' | map(.clat_ns.percentile["95.000000"] // 0) | max // 0
+            | . / 10000 | floor / 100 | tostring)] | @tsv' "$json" 2>/dev/null)
+    for ((i = 0; i < ${#CLIENT_KEY[@]}; i++)); do
+        p95="?"
+        for ((j = 0; j < ${#keys[@]}; j++)); do
+            if [ "${keys[$j]}" = "${CLIENT_KEY[$i]}" ]; then p95=${values[$j]}; fi
+        done
+        name=${CLIENT_NAME[$i]:-}
+        # No hostname.txt from the client: its CLIENTS entry tells clients on one address apart
+        if [ -z "$name" ] || [ "$name" = "${CLIENT_ADDR[$i]:-}" ]; then name=${CLIENT_ENTRY[$i]:-${CLIENT_KEY[$i]}}; fi
+        out+=" ${name}=${p95}ms"
+    done
+    echo "  P95 per client:${out}"
+}
+
+# PREFILL=1 in client saturation mode: write the step's data files on all clients, unless
+# earlier steps already wrote enough of them. The base name only changes with the file size
+# (SAT_MAX_TOTAL_SIZE); the files of the previous size are removed first.
+# State in SAT_CLIENT_PREFILL: "<base>|<size>|<files written>".
+# Usage: client_sat_prefill <data base> <size> <numjobs>
+client_sat_prefill() {
+    local base=$1 size=$2 num_jobs=$3 count=1 n=${#CLIENT_KEY[@]} job_file json prev_base prev_files
+    if [ "$PREFILL" != 1 ] || [ "$TARGET_IS_DEVICE" = true ]; then return 0; fi
+    if [ "$FILE_PER_JOB" = 1 ]; then count=$num_jobs; fi
+    IFS='|' read -r prev_base _ prev_files <<< "${SAT_CLIENT_PREFILL:-}"
+    if [ "$prev_base" = "$base" ] && [ "${prev_files:-0}" -ge "$count" ]; then return 0; fi
+    if [ "$prev_base" != "$base" ]; then
+        client_sat_prefill_cleanup
+        prev_files=0
+    fi
+    job_file="${CLIENT_WORK_DIR}/prefill_${base}.fio" json="${CLIENT_WORK_DIR}/prefill_${base}.json"
+    client_write_prefill_job "$job_file" "$base" "$size" "$count" "$SAT_DIRECT" "$prev_files"
+    print_status "Prefilling ${base} (${size}, files ${prev_files}..$((count - 1))) on all ${n} client(s)..."
+    if ! client_run_step "$n" "$job_file" "$json" "prefill_${base}"; then
+        print_error "Prefill of ${base} failed on the clients"
+        rm -f "$job_file" "$json"
+        return 1
+    fi
+    rm -f "$job_file" "$json"
+    SAT_CLIENT_PREFILL="${base}|${size}|${count}"
+}
+
+# Remove the data files written by client_sat_prefill on all clients (size change, end of run)
+client_sat_prefill_cleanup() {
+    local base size files n=${#CLIENT_KEY[@]} job_file
+    if [ -z "${SAT_CLIENT_PREFILL:-}" ]; then return 0; fi
+    IFS='|' read -r base size files <<< "$SAT_CLIENT_PREFILL"
+    SAT_CLIENT_PREFILL=""
+    job_file="${CLIENT_WORK_DIR}/cleanup_${base}.fio"
+    client_write_cleanup_job "$job_file" "$base" "$size" "$files"
+    print_status "Removing ${base} data files on all ${n} client(s)..."
+    client_run_step "$n" "$job_file" "${CLIENT_WORK_DIR}/cleanup_${base}.json" "cleanup_${base}" \
+        || print_warning "Could not remove ${base} on every client - remove it manually from ${TARGET_DIR}"
+    rm -f "$job_file" "${CLIENT_WORK_DIR}/cleanup_${base}.json"
+}
+
 # Client mode: every test configuration once per ramp step on the clients
 run_client_tests() {
     local config pattern block_size num_jobs direct test_size sync iodepth runtime current=0
@@ -3828,6 +4122,7 @@ run_client_tests() {
     echo "Incomplete steps: $CLIENT_STEPS_INCOMPLETE"
     echo "Failed steps:     $CLIENT_STEPS_FAILED (no results)"
     echo "EAGAIN retries:   $FIO_RETRY_COUNT"
+    print_retry_log "  retried: "
     echo "Server retries:   ${CLIENT_SERVER_RETRIES:-0} (job refused by a fio server)"
     echo "========================================="
     [ $((CLIENT_UPLOADS_FAILED + CLIENT_STEPS_FAILED + CLIENT_STEPS_INCOMPLETE)) -eq 0 ]
@@ -4049,6 +4344,8 @@ main() {
         print_client_security_warning
         client_setup_connections || exit 1
         client_fetch_info
+        # Before show_config and before any job file is written
+        client_choose_ioengine
     else
         # Setup target (detect device vs directory mode)
         setup_target_dir
@@ -4104,6 +4401,9 @@ main() {
         print_status "  P95 threshold: ${LATENCY_THRESHOLD_MS}ms"
         print_status "  Max total QD: ${MAX_TOTAL_QD}"
         print_status "  Runtime per step: ${SAT_RUNTIME}s"
+        if [ "$CLIENT_MODE" = true ]; then
+            print_status "  Clients: ${#CLIENT_ENTRY[@]}, every step on all of them at once (iodepth/numjobs/QD per client, P95 of all clients)"
+        fi
         print_status "  Max estimated time: ~${est_minutes} minutes (if all $MAX_STEPS steps x $num_patterns patterns x $num_block_sizes block sizes${sync_note} run)"
     else
         # Standard mode confirmation
@@ -4177,8 +4477,12 @@ main() {
         print_status "Auto-confirmed with --yes flag"
     fi
 
-    # Run tests based on mode
-    if [ "$CLIENT_MODE" = true ]; then
+    # Run tests based on mode (saturation first: with CLIENTS it runs every step on all clients)
+    if [ "$SATURATION_MODE" = true ]; then
+        run_saturation_runs
+        if [ "$CLIENT_MODE" = true ]; then client_sat_prefill_cleanup; fi
+        print_retry_summary
+    elif [ "$CLIENT_MODE" = true ]; then
         if run_client_tests; then
             print_retry_summary
             print_success "Client testing completed successfully!"
@@ -4188,14 +4492,12 @@ main() {
             cleanup
             exit 1
         fi
-    elif [ "$SATURATION_MODE" = true ]; then
-        run_saturation_runs
-        print_retry_summary
     else
         if run_all_tests; then
             print_retry_summary
             print_success "Performance testing completed successfully!"
         else
+            print_retry_summary
             print_error "Performance testing completed with errors."
             exit 1
         fi
@@ -4335,7 +4637,8 @@ RUNTIME="60"
 #     (realistic reads on ext4/xfs fallocated files and ZFS compression; directories only)
 # PREFILL=0
 # Retries when fio fails with a transient EAGAIN error (io_uring can return it on
-# reads at the end of the test file); other errors are never retried. 0 = off
+# reads at the end of the test file); other errors are never retried. 0 = off.
+# A result that needed a retry gets the description tag retried:N (N = retries).
 # FIO_RETRY_MAX=2
 # Detect the storage below TARGET_DIR (filesystem, ZFS dataset/zvol properties such as
 # sync/recordsize/volblocksize and the pool layout, CephFS/RBD pool, the disk with model,
@@ -4409,8 +4712,10 @@ RUNTIME="60"
 #                                # for servers bound to 127.0.0.1, nothing open on the network
 # CLIENT_SSH_USER=root           # SSH user for the tunnels (default: ssh config / current user)
 # CLIENT_SSH_BASE_PORT=18765     # Local tunnel ports from here (2 per client)
-# CLIENT_IOENGINE=libaio         # I/O engine on the clients (io_uring faster when enabled,
-#                                # psync for non-Linux clients)
+# CLIENT_IOENGINE=libaio         # I/O engine on the clients. Unset = the best engine ALL
+#                                # clients support (io_uring > libaio > psync, published by
+#                                # their --server), libaio if a client publishes none
+#                                # (--engine on the controller also sets it)
 # CLIENT_TARGET_IS_DEVICE=auto   # TARGET_DIR is a path ON THE CLIENTS (absolute, same on all);
 #                                # auto = block device when it starts with /dev/, 0/1 = force.
 #                                # e.g. TARGET_DIR=/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1
@@ -4418,7 +4723,9 @@ RUNTIME="60"
 # HOSTNAME/PROTOCOL/DRIVE_TYPE/DRIVE_MODEL describe the group, e.g. HOSTNAME=px1-vms.
 # Uploads add clients, ramp_uuid, client_hosts, client_storage_info and ramp_step_complete;
 # the description gets clients:N, ramp:1 and incomplete:1 (a client missing or failed).
-# Not combinable with SATURATION_MODE / --saturation.
+# With SATURATION_MODE / --saturation every step runs on ALL clients at once (RAMP_CLIENTS
+# must stay empty): iodepth/numjobs/MAX_TOTAL_QD apply per client, LATENCY_THRESHOLD_MS is
+# checked on the P95 of fio's "All clients" result. Incomplete steps are not uploaded.
 
 
 # Backend Configuration
@@ -4492,6 +4799,7 @@ General Options:
   -e, --env-file FILE    Specify a custom .env file path (can be used multiple times)
                          Files are loaded in order; later files override earlier ones.
   -i, --engine ENGINE    I/O engine (io_uring, libaio, psync). Default: auto-detect
+                         (client mode: engine of the clients, overrides CLIENT_IOENGINE)
 
 Host Metadata Options:
   --hostname NAME        Server hostname (default: current hostname)
@@ -4530,6 +4838,7 @@ Saturation Test Options (use with -s):
   --initial-numjobs N    Starting numjobs for saturation (default: 4)
   --max-qd N             Max total QD before auto-stop (default: 16384)
   --max-steps N          Max escalation steps (default: 20)
+  With --clients: every step on all clients at once, QD per client, P95 of all clients
 
 Advanced Settings (.env / environment only, all off by default):
   FIO_EXTRA_ARGS="..."   Extra fio arguments appended to every benchmark run
@@ -4540,7 +4849,9 @@ Advanced Settings (.env / environment only, all off by default):
                          them across tests; removed at the end (directory targets only)
                          PREFILL/FILE_PER_JOB add prefill:1 / fileperjob:1 to the description
   FIO_RETRY_MAX=N        Retry a fio run up to N times when it fails with a transient
-                         EAGAIN error (default: 2, 0 = off); other errors are not retried
+                         EAGAIN error (default: 2, 0 = off); other errors are not retried.
+                         A retried result gets retried:N in the description; the warning
+                         and the summary name the job parameters and the kernel
   SAT_SYNC=LIST          Saturation sync modes, comma-separated (none, sync, dsync, legacy 0/1;
                          default: SYNC). Each block size x sync mode is its own run with its
                          own run_uuid, e.g. SAT_SYNC=sync,dsync
@@ -4558,8 +4869,9 @@ Advanced Settings (.env / environment only, all off by default):
 
 Server Mode (this host runs fio jobs for a controller):
   --server               Start 'fio --server' on FIO_SERVER_BIND:FIO_SERVER_PORT and publish
-                         this host's storage detection for TARGET_DIR (storage.json,
-                         hostname.txt) read-only on FIO_SERVER_BIND:FIO_SERVER_INFO_PORT
+                         this host's storage detection for TARGET_DIR and I/O engine
+                         (IOENGINE / --engine, else auto-detected) as storage.json, plus
+                         hostname.txt, read-only on FIO_SERVER_BIND:FIO_SERVER_INFO_PORT
                          (python3 -m http.server; skipped with a warning without python3).
                          Runs in the foreground until Ctrl-C, --server-stop or FIO_SERVER_TIMEOUT.
   --server-stop          Stop the server recorded in the state directory (only its own PIDs)
@@ -4600,8 +4912,10 @@ Client Mode (this host is the controller; active when CLIENTS is set):
                          CLIENT_SSH_BASE_PORT (default: 18765, 2 ports per client). Use it
                          with servers bound to 127.0.0.1 (no open port on the network)
   CLIENT_SSH_USER=USER   SSH user for the tunnels (default: current user / ssh config)
-  CLIENT_IOENGINE=ENG    I/O engine used on the clients (default: libaio; io_uring is faster
-                         but often disabled; psync for non-Linux clients)
+  CLIENT_IOENGINE=ENG    I/O engine used on the clients (-i/--engine also sets it). Unset: the
+                         best engine supported by ALL clients (io_uring > libaio > psync, as
+                         detected and published by their --server); libaio when a client
+                         publishes none (older --server)
   CLIENT_TARGET_IS_DEVICE=auto|0|1
                          TARGET_DIR is a path ON THE CLIENTS (same everywhere, absolute; not
                          created or checked locally). auto = block device when it starts
@@ -4611,7 +4925,12 @@ Client Mode (this host is the controller; active when CLIENTS is set):
   storage.json) and ramp_step_complete; description tags clients:N, ramp:1, incomplete:1.
   A step is incomplete (still uploaded) when fio fails or a client is missing or reports
   an error. PREFILL writes the data files once on all clients before the first test.
-  Not combinable with --saturation.
+  With --saturation every step runs on ALL clients at once (not with --ramp-clients):
+  iodepth/numjobs/--max-qd apply per client, the threshold is checked on the P95 of fio's
+  "All clients" result (each client's P95 is printed too). Uploads carry both the
+  saturation fields (latency_threshold_ms, saturation-test) and clients / client_hosts /
+  client_storage_info. An incomplete step (a client missing or failed) counts as a failed
+  step and is not uploaded.
 
 Precedence:
   CLI flags > environment variables > .env file > hardcoded defaults
@@ -4649,6 +4968,9 @@ Examples:
   # Multi-client: on every VM (isolated network), then on the controller
   FIO_SERVER_BIND=10.44.44.101 TARGET_DIR=/mnt/fio $0 --server
   $0 --clients 10.44.44.101,10.44.44.102 --ramp-clients 1,2 --target-dir /mnt/fio -y
+
+  # Multi-client saturation: every step on both clients, P95 of all clients vs 20 ms
+  $0 --clients 10.44.44.101,10.44.44.102 --target-dir /mnt/fio --saturation --threshold 20
 
   # Multi-client over SSH tunnels (servers bound to 127.0.0.1)
   FIO_SERVER_BIND=127.0.0.1 $0 --server                  # on each client
