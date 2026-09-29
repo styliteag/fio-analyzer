@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- 
+
+## [0.13.2] - 2026-09-29
+
+### Added
 - **Ramp step fairness in the detail view**: `GET /api/ramp/runs/{ramp_uuid}` now returns `fairness` (slowest / fastest client IOPS, null below two clients) in every step, not only the summary endpoint. It is the noisy-neighbour signal of a step.
 
 ### Changed
