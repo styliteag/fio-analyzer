@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **fio I/O engine per test run** (`ioengine`, e.g. `libaio`, `io_uring`, `psync`): every import (single upload, bulk import, fio client mode) reads it from the fio JSON (`job options` of a local run, `global options` of a client-mode job file), falls back to `storage_info.ioengine` and stores null when neither names one. Test-run responses (`/api/test-runs/`, `/api/test-runs/{id}`, `/api/test-runs/performance-data`, `/api/time-series/all`) include it.
 - **Database migration 10** (automatic on startup, no table rebuild): new nullable `ioengine` column on `test_runs`, `test_runs_all` and `saturation_runs`. Existing rows are backfilled from `storage_info.ioengine` (on every start, only rows that are still null) and, once when the column is added, from the stored fio JSON upload (client-mode runs have no `storage_info` on the aggregate row). Rows whose upload file is gone stay null. The column is not part of the `test_runs` unique key.
+- **fio-test.sh `--server`** detects the I/O engine (explicit `IOENGINE`/`--engine` first, else io_uring > libaio > psync) and publishes it as `ioengine` in `storage.json`, also with `STORAGE_DETECT=0`.
 
 ### Changed
 - **Compare strict matching** (`GET /api/compare`, default `strict=true`) also requires the same `ioengine`, so libaio and io_uring runs are no longer compared as equal. Runs without a recorded engine only match each other. `strict=false` lists `ioengine` in `mismatch` when the engines differ; rows and cells carry `ioengine`, and the compare page shows it next to test size, duration and layout.
+- **fio-test.sh controller mode**: without `CLIENT_IOENGINE` the controller now uses the best engine every client supports (io_uring > libaio > psync, from the clients' `storage.json`) instead of always libaio, and prints which engine it chose and why. When a client publishes no engine (older `--server`), it falls back to libaio as before. `-i/--engine` on the controller now sets the client engine (it was ignored in controller mode); an explicit `CLIENT_IOENGINE` still works unchanged.
 
 ## [0.12.1] - 2026-09-28
 

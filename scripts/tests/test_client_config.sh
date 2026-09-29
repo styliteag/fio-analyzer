@@ -97,6 +97,10 @@ setup_valid; TARGET_DIR=$'/mnt/x\nexec_prerun=touch /tmp/pwned'
 validate_client_config; check "TARGET_DIR with newline rejected" 1 "$?"
 setup_valid; CLIENT_IOENGINE=$'libaio\nexec_prerun=id'
 validate_client_config; check "CLIENT_IOENGINE with newline rejected" 1 "$?"
+setup_valid; CLIENT_IOENGINE=""
+validate_client_config; check "empty CLIENT_IOENGINE accepted (chosen from the clients)" 0 "$?"
+setup_valid; CLIENT_IOENGINE="io uring"
+validate_client_config; check "CLIENT_IOENGINE with a space rejected" 1 "$?"
 setup_valid; CLIENT_SSH=yes
 validate_client_config; check "CLIENT_SSH must be 0/1" 1 "$?"
 setup_valid; CLIENT_SSH_BASE_PORT=65534 CLIENT_SSH=1
