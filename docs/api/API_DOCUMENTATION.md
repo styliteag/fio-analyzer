@@ -101,7 +101,7 @@ Most endpoints support filtering with these common parameters:
 - `directs` - Direct I/O flags (0=buffered, 1=direct)
 
 ### Run Filters
-- `tags` - Comma-separated description tags that must all be present, e.g. `prefill:1,fileperjob:1` (`/api/test-runs`, `/api/time-series/all`, `/api/time-series/history`)
+- `tags` - Comma-separated description tags that must all be present, e.g. `prefill:1,fileperjob:1` (`/api/test-runs`, `/api/time-series/all`, `/api/time-series/history`). A tag matches a whole element, so `retried:1` finds results that `fio-test.sh` uploaded after one EAGAIN retry (`retried:N` = N retries), not `retried:2`
 - `since` / `until` - Date (`YYYY-MM-DD`, `until` includes the whole day) or ISO datetime (`/api/test-runs`, `/api/time-series/all`; `/history` uses `start_date`/`end_date`)
 - `run_uuid` - Comma-separated run UUIDs
 

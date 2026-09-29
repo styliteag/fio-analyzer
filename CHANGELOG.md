@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **fio-test.sh EAGAIN retries are now visible**: A result that needed a retry after a transient EAGAIN error is uploaded with the description tag `retried:N` (N = retries of that test), in the normal, saturation and controller (client) modes. Only that test's upload gets the tag. You can filter on it with `tags=retried:1`, and it does not change which runs `/api/compare` matches. The retry warning now shows the job parameters (`rw`, `bs`, `size`, `numjobs`, `iodepth`, `direct`, `ioengine`) and the kernel (the clients' kernels in controller mode). The end-of-run summary lists every retried fio run, so you can see whether the retries only affect, for example, `direct=0` or reads.
 
 ## [0.12.1] - 2026-09-28
 

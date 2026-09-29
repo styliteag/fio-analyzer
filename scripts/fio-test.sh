@@ -258,6 +258,12 @@ define_defaults() {
     # Retries for transient EAGAIN errors (io_uring can return EAGAIN at the end of a file)
     FIO_RETRY_MAX="${FIO_RETRY_MAX:-2}"
     FIO_RETRY_COUNT=0
+    # Retries of the current test (uploaded as description tag retried:N), one line per
+    # retried fio run for the summaries, job parameters/kernel override for the warning
+    FIO_TEST_RETRIES=0
+    FIO_RETRY_LOG=()
+    FIO_RETRY_PARAMS=""
+    FIO_RETRY_KERNEL=""
     # Storage detection (filesystem, ZFS, Ceph), uploaded as storage_info; 0 = off
     STORAGE_DETECT="${STORAGE_DETECT:-1}"
     STORAGE_INFO=""
@@ -1664,30 +1670,102 @@ is_transient_fio_error() {
     [ -n "$(transient_fio_error_line "$1")" ]
 }
 
+# Text for terminal output: no control characters, no backslashes (print_* use echo -e)
+retry_clean_text() {
+    LC_ALL=C tr -d '\000-\037\177\\'
+}
+
+# Job parameters of a fio run for the retry diagnostics: FIO_RETRY_PARAMS when set
+# (client mode: the parameters are in a job file), otherwise taken from the fio arguments
+fio_retry_params() {
+    if [ -n "${FIO_RETRY_PARAMS:-}" ]; then
+        printf '%s' "$FIO_RETRY_PARAMS"
+        return 0
+    fi
+    local arg key out=""
+    for arg in "$@"; do
+        case "$arg" in
+            --rw=* | --bs=* | --size=* | --numjobs=* | --iodepth=* | --direct=* | --ioengine=*)
+                key=${arg#--}
+                out+="${out:+ }${key}"
+                ;;
+        esac
+    done
+    printf '%s' "$out"
+}
+
+# Kernel of the host(s) running the fio jobs: FIO_RETRY_KERNEL, in client mode the
+# kernels of all clients, otherwise SI_KERNEL (storage detection) or uname -r
+fio_retry_kernel() {
+    local kernel=${FIO_RETRY_KERNEL:-}
+    if [ -z "$kernel" ] && [ "${CLIENT_MODE:-false}" = true ] && declare -F client_kernels >/dev/null; then
+        kernel=$(client_kernels "${#CLIENT_STORAGE[@]}")
+    fi
+    kernel=${kernel:-${SI_KERNEL:-}}
+    if [ -z "$kernel" ]; then kernel=$(uname -r 2>/dev/null); fi
+    printf '%s' "${kernel:-unknown}"
+}
+
 # Run fio with the given arguments; retry up to FIO_RETRY_MAX times on transient EAGAIN errors.
+# Every retry counts in FIO_RETRY_COUNT (whole run) and FIO_TEST_RETRIES (current test,
+# uploaded as description tag retried:N); a retried run gets one line in FIO_RETRY_LOG.
 # Usage: run_fio_with_retry <label> <error_file> <fio args...>  (stderr of the last attempt stays in error_file)
 run_fio_with_retry() {
     local label=$1 error_file=$2
     shift 2
-    local attempt=0 rc
+    local attempt=0 rc info
     while :; do
-        fio "$@" 2>"$error_file" && return 0
-        rc=$?
-        if [ "$attempt" -ge "$FIO_RETRY_MAX" ] || ! is_transient_fio_error "$error_file"; then
+        rc=0
+        fio "$@" 2>"$error_file" || rc=$?
+        if [ "$rc" -eq 0 ] || [ "$attempt" -ge "$FIO_RETRY_MAX" ] || ! is_transient_fio_error "$error_file"; then
+            if [ "$attempt" -gt 0 ]; then
+                local result="ok"
+                if [ "$rc" -ne 0 ]; then result="failed"; fi
+                FIO_RETRY_LOG+=("$(printf '%s: %s, kernel=%s, retries=%s, %s' \
+                    "$label" "$info" "$(fio_retry_kernel)" "$attempt" "$result" | retry_clean_text)")
+            fi
             return "$rc"
         fi
         attempt=$((attempt + 1))
         FIO_RETRY_COUNT=$((FIO_RETRY_COUNT + 1))
-        print_warning "Transient fio error in ${label}, retry ${attempt}/${FIO_RETRY_MAX} in 5s: $(transient_fio_error_line "$error_file" | tr -d '\000-\037\\')"
+        FIO_TEST_RETRIES=$((${FIO_TEST_RETRIES:-0} + 1))
+        info=$(fio_retry_params "$@")
+        info=${info:-parameters unknown}
+        print_warning "$(printf 'Transient fio error in %s (%s, kernel=%s), retry %s/%s in 5s: %s' \
+            "$label" "$info" "$(fio_retry_kernel)" "$attempt" "$FIO_RETRY_MAX" \
+            "$(transient_fio_error_line "$error_file")" | retry_clean_text)"
         sleep 5
+    done
+}
+
+# Retried fio runs, one per line with the given indent (empty when there were none)
+print_retry_log() {
+    local entry
+    for entry in "${FIO_RETRY_LOG[@]}"; do
+        printf '%s%s\n' "$1" "$entry"
     done
 }
 
 # Report how many fio runs needed a retry, so the underlying problem stays visible
 print_retry_summary() {
     if [ "$FIO_RETRY_COUNT" -gt 0 ]; then
-        print_warning "Transient fio errors (EAGAIN) were retried ${FIO_RETRY_COUNT} time(s). Results are from the successful attempt."
+        print_warning "Transient fio errors (EAGAIN) were retried ${FIO_RETRY_COUNT} time(s). Results are from the successful attempt and are tagged retried:N."
+        print_warning "  Retried fio runs (${#FIO_RETRY_LOG[@]}):"
+        local entry
+        for entry in "${FIO_RETRY_LOG[@]}"; do
+            print_warning "    ${entry}"
+        done
         print_warning "  If this keeps happening with io_uring, try IOENGINE=libaio."
+    fi
+}
+
+# Description for the upload of the current test: DESCRIPTION plus retried:N when the
+# test needed a retry (FIO_TEST_RETRIES is reset at the start of every test)
+upload_description() {
+    if [ "${FIO_TEST_RETRIES:-0}" -gt 0 ]; then
+        printf '%s,retried:%s' "$DESCRIPTION" "$FIO_TEST_RETRIES"
+    else
+        printf '%s' "$DESCRIPTION"
     fi
 }
 
@@ -1703,6 +1781,7 @@ run_fio_test() {
     local runtime=$9
 
     print_status "Running FIO test: ${pattern} with ${block_size} block size, ${num_jobs} jobs"
+    FIO_TEST_RETRIES=0
     
     # Capture stderr to detect specific errors
     local error_file
@@ -1906,10 +1985,12 @@ display_iops() {
 upload_results() {
     local json_file=$1
     local test_name=$2
+    local description
+    description=$(upload_description)
     
     print_status "Uploading results: $test_name"
     print_status "         Hostname: $HOSTNAME"
-    print_status "      Description: $DESCRIPTION"
+    print_status "      Description: $description"
     print_status "         Run UUID: $RUN_UUID"
     print_status "      config_uuid: $CONFIG_UUID"
 
@@ -1939,7 +2020,7 @@ upload_results() {
         --form-string "drive_type=$DRIVE_TYPE" \
         --form-string "hostname=$HOSTNAME" \
         --form-string "protocol=$PROTOCOL" \
-        --form-string "description=$DESCRIPTION" \
+        --form-string "description=$description" \
         --form-string "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --form-string "config_uuid=$CONFIG_UUID" \
         --form-string "run_uuid=$RUN_UUID" \
@@ -1996,6 +2077,7 @@ run_fio_step() {
 
     local total_qd=$((iodepth * num_jobs))
     print_step "Running ${pattern} bs=${block_size} | iodepth=${iodepth} numjobs=${num_jobs} (Total QD: ${total_qd})"
+    FIO_TEST_RETRIES=0
 
     local error_file
     error_file=$(mktemp "${TMPDIR:-/tmp}/fio_sat_error.XXXXXX") || return 1
@@ -2773,6 +2855,7 @@ run_all_tests() {
     echo "Successful:       $successful_uploads"
     echo "Failed:           $failed_uploads"
     echo "EAGAIN retries:   $FIO_RETRY_COUNT"
+    print_retry_log "  retried: "
     
     # Display IOPS statistics if available
     if [ $iops_count -gt 0 ]; then
@@ -3478,6 +3561,14 @@ client_storage_info_json() {
     echo "$out"
 }
 
+# Kernels of the first <n> clients from their storage.json, unique, joined with "/"
+client_kernels() {
+    local out
+    out=$(printf '%s\n' "${CLIENT_STORAGE[@]:0:$1}" | jq -r '.kernel // empty | tostring | gsub("[[:cntrl:]]"; "")' 2>/dev/null \
+        | sort -u | paste -sd '/' - | retry_clean_text)
+    printf '%s' "${out:-unknown (clients)}"
+}
+
 # One-line summary of a client's storage.json for show_config
 client_storage_summary() {
     local out
@@ -3727,12 +3818,17 @@ client_run_ramp_step() {
     label=$(client_step_label "$@")
     job_file="${CLIENT_WORK_DIR}/${label}.fio" output="${CLIENT_WORK_DIR}/${label}.json"
     base=$(data_file_base "fio_test_${pattern}_${block_size}" "$test_size")
-    STEP_CLIENTS=$n STEP_COMPLETE=1
+    STEP_CLIENTS=$n STEP_COMPLETE=1 FIO_TEST_RETRIES=0
     build_description
+    # The job parameters are in the job file: name them (and the clients' kernels) for
+    # the retry diagnostics
+    FIO_RETRY_PARAMS="rw=${pattern} bs=${block_size} size=${test_size} numjobs=${num_jobs} iodepth=${iodepth} direct=${direct} ioengine=${CLIENT_IOENGINE}"
+    FIO_RETRY_KERNEL=$(client_kernels "$n")
     client_write_job_file "$job_file" "$pattern" "$block_size" "$num_jobs" "$direct" "$test_size" \
         "$sync" "$iodepth" "$runtime" "$base"
     print_step "${pattern} bs=${block_size} jobs=${num_jobs} iodepth=${iodepth} on ${n} client(s): $(client_hosts_list "$n")"
     client_run_step "$n" "$job_file" "$output" "$label" || rc=$?
+    FIO_RETRY_PARAMS="" FIO_RETRY_KERNEL=""
     if [ "$rc" -ne 0 ] || ! client_step_complete "$output" "$n"; then STEP_COMPLETE=0; fi
     if ! jq -e '.client_stats | type == "array"' "$output" >/dev/null 2>&1; then
         print_error "No fio client results for ${label} - not uploaded"
@@ -3828,6 +3924,7 @@ run_client_tests() {
     echo "Incomplete steps: $CLIENT_STEPS_INCOMPLETE"
     echo "Failed steps:     $CLIENT_STEPS_FAILED (no results)"
     echo "EAGAIN retries:   $FIO_RETRY_COUNT"
+    print_retry_log "  retried: "
     echo "Server retries:   ${CLIENT_SERVER_RETRIES:-0} (job refused by a fio server)"
     echo "========================================="
     [ $((CLIENT_UPLOADS_FAILED + CLIENT_STEPS_FAILED + CLIENT_STEPS_INCOMPLETE)) -eq 0 ]
@@ -4196,6 +4293,7 @@ main() {
             print_retry_summary
             print_success "Performance testing completed successfully!"
         else
+            print_retry_summary
             print_error "Performance testing completed with errors."
             exit 1
         fi
@@ -4335,7 +4433,8 @@ RUNTIME="60"
 #     (realistic reads on ext4/xfs fallocated files and ZFS compression; directories only)
 # PREFILL=0
 # Retries when fio fails with a transient EAGAIN error (io_uring can return it on
-# reads at the end of the test file); other errors are never retried. 0 = off
+# reads at the end of the test file); other errors are never retried. 0 = off.
+# A result that needed a retry gets the description tag retried:N (N = retries).
 # FIO_RETRY_MAX=2
 # Detect the storage below TARGET_DIR (filesystem, ZFS dataset/zvol properties such as
 # sync/recordsize/volblocksize and the pool layout, CephFS/RBD pool, the disk with model,
@@ -4540,7 +4639,9 @@ Advanced Settings (.env / environment only, all off by default):
                          them across tests; removed at the end (directory targets only)
                          PREFILL/FILE_PER_JOB add prefill:1 / fileperjob:1 to the description
   FIO_RETRY_MAX=N        Retry a fio run up to N times when it fails with a transient
-                         EAGAIN error (default: 2, 0 = off); other errors are not retried
+                         EAGAIN error (default: 2, 0 = off); other errors are not retried.
+                         A retried result gets retried:N in the description; the warning
+                         and the summary name the job parameters and the kernel
   SAT_SYNC=LIST          Saturation sync modes, comma-separated (none, sync, dsync, legacy 0/1;
                          default: SYNC). Each block size x sync mode is its own run with its
                          own run_uuid, e.g. SAT_SYNC=sync,dsync
