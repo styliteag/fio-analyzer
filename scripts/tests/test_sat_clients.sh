@@ -22,7 +22,8 @@ sat_r_init sat_r_append sat_r_get sat_r_len reset_sat_results saturation_loop pr
 fio_server_address client_fio_args client_hosts_list client_storage_info_json client_job_name
 client_job_target_lines client_extra_args_ini client_write_job_file client_write_prefill_job
 client_write_cleanup_job client_step_complete client_output_messages client_run_step
-client_run_sat_step client_print_p95 client_sat_prefill client_sat_prefill_cleanup"
+client_run_sat_step client_print_p95 client_sat_prefill client_sat_prefill_cleanup upload_description
+retry_clean_text fio_retry_params fio_retry_kernel print_retry_log client_kernels"
 SED_EXPR=""
 for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
 # shellcheck source=/dev/null
@@ -61,6 +62,10 @@ fio() {
     echo "$calls" >"$TMP/calls"
     printf '%s\n' "$@" >"$TMP/args.$calls"
     cp "$job" "$TMP/job.$calls"
+    if [ "${EAGAIN_AT:-0}" = "$calls" ]; then
+        echo 'fio: io_u error on file /t/f.0: Resource temporarily unavailable: read offset=0, buflen=4096' >&2
+        return 1
+    fi
     iodepth=$(sed -n 's/^iodepth=//p' "$job") numjobs=$(sed -n 's/^numjobs=//p' "$job")
     qd=$(( ${iodepth:-1} * ${numjobs:-1} ))
     jq --argjson qd "$qd" --argjson drop "$([ "${MISSING_CLIENT_AT:-0}" = "$calls" ] && echo true || echo false)" '
@@ -99,6 +104,24 @@ declare -a SAT_RESULTS_STEP SAT_P_IODEPTH SAT_P_NUMJOBS SAT_P_ESC_COUNT SAT_P_SA
 declare -a SAT_P_FAIL_COUNT SAT_P_BEST_IOPS SAT_P_BEST_QD SAT_P_SAT_STEP
 SAT_PATTERNS_ARR=(randread) SAT_SYNC_ARR=(none)
 upload_field() { grep -x -- "$2=.*" "$TMP/upload.$1" | head -n 1 | cut -d= -f2-; }
+
+# --- EAGAIN retry: retried:N tags only the step that needed it -----------------------------
+reset_counters
+reset_sat_results
+FIO_RETRY_MAX=2 FIO_TEST_RETRIES=5 EAGAIN_AT=2 FIO_RETRY_LOG=() FIO_RETRY_PARAMS="" FIO_RETRY_KERNEL=""
+client_kernels() { echo "6.8.0"; }
+saturation_loop 4k >"$TMP/out" 2>&1
+# fio calls: step 1, step 2 (EAGAIN), step 2 retry, step 3, step 4
+check "retry: five fio runs" 5 "$(cat "$TMP/calls")"
+check "retry: four steps uploaded" 4 "$(cat "$TMP/uploads")"
+check "retry: step 1 not tagged (no carry-over)" 0 "$(upload_field 1 description | grep -c 'retried:')"
+check "retry: step 2 tagged retried:1" 1 "$(upload_field 2 description | grep -c ',retried:1$')"
+check "retry: step 3 not tagged" 0 "$(upload_field 3 description | grep -c 'retried:')"
+check "retry: log names the step's job parameters" 1 \
+    "$(printf '%s\n' "${FIO_RETRY_LOG[@]}" | grep -c 'rw=randread bs=4k size=16M numjobs=1 iodepth=32 direct=1 ioengine=libaio')"
+check "retry: log names the clients' kernels" 1 "$(printf '%s\n' "${FIO_RETRY_LOG[@]}" | grep -c 'kernel=6.8.0')"
+check "retry: job parameters cleared after the step" "" "$FIO_RETRY_PARAMS"
+FIO_RETRY_MAX=0 EAGAIN_AT=0 FIO_TEST_RETRIES=0
 
 # --- escalation on all clients until the "All clients" P95 crosses the threshold -------------
 reset_counters
