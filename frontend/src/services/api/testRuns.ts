@@ -289,6 +289,8 @@ export interface SaturationRun {
     description: string | null;
     started: string;
     step_count: number;
+    /** > 1: fio-test.sh ran every step on this many clients at once (iodepth/num_jobs per client) */
+    clients?: number;
 }
 
 export interface SaturationRunUpdateData {
@@ -310,6 +312,7 @@ export interface SaturationStep {
     p99_latency_ms: number | null;
     bandwidth_mbs: number | null;
     timestamp: string;
+    clients?: number;
 }
 
 export interface SaturationPatternData {
@@ -332,6 +335,8 @@ export interface SaturationPatternSummary {
     read_write_pattern: string;
     block_size: string;
     sync: string | null;
+    /** Clients the steps ran on (1 = single host); patterns are grouped by it */
+    clients?: number;
     status: 'saturated' | 'not_reached';
     steps: number;
     best_within: SaturationSummaryStep | null;
@@ -359,6 +364,7 @@ export interface SaturationData {
     drive_type: string;
     drive_model: string;
     block_size: string | null;
+    clients?: number;
     threshold_ms: number;
     storage_info?: StorageInfo | null;
     patterns: Record<string, SaturationPatternData>;

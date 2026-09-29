@@ -823,7 +823,8 @@ async def get_saturation_runs(
         query = f"""
             SELECT run_uuid, hostname, protocol, drive_type, drive_model,
                    block_size, description,
-                   MIN(timestamp) as started, COUNT(*) as step_count
+                   MIN(timestamp) as started, COUNT(*) as step_count,
+                   MAX(COALESCE(clients, 1)) as clients
             FROM saturation_runs
             WHERE {where_clause}
             GROUP BY run_uuid
@@ -847,6 +848,7 @@ async def get_saturation_runs(
                 "description": row_dict.get("description"),
                 "started": row_dict["started"],
                 "step_count": row_dict["step_count"],
+                "clients": row_dict["clients"],
             })
 
         log_info(
@@ -913,7 +915,8 @@ async def get_saturation_data(
             SELECT id, timestamp, hostname, protocol, drive_type, drive_model,
                    block_size, read_write_pattern, iodepth, num_jobs,
                    iops, avg_latency, bandwidth, p95_latency, p99_latency,
-                   config_uuid, run_uuid, description, latency_threshold_ms, storage_info
+                   config_uuid, run_uuid, description, latency_threshold_ms, storage_info,
+                   COALESCE(clients, 1) AS clients
             FROM saturation_runs
             WHERE run_uuid = ?
             ORDER BY (iodepth * num_jobs) ASC
@@ -968,6 +971,7 @@ async def get_saturation_data(
                 "p99_latency_ms": row_dict["p99_latency"],
                 "bandwidth_mbs": row_dict["bandwidth"],
                 "timestamp": row_dict["timestamp"],
+                "clients": row_dict["clients"],
             }
             patterns[pattern]["steps"].append(step)
 
@@ -996,6 +1000,8 @@ async def get_saturation_data(
             "drive_type": drive_type,
             "drive_model": drive_model,
             "block_size": block_size,
+            # > 1: fio-test.sh ran the steps on this many clients at once (QD per client)
+            "clients": max(row["clients"] for row in rows),
             "threshold_ms": threshold_ms,
             "storage_info": decode_storage_info(next((row["storage_info"] for row in rows if row["storage_info"]), None)),
             "patterns": patterns,
