@@ -13,12 +13,14 @@ import SaturationSummaryTable from '../components/saturation/SaturationSummaryTa
 import { storageInfoSummary } from '../components/shared/StorageInfo';
 import { useSaturationRuns, useSaturationRunData } from '../hooks/useSaturationData';
 import type { SaturationRun, SaturationData } from '../services/api/testRuns';
+import { formatClientCount } from '../utils/clientCount';
 
 /** Format a run for display in the dropdown */
 function formatRunLabel(run: SaturationRun): string {
     const date = new Date(run.started).toLocaleDateString();
     const bs = run.block_size ? ` [${run.block_size}]` : '';
-    return `${run.drive_model} (${run.protocol}/${run.drive_type})${bs} - ${date} (${run.step_count} steps)`;
+    const clients = formatClientCount(run.clients);
+    return `${run.drive_model} (${run.protocol}/${run.drive_type})${bs}${clients ? ` · ${clients}` : ''} - ${date} (${run.step_count} steps)`;
 }
 
 /** Compute the max IOPS across visible patterns in a SaturationData */
@@ -56,7 +58,8 @@ function pickRun(runs: SaturationRun[], requested: string | null): string | null
 /** Build a subtitle string for a run's card header */
 function buildSubtitle(run: SaturationRun): string {
     const bs = run.block_size ? ` | Block Size: ${run.block_size}` : '';
-    return `${run.hostname} - ${run.drive_model} (${run.protocol}/${run.drive_type})${bs}`;
+    const clients = formatClientCount(run.clients);
+    return `${run.hostname} - ${run.drive_model} (${run.protocol}/${run.drive_type})${bs}${clients ? ` | ${clients} (QD per client)` : ''}`;
 }
 
 export default function Saturation() {

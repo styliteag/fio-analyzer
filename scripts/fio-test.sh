@@ -249,6 +249,8 @@ define_defaults() {
     SAT_MAX_TOTAL_SIZE="${SAT_MAX_TOTAL_SIZE:-}"
     SAT_CAP_MIN_WARNED=false
     SAT_PREFILL_BASE=""
+    # Client mode: data files prefilled on the clients ("<base>|<size>|<files>")
+    SAT_CLIENT_PREFILL=""
 
     # Advanced fio options (.env only, all off by default)
     FIO_EXTRA_ARGS="${FIO_EXTRA_ARGS:-}"
@@ -1784,6 +1786,12 @@ run_fio_test() {
     fi
 }
 
+# jq path of the result the extract_* functions read: the job of a local run, or fio's
+# "All clients" aggregate of a client-mode run (the only entry with a single client)
+fio_result_jq() {
+    printf '%s' '(.jobs[0] // ((.client_stats // []) | (map(select(.jobname == "All clients"))[0] // .[0])))'
+}
+
 # Function to extract IOPS from FIO JSON output
 extract_iops() {
     local json_file=$1
@@ -1791,8 +1799,8 @@ extract_iops() {
     # Use jq if available, otherwise fall back to grep (normal mode may not require jq)
     local read_iops write_iops
     if command -v jq &> /dev/null; then
-        read_iops=$(jq -r '.jobs[0].read.iops // 0' "$json_file" 2>/dev/null)
-        write_iops=$(jq -r '.jobs[0].write.iops // 0' "$json_file" 2>/dev/null)
+        read_iops=$(jq -r "$(fio_result_jq).read.iops // 0" "$json_file" 2>/dev/null)
+        write_iops=$(jq -r "$(fio_result_jq).write.iops // 0" "$json_file" 2>/dev/null)
     else
         read_iops=$(grep -E '"iops"\s*:' "$json_file" 2>/dev/null | head -1 | awk -F: '{print $2}' | tr -d ' ,' || echo "0")
         write_iops=$(grep -E '"iops"\s*:' "$json_file" 2>/dev/null | head -2 | tail -1 | awk -F: '{print $2}' | tr -d ' ,' || echo "0")
@@ -1816,7 +1824,7 @@ extract_avg_clat_ms() {
     if [ ! -f "$json_file" ]; then echo "-"; return; fi
 
     local clat_mean_ns
-    clat_mean_ns=$(jq -r ".jobs[0].${section}.clat_ns.mean // empty" "$json_file" 2>/dev/null)
+    clat_mean_ns=$(jq -r "$(fio_result_jq).${section}.clat_ns.mean // empty" "$json_file" 2>/dev/null)
 
     if [ -z "$clat_mean_ns" ] || [ "$clat_mean_ns" = "null" ]; then
         echo "-"
@@ -1837,7 +1845,7 @@ extract_p70_clat_ms() {
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
     local p70_ns
-    p70_ns=$(jq -r ".jobs[0].${section}.clat_ns.percentile[\"70.000000\"] // empty" "$json_file" 2>/dev/null)
+    p70_ns=$(jq -r "$(fio_result_jq).${section}.clat_ns.percentile[\"70.000000\"] // empty" "$json_file" 2>/dev/null)
 
     if [ -z "$p70_ns" ] || [ "$p70_ns" = "null" ]; then
         echo "-"
@@ -1858,7 +1866,7 @@ extract_p99_clat_ms() {
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
     local p99_ns
-    p99_ns=$(jq -r ".jobs[0].${section}.clat_ns.percentile[\"99.000000\"] // empty" "$json_file" 2>/dev/null)
+    p99_ns=$(jq -r "$(fio_result_jq).${section}.clat_ns.percentile[\"99.000000\"] // empty" "$json_file" 2>/dev/null)
 
     if [ -z "$p99_ns" ] || [ "$p99_ns" = "null" ]; then
         echo "-"
@@ -1994,6 +2002,12 @@ run_fio_step() {
     local output_file=$4
     local block_size=${5:-$SAT_CURRENT_BS}
 
+    # Client mode: the same step on all clients at once (saturation_loop stays unchanged)
+    if [ "${CLIENT_MODE:-false}" = true ]; then
+        client_run_sat_step "$pattern" "$iodepth" "$num_jobs" "$output_file" "$block_size"
+        return
+    fi
+
     local total_qd=$((iodepth * num_jobs))
     print_step "Running ${pattern} bs=${block_size} | iodepth=${iodepth} numjobs=${num_jobs} (Total QD: ${total_qd})"
 
@@ -2071,8 +2085,12 @@ extract_p95_clat_ms() {
     local section
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
+    # Client mode: older fio (e.g. 3.36) has no percentiles in "All clients" - then the
+    # worst client's P95 (an upper bound of the combined P95) is used
     local p95_ns
-    p95_ns=$(jq -r ".jobs[0].${section}.clat_ns.percentile[\"95.000000\"] // empty" "$json_file" 2>/dev/null)
+    p95_ns=$(jq -r "$(fio_result_jq).${section}.clat_ns.percentile[\"95.000000\"]
+        // ([.client_stats[]? | select(.jobname != \"All clients\")
+            | .${section}.clat_ns.percentile[\"95.000000\"] // empty] | max) // empty" "$json_file" 2>/dev/null)
 
     if [ -z "$p95_ns" ] || [ "$p95_ns" = "null" ]; then
         echo "ERR"
@@ -2102,7 +2120,7 @@ extract_iops_value() {
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
     local iops
-    iops=$(jq -r ".jobs[0].${section}.iops // empty" "$json_file" 2>/dev/null)
+    iops=$(jq -r "$(fio_result_jq).${section}.iops // empty" "$json_file" 2>/dev/null)
 
     # Validate numeric (integer or float)
     if [ -z "$iops" ] || [ "$iops" = "null" ] || ! [[ "$iops" =~ ^[0-9]+\.?[0-9]*$ ]]; then
@@ -2127,7 +2145,7 @@ extract_bw_mbs() {
     if [ "$pattern" = "randread" ] || [ "$pattern" = "read" ]; then section="read"; else section="write"; fi
 
     local bw_bytes
-    bw_bytes=$(jq -r ".jobs[0].${section}.bw_bytes // empty" "$json_file" 2>/dev/null)
+    bw_bytes=$(jq -r "$(fio_result_jq).${section}.bw_bytes // empty" "$json_file" 2>/dev/null)
 
     # Validate numeric
     if [ -z "$bw_bytes" ] || [ "$bw_bytes" = "null" ] || ! [[ "$bw_bytes" =~ ^[0-9]+$ ]]; then
@@ -3266,9 +3284,10 @@ parse_ramp_clients() {
 # Check the client-mode settings; TARGET_IS_DEVICE from CLIENT_TARGET_IS_DEVICE
 # (auto = the path starts with /dev/). TARGET_DIR is never looked at locally.
 validate_client_config() {
-    local var value n
-    if [ "$SATURATION_MODE" = true ]; then
-        print_error "SATURATION_MODE (--saturation) cannot be combined with CLIENTS (client mode) - run them separately"
+    local var value n ramp=${RAMP_CLIENTS:-}
+    # Saturation in client mode runs every step on all clients: no client-count ramp
+    if [ "${SATURATION_MODE:-false}" = true ] && [ -n "${ramp//[[:space:]]/}" ]; then
+        print_error "RAMP_CLIENTS (--ramp-clients) cannot be combined with SATURATION_MODE (--saturation) - saturation steps always run on all CLIENTS; unset RAMP_CLIENTS or run the ramp separately"
         return 1
     fi
     parse_clients "$CLIENTS" || return 1
@@ -3298,7 +3317,8 @@ validate_client_config() {
         print_error "Invalid CLIENT_IOENGINE '$CLIENT_IOENGINE'"
         return 1
     fi
-    for var in BLOCK_SIZES TEST_PATTERNS NUM_JOBS DIRECT TEST_SIZE SYNC IODEPTH RUNTIME; do
+    for var in BLOCK_SIZES TEST_PATTERNS NUM_JOBS DIRECT TEST_SIZE SYNC IODEPTH RUNTIME \
+        SAT_BLOCK_SIZES SAT_PATTERNS SAT_SYNC SAT_MAX_TOTAL_SIZE; do
         value=${!var:-}
         if [[ "$value" == *[[:cntrl:]]* ]]; then print_error "Invalid $var '$value'"; return 1; fi
     done
@@ -3574,15 +3594,16 @@ client_write_job_file() {
 }
 
 # Job file that writes the PREFILL data files (incompressible) on every client
-# Usage: client_write_prefill_job <file> <data base> <size> <files per job> <direct>
+# (FILE_PER_JOB=1: files <first>..<files per job>-1; first defaults to 0)
+# Usage: client_write_prefill_job <file> <data base> <size> <files per job> <direct> [first]
 client_write_prefill_job() {
-    local file=$1 base=$2 test_size=$3 num_jobs=$4 direct=$5 dir=${TARGET_DIR%/} j
+    local file=$1 base=$2 test_size=$3 num_jobs=$4 direct=$5 first=${6:-0} dir=${TARGET_DIR%/} j
     dir=${dir//:/\\:}
     {
         printf '%s\n' "[global]" "rw=write" "bs=1M" "size=${test_size}" "refill_buffers" "randrepeat=0" \
             "end_fsync=1" "ioengine=${CLIENT_IOENGINE}" "direct=${direct}" "thread"
         if [ "$FILE_PER_JOB" = 1 ]; then
-            for ((j = 0; j < num_jobs; j++)); do
+            for ((j = first; j < num_jobs; j++)); do
                 printf '\n%s\n%s\n' "[prefill_${j}]" "filename=${dir}/${base}.${j}"
             done
         else
@@ -3797,6 +3818,120 @@ client_cleanup_all() {
         client_run_step "$n" "$job_file" "${CLIENT_WORK_DIR}/cleanup_${test_size}.json" "cleanup_${test_size}" \
             || print_warning "Could not remove ${base} on every client - remove it manually from ${TARGET_DIR}"
     done
+}
+
+# Saturation mode with CLIENTS: run_fio_step's counterpart. The step runs on ALL clients
+# at once; iodepth/numjobs (and SAT_MAX_TOTAL_SIZE) apply per client. fio's client JSON is
+# left in <output file>: saturation_loop evaluates the "All clients" aggregate (P95 against
+# LATENCY_THRESHOLD_MS) and uploads it with the client fields. A step that is incomplete
+# (fio error, a client missing or reporting an error) fails and is not uploaded, since
+# its aggregate would not describe the load of all clients.
+# Usage: client_run_sat_step <pattern> <iodepth> <numjobs> <output file> <bs>
+client_run_sat_step() {
+    local pattern=$1 iodepth=$2 num_jobs=$3 output=$4 block_size=$5
+    local n=${#CLIENT_KEY[@]} label job_file base rc=0
+    print_step "Running ${pattern} bs=${block_size} | iodepth=${iodepth} numjobs=${num_jobs} (QD per client: $((iodepth * num_jobs))) on ${n} client(s)"
+    sat_step_size "$num_jobs"
+    if sat_cap_active; then
+        print_status "  per-job file size: ${SAT_STEP_SIZE} (cap ${SAT_MAX_TOTAL_SIZE} per client / ${num_jobs} jobs, test size ${SAT_TEST_SIZE})"
+    fi
+    label="sat_${pattern}_${block_size}_${SAT_SYNC}_${iodepth}x${num_jobs}_clients${n}"
+    label=${label//[^A-Za-z0-9_.+-]/}
+    job_file="${CLIENT_WORK_DIR}/${label}.fio"
+    base=$(data_file_base "fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}" "$SAT_STEP_SIZE")
+    client_sat_prefill "$base" "$SAT_STEP_SIZE" "$num_jobs" || return 1
+    STEP_CLIENTS=$n STEP_COMPLETE=1 RAMP_UUID=""
+    build_description
+    client_write_job_file "$job_file" "$pattern" "$block_size" "$num_jobs" "$SAT_DIRECT" "$SAT_STEP_SIZE" \
+        "$SAT_SYNC" "$iodepth" "$SAT_RUNTIME" "$base"
+    client_run_step "$n" "$job_file" "$output" "$label" || rc=$?
+    rm -f "$job_file"
+    if [ -s "$output" ]; then keep_json_copy "$output"; fi
+    if [ "$rc" -ne 0 ] || ! client_step_complete "$output" "$n"; then
+        STEP_COMPLETE=0
+        print_error "Step incomplete on the clients (fio error or a client missing in client_stats) - not evaluated, not uploaded"
+        return 1
+    fi
+    STEP_CLIENT_HOSTS=$(client_hosts_list "$n")
+    STEP_CLIENT_STORAGE=$(client_storage_info_json "$n")
+    client_print_p95 "$output" "$pattern"
+    if [ "$n" -gt 1 ] && [ "${SAT_CLIENT_P95_WARNED:-false}" != true ] && ! jq -e \
+        'any(.client_stats[] | select(.jobname == "All clients") | .read, .write; .clat_ns.percentile != null)' \
+        "$output" >/dev/null 2>&1; then
+        print_warning "fio's \"All clients\" result has no latency percentiles (older fio) - the threshold is checked on the worst client's P95"
+        SAT_CLIENT_P95_WARNED=true
+    fi
+    return 0
+}
+
+# Print each client's P95 completion latency of a step (worst of read/write for mixed
+# patterns), e.g. "  P95 per client: vm1=1.20ms vm2=3.40ms". The threshold is checked on
+# the "All clients" aggregate; this line shows which client is the slow one.
+client_print_p95() {
+    local json=$1 pattern=$2 sections i j key value out="" p95 name
+    local -a keys=() values=()
+    case "$pattern" in
+        read|randread) sections='[.read]' ;;
+        write|randwrite) sections='[.write]' ;;
+        *) sections='[.read, .write]' ;;
+    esac
+    while IFS=$'\t' read -r key value; do
+        keys+=("$key") values+=("$value")
+    done < <(jq -r '.client_stats[] | select(.jobname != "All clients")
+        | ["\(.hostname):\(.port)", ('"$sections"' | map(.clat_ns.percentile["95.000000"] // 0) | max // 0
+            | . / 10000 | floor / 100 | tostring)] | @tsv' "$json" 2>/dev/null)
+    for ((i = 0; i < ${#CLIENT_KEY[@]}; i++)); do
+        p95="?"
+        for ((j = 0; j < ${#keys[@]}; j++)); do
+            if [ "${keys[$j]}" = "${CLIENT_KEY[$i]}" ]; then p95=${values[$j]}; fi
+        done
+        name=${CLIENT_NAME[$i]:-}
+        # No hostname.txt from the client: its CLIENTS entry tells clients on one address apart
+        if [ -z "$name" ] || [ "$name" = "${CLIENT_ADDR[$i]:-}" ]; then name=${CLIENT_ENTRY[$i]:-${CLIENT_KEY[$i]}}; fi
+        out+=" ${name}=${p95}ms"
+    done
+    echo "  P95 per client:${out}"
+}
+
+# PREFILL=1 in client saturation mode: write the step's data files on all clients, unless
+# earlier steps already wrote enough of them. The base name only changes with the file size
+# (SAT_MAX_TOTAL_SIZE); the files of the previous size are removed first.
+# State in SAT_CLIENT_PREFILL: "<base>|<size>|<files written>".
+# Usage: client_sat_prefill <data base> <size> <numjobs>
+client_sat_prefill() {
+    local base=$1 size=$2 num_jobs=$3 count=1 n=${#CLIENT_KEY[@]} job_file json prev_base prev_files
+    if [ "$PREFILL" != 1 ] || [ "$TARGET_IS_DEVICE" = true ]; then return 0; fi
+    if [ "$FILE_PER_JOB" = 1 ]; then count=$num_jobs; fi
+    IFS='|' read -r prev_base _ prev_files <<< "${SAT_CLIENT_PREFILL:-}"
+    if [ "$prev_base" = "$base" ] && [ "${prev_files:-0}" -ge "$count" ]; then return 0; fi
+    if [ "$prev_base" != "$base" ]; then
+        client_sat_prefill_cleanup
+        prev_files=0
+    fi
+    job_file="${CLIENT_WORK_DIR}/prefill_${base}.fio" json="${CLIENT_WORK_DIR}/prefill_${base}.json"
+    client_write_prefill_job "$job_file" "$base" "$size" "$count" "$SAT_DIRECT" "$prev_files"
+    print_status "Prefilling ${base} (${size}, files ${prev_files}..$((count - 1))) on all ${n} client(s)..."
+    if ! client_run_step "$n" "$job_file" "$json" "prefill_${base}"; then
+        print_error "Prefill of ${base} failed on the clients"
+        rm -f "$job_file" "$json"
+        return 1
+    fi
+    rm -f "$job_file" "$json"
+    SAT_CLIENT_PREFILL="${base}|${size}|${count}"
+}
+
+# Remove the data files written by client_sat_prefill on all clients (size change, end of run)
+client_sat_prefill_cleanup() {
+    local base size files n=${#CLIENT_KEY[@]} job_file
+    if [ -z "${SAT_CLIENT_PREFILL:-}" ]; then return 0; fi
+    IFS='|' read -r base size files <<< "$SAT_CLIENT_PREFILL"
+    SAT_CLIENT_PREFILL=""
+    job_file="${CLIENT_WORK_DIR}/cleanup_${base}.fio"
+    client_write_cleanup_job "$job_file" "$base" "$size" "$files"
+    print_status "Removing ${base} data files on all ${n} client(s)..."
+    client_run_step "$n" "$job_file" "${CLIENT_WORK_DIR}/cleanup_${base}.json" "cleanup_${base}" \
+        || print_warning "Could not remove ${base} on every client - remove it manually from ${TARGET_DIR}"
+    rm -f "$job_file" "${CLIENT_WORK_DIR}/cleanup_${base}.json"
 }
 
 # Client mode: every test configuration once per ramp step on the clients
@@ -4104,6 +4239,9 @@ main() {
         print_status "  P95 threshold: ${LATENCY_THRESHOLD_MS}ms"
         print_status "  Max total QD: ${MAX_TOTAL_QD}"
         print_status "  Runtime per step: ${SAT_RUNTIME}s"
+        if [ "$CLIENT_MODE" = true ]; then
+            print_status "  Clients: ${#CLIENT_ENTRY[@]}, every step on all of them at once (iodepth/numjobs/QD per client, P95 of all clients)"
+        fi
         print_status "  Max estimated time: ~${est_minutes} minutes (if all $MAX_STEPS steps x $num_patterns patterns x $num_block_sizes block sizes${sync_note} run)"
     else
         # Standard mode confirmation
@@ -4177,8 +4315,12 @@ main() {
         print_status "Auto-confirmed with --yes flag"
     fi
 
-    # Run tests based on mode
-    if [ "$CLIENT_MODE" = true ]; then
+    # Run tests based on mode (saturation first: with CLIENTS it runs every step on all clients)
+    if [ "$SATURATION_MODE" = true ]; then
+        run_saturation_runs
+        if [ "$CLIENT_MODE" = true ]; then client_sat_prefill_cleanup; fi
+        print_retry_summary
+    elif [ "$CLIENT_MODE" = true ]; then
         if run_client_tests; then
             print_retry_summary
             print_success "Client testing completed successfully!"
@@ -4188,9 +4330,6 @@ main() {
             cleanup
             exit 1
         fi
-    elif [ "$SATURATION_MODE" = true ]; then
-        run_saturation_runs
-        print_retry_summary
     else
         if run_all_tests; then
             print_retry_summary
@@ -4418,7 +4557,9 @@ RUNTIME="60"
 # HOSTNAME/PROTOCOL/DRIVE_TYPE/DRIVE_MODEL describe the group, e.g. HOSTNAME=px1-vms.
 # Uploads add clients, ramp_uuid, client_hosts, client_storage_info and ramp_step_complete;
 # the description gets clients:N, ramp:1 and incomplete:1 (a client missing or failed).
-# Not combinable with SATURATION_MODE / --saturation.
+# With SATURATION_MODE / --saturation every step runs on ALL clients at once (RAMP_CLIENTS
+# must stay empty): iodepth/numjobs/MAX_TOTAL_QD apply per client, LATENCY_THRESHOLD_MS is
+# checked on the P95 of fio's "All clients" result. Incomplete steps are not uploaded.
 
 
 # Backend Configuration
@@ -4530,6 +4671,7 @@ Saturation Test Options (use with -s):
   --initial-numjobs N    Starting numjobs for saturation (default: 4)
   --max-qd N             Max total QD before auto-stop (default: 16384)
   --max-steps N          Max escalation steps (default: 20)
+  With --clients: every step on all clients at once, QD per client, P95 of all clients
 
 Advanced Settings (.env / environment only, all off by default):
   FIO_EXTRA_ARGS="..."   Extra fio arguments appended to every benchmark run
@@ -4611,7 +4753,12 @@ Client Mode (this host is the controller; active when CLIENTS is set):
   storage.json) and ramp_step_complete; description tags clients:N, ramp:1, incomplete:1.
   A step is incomplete (still uploaded) when fio fails or a client is missing or reports
   an error. PREFILL writes the data files once on all clients before the first test.
-  Not combinable with --saturation.
+  With --saturation every step runs on ALL clients at once (not with --ramp-clients):
+  iodepth/numjobs/--max-qd apply per client, the threshold is checked on the P95 of fio's
+  "All clients" result (each client's P95 is printed too). Uploads carry both the
+  saturation fields (latency_threshold_ms, saturation-test) and clients / client_hosts /
+  client_storage_info. An incomplete step (a client missing or failed) counts as a failed
+  step and is not uploaded.
 
 Precedence:
   CLI flags > environment variables > .env file > hardcoded defaults
@@ -4649,6 +4796,9 @@ Examples:
   # Multi-client: on every VM (isolated network), then on the controller
   FIO_SERVER_BIND=10.44.44.101 TARGET_DIR=/mnt/fio $0 --server
   $0 --clients 10.44.44.101,10.44.44.102 --ramp-clients 1,2 --target-dir /mnt/fio -y
+
+  # Multi-client saturation: every step on both clients, P95 of all clients vs 20 ms
+  $0 --clients 10.44.44.101,10.44.44.102 --target-dir /mnt/fio --saturation --threshold 20
 
   # Multi-client over SSH tunnels (servers bound to 127.0.0.1)
   FIO_SERVER_BIND=127.0.0.1 $0 --server                  # on each client
