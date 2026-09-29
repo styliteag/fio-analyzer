@@ -49,6 +49,28 @@ def test_per_client_results_in_fio_order() -> None:
     assert first.error == 0
 
 
+def test_all_clients_percentiles_are_kept() -> None:
+    run = parse_client_mode(FIXTURE)
+    aggregate = next(entry for entry in FIXTURE["client_stats"] if entry["jobname"] == "All clients")
+    assert run.job["read"]["clat_ns"]["percentile"] == aggregate["read"]["clat_ns"]["percentile"]
+
+
+def test_missing_all_clients_percentiles_use_the_worst_client() -> None:
+    """fio 3.36 writes no percentiles into "All clients": P95 must not read as 0 (saturation threshold)."""
+    data = copy.deepcopy(FIXTURE)
+    aggregate = next(entry for entry in data["client_stats"] if entry["jobname"] == "All clients")
+    del aggregate["read"]["clat_ns"]["percentile"]
+    clients = [entry for entry in data["client_stats"] if entry["jobname"] != "All clients"]
+    clients[1]["read"]["clat_ns"]["percentile"]["95.000000"] = 5_000_000
+    expected = max(entry["read"]["clat_ns"]["percentile"]["99.000000"] for entry in clients)
+    extracted = extract_test_run_data(data, "x.json")
+    assert extracted["p95_latency"] == pytest.approx(5.0)
+    assert extracted["p99_latency"] == pytest.approx(expected / 1_000_000)
+    assert extracted["avg_latency"] > 0
+    # per-client values untouched
+    assert extracted["client_results"][0].p95_latency == pytest.approx(0.083456)
+
+
 def test_single_client_without_all_clients_entry() -> None:
     data = copy.deepcopy(FIXTURE)
     data["client_stats"] = [data["client_stats"][0]]

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - 
 
+### Fixed
+- **Multi-client uploads from older fio versions**: fio 3.36 writes no latency percentiles into the "All clients" result, so P95/P99 of client-mode steps (client ramps) were stored as 0. The worst client's percentiles are now stored instead, an upper bound of the combined percentile. Steps imported before this fix keep their stored 0 values.
+
 ## [0.12.1] - 2026-09-28
 
 ### Fixed
