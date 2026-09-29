@@ -28,7 +28,8 @@ def _is_complete(row: Dict[str, Any]) -> bool:
     return not client_rows or len(client_rows) == (row["clients"] or 1)
 
 
-def _fairness(client_rows: List[Dict[str, Any]]) -> Optional[float]:
+def client_fairness(client_rows: List[Dict[str, Any]]) -> Optional[float]:
+    """Slowest / fastest client IOPS of one step (1.0 = even); None below two clients."""
     values = [client["iops"] or 0 for client in client_rows]
     if len(values) < 2 or max(values) <= 0:
         return None
@@ -47,7 +48,7 @@ def _step(row: Dict[str, Any]) -> Dict[str, Any]:
         "avg_latency": row["avg_latency"],
         "p95_latency": row["p95_latency"],
         "p99_latency": row["p99_latency"],
-        "fairness": _fairness(row.get("client_rows") or []),
+        "fairness": client_fairness(row.get("client_rows") or []),
         "complete": _is_complete(row),
     }
 

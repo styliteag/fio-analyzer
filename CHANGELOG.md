@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Ramp step fairness in the detail view**: `GET /api/ramp/runs/{ramp_uuid}` now returns `fairness` (slowest / fastest client IOPS, null below two clients) in every step, not only the summary endpoint. It is the noisy-neighbour signal of a step.
+
 ### Changed
 - **Test cleanup**: removed tests that only repeated a check made elsewhere (4 pytest tests, 7 fio-test.sh suite checks) and two fio-test.sh functions that nothing called (`client_step_iops`, `sat_r_len`). The old `backend/test_api.py` import script is replaced by `tests/test_app.py`, which checks that the app loads and mounts every router; the shared `manager` test fixture now lives in `tests/conftest.py`. No behavior change.
 

@@ -61,6 +61,8 @@ export interface RampStep {
     readonly avg_latency: number | null;
     readonly p95_latency: number | null;
     readonly p99_latency: number | null;
+    /** Slowest / fastest client IOPS; null below two clients */
+    readonly fairness: number | null;
     readonly clients_detail: readonly RampClientResult[];
 }
 

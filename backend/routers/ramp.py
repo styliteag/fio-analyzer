@@ -15,7 +15,7 @@ from auth.middleware import User, require_viewer
 from database.client_migration import CLIENT_RESULTS_TABLE
 from database.client_results import MAX_RAMP_CLIENT_ROWS, MAX_RAMP_STEPS
 from database.connection import get_db
-from utils.ramp_summary import summarize_ramp
+from utils.ramp_summary import client_fairness, summarize_ramp
 from utils.storage_info import decode_storage_info
 
 router = APIRouter()
@@ -142,7 +142,14 @@ async def get_ramp(
         "ramp_uuid": ramp_uuid,
         "run_uuid": first["run_uuid"],
         **{column: first[column] for column in CONFIG_COLUMNS},
-        "steps": [{**{k: v for k, v in step.items() if k not in CONFIG_COLUMNS and k != "client_rows"}, "clients_detail": step["client_rows"]} for step in steps],
+        "steps": [
+            {
+                **{k: v for k, v in step.items() if k not in CONFIG_COLUMNS and k != "client_rows"},
+                "fairness": client_fairness(step["client_rows"]),
+                "clients_detail": step["client_rows"],
+            }
+            for step in steps
+        ],
     }
 
 

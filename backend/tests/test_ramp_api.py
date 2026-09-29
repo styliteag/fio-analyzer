@@ -56,6 +56,15 @@ def test_ramp_details_include_clients_and_storage(manager: DatabaseManager) -> N
     assert two["clients_detail"][1]["storage_info"]["fs_type"] == "xfs"
 
 
+def test_ramp_details_carry_fairness_per_step(manager: DatabaseManager) -> None:
+    upload_ramp(manager)
+    detail = get(manager, "/api/ramp/runs/ramp-1").json()
+    summary = get(manager, "/api/ramp/runs/ramp-1/summary").json()
+    assert detail["steps"][0]["fairness"] is None  # one client: nothing to compare
+    assert detail["steps"][1]["fairness"] == summary["steps"][1]["fairness"]
+    assert 0 < detail["steps"][1]["fairness"] <= 1
+
+
 def test_ramp_summary(manager: DatabaseManager) -> None:
     upload_ramp(manager)
     summary = get(manager, "/api/ramp/runs/ramp-1/summary?threshold_ms=1").json()
