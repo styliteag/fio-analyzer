@@ -763,7 +763,7 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
     # 1. job options -> runtime (in seconds) - preferred, this is the configured runtime
     # 2. job -> duration (in milliseconds) - fallback
     # 3. job -> job_runtime (in milliseconds) - fallback
-    runtime_from_opts = job_opts.get("runtime") or global_opts.get("runtime")
+    runtime_from_opts = _int_option(job_opts, global_opts, "runtime", None)
     duration_from_job = job.get("duration")
     job_runtime_ms = job.get("job_runtime", 0)
     
@@ -787,13 +787,13 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
         # Extract from job options (matching Node.js logic)
         "block_size": (job_opts.get("bs") or global_opts.get("bs") or "4k").upper(),
         "read_write_pattern": job_opts.get("rw") or global_opts.get("rw") or "read",
-        "queue_depth": int(job_opts.get("iodepth") or global_opts.get("iodepth") or 1),
+        "queue_depth": _int_option(job_opts, global_opts, "iodepth", 1),
         "output_file": job_opts.get("filename") or global_opts.get("filename") or "testfile",
-        "num_jobs": int(job_opts.get("numjobs") or global_opts.get("numjobs") or 1),
-        "direct": int(job_opts.get("direct") or global_opts.get("direct") or 0),
+        "num_jobs": _int_option(job_opts, global_opts, "numjobs", 1),
+        "direct": _int_option(job_opts, global_opts, "direct", 0),
         "test_size": job_opts.get("size") or global_opts.get("size") or "1M",
         "sync": _extract_sync(job_opts, global_opts),
-        "iodepth": int(job_opts.get("iodepth") or global_opts.get("iodepth") or 1),
+        "iodepth": _int_option(job_opts, global_opts, "iodepth", 1),
         # Local runs pass the engine on the command line (job options), client mode in the job file (global options)
         "ioengine": extract_ioengine(job_opts, global_opts),
         # Extract performance metrics
@@ -834,6 +834,21 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
     }
 
     return test_run_data
+
+
+def _int_option(
+    job_opts: Dict[str, Any], global_opts: Dict[str, Any], name: str, default: Optional[int]
+) -> Optional[int]:
+    """Read a whole-number fio option (job options first); a list like direct=1,0 is a client error."""
+    raw = job_opts.get(name) or global_opts.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError) as error:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid fio option {name}={raw!r}: expected a single whole number"
+        ) from error
 
 
 def _extract_sync(job_opts: Dict[str, Any], global_opts: Dict[str, Any]) -> str:

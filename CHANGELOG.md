@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comparison**: `cachefit` is a layout tag. Strict matching (`/api/compare`, Compare page) therefore never compares cache-sized runs with runs measured on the storage. `strict=false` lists the difference in `mismatch`.
 
 ### Fixed
+- **fio-test.sh rejects misspelled options** (#6): an unknown option (e.g. `--saturaton`) or a stray argument stops the script with an error that names it, instead of being ignored silently. `-h`/`-u`/`-g` placed after other options get a hint that they must come first.
+- **Saturation mode with `DIRECT`/`TEST_SIZE`/`RUNTIME` lists** (#6): such lists reached the upload unparsed (e.g. `direct=1,0`) and the import failed with a `ValueError`. Saturation mode now stops at startup with a clear error, since a saturation run uses one value (`SAT_SYNC`/`SYNC` lists still give one run per sync mode). The import answers malformed whole-number fio options (`direct`, `iodepth`, `numjobs`, `runtime`) with HTTP 400 and the option name instead of an internal error.
 - **Multi-client uploads from older fio versions**: fio 3.36 writes no latency percentiles into the "All clients" result, so P95/P99 of such steps were stored as 0. The worst client's percentiles are now stored instead (affects client ramps as well).
 
 ### Fixed

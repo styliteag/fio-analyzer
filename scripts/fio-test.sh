@@ -440,6 +440,18 @@ validate_saturation_config() {
 
     # Sync modes: SAT_SYNC list, or SYNC when SAT_SYNC is unset (one run per value)
     parse_sat_sync_list "${SAT_SYNC:-$SYNC}" || exit 1
+
+    # A saturation run uses one direct mode, test size and runtime (a list would reach the
+    # upload unparsed, e.g. direct=1,0, and the backend rejects it)
+    local name value
+    for name in DIRECT TEST_SIZE RUNTIME; do
+        value=${!name}
+        if [[ "$value" == *,* ]]; then
+            print_error "Saturation mode takes a single ${name} value, got '${value}'"
+            print_error "Run the saturation test once per value (e.g. ${name}=${value%%,*}); only SAT_SYNC/SYNC and SAT_BLOCK_SIZES accept lists"
+            exit 1
+        fi
+    done
 }
 
 # Parse a comma-separated sync list into SAT_SYNC_ARR (spaces trimmed)
@@ -4478,7 +4490,6 @@ main() {
     local skip_confirmation=false
     local server_action=""
     local env_files=()
-    local args=()
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -4651,16 +4662,21 @@ main() {
                     exit 1
                 fi
                 CLI_STORAGE_CACHE_BYTES="$2"; shift 2 ;;
+            -h|--help|-u|--uuid|-g|--generate-env)
+                print_error "Option $1 must be the first argument (e.g. $0 $1)"
+                exit 1
+                ;;
+            -*)
+                print_error "Unknown option: $1 (see $0 --help)"
+                exit 1
+                ;;
             *)
-                args+=("$1")
-                shift
+                print_error "Unexpected argument: $1 (options only, see $0 --help)"
+                exit 1
                 ;;
         esac
     done
-    
-    # Restore remaining arguments for potential future use
-    set -- "${args[@]}"
-    
+
     # Load configuration (supports multiple env files and INCLUDE directives)
     # Precedence: CLI flags > env vars / .env file > hardcoded defaults
     load_env_files "${env_files[@]}"
@@ -5181,6 +5197,8 @@ Standard Test Options:
   --sync none|sync|dsync Sync mode, comma-separated for multiple (default: 1)
                          Legacy values 0 (= none) and 1 (= sync) are still accepted
   --iodepth N            I/O depth per job, comma-separated for multiple (default: 1)
+                         Saturation mode: --test-size, --runtime and --direct take a
+                         single value; --sync may be a list (one run per mode)
 
 Infrastructure Options:
   --target-dir PATH      Test directory or block device (default: ./fio_tmp/)
