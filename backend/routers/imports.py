@@ -1006,6 +1006,8 @@ def insert_saturation_run(db: sqlite3.Connection, test_run_data: Dict[str, Any],
         "run_uuid",
         "storage_info",
         "latency_threshold_ms",
+        "clients",
+        "client_hosts",
         "output_file",
         "num_jobs",
         "direct",
@@ -1037,6 +1039,8 @@ def insert_saturation_run(db: sqlite3.Connection, test_run_data: Dict[str, Any],
 
     values = [test_run_data.get(col) for col in columns]
     values[columns.index("ioengine")] = run_ioengine(test_run_data)
+    # fio client mode: every step runs on all clients (per-client rows are kept in the raw JSON)
+    values[columns.index("clients")] = test_run_data.get("clients") or 1
     placeholders = ", ".join(["?" for _ in columns])
 
     cursor.execute(
