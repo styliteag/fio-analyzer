@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **Client Ramps page** (`/ramps`, admin and viewer): lists multi-client ramps with host › protocol › type › model, configuration, client counts and date, sortable and filterable by host and run. A selected ramp (`?ramp=`, P95 threshold `?threshold=`, default 100 ms) shows summary cards (highest client count within the threshold, first count above it, max aggregate IOPS, per-client IOPS drop, worst fairness, incomplete steps), charts of aggregate IOPS/bandwidth and latency with the threshold line over the client count, a per-client IOPS spread chart, a per-step table with every client's results (incomplete steps and failed clients flagged) and a raw JSON ZIP download. Other configurations of the same run can be picked directly.
+
+### Changed
+- **Header navigation**: The desktop navigation starts at 1280 px (below that the menu button is used) and shows its icons only from 1536 px on, so all entries fit without horizontal scrolling.
 
 ## [0.12.1] - 2026-09-28
 
