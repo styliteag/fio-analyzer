@@ -17,7 +17,8 @@ const NavLinks: React.FC<{ items: readonly NavItem[]; vertical?: boolean }> = ({
         {items.map(({ to, label, icon: Icon, description }) => (
             <li key={to}>
                 <NavLink to={to} end={to === '/'} className={linkClass} title={description}>
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {/* Icons only from 2xl on (and in the mobile menu), so all entries fit next to the user controls */}
+                    <Icon className={vertical ? 'h-4 w-4 shrink-0' : 'hidden 2xl:block h-4 w-4 shrink-0'} aria-hidden="true" />
                     <span>{label}</span>
                 </NavLink>
             </li>
@@ -67,18 +68,18 @@ export const AppHeader: React.FC = () => {
                         <span className="text-lg font-bold theme-text-primary whitespace-nowrap">FIO Analyzer</span>
                     </Link>
 
-                    <nav className="hidden lg:block" aria-label="Main">
+                    <nav className="hidden xl:block" aria-label="Main">
                         <NavLinks items={items} />
                     </nav>
 
-                    <div className="hidden lg:flex items-center gap-3 shrink-0">
+                    <div className="hidden xl:flex items-center gap-3 shrink-0">
                         <ThemeToggle />
                         <UserControls username={username} role={userRole} onLogout={logout} />
                     </div>
 
                     <button
                         type="button"
-                        className="lg:hidden inline-flex items-center justify-center p-2 rounded-md theme-nav-link"
+                        className="xl:hidden inline-flex items-center justify-center p-2 rounded-md theme-nav-link"
                         onClick={() => setMenuOpen((open) => !open)}
                         aria-expanded={menuOpen}
                         aria-controls="mobile-menu"
@@ -90,7 +91,7 @@ export const AppHeader: React.FC = () => {
             </div>
 
             {menuOpen && (
-                <div id="mobile-menu" className="lg:hidden border-t theme-border-primary px-4 py-3 space-y-3">
+                <div id="mobile-menu" className="xl:hidden border-t theme-border-primary px-4 py-3 space-y-3">
                     <nav aria-label="Main">
                         <NavLinks items={items} vertical />
                     </nav>
