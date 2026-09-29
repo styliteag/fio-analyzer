@@ -10,6 +10,8 @@ export interface TestRun {
 	queue_depth: number;
 	duration: number;
 	fio_version?: string;
+	mem_total?: number;
+	arc_max?: number;
 	job_runtime?: number;
 	rwmixread?: number;
 	total_ios_read?: number;
@@ -269,6 +271,8 @@ export interface StorageInfo {
 	kernel?: string;
 	ioengine?: string;
 	fio_version?: string;
+	mem_total?: number;
+	arc_max?: number;
 	zfs?: Record<string, string | undefined> & { dataset?: string; type?: string };
 	ceph?: Record<string, string | number | undefined> & { kind?: string; pool?: string };
 	[key: string]: unknown;

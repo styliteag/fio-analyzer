@@ -23,7 +23,9 @@ fio_server_address client_fio_args client_hosts_list client_storage_info_json cl
 client_job_target_lines client_extra_args_ini client_write_job_file client_write_prefill_job
 client_write_cleanup_job client_step_complete client_output_messages client_run_step
 client_run_sat_step client_print_p95 client_sat_prefill client_sat_prefill_cleanup upload_description
-retry_clean_text fio_retry_params fio_retry_kernel print_retry_log client_kernels"
+retry_clean_text fio_retry_params fio_retry_kernel print_retry_log client_kernels apply_cachefit_tag
+client_cache_fit_check test_working_set_bytes host_cache_bytes cache_mul si_byte_count cache_fit_text
+human_bytes cache_size_bytes"
 SED_EXPR=""
 for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
 # shellcheck source=/dev/null
@@ -122,6 +124,22 @@ check "retry: log names the step's job parameters" 1 \
 check "retry: log names the clients' kernels" 1 "$(printf '%s\n' "${FIO_RETRY_LOG[@]}" | grep -c 'kernel=6.8.0')"
 check "retry: job parameters cleared after the step" "" "$FIO_RETRY_PARAMS"
 FIO_RETRY_MAX=0 EAGAIN_AT=0 FIO_TEST_RETRIES=0
+
+# --- cache fit: every step is checked on the clients, cachefit:1 only while it fits ----------
+# 16M per job x 1 job x 2 clients = 32M working set
+reset_counters
+reset_sat_results
+STORAGE_CACHE_BYTES_N=$((40 * 1048576))
+saturation_loop 4k >"$TMP/out" 2>&1
+check "cachefit: every step tagged (32M <= 40M)" "1 1 1 1" \
+    "$(for i in 1 2 3 4; do upload_field "$i" description | grep -c ',cachefit:1$'; done | tr '\n' ' ' | sed 's/ $//')"
+check "cachefit: job description tagged" 1 "$(grep -c 'cachefit:1' "$TMP/job.1")"
+reset_counters
+reset_sat_results
+STORAGE_CACHE_BYTES_N=$((16 * 1048576))
+saturation_loop 4k >"$TMP/out" 2>&1
+check "cachefit: no step tagged (32M > 16M)" 0 "$(cat "$TMP"/upload.* | grep -c 'cachefit:1')"
+STORAGE_CACHE_BYTES_N="" CACHE_FIT=0
 
 # --- escalation on all clients until the "All clients" P95 crosses the threshold -------------
 reset_counters

@@ -205,6 +205,13 @@ bytes_to_mib_size() {
     echo "$(($1 / 1048576))M"
 }
 
+# Bytes as a short size for messages (binary units): 512B, 1.5K, 64.0G, 2.0T
+human_bytes() {
+    awk -v b="$1" 'BEGIN { n = split("B K M G T P E", u, " "); i = 1
+        while (b >= 1024 && i < n) { b /= 1024; i++ }
+        if (i == 1) printf "%dB", b; else printf "%.1f%s", b, u[i] }'
+}
+
 # ============================================================
 # Configuration Functions
 # ============================================================
@@ -270,6 +277,11 @@ define_defaults() {
     STORAGE_DETECT="${STORAGE_DETECT:-1}"
     STORAGE_INFO=""
     STORAGE_WARNINGS=0
+    # Cache (RAM, ZFS ARC) the working set is compared with, for caches this host cannot
+    # see, e.g. the hypervisor's ZFS ARC below VMs (fio size like 64G; empty = none)
+    STORAGE_CACHE_BYTES="${STORAGE_CACHE_BYTES:-}"
+    STORAGE_CACHE_BYTES_N=""
+    CACHE_FIT=0
 
     # Server mode (--server): fio --server on this host for a controller
     FIO_SERVER_BIND="${FIO_SERVER_BIND:-}"
@@ -325,6 +337,7 @@ apply_cli_overrides() {
     [ -n "${CLI_MAX_TOTAL_QD+set}" ]         && MAX_TOTAL_QD="$CLI_MAX_TOTAL_QD"
     [ -n "${CLI_CLIENTS+set}" ]              && CLIENTS="$CLI_CLIENTS"
     [ -n "${CLI_RAMP_CLIENTS+set}" ]         && RAMP_CLIENTS="$CLI_RAMP_CLIENTS"
+    [ -n "${CLI_STORAGE_CACHE_BYTES+set}" ]  && STORAGE_CACHE_BYTES="$CLI_STORAGE_CACHE_BYTES"
 }
 
 # Generate UUIDs for tracking
@@ -361,6 +374,7 @@ generate_uuids() {
 # Build description string (single location, no duplication)
 # Uses BASE_DESCRIPTION (the user-supplied text) so repeated calls do not nest.
 # Saturation uploads must start with "saturation-test" (backend detection).
+# RUN_DESCRIPTION is the description without the per-test cachefit tag (apply_cachefit_tag).
 build_description() {
     local prefix=""
     if [ "$SATURATION_MODE" = true ]; then
@@ -384,6 +398,16 @@ build_description() {
 
     # Sanitize: spaces to underscores, remove special chars (dots stay: versions, FQDNs)
     DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_.,;:]//g')
+    RUN_DESCRIPTION=$DESCRIPTION
+    apply_cachefit_tag
+}
+
+# DESCRIPTION = RUN_DESCRIPTION plus cachefit:1 while the current test's working set fits
+# in a cache (CACHE_FIT=1, set per test by cache_fit_check / client_cache_fit_check).
+# The tag never leaks into later tests and the date in the description stays the same.
+apply_cachefit_tag() {
+    DESCRIPTION=${RUN_DESCRIPTION:-$DESCRIPTION}
+    if [ "${CACHE_FIT:-0}" = 1 ]; then DESCRIPTION+=",cachefit:1"; fi
 }
 
 # Validate saturation-specific configuration
@@ -510,6 +534,234 @@ sat_drop_stale_prefill() {
     SAT_PREFILL_BASE="$base"
 }
 
+# ============================================================
+# Cache fit check: warn when a test's data fits into RAM or the ZFS ARC
+# ============================================================
+# A working set that fits into a cache is (partly) read from memory, so the results show
+# cache speed instead of storage speed. Caches that count, the largest one wins:
+#   - STORAGE_CACHE_BYTES: a cache this host cannot see, e.g. the ZFS ARC of the hypervisor
+#     below VMs (direct=1 in the guest does not bypass it). Always applies; in client mode
+#     it is shared by all clients, so the data of all clients of a step counts.
+#   - ZFS ARC (arc_max) when the target is on ZFS here and primarycache is all (or unknown)
+#   - page cache (MemTotal) for buffered I/O (direct=0) only
+# Tests that fit get the description tag cachefit:1.
+
+# Validate STORAGE_CACHE_BYTES into STORAGE_CACHE_BYTES_N (bytes; empty or 0 = not set).
+# Invalid values are ignored with a warning.
+validate_storage_cache() {
+    STORAGE_CACHE_BYTES_N=""
+    case "${STORAGE_CACHE_BYTES:-}" in ""|0) STORAGE_CACHE_BYTES=""; return 0 ;; esac
+    STORAGE_CACHE_BYTES_N=$(cache_size_bytes "$STORAGE_CACHE_BYTES")
+    if [ -z "$STORAGE_CACHE_BYTES_N" ]; then
+        print_warning "STORAGE_CACHE_BYTES must be a size like 64G, 512M or 1T (got '$STORAGE_CACHE_BYTES'), ignoring it"
+        STORAGE_CACHE_BYTES=""
+    fi
+}
+
+# Bytes of data one test touches on one host: <size> x <numjobs> with a file per job
+# (FILE_PER_JOB=1, directory targets), else <size>: all jobs share one file, and on a
+# block device every job works on the first <size> bytes. Returns 1 for unusable values.
+# Usage: test_working_set_bytes <size> <numjobs>
+test_working_set_bytes() {
+    local bytes jobs=$2
+    bytes=$(cache_size_bytes "$1")
+    if [ -z "$bytes" ] || ! [[ "$jobs" =~ ^[1-9][0-9]{0,4}$ ]]; then return 1; fi
+    if [ "$TARGET_IS_DEVICE" != true ] && [ "$FILE_PER_JOB" = 1 ]; then
+        bytes=$(cache_mul "$bytes" "$jobs")
+    fi
+    echo "$bytes"
+}
+
+# $1 x $2 (both below 2^60), limited to 2^62 so that absurd sizes cannot overflow
+cache_mul() {
+    if [ "$1" -gt $((4611686018427387904 / $2)) ]; then echo 4611686018427387904; else echo $(($1 * $2)); fi
+}
+
+# Largest cache of one host that holds a test's data into CACHE_BYTES / CACHE_SOURCE
+# (0 / "" when none applies). Values may come from a client: only plain numbers count.
+# Usage: host_cache_bytes <direct> <mem_total> <arc_max> <on zfs: 0|1> <primarycache>
+host_cache_bytes() {
+    local direct=$1 mem arc on_zfs=$4 primarycache=$5
+    mem=$(si_byte_count "$2") arc=$(si_byte_count "$3")
+    CACHE_BYTES=0 CACHE_SOURCE=""
+    if [ "$on_zfs" = 1 ] && [ -n "$arc" ] && { [ -z "$primarycache" ] || [ "$primarycache" = all ]; }; then
+        CACHE_BYTES=$arc CACHE_SOURCE="ZFS ARC (arc_max)"
+    fi
+    if [ "$direct" = 0 ] && [ -n "$mem" ] && [ "$mem" -gt "$CACHE_BYTES" ]; then
+        CACHE_BYTES=$mem CACHE_SOURCE="page cache (RAM, direct=0)"
+    fi
+}
+
+# Cache fit of one test on this host into CACHE_FIT (0/1), CACHE_WS (working set),
+# CACHE_BYTES and CACHE_SOURCE (the largest applicable cache)
+# Usage: cache_fit_check <size> <numjobs> <direct>
+cache_fit_check() {
+    local on_zfs=0 ws
+    CACHE_FIT=0 CACHE_WS=0
+    if [ -n "${SI_ZFS_DATASET:-}" ]; then on_zfs=1; fi
+    host_cache_bytes "$3" "${SI_MEM_TOTAL:-}" "${SI_ARC_MAX:-}" "$on_zfs" "${SI_ZFS_PRIMARYCACHE:-}"
+    if [ -n "${STORAGE_CACHE_BYTES_N:-}" ] && [ "$STORAGE_CACHE_BYTES_N" -gt "$CACHE_BYTES" ]; then
+        CACHE_BYTES=$STORAGE_CACHE_BYTES_N CACHE_SOURCE="STORAGE_CACHE_BYTES"
+    fi
+    ws=$(test_working_set_bytes "$1" "$2") || return 0
+    CACHE_WS=$ws
+    if [ "$CACHE_BYTES" -gt 0 ] && [ "$ws" -le "$CACHE_BYTES" ]; then CACHE_FIT=1; fi
+    return 0
+}
+
+# Client mode: cache details of every client from its storage.json into CLIENT_MEM,
+# CLIENT_ARC, CLIENT_ON_ZFS, CLIENT_PCACHE and CLIENT_VIRT (unknown = empty)
+client_cache_info() {
+    local i line mem arc on_zfs pcache virt
+    CLIENT_MEM=() CLIENT_ARC=() CLIENT_ON_ZFS=() CLIENT_PCACHE=() CLIENT_VIRT=()
+    for ((i = 0; i < ${#CLIENT_STORAGE[@]}; i++)); do
+        line=$(jq -r '[(.mem_total // "" | tostring), (.arc_max // "" | tostring),
+            (if (.zfs | type) == "object" then "1" else "0" end),
+            (if (.zfs | type) == "object" then (.zfs.primarycache // "" | tostring) else "" end),
+            (if (.virt | type) == "object" then (.virt.type // "" | tostring) else "" end)]
+            | join("|")' <<< "${CLIENT_STORAGE[$i]}" 2>/dev/null)
+        IFS='|' read -r mem arc on_zfs pcache virt <<< "$line"
+        CLIENT_MEM+=("$(si_byte_count "$mem")") CLIENT_ARC+=("$(si_byte_count "$arc")")
+        if [ "$on_zfs" = 1 ]; then CLIENT_ON_ZFS+=(1); else CLIENT_ON_ZFS+=(0); fi
+        CLIENT_PCACHE+=("${pcache//[^a-z]/}") CLIENT_VIRT+=("${virt//[^A-Za-z0-9_.-]/}")
+    done
+}
+
+# Client mode: cache fit of one test on the first <n> clients into CACHE_FIT, CACHE_WS,
+# CACHE_BYTES and CACHE_SOURCE. STORAGE_CACHE_BYTES is shared by all clients (the data of
+# all <n> clients counts); each client's own RAM / ARC holds only its own share. The test
+# fits when the shared cache holds everything or any client's share fits its own cache.
+# Usage: client_cache_fit_check <n> <size> <numjobs> <direct>
+client_cache_fit_check() {
+    local n=$1 share i
+    CACHE_FIT=0 CACHE_WS=0 CACHE_BYTES=0 CACHE_SOURCE=""
+    share=$(test_working_set_bytes "$2" "$3") || return 0
+    CACHE_WS=$(cache_mul "$share" "$n")
+    if [ -n "${STORAGE_CACHE_BYTES_N:-}" ] && [ "$CACHE_WS" -le "$STORAGE_CACHE_BYTES_N" ]; then
+        CACHE_FIT=1 CACHE_BYTES=$STORAGE_CACHE_BYTES_N CACHE_SOURCE="STORAGE_CACHE_BYTES"
+        return 0
+    fi
+    for ((i = 0; i < n; i++)); do
+        host_cache_bytes "$4" "${CLIENT_MEM[$i]:-}" "${CLIENT_ARC[$i]:-}" "${CLIENT_ON_ZFS[$i]:-0}" \
+            "${CLIENT_PCACHE[$i]:-}"
+        if [ "$CACHE_BYTES" -gt 0 ] && [ "$share" -le "$CACHE_BYTES" ]; then
+            CACHE_FIT=1 CACHE_WS=$share CACHE_SOURCE+=" of client ${CLIENT_NAME[$i]:-$((i + 1))}"
+            return 0
+        fi
+    done
+    CACHE_BYTES=${STORAGE_CACHE_BYTES_N:-0} CACHE_SOURCE=""
+    return 0
+}
+
+# One line about a fitting test: "working set 40.0G <= 64.0G STORAGE_CACHE_BYTES"
+cache_fit_text() {
+    echo "working set $(human_bytes "$CACHE_WS") <= $(human_bytes "$CACHE_BYTES") ${CACHE_SOURCE}"
+}
+
+# Per test: set CACHE_FIT and the cachefit tag in DESCRIPTION (not in client mode, where
+# client_run_ramp_step / client_run_sat_step check before build_description), with a note
+# when it fits
+# Usage: cache_fit_apply <size> <numjobs> <direct>
+cache_fit_apply() {
+    cache_fit_check "$1" "$2" "$3"
+    apply_cachefit_tag
+    if [ "$CACHE_FIT" = 1 ]; then
+        print_warning "Cache fit: $(cache_fit_text) - results may show cache speed, tagged cachefit:1"
+    fi
+}
+
+# Startup check over every size / numjobs / direct (/ client count) combination: warns
+# once with the combinations that fit; CACHE_FIT_WARNINGS = number of fitting combinations
+show_cache_fit_warning() {
+    local size jobs direct n label total=0 lines=0 detail cache_note=""
+    local -a sizes jobs_list directs counts fits=()
+    CACHE_FIT_WARNINGS=0
+    if [ "$SATURATION_MODE" = true ]; then
+        # The first step has the smallest working set (numjobs only grows, the cap only shrinks
+        # the per-job size); later steps are checked one by one
+        sat_step_size "$INITIAL_NUMJOBS"
+        sizes=("$SAT_STEP_SIZE") jobs_list=("$INITIAL_NUMJOBS") directs=("$SAT_DIRECT")
+    else
+        sizes=("${TEST_SIZE[@]}") jobs_list=("${NUM_JOBS[@]}") directs=("${DIRECT[@]}")
+    fi
+    if [ "${CLIENT_MODE:-false}" = true ]; then counts=("${RAMP_STEPS[@]}"); else counts=(1); fi
+    for size in "${sizes[@]}"; do
+        for jobs in "${jobs_list[@]}"; do
+            for direct in "${directs[@]}"; do
+                for n in "${counts[@]}"; do
+                    total=$((total + 1))
+                    if [ "${CLIENT_MODE:-false}" = true ]; then
+                        client_cache_fit_check "$n" "$size" "$jobs" "$direct"
+                        label="size=${size} jobs=${jobs} direct=${direct} clients=${n}"
+                    else
+                        cache_fit_check "$size" "$jobs" "$direct"
+                        label="size=${size} jobs=${jobs} direct=${direct}"
+                    fi
+                    if [ "$CACHE_FIT" = 1 ]; then fits+=("${label}: $(cache_fit_text)"); fi
+                done
+            done
+        done
+    done
+    CACHE_FIT=0
+    CACHE_FIT_WARNINGS=${#fits[@]}
+    if [ "$CACHE_FIT_WARNINGS" -gt 0 ]; then
+        if [ "$SATURATION_MODE" = true ]; then cache_note=" (first saturation step)"; fi
+        print_warning "Cache fit: the working set fits into a cache in ${CACHE_FIT_WARNINGS} of ${total} test size/jobs/direct combination(s)${cache_note}."
+        print_warning "  Reads (and buffered writes) may be served from memory and show cache speed, not storage speed:"
+        for detail in "${fits[@]}"; do
+            lines=$((lines + 1))
+            if [ "$lines" -gt 8 ]; then
+                print_warning "  ... and $((CACHE_FIT_WARNINGS - 8)) more"
+                break
+            fi
+            print_warning "  ${detail}"
+        done
+        if [ "$FILE_PER_JOB" = 1 ]; then detail="TEST_SIZE x NUM_JOBS"; else detail="TEST_SIZE"; fi
+        if [ "${CLIENT_MODE:-false}" = true ]; then detail+=" (x clients for STORAGE_CACHE_BYTES)"; fi
+        print_warning "  These uploads get the description tag cachefit:1. Make ${detail} larger than the cache to measure the storage."
+    fi
+    if [ -z "${STORAGE_CACHE_BYTES_N:-}" ] && cache_in_vm; then
+        print_status "Running in a VM: a cache of the hypervisor (e.g. its ZFS ARC) is not visible here and is used even with direct=1."
+        print_status "  Set STORAGE_CACHE_BYTES (e.g. 64G) to the hypervisor's cache size to check the working set against it."
+    fi
+    return 0
+}
+
+# True when this host (or, in client mode, any client) runs in a VM
+cache_in_vm() {
+    local v
+    if [ "${CLIENT_MODE:-false}" = true ]; then
+        for v in ${CLIENT_VIRT[@]+"${CLIENT_VIRT[@]}"}; do
+            case "$v" in ""|lxc*|systemd-nspawn|docker|podman|rkt|wsl|proot|pouch|openvz) ;; *) return 0 ;; esac
+        done
+        return 1
+    fi
+    case "${SI_VIRT_TYPE:-}" in ""|lxc*|systemd-nspawn|docker|podman|rkt|wsl|proot|pouch|openvz) return 1 ;; esac
+    return 0
+}
+
+# Cache line of show_config
+cache_summary() {
+    local out=""
+    if [ "${CLIENT_MODE:-false}" = true ]; then
+        out="each client's RAM / ZFS ARC from its storage.json"
+    else
+        if [ -n "${SI_MEM_TOTAL:-}" ]; then out="RAM $(human_bytes "$SI_MEM_TOTAL") (page cache, direct=0 only)"; fi
+        if [ -n "${SI_ARC_MAX:-}" ]; then
+            out+="${out:+, }ZFS ARC max $(human_bytes "$SI_ARC_MAX")"
+            if [ -z "${SI_ZFS_DATASET:-}" ]; then
+                out+=" (target not on ZFS)"
+            elif [ -n "${SI_ZFS_PRIMARYCACHE:-}" ] && [ "$SI_ZFS_PRIMARYCACHE" != all ]; then
+                out+=" (not used: primarycache=${SI_ZFS_PRIMARYCACHE})"
+            fi
+        fi
+    fi
+    if [ -n "${STORAGE_CACHE_BYTES_N:-}" ]; then
+        out+="${out:+, }STORAGE_CACHE_BYTES $(human_bytes "$STORAGE_CACHE_BYTES_N")"
+    fi
+    echo "${out:-unknown}"
+}
+
 # Convert scalar values to arrays for multi-value iteration
 convert_scalars_to_arrays() {
     # Freeze scalar values for saturation mode BEFORE array conversion
@@ -554,6 +806,7 @@ validate_advanced_options() {
         PREFILL=0
     fi
     validate_sat_cap
+    validate_storage_cache
 
     if ! [[ "$FIO_RETRY_MAX" =~ ^[0-9]+$ ]] || [ "${#FIO_RETRY_MAX}" -gt 2 ] || [ "$FIO_RETRY_MAX" -gt 10 ]; then
         print_warning "FIO_RETRY_MAX must be a number from 0 to 10 (got '$FIO_RETRY_MAX'), using 2"
@@ -1328,10 +1581,75 @@ storage_virt_info() {
     SI_VIRT_JSON=$(json_object type "$type" vendor "$SI_VIRT_VENDOR" product "$SI_VIRT_PRODUCT")
 }
 
+# A byte count as a plain decimal below 2^60 (1 EiB), else empty: values from /proc,
+# sysctl or a client's storage.json end up in shell arithmetic
+si_byte_count() {
+    [[ "$1" =~ ^[1-9][0-9]{0,18}$ ]] || return 0
+    # 19 digits: compare as text (same length), so no arithmetic can overflow
+    # shellcheck disable=SC2071
+    if [ "${#1}" -eq 19 ] && [[ "$1" > 1152921504606846975 ]]; then return 0; fi
+    printf '%s' "$1"
+}
+
+# A fio size (64G, 512m, 1TiB, 4096) in bytes below 2^60 for the cache check; empty when
+# invalid, zero or too large (fio_size_to_bytes itself does not check for overflow)
+cache_size_bytes() {
+    local re='^([0-9]+)([kKmMgGtTpP]?)([iI]?[bB])?$' num shift_bits=0
+    [[ "$1" =~ $re ]] || return 0
+    num=${BASH_REMATCH[1]}
+    while [[ "$num" == 0?* ]]; do num=${num#0}; done
+    num=$(si_byte_count "$num")
+    [ -n "$num" ] || return 0
+    case "${BASH_REMATCH[2]}" in
+        k|K) shift_bits=10 ;; m|M) shift_bits=20 ;; g|G) shift_bits=30 ;;
+        t|T) shift_bits=40 ;; p|P) shift_bits=50 ;;
+    esac
+    if [ "$num" -ge $(((1 << 60) >> shift_bits)) ]; then return 0; fi
+    printf '%s' "$((num << shift_bits))"
+}
+
+# Caches of this host in bytes into SI_MEM_TOTAL (RAM: MemTotal, the page cache limit)
+# and SI_ARC_MAX (ZFS ARC c_max; only on hosts with ZFS loaded); empty when unknown.
+# Linux: /proc/meminfo and /proc/spl/kstat/zfs/arcstats (below SI_SYS_ROOT in tests),
+# otherwise sysctl (macOS hw.memsize, FreeBSD hw.physmem and kstat.zfs.misc.arcstats.c_max).
+storage_cache_sizes() {
+    local root=${SI_SYS_ROOT:-} key value unit os
+    SI_MEM_TOTAL="" SI_ARC_MAX=""
+    if [ -r "$root/proc/meminfo" ]; then
+        while read -r key value unit; do
+            if [ "$key" = MemTotal: ]; then
+                # kB (KiB) as the kernel prints it
+                if [ "$unit" = kB ] && [ -n "$(si_byte_count "$value")" ] && [ "${#value}" -le 15 ]; then
+                    SI_MEM_TOTAL=$((value * 1024))
+                fi
+                break
+            fi
+        done < "$root/proc/meminfo"
+    fi
+    if [ -r "$root/proc/spl/kstat/zfs/arcstats" ]; then
+        # "name type data" lines, e.g. "c_max  4  8589934592"
+        while read -r key _ value; do
+            if [ "$key" = c_max ]; then SI_ARC_MAX=$(si_byte_count "$value"); break; fi
+        done < "$root/proc/spl/kstat/zfs/arcstats"
+    fi
+    if [ -n "$root" ]; then return 0; fi
+    os=$(uname -s 2>/dev/null)
+    if [ "$os" = Linux ] || ! command -v sysctl >/dev/null 2>&1; then return 0; fi
+    if [ -z "$SI_MEM_TOTAL" ]; then
+        if [ "$os" = Darwin ]; then key=hw.memsize; else key=hw.physmem; fi
+        SI_MEM_TOTAL=$(si_byte_count "$(si_run sysctl -n "$key" | head -n 1)")
+    fi
+    if [ -z "$SI_ARC_MAX" ]; then
+        SI_ARC_MAX=$(si_byte_count "$(si_run sysctl -n kstat.zfs.misc.arcstats.c_max | head -n 1)")
+    fi
+    return 0
+}
+
 # STORAGE_INFO JSON from the detected SI_* values
 storage_info_json() {
     json_object fs_type "${SI_FS_TYPE:-}" kernel "${SI_KERNEL:-}" os "${SI_OS:-}" \
-        ioengine "${IOENGINE:-}" fio_version "${SI_FIO_VERSION:-}" zfs:o "${SI_ZFS_JSON:-}" \
+        ioengine "${IOENGINE:-}" fio_version "${SI_FIO_VERSION:-}" \
+        mem_total:n "${SI_MEM_TOTAL:-}" arc_max:n "${SI_ARC_MAX:-}" zfs:o "${SI_ZFS_JSON:-}" \
         ceph:o "${SI_CEPH_JSON:-}" disk:o "${SI_DISK_JSON:-}" virt:o "${SI_VIRT_JSON:-}"
 }
 
@@ -1346,6 +1664,8 @@ detect_storage() {
     SI_CEPH_OBJECT_SIZE="" SI_CEPH_DATA_POOL="" SI_CEPH_POOL_TYPE="" SI_CEPH_POOL_SIZE=""
     SI_CEPH_MIN_SIZE="" SI_DISK_JSON="" SI_DISK_NAME="" SI_VIRT_JSON="" SI_VIRT_TYPE=""
     SI_KERNEL="" SI_OS="" SI_FIO_VERSION=""
+    # RAM and ZFS ARC size: also without STORAGE_DETECT, for the cache fit check
+    storage_cache_sizes
     case "${STORAGE_DETECT:-1}" in 0|false|no|off) return 0 ;; esac
 
     if [ "$TARGET_IS_DEVICE" = true ]; then
@@ -1379,7 +1699,8 @@ detect_storage() {
         STORAGE_INFO=$(storage_info_json)
     done
     if [ "$(LC_ALL=C; echo "${#STORAGE_INFO}")" -ge 4096 ]; then
-        STORAGE_INFO=$(json_object fs_type "$SI_FS_TYPE" os "$SI_OS" ioengine "${IOENGINE:-}")
+        STORAGE_INFO=$(json_object fs_type "$SI_FS_TYPE" os "$SI_OS" ioengine "${IOENGINE:-}" \
+            mem_total:n "${SI_MEM_TOTAL:-}" arc_max:n "${SI_ARC_MAX:-}")
     fi
 }
 
@@ -1515,6 +1836,8 @@ storage_summary_tokens() {
         dmi=${dmi# }
         si_token dmi "${dmi% }"
     fi
+    if [ -n "${SI_MEM_TOTAL:-}" ]; then si_token ram "$(human_bytes "$SI_MEM_TOTAL")"; fi
+    if [ -n "${SI_ARC_MAX:-}" ]; then si_token arc_max "$(human_bytes "$SI_ARC_MAX")"; fi
     si_token kernel "${SI_KERNEL:-}"
     si_token ioengine "${IOENGINE:-}"
     si_token fio "${SI_FIO_VERSION#fio-}"
@@ -2105,6 +2428,8 @@ run_fio_step() {
     if sat_cap_active; then
         print_status "  per-job file size: ${step_size} (cap ${SAT_MAX_TOTAL_SIZE} / ${num_jobs} jobs, test size ${SAT_TEST_SIZE})"
     fi
+    # cachefit:1 in DESCRIPTION for this step (fio run and upload) only
+    cache_fit_apply "$step_size" "$num_jobs" "$SAT_DIRECT"
 
     local data_base
     data_base=$(data_file_base "fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}" "$step_size")
@@ -2769,6 +3094,7 @@ show_config() {
     if [ "${CLIENT_MODE:-false}" != true ]; then
         echo "Storage:      $(storage_summary)"
     fi
+    echo "Cache:        $(cache_summary)"
     if [ -n "$FIO_EXTRA_ARGS" ]; then
         echo "FIO Extra:    ${FIO_EXTRA_ARGS_ARR[*]}"
     fi
@@ -2830,6 +3156,8 @@ run_all_tests() {
                                     print_status "Test $current_test/$total_tests: ${pattern} with ${block_size} ${num_jobs} ${direct} ${test_size} ${sync} ${iodepth} ${runtime}"
 
                                     output_file="/tmp/fio_results_${pattern}_${block_size}_${num_jobs}_${direct}_${test_size}_$(date +%s).json"
+                                    # cachefit:1 in DESCRIPTION for this test only
+                                    cache_fit_apply "$test_size" "$num_jobs" "$direct"
 
                                     if run_fio_test "$block_size" "$pattern" "$output_file" "$num_jobs" "$direct" "$test_size" "$sync" "$iodepth" "$runtime"; then
                                         # Display IOPS after successful test and collect for average
@@ -3655,6 +3983,8 @@ client_storage_summary() {
         ("ceph=" + (.ceph.kind // empty)), ("pool=" + (.ceph.pool // empty)),
         ("disk=" + (.disk.name // empty)), ("model=" + (.disk.model // empty)),
         ("driver=" + (.disk.driver // empty)), ("virt=" + (.virt.type // empty)),
+        ("ram=" + (.mem_total | numbers | . / 107374182.4 | floor / 10 | tostring) + "G"),
+        ("arc_max=" + (.arc_max | numbers | . / 107374182.4 | floor / 10 | tostring) + "G"),
         ("kernel=" + (.kernel // empty))] | join(" ")' <<< "$1" 2>/dev/null)
     out=${out//[[:cntrl:]]/}
     echo "${out:-unknown}"
@@ -3897,6 +4227,11 @@ client_run_ramp_step() {
     job_file="${CLIENT_WORK_DIR}/${label}.fio" output="${CLIENT_WORK_DIR}/${label}.json"
     base=$(data_file_base "fio_test_${pattern}_${block_size}" "$test_size")
     STEP_CLIENTS=$n STEP_COMPLETE=1 FIO_TEST_RETRIES=0
+    # cachefit:1 for this step only (build_description adds it while CACHE_FIT=1)
+    client_cache_fit_check "$n" "$test_size" "$num_jobs" "$direct"
+    if [ "$CACHE_FIT" = 1 ]; then
+        print_warning "Cache fit: $(cache_fit_text) - results may show cache speed, tagged cachefit:1"
+    fi
     build_description
     # The job parameters are in the job file: name them (and the clients' kernels) for
     # the retry diagnostics
@@ -3994,6 +4329,11 @@ client_run_sat_step() {
     base=$(data_file_base "fio_saturation_${pattern}_${block_size}_${iodepth}_${num_jobs}" "$SAT_STEP_SIZE")
     client_sat_prefill "$base" "$SAT_STEP_SIZE" "$num_jobs" || return 1
     STEP_CLIENTS=$n STEP_COMPLETE=1 RAMP_UUID=""
+    # cachefit:1 for this step only (build_description adds it while CACHE_FIT=1)
+    client_cache_fit_check "$n" "$SAT_STEP_SIZE" "$num_jobs" "$SAT_DIRECT"
+    if [ "$CACHE_FIT" = 1 ]; then
+        print_warning "Cache fit: $(cache_fit_text) - results may show cache speed, tagged cachefit:1"
+    fi
     build_description
     client_write_job_file "$job_file" "$pattern" "$block_size" "$num_jobs" "$SAT_DIRECT" "$SAT_STEP_SIZE" \
         "$SAT_SYNC" "$iodepth" "$SAT_RUNTIME" "$base"
@@ -4305,6 +4645,12 @@ main() {
             --config-uuid)
                 [ -z "$2" ] && { print_error "Option --config-uuid requires a UUID"; exit 1; }
                 CLI_CONFIG_UUID="$2"; shift 2 ;;
+            --storage-cache-bytes)
+                if [ -z "$2" ] || [[ "$2" =~ ^- ]]; then
+                    print_error "Option --storage-cache-bytes requires a size like 64G (0 = none)"
+                    exit 1
+                fi
+                CLI_STORAGE_CACHE_BYTES="$2"; shift 2 ;;
             *)
                 args+=("$1")
                 shift
@@ -4344,6 +4690,7 @@ main() {
         print_client_security_warning
         client_setup_connections || exit 1
         client_fetch_info
+        client_cache_info
         # Before show_config and before any job file is written
         client_choose_ioengine
     else
@@ -4367,6 +4714,9 @@ main() {
     # DRIVE_MODEL/DRIVE_TYPE vs. detected storage (warnings only; not in client mode)
     if [ "$CLIENT_MODE" = true ]; then STORAGE_WARNINGS=0; else storage_plausibility_checks; fi
     config_warnings=$((config_warnings + STORAGE_WARNINGS))
+
+    # Working set that fits into RAM / ZFS ARC / STORAGE_CACHE_BYTES (warning, tests still run)
+    show_cache_fit_warning
     if [ "$SATURATION_MODE" = true ] && [ "$STORAGE_WARNINGS" -gt 0 ]; then
         print_warning "Configuration warnings detected! Check DRIVE_MODEL/DRIVE_TYPE above."
     fi
@@ -4437,6 +4787,11 @@ main() {
             print_warning "⚠️  Configuration issues detected - some tests may fail!"
             print_warning "   See warnings above for details and suggestions."
         fi
+    fi
+
+    if [ "$CACHE_FIT_WARNINGS" -gt 0 ]; then
+        echo
+        print_warning "Cache fit: ${CACHE_FIT_WARNINGS} test combination(s) fit into a cache (see above) - uploaded with cachefit:1"
     fi
 
     # Extra warning for device mode
@@ -4643,10 +4998,17 @@ RUNTIME="60"
 # Detect the storage below TARGET_DIR (filesystem, ZFS dataset/zvol properties such as
 # sync/recordsize/volblocksize and the pool layout, CephFS/RBD pool, the disk with model,
 # serial and driver, e.g. QEMU HARDDISK / drive-scsi1 / virtio_scsi, and the hypervisor
-# inside VMs) and upload it as storage_info with every result. Warns when DRIVE_MODEL tags
+# inside VMs, RAM and ZFS ARC size) and upload it as storage_info with every result. Warns when DRIVE_MODEL tags
 # (syncoff, syncall, syncstd, rs16k, vbs16k) or DRIVE_TYPE (mirror, raidz1/2/3, draid,
 # stripe) do not match the detected ZFS settings or pool layout. 0 = off
 # STORAGE_DETECT=1
+# Cache fit check: tests whose working set (TEST_SIZE, x NUM_JOBS with FILE_PER_JOB=1,
+# x clients in client mode) fits into a cache run at memory speed. Checked against the
+# ZFS ARC (arc_max) of a ZFS target with primarycache=all, the RAM (page cache) with
+# DIRECT=0 and this setting; fitting tests get a warning and the tag cachefit:1.
+# Set it to the cache of the storage host this machine cannot see, e.g. the hypervisor's
+# ZFS ARC below VMs (direct=1 in the guest does not bypass it). Empty/0 = none.
+# STORAGE_CACHE_BYTES=64G
 
 # ============================================================
 # Saturation Test Mode (use with --saturation flag)
@@ -4827,6 +5189,14 @@ Infrastructure Options:
   -U, --username USER    Upload username (default: uploader)
   -P, --password PASS    Upload password (default: uploader). Visible in the process
                          list (ps) - prefer PASSWORD in a .env readable only by you
+  --storage-cache-bytes SIZE
+                         = STORAGE_CACHE_BYTES: size of a cache this host cannot see, e.g.
+                         the hypervisor's ZFS ARC below VMs (64G; empty/0 = none). direct=1
+                         in a VM does not bypass it. In client mode it is shared by all clients.
+                         Tests whose working set (TEST_SIZE, x NUM_JOBS with FILE_PER_JOB=1,
+                         x clients) fits into it, into the ZFS ARC of a ZFS target
+                         (primarycache=all) or, with DIRECT=0, into the RAM (page cache) get a
+                         warning at start and the description tag cachefit:1
 
 Saturation Test Options (use with -s):
   -s, --saturation       Enable saturation test mode
@@ -4861,7 +5231,8 @@ Advanced Settings (.env / environment only, all off by default):
                          Adds satcap:<SZ> to the description
   STORAGE_DETECT=0|1     Detect the storage below the target (filesystem, kernel, fio version,
                          ZFS dataset/zvol properties and pool layout, CephFS/RBD pool, disk
-                         model/serial/driver, hypervisor inside VMs) and upload it as
+                         model/serial/driver, hypervisor inside VMs, RAM and ZFS ARC size as
+                         mem_total/arc_max) and upload it as
                          storage_info with every result (default: 1). Also warns when
                          DRIVE_MODEL/DRIVE_TYPE tags (syncoff, syncall, syncstd, rs16k, vbs16k,
                          mirror, raidz1/2/3, draid, stripe) do not match the detected ZFS

@@ -17,7 +17,8 @@ trap 'rm -rf "$TMP"' EXIT
 FUNCS="transient_fio_error_line is_transient_fio_error run_fio_with_retry sanitize_fio_json
 fio_server_address client_fio_args client_step_complete client_output_messages client_run_step
 retry_clean_text fio_retry_params fio_retry_kernel client_kernels upload_description
-client_step_label client_run_ramp_step"
+client_step_label client_run_ramp_step client_cache_fit_check test_working_set_bytes host_cache_bytes
+cache_mul si_byte_count fio_size_to_bytes cache_fit_text human_bytes cache_size_bytes apply_cachefit_tag"
 SED_EXPR=""
 for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
 # shellcheck source=/dev/null
@@ -117,6 +118,7 @@ keep_json_copy() { :; }
 display_client_step() { :; }
 upload_results() { upload_description >>"$TMP/uploads"; echo >>"$TMP/uploads"; }
 CLIENT_IOENGINE=libaio CLIENT_UPLOADS_OK=0 CLIENT_UPLOADS_FAILED=0 CLIENT_STEPS_FAILED=0 CLIENT_STEPS_INCOMPLETE=0
+TARGET_IS_DEVICE=false FILE_PER_JOB=0 STORAGE_CACHE_BYTES_N="" CACHE_FIT=0 CLIENT_MEM=() CLIENT_ARC=() CLIENT_ON_ZFS=() CLIENT_PCACHE=()
 FIO_RETRY_MAX=2 FIO_RETRY_COUNT=0 FIO_RETRY_LOG=() FIO_OUT_1=eagain FIO_OUT_2=two FIO_OUT_3=two
 echo 0 >"$TMP/calls" && : >"$TMP/warnings" && : >"$TMP/uploads"
 client_run_ramp_step 2 read 4k 1 0 8G none 32 60

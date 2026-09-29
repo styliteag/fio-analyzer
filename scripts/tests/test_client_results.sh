@@ -17,7 +17,8 @@ FUNCS="generate_uuid_from_hash json_escape build_description sat_cap_active clie
 client_step_iops client_sanitize_name client_valid_json_object client_fetch_info client_hosts_list
 client_storage_info_json new_ramp_uuid client_config_list client_run_ramp_step client_run_config
 run_client_tests upload_results data_file_base client_step_label upload_description client_kernels print_retry_log
-retry_clean_text"
+retry_clean_text apply_cachefit_tag client_cache_fit_check test_working_set_bytes host_cache_bytes cache_mul
+si_byte_count fio_size_to_bytes cache_fit_text human_bytes cache_size_bytes"
 SED_EXPR=""
 for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
 # shellcheck source=/dev/null

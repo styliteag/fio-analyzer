@@ -17,7 +17,8 @@ FUNCS="fio_size_to_bytes json_escape json_object si_run si_safe_arg si_read_file
 storage_zfs_dataset storage_zpool_layout storage_zfs_props storage_rbd_device storage_ceph_pool
 storage_ceph_info storage_parent_disk storage_disk_driver storage_disk_lsblk storage_disk_info
 storage_virt_info storage_info_json detect_storage storage_size_matches storage_pool_layout_check
-storage_plausibility_checks si_token storage_summary_tokens storage_summary upload_results"
+storage_plausibility_checks si_token storage_summary_tokens storage_summary upload_results
+si_byte_count storage_cache_sizes human_bytes"
 SED_EXPR=""
 for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
 # shellcheck source=/dev/null

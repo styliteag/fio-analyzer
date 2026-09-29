@@ -35,12 +35,12 @@ SOURCE_TABLES = {"newest": "test_runs_all", "history": "test_runs_all", "latest"
 ROW_LIMITS = {"test_runs": MAX_ROWS_PER_TARGET, "test_runs_all": MAX_HISTORY_ROWS_PER_TARGET}
 HIERARCHY_COLUMNS = ("hostname", "protocol", "drive_type", "drive_model")
 KEY_COLUMNS = ("read_write_pattern", "block_size", "sync", "direct", "num_jobs", "iodepth")
-# Strict matching also requires identical test size, runtime, file layout (prefill/fileperjob/satcap tags),
+# Strict matching also requires identical test size, runtime, file layout (prefill/fileperjob/satcap/cachefit tags),
 # client count and fio I/O engine, otherwise e.g. a 256M/5 s smoke test would be compared with a 10G/60 s run,
 # the aggregate of 4 fio clients with a single host, or a libaio run with an io_uring run.
 # A run without a recorded engine (NULL) only matches other runs without one.
 STRICT_FIELDS = ("test_size", "duration", "layout", "clients", "ioengine")
-LAYOUT_TAGS = ("prefill", "fileperjob", "satcap")
+LAYOUT_TAGS = ("prefill", "fileperjob", "satcap", "cachefit")
 METRICS = ("iops", "bandwidth", "avg_latency", "p95_latency", "p99_latency")
 HIGHER_IS_BETTER = frozenset({"iops", "bandwidth"})
 SELECT_COLUMNS = KEY_COLUMNS + METRICS + ("timestamp", "test_size", "duration", "description", "clients", "ioengine")
@@ -293,7 +293,7 @@ def comparison_hint(counts: Dict[str, int], source: str, strict: bool) -> Option
     advice.append("strict=false to compare anyway (differences are listed per row)")
     return (
         f"{counts['strict']} configurations match exactly, {counts['loose']} match when test size, runtime, file layout "
-        f"(prefill/fileperjob/satcap), client count and I/O engine are ignored. Try " + " or ".join(advice) + "."
+        f"(prefill/fileperjob/satcap/cachefit), client count and I/O engine are ignored. Try " + " or ".join(advice) + "."
     )
 
 
@@ -388,7 +388,7 @@ def list_targets(
     description=(
         "Compare 2-10 storage combinations side by side per test configuration "
         "(read_write_pattern, block_size, sync, direct, num_jobs, iodepth and - by default (`strict=true`) - test_size, "
-        "duration, the file layout tags prefill/fileperjob/satcap, the client count and the fio I/O engine (`ioengine`, "
+        "duration, the file layout tags prefill/fileperjob/satcap/cachefit, the client count and the fio I/O engine (`ioengine`, "
         "e.g. libaio vs. io_uring; runs without a recorded engine only match each other), so smoke tests, prefilled runs "
         "or runs with another engine are never mixed with regular runs). The first target is the baseline; "
         "every other target gets `diff_pct` = (value - baseline) / baseline * 100 (1 decimal, null if the baseline "
@@ -427,7 +427,7 @@ def compare_targets(
     strict: bool = Query(
         True,
         description="Only compare identical configurations incl. test_size, duration, file layout tags "
-        "(prefill/fileperjob/satcap), client count and ioengine. strict=false matches on pattern/block size/sync/direct/"
+        "(prefill/fileperjob/satcap/cachefit), client count and ioengine. strict=false matches on pattern/block size/sync/direct/"
         "num_jobs/iodepth only and lists differing fields per row in `mismatch`",
     ),
     user: User = Depends(require_viewer),

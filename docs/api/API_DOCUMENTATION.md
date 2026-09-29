@@ -65,7 +65,7 @@ Every import stores the fio I/O engine as `ioengine` (lower-case): from the fio 
 
 ### Comparison
 - `GET /api/compare/targets?source=latest|history` - All Host-Protocol-Type-Model combinations with test runs, as `target` values
-- `GET /api/compare?target=A&target=B[&target=C…]` - Compare 2–10 targets side by side. By default (`strict=true`) only identical configurations are compared, including test size, duration, the layout tags `prefill`/`fileperjob`/`satcap`, the client count (`clients`) and the fio I/O engine (`ioengine`, e.g. libaio vs. io_uring; runs without a recorded engine only match each other); `strict=false` matches loosely and reports differing fields in `mismatch`. A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted or `*`. The first target is the baseline; every other target gets `diff_pct` per metric (iops, bandwidth, avg/p95/p99 latency) and a `better` flag. Options: `source=latest|history`, `patterns`, `block_sizes`, `syncs`, `include_incomplete`, plus the run filters below
+- `GET /api/compare?target=A&target=B[&target=C…]` - Compare 2–10 targets side by side. By default (`strict=true`) only identical configurations are compared, including test size, duration, the layout tags `prefill`/`fileperjob`/`satcap`/`cachefit`, the client count (`clients`) and the fio I/O engine (`ioengine`, e.g. libaio vs. io_uring; runs without a recorded engine only match each other); `strict=false` matches loosely and reports differing fields in `mismatch`. A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted or `*`. The first target is the baseline; every other target gets `diff_pct` per metric (iops, bandwidth, avg/p95/p99 latency) and a `better` flag. Options: `source=latest|history`, `patterns`, `block_sizes`, `syncs`, `include_incomplete`, plus the run filters below
 
 ### Import Log
 - `GET /api/import-log/runs/{run_uuid}` - Upload attempts per outcome (`imported`, `rejected`, `error`) plus rows stored for the run, and the failed attempts with reasons
@@ -103,7 +103,7 @@ Most endpoints support filtering with these common parameters:
 - `directs` - Direct I/O flags (0=buffered, 1=direct)
 
 ### Run Filters
-- `tags` - Comma-separated description tags that must all be present, e.g. `prefill:1,fileperjob:1` (`/api/test-runs`, `/api/time-series/all`, `/api/time-series/history`). A tag matches a whole element, so `retried:1` finds results that `fio-test.sh` uploaded after one EAGAIN retry (`retried:N` = N retries), not `retried:2`
+- `tags` - Comma-separated description tags that must all be present, e.g. `prefill:1,fileperjob:1` or `cachefit:1` (fio-test.sh: the working set fit into RAM, the ZFS ARC or `STORAGE_CACHE_BYTES`) (`/api/test-runs`, `/api/time-series/all`, `/api/time-series/history`). A tag matches a whole element, so `retried:1` finds results that `fio-test.sh` uploaded after one EAGAIN retry (`retried:N` = N retries), not `retried:2`
 - `since` / `until` - Date (`YYYY-MM-DD`, `until` includes the whole day) or ISO datetime (`/api/test-runs`, `/api/time-series/all`; `/history` uses `start_date`/`end_date`)
 - `run_uuid` - Comma-separated run UUIDs
 
