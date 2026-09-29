@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Multi-client uploads from older fio versions**: fio 3.36 writes no latency percentiles into the "All clients" result, so P95/P99 of client-mode steps (client ramps) were stored as 0. The worst client's percentiles are now stored instead, an upper bound of the combined percentile. Steps imported before this fix keep their stored 0 values.
 
+### Fixed
+- **fio-test.sh descriptions keep dots**: `--description` / `DESCRIPTION` text such as `v1.2` and FQDN hostnames in the `hostname:` tag (e.g. `srv.example.com`) are no longer stripped of their dots. The backend only splits descriptions on `,` and `:`, so tag filters are unaffected.
+
 ## [0.12.1] - 2026-09-28
 
 ### Fixed
