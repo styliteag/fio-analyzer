@@ -38,6 +38,7 @@ class TestRunBase:
     test_size: Optional[str] = None
     sync: Optional[str] = None
     iodepth: Optional[int] = None
+    ioengine: Optional[str] = None
     # Performance metrics
     avg_latency: Optional[float] = None
     bandwidth: Optional[float] = None

@@ -274,7 +274,7 @@ async def get_test_runs(
                    block_size, read_write_pattern, queue_depth, duration,
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-                   output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                   output_file, num_jobs, direct, test_size, sync, iodepth, ioengine, is_latest,
                    avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency,
                    config_uuid, run_uuid, storage_info
             FROM test_runs
@@ -687,7 +687,7 @@ async def get_performance_data(
                        block_size, read_write_pattern, queue_depth, duration,
                        fio_version, job_runtime, rwmixread, total_ios_read,
                        total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-                       uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                       uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, ioengine, is_latest,
                        avg_latency, bandwidth, iops, p95_latency, p99_latency,
                        config_uuid, run_uuid
                 FROM test_runs WHERE id = ?
@@ -718,6 +718,7 @@ async def get_performance_data(
                     "test_size": test_run_data["test_size"],
                     "sync": test_run_data["sync"],
                     "iodepth": test_run_data["iodepth"],
+                    "ioengine": test_run_data["ioengine"],
                     "duration": test_run_data["duration"],
                     "config_uuid": test_run_data["config_uuid"],
                     "run_uuid": test_run_data["run_uuid"],
@@ -1418,7 +1419,7 @@ async def get_test_run(
                    block_size, read_write_pattern, queue_depth, duration,
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-                   output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                   output_file, num_jobs, direct, test_size, sync, iodepth, ioengine, is_latest,
                    avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency,
                    config_uuid, run_uuid, storage_info
             FROM test_runs WHERE id = ?

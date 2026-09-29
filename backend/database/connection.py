@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from config.settings import settings
 from database.client_migration import migrate_clients
 from database.import_log import ensure_import_log_table
+from database.ioengine_migration import migrate_ioengine
 from database.saturation_migration import add_threshold_column
 from database.storage_info_migration import add_storage_info_column
 from database.sync_migration import migrate_sync_to_text
@@ -125,6 +126,8 @@ class DatabaseManager:
                 clients INTEGER DEFAULT 1,
                 ramp_uuid TEXT,
                 client_hosts TEXT,
+                -- fio I/O engine (libaio, io_uring, psync, ...)
+                ioengine TEXT,
                 -- Uniqueness tracking
                 is_latest INTEGER DEFAULT 1
             )
@@ -191,6 +194,8 @@ class DatabaseManager:
                 clients INTEGER DEFAULT 1,
                 ramp_uuid TEXT,
                 client_hosts TEXT,
+                -- fio I/O engine (libaio, io_uring, psync, ...)
+                ioengine TEXT,
                 -- Uniqueness tracking
                 is_latest INTEGER DEFAULT 1,
                 -- Unique constraint
@@ -438,7 +443,8 @@ class DatabaseManager:
                     p99_95_latency REAL,
                     p99_99_latency REAL,
                     config_uuid TEXT,
-                    run_uuid TEXT
+                    run_uuid TEXT,
+                    ioengine TEXT
                 )
             """)
             cursor.execute(
@@ -466,6 +472,9 @@ class DatabaseManager:
 
         # Migration 9: multi-client runs (clients in the latest unique key, ramp_uuid, per-client results)
         migrate_clients(cursor, self._create_views)
+
+        # Migration 10: fio I/O engine per run (strict compare key), backfilled from storage_info/uploads
+        migrate_ioengine(cursor)
 
         self.connection.commit()
 

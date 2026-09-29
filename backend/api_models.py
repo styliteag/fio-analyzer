@@ -88,6 +88,7 @@ class TestRunBase(BaseModel):
     test_size: Optional[str] = Field(None, description="Test data size", example="10G")
     sync: Optional[str] = Field(None, description="fio sync mode: none, sync or dsync", example="sync")
     iodepth: Optional[int] = Field(None, description="I/O depth (same as queue_depth)", example=32, ge=1)
+    ioengine: Optional[str] = Field(None, description="fio I/O engine (null if the upload did not record one)", example="io_uring")
 
     # Performance metrics
     avg_latency: Optional[float] = Field(None, description="Average latency in milliseconds", example=0.256, ge=0)
@@ -189,6 +190,7 @@ class PerformanceDataResponse(BaseModel):
     test_size: Optional[str] = Field(None, description="Test size")
     sync: Optional[str] = Field(None, description="fio sync mode: none, sync or dsync")
     iodepth: Optional[int] = Field(None, description="I/O depth")
+    ioengine: Optional[str] = Field(None, description="fio I/O engine")
     duration: int = Field(..., description="Duration in seconds", example=300)
     metrics: PerformanceMetrics = Field(..., description="Performance metrics")
 

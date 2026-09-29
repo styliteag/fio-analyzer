@@ -286,7 +286,8 @@ define_defaults() {
     CLIENT_SSH="${CLIENT_SSH:-0}"
     CLIENT_SSH_USER="${CLIENT_SSH_USER:-}"
     CLIENT_SSH_BASE_PORT="${CLIENT_SSH_BASE_PORT:-18765}"
-    CLIENT_IOENGINE="${CLIENT_IOENGINE:-libaio}"
+    # Empty = the best engine every client supports (client_choose_ioengine)
+    CLIENT_IOENGINE="${CLIENT_IOENGINE:-}"
     CLIENT_TARGET_IS_DEVICE="${CLIENT_TARGET_IS_DEVICE:-auto}"
     CLIENT_MODE=false
     CLIENT_SSH_PIDS=()
@@ -579,11 +580,13 @@ init_config() {
     validate_advanced_options
 
     # Step 3: Detect I/O engine (before array conversion so psync fallback works).
-    # Client mode: the clients run the jobs with CLIENT_IOENGINE, nothing is detected here.
+    # Client mode: the clients run the jobs with CLIENT_IOENGINE (--engine wins); when neither
+    # is set, client_choose_ioengine picks it from the clients' storage.json after connecting.
     if [ "$CLIENT_MODE" = true ]; then
+        if [ -n "${CLI_IOENGINE:-}" ]; then CLIENT_IOENGINE="$CLI_IOENGINE"; fi
         validate_client_config || exit 1
         STEP_CLIENTS=${RAMP_STEPS[${#RAMP_STEPS[@]} - 1]}
-        IOENGINE="$CLIENT_IOENGINE"
+        IOENGINE="${CLIENT_IOENGINE:-libaio}"
         set_sync_engine_flag
     else
         detect_ioengine
@@ -3082,12 +3085,13 @@ server_write_file() {
     mv -f "$tmp" "$dir/$name"
 }
 
-# Write the published files into <state dir>/info: storage.json and hostname.txt only
+# Write the published files into <state dir>/info: storage.json and hostname.txt only.
+# Without storage detection (STORAGE_DETECT=0) storage.json still names the I/O engine.
 server_write_info() {
     local dir="$1/info" info=${STORAGE_INFO:-} name
     if [ -L "$dir" ]; then return 1; fi
     mkdir -p "$dir" || return 1
-    if [ -z "$info" ]; then info='{}'; fi
+    if [ -z "$info" ]; then info=$(json_object ioengine "${IOENGINE:-}"); fi
     name=$(hostname -s 2>/dev/null || hostname 2>/dev/null)
     name=${name//[^A-Za-z0-9._-]/}
     server_write_file "$dir" storage.json "$info" || return 1
@@ -3247,6 +3251,8 @@ run_server_mode() {
         print_warning "TARGET_DIR '$TARGET_DIR' is relative - the controller needs an absolute path (same on every client)"
     fi
     setup_target_dir
+    # Published in storage.json: the controller picks the engine every client supports
+    detect_ioengine
     detect_storage
     server_write_info "$SERVER_STATE_DIR" || { print_error "Cannot write $SERVER_STATE_DIR/info"; exit 1; }
 
@@ -3396,7 +3402,8 @@ validate_client_config() {
         print_error "In client mode TARGET_DIR must be an absolute path on the clients (got '$TARGET_DIR')"
         return 1
     fi
-    if ! [[ "$CLIENT_IOENGINE" =~ ^[A-Za-z0-9_.:-]+$ ]] || [[ "$CLIENT_IOENGINE" == external* ]]; then
+    # Empty = chosen from the clients' storage.json (client_choose_ioengine)
+    if [ -n "$CLIENT_IOENGINE" ] && { ! [[ "$CLIENT_IOENGINE" =~ ^[A-Za-z0-9_.:-]+$ ]] || [[ "$CLIENT_IOENGINE" == external* ]]; }; then
         print_error "Invalid CLIENT_IOENGINE '$CLIENT_IOENGINE'"
         return 1
     fi
@@ -3553,6 +3560,56 @@ client_fetch_info() {
         CLIENT_NAME+=("${name:-${CLIENT_ADDR[$i]}}")
         CLIENT_STORAGE+=("$info")
     done
+}
+
+# Rank of an engine for client_choose_ioengine (higher = faster); 0 = not one of the three
+client_ioengine_rank() {
+    case "$1" in
+        io_uring) echo 3 ;;
+        libaio) echo 2 ;;
+        psync) echo 1 ;;
+        *) echo 0 ;;
+    esac
+}
+
+# Set CLIENT_IOENGINE/IOENGINE/IS_SYNC_ENGINE for client mode (after client_fetch_info).
+# CLIENT_IOENGINE or --engine set: used as is. Otherwise the best engine that EVERY client
+# supports (io_uring > libaio > psync), from the ioengine each client's --server publishes in
+# storage.json; libaio (the former default) when a client publishes none or another engine.
+client_choose_ioengine() {
+    local i n=${#CLIENT_STORAGE[@]} engine rank best=3 unknown=()
+    local names=("" psync libaio io_uring)
+    if [ -n "$CLIENT_IOENGINE" ]; then
+        IOENGINE=$CLIENT_IOENGINE
+        set_sync_engine_flag
+        print_status "Client I/O engine: $CLIENT_IOENGINE (set by CLIENT_IOENGINE or --engine)"
+        return 0
+    fi
+    for ((i = 0; i < n; i++)); do
+        engine=$(jq -r 'if (.ioengine | type) == "string" then .ioengine else "" end' \
+            <<< "${CLIENT_STORAGE[$i]:-}" 2>/dev/null)
+        engine=${engine//[^A-Za-z0-9_.:-]/}
+        rank=$(client_ioengine_rank "$engine")
+        if [ "$rank" -eq 0 ]; then
+            unknown+=("${CLIENT_ENTRY[$i]}${engine:+ ($engine)}")
+        elif [ "$rank" -lt "$best" ]; then
+            best=$rank
+        fi
+    done
+    if [ "$n" -eq 0 ] || [ "${#unknown[@]}" -gt 0 ]; then
+        CLIENT_IOENGINE=libaio
+        print_warning "Client I/O engine: libaio (no usable ioengine in storage.json of: ${unknown[*]:-all clients})"
+        print_warning "  Run fio-test.sh --server of this version on the clients or set CLIENT_IOENGINE"
+    else
+        CLIENT_IOENGINE=${names[$best]}
+        print_status "Client I/O engine: $CLIENT_IOENGINE (best engine supported by all ${n} clients)"
+    fi
+    IOENGINE=$CLIENT_IOENGINE
+    set_sync_engine_flag
+    if [ "$IS_SYNC_ENGINE" = true ]; then
+        IODEPTH=(1)
+        print_warning "psync is synchronous - using iodepth=1"
+    fi
 }
 
 # Comma-separated names of the first <n> clients (client_hosts upload field)
@@ -4287,6 +4344,8 @@ main() {
         print_client_security_warning
         client_setup_connections || exit 1
         client_fetch_info
+        # Before show_config and before any job file is written
+        client_choose_ioengine
     else
         # Setup target (detect device vs directory mode)
         setup_target_dir
@@ -4653,8 +4712,10 @@ RUNTIME="60"
 #                                # for servers bound to 127.0.0.1, nothing open on the network
 # CLIENT_SSH_USER=root           # SSH user for the tunnels (default: ssh config / current user)
 # CLIENT_SSH_BASE_PORT=18765     # Local tunnel ports from here (2 per client)
-# CLIENT_IOENGINE=libaio         # I/O engine on the clients (io_uring faster when enabled,
-#                                # psync for non-Linux clients)
+# CLIENT_IOENGINE=libaio         # I/O engine on the clients. Unset = the best engine ALL
+#                                # clients support (io_uring > libaio > psync, published by
+#                                # their --server), libaio if a client publishes none
+#                                # (--engine on the controller also sets it)
 # CLIENT_TARGET_IS_DEVICE=auto   # TARGET_DIR is a path ON THE CLIENTS (absolute, same on all);
 #                                # auto = block device when it starts with /dev/, 0/1 = force.
 #                                # e.g. TARGET_DIR=/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1
@@ -4738,6 +4799,7 @@ General Options:
   -e, --env-file FILE    Specify a custom .env file path (can be used multiple times)
                          Files are loaded in order; later files override earlier ones.
   -i, --engine ENGINE    I/O engine (io_uring, libaio, psync). Default: auto-detect
+                         (client mode: engine of the clients, overrides CLIENT_IOENGINE)
 
 Host Metadata Options:
   --hostname NAME        Server hostname (default: current hostname)
@@ -4807,8 +4869,9 @@ Advanced Settings (.env / environment only, all off by default):
 
 Server Mode (this host runs fio jobs for a controller):
   --server               Start 'fio --server' on FIO_SERVER_BIND:FIO_SERVER_PORT and publish
-                         this host's storage detection for TARGET_DIR (storage.json,
-                         hostname.txt) read-only on FIO_SERVER_BIND:FIO_SERVER_INFO_PORT
+                         this host's storage detection for TARGET_DIR and I/O engine
+                         (IOENGINE / --engine, else auto-detected) as storage.json, plus
+                         hostname.txt, read-only on FIO_SERVER_BIND:FIO_SERVER_INFO_PORT
                          (python3 -m http.server; skipped with a warning without python3).
                          Runs in the foreground until Ctrl-C, --server-stop or FIO_SERVER_TIMEOUT.
   --server-stop          Stop the server recorded in the state directory (only its own PIDs)
@@ -4849,8 +4912,10 @@ Client Mode (this host is the controller; active when CLIENTS is set):
                          CLIENT_SSH_BASE_PORT (default: 18765, 2 ports per client). Use it
                          with servers bound to 127.0.0.1 (no open port on the network)
   CLIENT_SSH_USER=USER   SSH user for the tunnels (default: current user / ssh config)
-  CLIENT_IOENGINE=ENG    I/O engine used on the clients (default: libaio; io_uring is faster
-                         but often disabled; psync for non-Linux clients)
+  CLIENT_IOENGINE=ENG    I/O engine used on the clients (-i/--engine also sets it). Unset: the
+                         best engine supported by ALL clients (io_uring > libaio > psync, as
+                         detected and published by their --server); libaio when a client
+                         publishes none (older --server)
   CLIENT_TARGET_IS_DEVICE=auto|0|1
                          TARGET_DIR is a path ON THE CLIENTS (same everywhere, absolute; not
                          created or checked locally). auto = block device when it starts
