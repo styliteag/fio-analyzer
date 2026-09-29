@@ -373,8 +373,8 @@ build_description() {
 
     DESCRIPTION="${prefix:+${prefix},}hostname:${HOSTNAME},protocol:${PROTOCOL},drivetype:${DRIVE_TYPE},drivemodel:${DRIVE_MODEL},config_uuid:${CONFIG_UUID},run_uuid:${RUN_UUID},date:$(date -u +%Y-%m-%dT%H:%M:%SZ)${tags}"
 
-    # Sanitize: spaces to underscores, remove special chars
-    DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_,;:]//g')
+    # Sanitize: spaces to underscores, remove special chars (dots stay: versions, FQDNs)
+    DESCRIPTION=$(echo "$DESCRIPTION" | sed 's/ /_/g' | sed 's/[^-a-zA-Z0-9_.,;:]//g')
 }
 
 # Validate saturation-specific configuration

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - 
 
+### Fixed
+- **fio-test.sh descriptions keep dots**: `--description` / `DESCRIPTION` text such as `v1.2` and FQDN hostnames in the `hostname:` tag (e.g. `srv.example.com`) are no longer stripped of their dots. The backend only splits descriptions on `,` and `:`, so tag filters are unaffected.
+
 ## [0.12.1] - 2026-09-28
 
 ### Fixed
