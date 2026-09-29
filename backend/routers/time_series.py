@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from auth.middleware import User, require_admin, require_viewer
 from database.connection import get_db
 from database.models import TrendData
+from database.run_deletion import delete_orphan_client_results
 from utils.logging import log_error, log_info
 from utils.run_filters import build_run_filters
 from utils.sync_mode import parse_sync_filter
@@ -1427,6 +1428,7 @@ async def delete_time_series(
         # Delete from test_runs_all
         cursor.execute(f"DELETE FROM test_runs_all WHERE id IN ({placeholders})", int_test_run_ids)
         deleted = cursor.rowcount
+        delete_orphan_client_results(cursor)
         not_found = len(test_run_ids) - deleted
 
         db.commit()
@@ -1447,6 +1449,7 @@ async def delete_time_series(
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         log_error("Error during time-series delete", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to delete time-series test runs")
 
@@ -1641,6 +1644,7 @@ async def execute_history_cleanup(
         else:
             raise HTTPException(status_code=400, detail="Invalid mode")
 
+        delete_orphan_client_results(cursor)
         db.commit()
 
         log_info(

@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- 
+### Fixed
+- **Admin deletes removed unrelated history rows** (since the FastAPI migration, 2025-07-18): `DELETE /api/test-runs/{id}` (Admin → run/config groups) deleted the `test_runs` row and then the `test_runs_all` row with the same number. The two tables number their rows independently, so this erased an unrelated, usually much older history row and left the run's own history row in place. The endpoint now deletes the matching history row, found by timestamp, `run_uuid` and configuration, and returns 404 for ids that are not in `test_runs`. History rows removed by earlier Admin deletes cannot be restored from the database; re-import their JSON files from `uploads/` if they still exist.
+- **Deleting a whole run**: new `DELETE /api/test-runs/by-run-uuid?run_uuid=…` removes a run from `test_runs`, `test_runs_all` and `client_results`, also results that newer uploads already replaced (these never showed up in the Admin run groups). The Admin run groups use it for "delete run". The Admin History tab shows a "Delete Run" button when the search matches the rows of exactly one run (search for the `run_uuid`).
+- **Per-client results left behind**: deleting history rows (`DELETE /api/time-series/delete`, history cleanup and compaction) left their `client_results` rows in the database. They are now removed with the history rows.
+- **Admin bulk delete reported failures as success**: a rejected delete (e.g. HTTP 404) counted as deleted.
 
 ## [0.13.0] - 2026-09-29
 

@@ -14,6 +14,7 @@ export {
     bulkUpdateTestRuns,
     deleteTestRun,
     deleteTestRuns,
+    deleteTestRunsByRunUuid,
     fetchFilters,
     convertActiveFiltersToOptions,
     extractTestRuns,

@@ -1,7 +1,7 @@
 // Bulk edit / delete of all test runs sharing a config_uuid or run_uuid
 import { useCallback, useState } from 'react';
 import type { UseUUIDGroupedRunsReturn } from '../../../hooks/api/useUUIDGroupedRuns';
-import { bulkUpdateTestRunsByUUID, deleteTestRuns } from '../../../services/api/testRuns';
+import { bulkUpdateTestRunsByUUID, deleteTestRuns, deleteTestRunsByRunUuid } from '../../../services/api/testRuns';
 import { useToast } from '../../../contexts/ToastContext';
 import { EMPTY_ENABLED_FIELDS, type UUIDDeleteState, type UUIDEditState, type UUIDType } from '../types';
 import { collectEnabledUpdates, commonEditableFields, fetchRunsByIds, plural } from '../utils';
@@ -95,12 +95,21 @@ export const useUUIDEdits = ({ configGroups, runGroups, groups }: Options) => {
             return;
         }
         try {
-            const result = await deleteTestRuns(group.test_run_ids);
-            if (result.failed > 0) {
-                throw new Error(`Failed to delete ${result.failed} of ${result.total} test runs`);
+            if (uuidType === 'run_uuid') {
+                // Whole run: also its history rows that newer uploads already replaced
+                const result = await deleteTestRunsByRunUuid(uuid);
+                if (result.error || !result.data) throw new Error(result.error);
+                closeDelete();
+                const { test_runs, test_runs_all } = result.data.deleted;
+                toast.success(`Deleted run: ${test_runs} latest and ${test_runs_all} history row${plural(test_runs_all)}`);
+            } else {
+                const result = await deleteTestRuns(group.test_run_ids);
+                if (result.failed > 0) {
+                    throw new Error(`Failed to delete ${result.failed} of ${result.total} test runs`);
+                }
+                closeDelete();
+                toast.success(`Deleted ${group.test_run_ids.length} test run${plural(group.test_run_ids.length)}`);
             }
-            closeDelete();
-            toast.success(`Deleted ${group.test_run_ids.length} test run${plural(group.test_run_ids.length)}`);
             groups.clearCache();
             refreshGroups(uuidType);
         } catch {

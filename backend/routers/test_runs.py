@@ -19,6 +19,7 @@ from fastapi import (
 from auth.middleware import User, require_admin, require_viewer
 from database.connection import get_db
 from database.models import BulkUpdateRequest
+from database.run_deletion import delete_latest_run, delete_run_uuid
 from routers.saturation import stored_threshold
 from utils.logging import log_error, log_info
 from utils.run_filters import build_run_filters
@@ -1616,14 +1617,70 @@ async def update_test_run(
 
 
 @router.delete(
+    "/by-run-uuid",
+    summary="Delete Test Runs by run_uuid",
+    description="Permanently delete every result of one script run: latest rows, history rows "
+    "(also results that newer uploads already replaced) and per-client results. Saturation runs "
+    "are deleted with DELETE /saturation-runs/by-uuid.",
+    responses={
+        200: {
+            "description": "Run deleted",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Deleted run 550e8400-e29b-41d4-a716-446655440000",
+                        "run_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                        "deleted": {"test_runs": 6, "test_runs_all": 18, "client_results": 93},
+                    }
+                }
+            },
+        },
+        401: {"description": "Authentication required"},
+        403: {"description": "Admin access required"},
+        404: {"description": "No test runs with this run_uuid"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def delete_test_runs_by_run_uuid(
+    request: Request,
+    run_uuid: str = Query(..., min_length=1, max_length=128, description="Delete all test runs with this run_uuid"),
+    user: User = Depends(require_admin),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    request_id = getattr(request.state, "request_id", "unknown")
+    try:
+        deleted = delete_run_uuid(db.cursor(), run_uuid)
+        if deleted["test_runs"] == 0 and deleted["test_runs_all"] == 0:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="No test runs with this run_uuid")
+        db.commit()
+        log_info("Test runs deleted by run_uuid", {"request_id": request_id, "user": user.username, "run_uuid": run_uuid, "deleted": deleted})
+        return {"message": f"Deleted run {run_uuid}", "run_uuid": run_uuid, "deleted": deleted}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        log_error("Error deleting test runs by run_uuid", e, {"request_id": request_id})
+        raise HTTPException(status_code=500, detail="Failed to delete test runs")
+
+
+@router.delete(
     "/{test_run_id}",
     summary="Delete Test Run",
-    description="Permanently delete a test run and all associated data",
+    description="Permanently delete a latest test run (test_runs id) together with its own history row "
+    "and per-client results. Older history rows of the same configuration are kept.",
     response_description="Deletion confirmation",
     responses={
         200: {
             "description": "Test run deleted successfully",
-            "content": {"application/json": {"example": {"message": "Test run deleted successfully"}}},
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Test run deleted successfully",
+                        "deleted": {"test_runs": 1, "test_runs_all": 1, "client_results": 0},
+                    }
+                }
+            },
         },
         401: {"description": "Authentication required"},
         403: {"description": "Admin access required"},
@@ -1638,49 +1695,34 @@ async def delete_test_run(
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
-    Permanently delete a test run and all associated data.
+    Permanently delete a latest test run with its history row and per-client results.
 
-    This operation removes the test run from both the latest test runs table
-    and the historical data table. This action cannot be undone.
+    The id is a test_runs id. The history row is matched by content (timestamp, run_uuid and
+    configuration), because test_runs_all numbers its rows independently.
 
     **Authentication Required:** Admin access
 
     **Warning:** This is a permanent operation that cannot be reversed.
-    Consider exporting important data before deletion.
     """
     request_id = getattr(request.state, "request_id", "unknown")
 
     try:
-        cursor = db.cursor()
-
-        # Delete from both tables
-        cursor.execute("DELETE FROM test_runs WHERE id = ?", (test_run_id,))
-        latest_deleted = cursor.rowcount
-
-        cursor.execute("DELETE FROM test_runs_all WHERE id = ?", (test_run_id,))
-        all_deleted = cursor.rowcount
-
-        db.commit()
-
-        if latest_deleted == 0 and all_deleted == 0:
+        deleted = delete_latest_run(db.cursor(), test_run_id)
+        if deleted is None:
             raise HTTPException(status_code=404, detail="Test run not found")
+        db.commit()
 
         log_info(
             "Test run deleted successfully",
-            {
-                "request_id": request_id,
-                "user": user.username,
-                "test_run_id": test_run_id,
-                "latest_deleted": latest_deleted,
-                "all_deleted": all_deleted,
-            },
+            {"request_id": request_id, "user": user.username, "test_run_id": test_run_id, "deleted": deleted},
         )
 
-        return {"message": "Test run deleted successfully"}
+        return {"message": "Test run deleted successfully", "deleted": deleted}
 
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         log_error("Error deleting test run", e, {"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to delete test run")
 

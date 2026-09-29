@@ -250,14 +250,28 @@ export const deleteTestRuns = async (ids: number[], abortSignal?: AbortSignal) =
         ids.map(id => deleteTestRun(id, abortSignal))
     );
     
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
-    
+    // apiCall reports HTTP errors in the result instead of rejecting
+    const successful = results.filter(r => r.status === 'fulfilled' && !r.value.error).length;
+
     return {
         successful,
-        failed,
+        failed: ids.length - successful,
         total: ids.length,
     };
+};
+
+export interface RunDeleteCounts {
+    readonly test_runs: number;
+    readonly test_runs_all: number;
+    readonly client_results: number;
+}
+
+// Delete every latest and history row of one script run (run_uuid), with its per-client results
+export const deleteTestRunsByRunUuid = async (runUuid: string, abortSignal?: AbortSignal) => {
+    return apiCall<{ message: string; run_uuid: string; deleted: RunDeleteCounts }>(
+        `/api/test-runs/by-run-uuid?run_uuid=${encodeURIComponent(runUuid)}`,
+        { method: "DELETE", signal: abortSignal },
+    );
 };
 
 // Fetch filter options for UI

@@ -121,6 +121,12 @@
       "summary": "Bulk Update Test Runs by UUID"
     },
     {
+      "method": "DELETE",
+      "path": "/api/test-runs/by-run-uuid",
+      "auth": "admin",
+      "summary": "Delete Test Runs by run_uuid"
+    },
+    {
       "method": "GET",
       "path": "/api/test-runs/grouped-by-uuid",
       "auth": "none",

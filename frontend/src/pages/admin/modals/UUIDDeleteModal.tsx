@@ -14,7 +14,11 @@ export const UUIDDeleteModal: React.FC<{ readonly edits: UUIDEdits }> = ({ edits
                 onConfirm={submitDelete}
                 onCancel={closeDelete}
             >
-                You are about to delete {state.count} test run{plural(state.count)}. This action cannot be undone.
+                You are about to delete {state.count} test run{plural(state.count)}
+                {state.uuidType === 'run_uuid'
+                    ? ' and every history row of this run, including results that newer uploads replaced'
+                    : ' and their own history rows'}
+                . This action cannot be undone.
             </DeleteWarning>
         </Modal>
     );
