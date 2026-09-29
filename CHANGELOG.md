@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **fio-test.sh saturation mode with fio clients**: `--saturation` / `SATURATION_MODE` now works together with `CLIENTS` (controller mode). Every saturation step runs on all clients at once through `fio --client`; the existing escalation loop is reused, only the "run one step" part is swapped. iodepth, numjobs, `MAX_TOTAL_QD` and `SAT_MAX_TOTAL_SIZE` apply per client. The P95 threshold is checked on fio's "All clients" result (older fio versions without percentiles there, e.g. 3.36: the worst client's P95), and each client's P95 is printed per step. Uploads carry the saturation fields (`latency_threshold_ms`, `saturation-test` description) and the client fields (`clients`, `client_hosts`, `client_storage_info`, `clients:N` tag). A step with a missing or failed client counts as a failed step and is not uploaded. `PREFILL` writes the data files on the clients once per file size and removes them at the end. `RAMP_CLIENTS` cannot be combined with saturation mode (clear error).
+- **Saturation runs keep their client count**: `saturation_runs` gets `clients` (default 1) and `client_hosts` (added on startup). `GET /api/saturation/runs/{run_uuid}/summary` groups by `clients` as well and returns it per pattern, so a multi-client run is never merged with single-host steps of the same `run_uuid`; `saturation-runs` and `saturation-data` return `clients` too. The Saturation page and the saturation comparison label multi-client runs ("4 clients").
+
+### Fixed
+- **Multi-client uploads from older fio versions**: fio 3.36 writes no latency percentiles into the "All clients" result, so P95/P99 of such steps were stored as 0. The worst client's percentiles are now stored instead (affects client ramps as well).
 
 ## [0.12.1] - 2026-09-28
 

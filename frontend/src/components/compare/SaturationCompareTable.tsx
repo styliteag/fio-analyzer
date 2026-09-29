@@ -1,5 +1,6 @@
 // Saturation points of several runs side by side: rows = pattern (+ block size / sync), columns = runs
 import type { SaturationPatternSummary, SaturationRun, SaturationSummaryStep } from '../../services/api/testRuns';
+import { formatClientCount } from '../../utils/clientCount';
 import { formatSyncMode } from '../../utils/syncMode';
 import { compareBlockSizes } from './compareUtils';
 import type { RunSummary } from './useCompareData';
@@ -32,7 +33,10 @@ const formatBest = (step: SaturationSummaryStep): string => {
     return `QD ${step.total_qd} · ${iops} IOPS · P95 ${p95} ms`;
 };
 
-const runHeading = (run: SaturationRun): string => `${run.hostname} · ${run.drive_model}`;
+const runHeading = (run: SaturationRun): string => {
+    const clients = formatClientCount(run.clients);
+    return `${run.hostname} · ${run.drive_model}${clients ? ` · ${clients}` : ''}`;
+};
 
 const SaturationCompareTable: React.FC<SaturationCompareTableProps> = ({ runs, summaries }) => {
     const keys = collectKeys(runs.map((run) => summaries[run.run_uuid]).filter(Boolean));
