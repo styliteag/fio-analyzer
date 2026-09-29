@@ -3871,6 +3871,8 @@ client_fio_args() {
 # Host name as sent by a client: [A-Za-z0-9._-] only, at most 64 characters
 client_sanitize_name() {
     local v=${1//[^A-Za-z0-9._-]/}
+    # No leading "-": the name is passed to jq after --args, which still parses options there
+    while [[ "$v" == -* ]]; do v=${v#-}; done
     printf '%s' "${v:0:64}"
 }
 
@@ -3959,21 +3961,23 @@ client_hosts_list() {
 }
 
 # client_storage_info upload field for the first <n> clients:
-# {"<host>:<port>": {<storage.json>..., "client_name": "<CLIENTS entry>"}, ...}
+# {"<host>:<port>": {<storage.json>..., "client_name": "<name as in client_hosts>",
+#  "client_entry": "<CLIENTS entry>"}, ...}
 # Kept below 120000 bytes (one command-line argument of curl; Linux allows 128 KiB):
 # drops virt, ceph, disk, then zfs details, then keeps only fs_type.
 client_storage_info_json() {
     local n=$1 out part
     out=$(printf '%s\n' "${CLIENT_STORAGE[@]:0:$n}" | jq -c -s --args '
-        . as $v | ($v | length) as $n
-        | reduce range(0; $n) as $i ({}; . + {($ARGS.positional[$i]): ($v[$i] + {client_name: $ARGS.positional[$i + $n]})})' \
-        "${CLIENT_KEY[@]:0:$n}" "${CLIENT_ENTRY[@]:0:$n}") || out='{}'
+        . as $v | ($v | length) as $n | $ARGS.positional as $p
+        | reduce range(0; $n) as $i ({};
+            . + {($p[$i]): ($v[$i] + {client_name: $p[$i + $n], client_entry: $p[$i + 2 * $n]})})' \
+        "${CLIENT_KEY[@]:0:$n}" "${CLIENT_NAME[@]:0:$n}" "${CLIENT_ENTRY[@]:0:$n}") || out='{}'
     for part in virt ceph disk zfs; do
         [ "$(LC_ALL=C; echo "${#out}")" -gt 120000 ] || break
         out=$(jq -c --arg p "$part" 'map_values(del(.[$p]))' <<< "$out")
     done
     if [ "$(LC_ALL=C; echo "${#out}")" -gt 120000 ]; then
-        out=$(jq -c 'map_values({client_name, fs_type})' <<< "$out")
+        out=$(jq -c 'map_values({client_name, client_entry, fs_type})' <<< "$out")
     fi
     echo "$out"
 }

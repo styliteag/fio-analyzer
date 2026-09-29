@@ -31,12 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **fio-test.sh rejects misspelled options** (#6): an unknown option (e.g. `--saturaton`) or a stray argument stops the script with an error that names it, instead of being ignored silently. `-h`/`-u`/`-g` placed after other options get a hint that they must come first.
 - **Saturation mode with `DIRECT`/`TEST_SIZE`/`RUNTIME` lists** (#6): such lists reached the upload unparsed (e.g. `direct=1,0`) and the import failed with a `ValueError`. Saturation mode now stops at startup with a clear error, since a saturation run uses one value (`SAT_SYNC`/`SYNC` lists still give one run per sync mode). The import answers malformed whole-number fio options (`direct`, `iodepth`, `numjobs`, `runtime`) with HTTP 400 and the option name instead of an internal error.
-- **Multi-client uploads from older fio versions**: fio 3.36 writes no latency percentiles into the "All clients" result, so P95/P99 of such steps were stored as 0. The worst client's percentiles are now stored instead (affects client ramps as well).
-
-### Fixed
 - **Multi-client uploads from older fio versions**: fio 3.36 writes no latency percentiles into the "All clients" result, so P95/P99 of client-mode steps (client ramps) were stored as 0. The worst client's percentiles are now stored instead, an upper bound of the combined percentile. Steps imported before this fix keep their stored 0 values.
-
-### Fixed
+- **History page mixed client counts**: the steps of a client ramp (1, 2, 4 … clients) with the same pattern, block size and queue depth were drawn as one zig-zag line. `GET /api/time-series/history` now returns `num_jobs` and `clients`, and the History page keeps configurations with more than one job or client apart ("randread · 4K · QD16 · 10 clients"). Series of single-job local runs keep their names, so saved links still work.
+- **Client names in client ramps**: fio-test.sh put the `CLIENTS` entry (e.g. the IP) into each client's `client_name`, while `client_hosts` held the name from the client's `hostname.txt`, so ramp charts showed IPs and the step table showed hostnames. `client_name` now holds the same name as `client_hosts`; the `CLIENTS` entry moves to the new `client_entry` field. Runs uploaded before this fix keep showing the IPs. Leading dashes are stripped from a client's `hostname.txt` name, so it can never be read as a jq option.
 - **fio-test.sh descriptions keep dots**: `--description` / `DESCRIPTION` text such as `v1.2` and FQDN hostnames in the `hostname:` tag (e.g. `srv.example.com`) are no longer stripped of their dots. The backend only splits descriptions on `,` and `:`, so tag filters are unaffected.
 
 ## [0.12.1] - 2026-09-28

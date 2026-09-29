@@ -34,23 +34,37 @@ export interface HistoryRow {
     readonly block_size: string;
     readonly read_write_pattern: string;
     readonly queue_depth: number;
+    readonly num_jobs?: number | null;
+    readonly clients?: number | null;
     readonly [metric: string]: string | number | null | undefined;
 }
 
 const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#84cc16', '#f97316', '#6366f1'];
 
-export const configKey = (row: HistoryRow): string => `${row.read_write_pattern}|${row.block_size}|${row.queue_depth}`;
+// Jobs and clients join the key only when above 1, so keys of single-job local runs stay unchanged
+export const configKey = (row: HistoryRow): string => {
+    const base = `${row.read_write_pattern}|${row.block_size}|${row.queue_depth}`;
+    const jobs = (row.num_jobs ?? 1) > 1 ? `|j${row.num_jobs}` : '';
+    const clients = (row.clients ?? 1) > 1 ? `|c${row.clients}` : '';
+    return `${base}${jobs}${clients}`;
+};
+
+const formatKeyExtra = (part: string): string => {
+    if (part.startsWith('j')) return `${part.slice(1)} jobs`;
+    if (part.startsWith('c')) return `${part.slice(1)} clients`;
+    return part;
+};
 
 export const formatConfigKey = (key: string): string => {
-    const [pattern, blockSize, queueDepth] = key.split('|');
-    return `${pattern} · ${blockSize} · QD${queueDepth}`;
+    const [pattern, blockSize, queueDepth, ...extra] = key.split('|');
+    return [`${pattern}`, blockSize, `QD${queueDepth}`, ...extra.map(formatKeyExtra)].join(' · ');
 };
 
 const metricInfo = (metric: string): HistoryMetric =>
     HISTORY_METRICS.find((item) => item.value === metric) ?? { value: metric, label: metric, unit: '' };
 
 export const uniqueConfigKeys = (rows: readonly HistoryRow[]): string[] =>
-    [...new Set(rows.map(configKey))].sort();
+    [...new Set(rows.map(configKey))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
 export const buildHistoryChartData = (
     rows: readonly HistoryRow[],

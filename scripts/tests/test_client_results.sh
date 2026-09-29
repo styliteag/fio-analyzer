@@ -91,6 +91,8 @@ check "curl uses --max-time 5" 6 "$(grep -c -- '--max-time 5' "$TMP/curl_calls")
 check "name from hostname.txt" node-a "${CLIENT_NAME[0]}"
 check "hostile hostname.txt sanitized" "nodebid" "${CLIENT_NAME[1]}"
 check "unreachable client: address as name" 10.0.0.3 "${CLIENT_NAME[2]}"
+check "leading dashes stripped (no jq option)" "rawfile" "$(client_sanitize_name '--rawfile')"
+check "only dashes -> empty" "" "$(client_sanitize_name '---')"
 check "storage.json kept" '{"fs_type":"zfs","zfs":{"dataset":"tank/fio","sync":"disabled"}}' "${CLIENT_STORAGE[0]}"
 check "invalid storage.json -> {}" "{}" "${CLIENT_STORAGE[1]}"
 check "missing storage.json -> {}" "{}" "${CLIENT_STORAGE[2]}"
@@ -102,7 +104,9 @@ check "client_hosts for 3 clients" "node-a,nodebid,10.0.0.3" "$(client_hosts_lis
 csi=$(client_storage_info_json 3)
 check "client_storage_info is valid JSON" dict "$(pyget "$csi" 'type(o).__name__')"
 check "keys are host:port as passed to fio" "10.0.0.1:8765,10.0.0.2:8765,10.0.0.3:9000" "$(pyget "$csi" '",".join(o)')"
-check "client_name holds the CLIENTS entry" "10.0.0.3:9000" "$(pyget "$csi" 'o["10.0.0.3:9000"]["client_name"]')"
+check "client_name matches client_hosts" node-a "$(pyget "$csi" 'o["10.0.0.1:8765"]["client_name"]')"
+check "client_name falls back to the address" 10.0.0.3 "$(pyget "$csi" 'o["10.0.0.3:9000"]["client_name"]')"
+check "client_entry holds the CLIENTS entry" "10.0.0.3:9000" "$(pyget "$csi" 'o["10.0.0.3:9000"]["client_entry"]')"
 check "storage info kept per client" disabled "$(pyget "$csi" 'o["10.0.0.1:8765"]["zfs"]["sync"]')"
 check "only active clients" 1 "$(pyget "$(client_storage_info_json 1)" 'len(o)')"
 
@@ -113,7 +117,8 @@ csi=$(client_storage_info_json 3)
 check "oversized: still valid JSON" dict "$(pyget "$csi" 'type(o).__name__')"
 check "oversized: at most 256 KiB" 1 "$(pyget "$csi" 'int(len(json.dumps(o)) <= 262144)')"
 check "oversized: fs_type kept" xfs "$(pyget "$csi" 'o["10.0.0.1:8765"]["fs_type"]')"
-check "oversized: client_name kept" 10.0.0.1 "$(pyget "$csi" 'o["10.0.0.1:8765"]["client_name"]')"
+check "oversized: client_name kept" node-a "$(pyget "$csi" 'o["10.0.0.1:8765"]["client_name"]')"
+check "oversized: client_entry kept" 10.0.0.1 "$(pyget "$csi" 'o["10.0.0.1:8765"]["client_entry"]')"
 
 # --- description tags ----------------------------------------------------------------------------
 HOSTNAME=px1-vms PROTOCOL=local DRIVE_TYPE=vm-ssd DRIVE_MODEL=m CONFIG_UUID=c RUN_UUID=r

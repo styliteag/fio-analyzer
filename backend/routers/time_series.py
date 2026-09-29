@@ -632,6 +632,8 @@ async def get_latest_time_series(
                             "p90_latency": 0.448,
                             "p95_latency": 0.512,
                             "p99_latency": 1.024,
+                            "num_jobs": 1,
+                            "clients": 1,
                         }
                     ]
                 }
@@ -857,7 +859,7 @@ async def get_historical_time_series(
                 id, timestamp, hostname, protocol, drive_model, drive_type,
                 block_size, read_write_pattern, queue_depth,
                 iops, avg_latency, bandwidth, p70_latency, p90_latency, p95_latency, p99_latency,
-                config_uuid, run_uuid
+                config_uuid, run_uuid, num_jobs, clients
             FROM test_runs_all
             WHERE {where_clause}
             ORDER BY timestamp DESC
@@ -887,6 +889,8 @@ async def get_historical_time_series(
                 "p99_latency": row[15],
                 "config_uuid": row[16],
                 "run_uuid": row[17],
+                "num_jobs": row[18],
+                "clients": row[19] or 1,
             }
 
             # If metric_type is specified, filter results to only include records with that metric value

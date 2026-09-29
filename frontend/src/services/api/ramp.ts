@@ -134,7 +134,7 @@ export const isRampStepComplete = (step: RampStep): boolean => {
     return step.clients_detail.length === 0 || step.clients_detail.length === (step.clients || 1);
 };
 
-/** Display name of a client: the name from CLIENTS, else its fio address */
+/** Display name of a client: its hostname.txt name (as in client_hosts), else its fio address */
 export const rampClientLabel = (client: RampClientResult): string => {
     if (client.client_name) return client.client_name;
     if (client.client_host) return client.client_port ? `${client.client_host}:${client.client_port}` : client.client_host;
