@@ -38,7 +38,9 @@ Authenticated users without the required role get HTTP 403; missing or invalid c
 - `POST /api/import/` - Import FIO test data from JSON file
 - `POST /api/import/bulk` - Bulk import from server directory
 
-Multi-client runs (`fio --client=… job.fio`, sent by `fio-test.sh` in controller mode) are detected from fio's `client_stats`: the step is stored once with the metrics of fio's "All clients" result and `clients` = number of clients, plus one row per client. Optional form fields: `ramp_uuid` (≤ 64 chars, groups the client-count steps of one test configuration), `client_hosts` (comma list of client names) and `client_storage_info` (JSON object `"host:port"` or `"host"` → that client's storage_info, ≤ 256 KiB).
+Multi-client runs (`fio --client=… job.fio`, sent by `fio-test.sh` in controller mode) are detected from fio's `client_stats`: the step is stored once with the metrics of fio's "All clients" result and `clients` = number of clients, plus one row per client. Optional form fields: `ramp_uuid` (≤ 64 chars, groups the client-count steps of one test configuration), `client_hosts` (comma list of client names) and `client_storage_info` (JSON object `"host:port"` or `"host"` → that client's storage_info, ≤ 256 KiB). When fio leaves the latency percentiles out of "All clients" (older fio, e.g. 3.36), the worst client's percentiles are stored for the step. Saturation uploads in client mode (description `saturation-test…`) go to `saturation_runs` with `clients` and `client_hosts`; their per-client results stay in the uploaded JSON only.
+
+Every import stores the fio I/O engine as `ioengine` (lower-case): from the fio JSON (`job options.ioengine` of a local run, `global options.ioengine` of a client-mode run), else from `storage_info.ioengine`, else null. Test-run responses (`/api/test-runs/`, `/api/test-runs/{id}`, `/api/test-runs/performance-data`, `/api/time-series/all`) include it. Existing databases get the column on startup, backfilled from `storage_info` and, once, from the stored fio JSON uploads.
 
 ### Time Series Analytics
 - `GET /api/time-series/servers` - Get server list with statistics
@@ -53,8 +55,8 @@ Multi-client runs (`fio --client=… job.fio`, sent by `fio-test.sh` in controll
 - `GET /api/dashboard/stats` - Aggregated counts, averages and last upload time (admin only; computed in SQL, a few hundred bytes)
 
 ### Saturation
-- `GET /api/saturation/runs/{run_uuid}/summary?threshold_ms=` - Per pattern: best step within the P95 threshold (highest IOPS) and the first step above it. Uses the stored threshold unless `threshold_ms` is given
-- `GET /api/test-runs/saturation-data?run_uuid=&threshold_ms=` - Chart data; `threshold_ms` defaults to the stored threshold (100 ms for older runs)
+- `GET /api/saturation/runs/{run_uuid}/summary?threshold_ms=` - Per pattern (and block size, sync mode, `clients`): best step within the P95 threshold (highest IOPS) and the first step above it. Uses the stored threshold unless `threshold_ms` is given. `clients` > 1 marks a multi-client saturation run (`fio-test.sh --saturation` with `CLIENTS`: every step on all clients, iodepth/num_jobs per client)
+- `GET /api/test-runs/saturation-data?run_uuid=&threshold_ms=` - Chart data; `threshold_ms` defaults to the stored threshold (100 ms for older runs); `clients` per step and for the run (highest count). `GET /api/test-runs/saturation-runs` lists `clients` per run as well
 
 ### Client Ramps
 - `GET /api/ramp/runs?hostname=&run_uuid=&limit=` - Multi-client ramps (one per `ramp_uuid`), newest first, with test configuration, client counts and number of steps
@@ -63,7 +65,7 @@ Multi-client runs (`fio --client=… job.fio`, sent by `fio-test.sh` in controll
 
 ### Comparison
 - `GET /api/compare/targets?source=latest|history` - All Host-Protocol-Type-Model combinations with test runs, as `target` values
-- `GET /api/compare?target=A&target=B[&target=C…]` - Compare 2–10 targets side by side. By default (`strict=true`) only identical configurations are compared, including test size, duration, the layout tags `prefill`/`fileperjob`/`satcap`/`cachefit` and the client count (`clients`); `strict=false` matches loosely and reports differing fields in `mismatch`. A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted or `*`. The first target is the baseline; every other target gets `diff_pct` per metric (iops, bandwidth, avg/p95/p99 latency) and a `better` flag. Options: `source=latest|history`, `patterns`, `block_sizes`, `syncs`, `include_incomplete`, plus the run filters below
+- `GET /api/compare?target=A&target=B[&target=C…]` - Compare 2–10 targets side by side. By default (`strict=true`) only identical configurations are compared, including test size, duration, the layout tags `prefill`/`fileperjob`/`satcap`/`cachefit`, the client count (`clients`) and the fio I/O engine (`ioengine`, e.g. libaio vs. io_uring; runs without a recorded engine only match each other); `strict=false` matches loosely and reports differing fields in `mismatch`. A target is `hostname|protocol|drive_type|drive_model`; trailing parts may be omitted or `*`. The first target is the baseline; every other target gets `diff_pct` per metric (iops, bandwidth, avg/p95/p99 latency) and a `better` flag. Options: `source=latest|history`, `patterns`, `block_sizes`, `syncs`, `include_incomplete`, plus the run filters below
 
 ### Import Log
 - `GET /api/import-log/runs/{run_uuid}` - Upload attempts per outcome (`imported`, `rejected`, `error`) plus rows stored for the run, and the failed attempts with reasons
@@ -101,7 +103,7 @@ Most endpoints support filtering with these common parameters:
 - `directs` - Direct I/O flags (0=buffered, 1=direct)
 
 ### Run Filters
-- `tags` - Comma-separated description tags that must all be present, e.g. `prefill:1,fileperjob:1` or `cachefit:1` (fio-test.sh: the working set fit into RAM, the ZFS ARC or `STORAGE_CACHE_BYTES`) (`/api/test-runs`, `/api/time-series/all`, `/api/time-series/history`)
+- `tags` - Comma-separated description tags that must all be present, e.g. `prefill:1,fileperjob:1` or `cachefit:1` (fio-test.sh: the working set fit into RAM, the ZFS ARC or `STORAGE_CACHE_BYTES`) (`/api/test-runs`, `/api/time-series/all`, `/api/time-series/history`). A tag matches a whole element, so `retried:1` finds results that `fio-test.sh` uploaded after one EAGAIN retry (`retried:N` = N retries), not `retried:2`
 - `since` / `until` - Date (`YYYY-MM-DD`, `until` includes the whole day) or ISO datetime (`/api/test-runs`, `/api/time-series/all`; `/history` uses `start_date`/`end_date`)
 - `run_uuid` - Comma-separated run UUIDs
 

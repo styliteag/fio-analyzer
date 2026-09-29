@@ -7,15 +7,19 @@ Migration for multi-client runs (fio client mode, client ramps).
   constraint in place, so the table is rebuilt; its indexes and the latest_test_per_server
   view are recreated afterwards.
 - client_results: per-client results of a multi-client step
+- saturation_runs: clients (default 1) and client_hosts, so saturation runs of fio-test.sh in
+  controller mode keep their client count (the saturation summary groups by it)
 """
 
 import re
 import sqlite3
-from typing import Callable, List
+from typing import Callable, List, Tuple
 
 from utils.logging import log_info
 
 CLIENT_COLUMNS = (("clients", "INTEGER DEFAULT 1"), ("ramp_uuid", "TEXT"), ("client_hosts", "TEXT"))
+# Saturation steps always run on all clients: no ramp_uuid
+SATURATION_CLIENT_COLUMNS = (("clients", "INTEGER DEFAULT 1"), ("client_hosts", "TEXT"))
 CLIENT_RESULTS_TABLE = "client_results"
 UNIQUE_PATTERN = re.compile(r"UNIQUE\s*\(([^)]*)\)", re.IGNORECASE)
 
@@ -46,11 +50,11 @@ def _columns(cursor: sqlite3.Cursor, table: str) -> List[str]:
     return [row[1] for row in cursor.execute(f"PRAGMA table_info({table})")]
 
 
-def _add_columns(cursor: sqlite3.Cursor, table: str) -> None:
+def _add_columns(cursor: sqlite3.Cursor, table: str, columns: Tuple[Tuple[str, str], ...] = CLIENT_COLUMNS) -> None:
     existing = _columns(cursor, table)
     if not existing:
         return
-    for name, definition in CLIENT_COLUMNS:
+    for name, definition in columns:
         if name not in existing:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
             log_info("Added multi-client column", {"table": table, "column": name})
@@ -103,10 +107,16 @@ def _rebuild(cursor: sqlite3.Cursor, create_sql: str, recreate_views: Callable[[
     recreate_views(cursor)  # views of the current schema version (CREATE VIEW IF NOT EXISTS)
 
 
+def add_saturation_client_columns(cursor: sqlite3.Cursor) -> None:
+    """Add clients / client_hosts to saturation_runs if the table exists (idempotent)."""
+    _add_columns(cursor, "saturation_runs", SATURATION_CLIENT_COLUMNS)
+
+
 def migrate_clients(cursor: sqlite3.Cursor, recreate_views: Callable[[sqlite3.Cursor], None]) -> None:
     """Add multi-client columns, `clients` in the test_runs unique key and the client_results table (idempotent)."""
     for table in ("test_runs_all", "test_runs"):
         _add_columns(cursor, table)
+    add_saturation_client_columns(cursor)
     if _columns(cursor, "test_runs"):
         _rebuild_test_runs(cursor, recreate_views)
     cursor.execute(CLIENT_RESULTS_SQL)

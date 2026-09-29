@@ -36,7 +36,8 @@ CREATE TABLE {table} (
     p99_latency REAL,
     description TEXT,
     run_uuid TEXT,
-    clients INTEGER DEFAULT 1
+    clients INTEGER DEFAULT 1,
+    ioengine TEXT
 );
 """
 
@@ -62,6 +63,7 @@ COLUMNS = (
     "description",
     "run_uuid",
     "clients",
+    "ioengine",
 )
 
 DEFAULTS: dict[str, Any] = {
@@ -85,6 +87,7 @@ DEFAULTS: dict[str, Any] = {
     "description": "",
     "run_uuid": "run-1",
     "clients": 1,
+    "ioengine": "libaio",
 }
 
 
@@ -469,6 +472,43 @@ def test_strict_keeps_client_counts_apart() -> None:
     assert compared["diff_pct"]["b"]["iops"] == -5.0
     loose = call(db, targets("a", "b", strict="false")).json()["rows"]
     assert any("clients" in r["mismatch"] for r in loose)
+
+
+def test_strict_keeps_io_engines_apart() -> None:
+    """A libaio run is not comparable with an io_uring run of the same configuration."""
+    db = make_db([row("a", ioengine="io_uring", iops=500.0), row("b", ioengine="libaio", iops=100.0), row("b", ioengine="io_uring", iops=450.0)])
+    body = call(db, targets("a", "b")).json()
+    [compared] = body["rows"]
+    assert compared["ioengine"] == "io_uring"
+    assert compared["results"]["b"]["ioengine"] == "io_uring"
+    assert compared["diff_pct"]["b"]["iops"] == -10.0
+    assert body["match_counts"] == {"strict": 1, "loose": 1}
+
+
+def test_strict_unknown_engine_is_its_own_bucket() -> None:
+    """Runs without a recorded engine (NULL) only match each other, and sort after known engines."""
+    db = make_db([row("a", ioengine=None), row("a", ioengine="libaio"), row("b", ioengine="libaio")])
+    assert [r["ioengine"] for r in call(db, targets("a", "b")).json()["rows"]] == ["libaio"]
+    rows = call(db, targets("a", "b", include_incomplete="true")).json()["rows"]
+    assert [r["ioengine"] for r in rows] == ["libaio", None]
+    assert rows[1]["results"]["b"] is None
+
+
+def test_loose_mode_reports_io_engine_mismatch() -> None:
+    db = make_db([row("a", ioengine="io_uring"), row("b", ioengine="libaio")])
+    body = call(db, targets("a", "b")).json()
+    assert body["rows"] == []
+    assert body["match_counts"] == {"strict": 0, "loose": 1}
+    assert "I/O engine" in body["hint"]
+    [compared] = call(db, targets("a", "b", strict="false")).json()["rows"]
+    assert compared["mismatch"] == ["ioengine"]
+    assert "ioengine" not in compared
+
+
+def test_loose_mode_reports_unknown_engine_as_mismatch() -> None:
+    db = make_db([row("a", ioengine=None), row("b", ioengine="libaio")])
+    [compared] = call(db, targets("a", "b", strict="false")).json()["rows"]
+    assert compared["mismatch"] == ["ioengine"]
 
 
 def test_strict_compares_runs_with_identical_layout() -> None:

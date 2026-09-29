@@ -11,7 +11,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 FUNCS="parse_duration_seconds is_loopback_addr valid_port server_validate_bind fio_server_address
-server_state_dir server_write_info server_pid_matches server_stop_pids json_escape
+server_state_dir server_write_info server_pid_matches server_stop_pids json_escape json_object
 server_bind_canonical server_write_file server_proc_stamp"
 SED_EXPR=""
 for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
@@ -104,6 +104,21 @@ check "only the two info files are published" 2 "$(find "$TMP/state/info" -type 
 STORAGE_INFO=""
 server_write_info "$TMP/state"
 check "empty STORAGE_INFO publishes {}" "{}" "$(cat "$TMP/state/info/storage.json")"
+IOENGINE=io_uring
+server_write_info "$TMP/state"
+check "STORAGE_DETECT=0 still publishes the engine" '{"ioengine":"io_uring"}' "$(cat "$TMP/state/info/storage.json")"
+STORAGE_INFO='{"fs_type":"xfs","ioengine":"libaio"}'
+server_write_info "$TMP/state"
+check "detected storage info is published as is" "$STORAGE_INFO" "$(cat "$TMP/state/info/storage.json")"
+STORAGE_INFO="" IOENGINE=""
+
+# --- run_server_mode detects the engine before storage.json is built -------------------------
+server_body=$(sed -n '/^run_server_mode()/,/^}/p' "$SCRIPT")
+engine_line=$(grep -n '^ *detect_ioengine$' <<< "$server_body" | cut -d: -f1)
+storage_line=$(grep -n '^ *detect_storage$' <<< "$server_body" | cut -d: -f1)
+check "run_server_mode calls detect_ioengine once" 1 "$(grep -c '^ *detect_ioengine$' <<< "$server_body")"
+check "detect_ioengine runs before detect_storage" true \
+    "$(if [ "${engine_line:-0}" -gt 0 ] && [ "$engine_line" -lt "${storage_line:-0}" ]; then echo true; else echo false; fi)"
 
 # --- --server-stop: only the recorded PIDs with the same start time, uid and command ---------
 # PID file: line 1 PID, line 2 "<lstart> <uid>" from ps at start.

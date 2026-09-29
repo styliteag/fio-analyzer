@@ -36,6 +36,7 @@ from utils.fio_metrics import (
     extract_percentile_latency,
     load_fio_json,
 )
+from utils.ioengine import extract_ioengine, ioengine_from_storage_info
 from utils.logging import log_error, log_info
 from utils.storage_info import encode_storage_info
 from utils.sync_mode import normalize_sync
@@ -793,6 +794,8 @@ def extract_test_run_data(fio_data: Dict[str, Any], filename: str) -> Dict[str, 
         "test_size": job_opts.get("size") or global_opts.get("size") or "1M",
         "sync": _extract_sync(job_opts, global_opts),
         "iodepth": int(job_opts.get("iodepth") or global_opts.get("iodepth") or 1),
+        # Local runs pass the engine on the command line (job options), client mode in the job file (global options)
+        "ioengine": extract_ioengine(job_opts, global_opts),
         # Extract performance metrics
         "iops": extract_iops(job),
         "avg_latency": extract_latency(job),
@@ -840,6 +843,11 @@ def _extract_sync(job_opts: Dict[str, Any], global_opts: Dict[str, Any]) -> str:
         return normalize_sync(raw)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+def run_ioengine(test_run_data: Dict[str, Any]) -> Optional[str]:
+    """Engine from the fio JSON, else the one fio-test.sh detected (storage_info); None if neither names one."""
+    return test_run_data.get("ioengine") or ioengine_from_storage_info(test_run_data.get("storage_info"))
 
 
 def insert_test_run(db: sqlite3.Connection, test_run_data: Dict[str, Any], file_path: str = None) -> int:
@@ -898,6 +906,7 @@ def insert_test_run_rows(db: sqlite3.Connection, test_run_data: Dict[str, Any], 
         "test_size",
         "sync",
         "iodepth",
+        "ioengine",
         "avg_latency",
         "bandwidth",
         "iops",
@@ -923,6 +932,7 @@ def insert_test_run_rows(db: sqlite3.Connection, test_run_data: Dict[str, Any], 
 
     values = [test_run_data.get(col) for col in columns]
     values[columns.index("clients")] = test_run_data.get("clients") or 1
+    values[columns.index("ioengine")] = run_ioengine(test_run_data)
     placeholders = ", ".join(["?" for _ in columns])
 
     # Insert into test_runs_all first
@@ -996,12 +1006,15 @@ def insert_saturation_run(db: sqlite3.Connection, test_run_data: Dict[str, Any],
         "run_uuid",
         "storage_info",
         "latency_threshold_ms",
+        "clients",
+        "client_hosts",
         "output_file",
         "num_jobs",
         "direct",
         "test_size",
         "sync",
         "iodepth",
+        "ioengine",
         "avg_latency",
         "bandwidth",
         "iops",
@@ -1025,6 +1038,9 @@ def insert_saturation_run(db: sqlite3.Connection, test_run_data: Dict[str, Any],
     ]
 
     values = [test_run_data.get(col) for col in columns]
+    values[columns.index("ioengine")] = run_ioengine(test_run_data)
+    # fio client mode: every step runs on all clients (per-client rows are kept in the raw JSON)
+    values[columns.index("clients")] = test_run_data.get("clients") or 1
     placeholders = ", ".join(["?" for _ in columns])
 
     cursor.execute(

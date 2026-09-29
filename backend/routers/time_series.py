@@ -378,7 +378,7 @@ async def get_all_time_series(
                    block_size, read_write_pattern, queue_depth, duration,
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-                   output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                   output_file, num_jobs, direct, test_size, sync, iodepth, ioengine, is_latest,
                    avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency
             FROM test_runs_all
             WHERE {where_clause}

@@ -10,6 +10,7 @@ import History from "./pages/History";
 import Home from "./pages/Home";
 import Host from "./pages/Host";
 import NotFound from "./pages/NotFound";
+import Ramps from "./pages/Ramps";
 import Saturation from "./pages/Saturation";
 import Upload from "./pages/Upload";
 import UserManager from "./pages/UserManager";
@@ -45,6 +46,7 @@ const ProtectedApp = () => {
 				<Route path="/host" element={readersOnly(<Host />)} />
 				<Route path="/history" element={readersOnly(<History />)} />
 				<Route path="/saturation" element={readersOnly(<Saturation />)} />
+				<Route path="/ramps" element={readersOnly(<Ramps />)} />
 				<Route path="/compare" element={readersOnly(<Compare />)} />
 				<Route path="/upload" element={<RequireRole roles={UPLOADERS}><Upload /></RequireRole>} />
 				<Route path="/admin" element={adminOnly(<Admin />)} />

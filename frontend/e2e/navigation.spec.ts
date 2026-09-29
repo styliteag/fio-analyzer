@@ -8,6 +8,7 @@ const PAGES = [
     { path: '/host', link: 'Hosts', heading: 'Host Analysis' },
     { path: '/history', link: 'History', heading: 'Performance History' },
     { path: '/saturation', link: 'Saturation', heading: 'Saturation Analysis' },
+    { path: '/ramps', link: 'Ramps', heading: 'Client Ramps' },
     { path: '/compare', link: 'Compare', heading: 'Compare Storage' },
     { path: '/upload', link: 'Upload', heading: 'Upload FIO Results' },
     { path: '/admin', link: 'Admin', heading: 'Admin' },

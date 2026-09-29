@@ -77,9 +77,18 @@ setup_valid() {
 }
 setup_valid; validate_client_config; check "valid client config" 0 "$?"
 check "directory target" false "$TARGET_IS_DEVICE"
+setup_valid; SATURATION_MODE=true RAMP_CLIENTS=""; validate_client_config; rc=$?
+check "saturation + clients is accepted" 0 "$rc"
+check "saturation + clients: no error" 0 "$(grep -c '^ERR' "$TMP/out")"
+check "saturation + clients: one step with all clients" 2 "${RAMP_STEPS[*]}"
+setup_valid; SATURATION_MODE=true RAMP_CLIENTS=" "; validate_client_config
+check "saturation + blank RAMP_CLIENTS is accepted" 0 "$?"
 setup_valid; SATURATION_MODE=true; validate_client_config; rc=$?
-check "saturation + clients is an error" 1 "$rc"
-check "saturation error explains" 1 "$(grep -c 'SATURATION' "$TMP/out")"
+check "saturation + RAMP_CLIENTS is an error" 1 "$rc"
+check "saturation + RAMP_CLIENTS error explains" 1 "$(grep -c 'RAMP_CLIENTS.*SATURATION_MODE' "$TMP/out")"
+setup_valid; SATURATION_MODE=true RAMP_CLIENTS="" SAT_BLOCK_SIZES=$'4k\nexec_prerun=id'
+validate_client_config; check "SAT_BLOCK_SIZES with newline rejected" 1 "$?"
+unset SAT_BLOCK_SIZES
 setup_valid; TARGET_DIR=/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1; PREFILL=1 FILE_PER_JOB=1
 validate_client_config; check "device target ok" 0 "$?"
 check "auto: /dev/ path is a device" true "$TARGET_IS_DEVICE"
@@ -97,6 +106,10 @@ setup_valid; TARGET_DIR=$'/mnt/x\nexec_prerun=touch /tmp/pwned'
 validate_client_config; check "TARGET_DIR with newline rejected" 1 "$?"
 setup_valid; CLIENT_IOENGINE=$'libaio\nexec_prerun=id'
 validate_client_config; check "CLIENT_IOENGINE with newline rejected" 1 "$?"
+setup_valid; CLIENT_IOENGINE=""
+validate_client_config; check "empty CLIENT_IOENGINE accepted (chosen from the clients)" 0 "$?"
+setup_valid; CLIENT_IOENGINE="io uring"
+validate_client_config; check "CLIENT_IOENGINE with a space rejected" 1 "$?"
 setup_valid; CLIENT_SSH=yes
 validate_client_config; check "CLIENT_SSH must be 0/1" 1 "$?"
 setup_valid; CLIENT_SSH_BASE_PORT=65534 CLIENT_SSH=1

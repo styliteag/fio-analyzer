@@ -274,7 +274,7 @@ async def get_test_runs(
                    block_size, read_write_pattern, queue_depth, duration,
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-                   output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                   output_file, num_jobs, direct, test_size, sync, iodepth, ioengine, is_latest,
                    avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency,
                    config_uuid, run_uuid, storage_info
             FROM test_runs
@@ -687,7 +687,7 @@ async def get_performance_data(
                        block_size, read_write_pattern, queue_depth, duration,
                        fio_version, job_runtime, rwmixread, total_ios_read,
                        total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-                       uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                       uploaded_file_path, output_file, num_jobs, direct, test_size, sync, iodepth, ioengine, is_latest,
                        avg_latency, bandwidth, iops, p95_latency, p99_latency,
                        config_uuid, run_uuid
                 FROM test_runs WHERE id = ?
@@ -718,6 +718,7 @@ async def get_performance_data(
                     "test_size": test_run_data["test_size"],
                     "sync": test_run_data["sync"],
                     "iodepth": test_run_data["iodepth"],
+                    "ioengine": test_run_data["ioengine"],
                     "duration": test_run_data["duration"],
                     "config_uuid": test_run_data["config_uuid"],
                     "run_uuid": test_run_data["run_uuid"],
@@ -823,7 +824,8 @@ async def get_saturation_runs(
         query = f"""
             SELECT run_uuid, hostname, protocol, drive_type, drive_model,
                    block_size, description,
-                   MIN(timestamp) as started, COUNT(*) as step_count
+                   MIN(timestamp) as started, COUNT(*) as step_count,
+                   MAX(COALESCE(clients, 1)) as clients
             FROM saturation_runs
             WHERE {where_clause}
             GROUP BY run_uuid
@@ -847,6 +849,7 @@ async def get_saturation_runs(
                 "description": row_dict.get("description"),
                 "started": row_dict["started"],
                 "step_count": row_dict["step_count"],
+                "clients": row_dict["clients"],
             })
 
         log_info(
@@ -913,7 +916,8 @@ async def get_saturation_data(
             SELECT id, timestamp, hostname, protocol, drive_type, drive_model,
                    block_size, read_write_pattern, iodepth, num_jobs,
                    iops, avg_latency, bandwidth, p95_latency, p99_latency,
-                   config_uuid, run_uuid, description, latency_threshold_ms, storage_info
+                   config_uuid, run_uuid, description, latency_threshold_ms, storage_info,
+                   COALESCE(clients, 1) AS clients
             FROM saturation_runs
             WHERE run_uuid = ?
             ORDER BY (iodepth * num_jobs) ASC
@@ -968,6 +972,7 @@ async def get_saturation_data(
                 "p99_latency_ms": row_dict["p99_latency"],
                 "bandwidth_mbs": row_dict["bandwidth"],
                 "timestamp": row_dict["timestamp"],
+                "clients": row_dict["clients"],
             }
             patterns[pattern]["steps"].append(step)
 
@@ -996,6 +1001,8 @@ async def get_saturation_data(
             "drive_type": drive_type,
             "drive_model": drive_model,
             "block_size": block_size,
+            # > 1: fio-test.sh ran the steps on this many clients at once (QD per client)
+            "clients": max(row["clients"] for row in rows),
             "threshold_ms": threshold_ms,
             "storage_info": decode_storage_info(next((row["storage_info"] for row in rows if row["storage_info"]), None)),
             "patterns": patterns,
@@ -1412,7 +1419,7 @@ async def get_test_run(
                    block_size, read_write_pattern, queue_depth, duration,
                    fio_version, job_runtime, rwmixread, total_ios_read,
                    total_ios_write, usr_cpu, sys_cpu, hostname, protocol,
-                   output_file, num_jobs, direct, test_size, sync, iodepth, is_latest,
+                   output_file, num_jobs, direct, test_size, sync, iodepth, ioengine, is_latest,
                    avg_latency, bandwidth, iops, p70_latency, p90_latency, p95_latency, p99_latency,
                    config_uuid, run_uuid, storage_info
             FROM test_runs WHERE id = ?

@@ -29,6 +29,8 @@ export interface CompareCell {
     readonly duration: number | null;
     readonly layout: string;
     readonly clients: number;
+    /** fio I/O engine (libaio, io_uring, ...); null when the upload did not record one */
+    readonly ioengine?: string | null;
 }
 
 export type MetricValues<T> = Readonly<Record<CompareMetric, T>>;
@@ -44,6 +46,7 @@ export interface CompareRow {
     readonly duration?: number | null;
     readonly layout?: string;
     readonly clients?: number;
+    readonly ioengine?: string | null;
     readonly mismatch?: readonly string[];
     readonly results: Readonly<Record<string, CompareCell | null>>;
     readonly diff_pct: Readonly<Record<string, MetricValues<number | null>>>;
@@ -63,7 +66,7 @@ export interface CompareResponse {
     readonly rows: readonly CompareRow[];
     readonly summary: Readonly<Record<string, CompareTargetSummary>>;
     readonly source?: string;
-    /** Configurations matching exactly vs. ignoring test size, runtime and layout */
+    /** Configurations matching exactly vs. ignoring test size, runtime, layout, client count and I/O engine */
     readonly match_counts?: { readonly strict: number; readonly loose: number };
     /** Explanation when strict matching finds fewer configurations than loose matching */
     readonly hint?: string | null;
