@@ -8,7 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- 
+- **fio-test.sh cache fit check**: the script warns when a test's working set fits into a cache, because reads then show cache speed instead of storage speed. The working set is `TEST_SIZE`, times `NUM_JOBS` with `FILE_PER_JOB=1` (all jobs share one file otherwise, and on block devices every job uses the first `TEST_SIZE` bytes), times the number of clients of the step in client mode. Saturation steps use the capped per-job size and the growing numjobs. It is checked against these caches, and the largest one counts:
+  - the new setting `STORAGE_CACHE_BYTES` (`.env`, or `--storage-cache-bytes 64G`). Use it for caches this host cannot see, e.g. the ZFS ARC of the hypervisor below VMs, which `direct=1` in the guest does not bypass. In client mode, all clients share it.
+  - the ZFS ARC (`arc_max`) when the target is on ZFS with `primarycache=all`
+  - the RAM (page cache) with `DIRECT=0`. In client mode, each client's own RAM or ARC is compared with that client's share.
+
+  A warning at start lists every size/jobs/direct(/clients) combination that fits. Each fitting test or ramp step is uploaded with the description tag `cachefit:1`, and later tests do not carry it over. Inside a VM without `STORAGE_CACHE_BYTES`, a hint explains that the hypervisor's cache is invisible. `show_config` prints a `Cache:` line.
+- **fio-test.sh storage detection**: `storage_info` (and the `storage.json` published by `--server`) now includes `mem_total` (RAM in bytes, from `/proc/meminfo`) and, where ZFS is loaded, `arc_max` (ZFS ARC `c_max`). macOS and FreeBSD read these via `sysctl`. The Storage section of the test run details shows them in GiB.
+
+### Changed
+- **Comparison**: `cachefit` is a layout tag. Strict matching (`/api/compare`, Compare page) therefore never compares cache-sized runs with runs measured on the storage. `strict=false` lists the difference in `mismatch`.
 
 ## [0.12.1] - 2026-09-28
 

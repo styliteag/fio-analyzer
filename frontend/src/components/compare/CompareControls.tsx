@@ -23,7 +23,8 @@ interface CompareControlsProps {
 const FIELD = 'px-3 py-2 border rounded-lg text-sm theme-bg-primary theme-text-primary theme-border-primary';
 const LABEL = 'block text-sm font-medium theme-text-secondary mb-1';
 const STRICT_HELP =
-    'Strict: only configurations with identical test size, duration, file layout (prefill / fileperjob / satcap tags) and client count are compared. ' +
+    'Strict: only configurations with identical test size, duration, file layout (prefill / fileperjob / satcap / cachefit tags) and client count are compared. ' +
+    'cachefit marks runs whose data fit into RAM or the ZFS ARC, so they are never compared with runs measured on the storage. ' +
     'Turn it off to match on pattern, block size, sync, direct, jobs and queue depth only; differing fields are marked with ⚠.';
 
 /** Text field that writes on blur or Enter, so the comparison is not reloaded per keystroke */

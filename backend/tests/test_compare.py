@@ -411,6 +411,11 @@ def test_layout_signature_uses_only_layout_tags() -> None:
     assert compare.layout_signature(None) == ""
 
 
+def test_layout_signature_includes_cachefit() -> None:
+    assert compare.layout_signature("hostname:h,run_uuid:r,date:x,clients:6,ramp:1,cachefit:1") == "cachefit:1"
+    assert compare.layout_signature("hostname:h,fileperjob:1,cachefit:1") == "cachefit:1,fileperjob:1"
+
+
 def mixed_db() -> sqlite3.Connection:
     """Host a has a real 10G/60 s run and a newer 256M/5 s smoke test; host b only the real run."""
     return make_db(
@@ -436,6 +441,24 @@ def test_strict_keeps_prefill_runs_apart() -> None:
     assert call(db, targets("a", "b")).json()["rows"] == []
     rows = call(db, targets("a", "b", include_incomplete="true")).json()["rows"]
     assert sorted(r["layout"] for r in rows) == ["", "prefill:1"]
+
+
+def test_strict_keeps_cache_sized_runs_apart() -> None:
+    """A run whose working set fits into RAM/ARC (cachefit:1) is never compared with a normal run."""
+    db = make_db([row("a", iops=90000.0, description="hostname:a,cachefit:1"), row("b", iops=1000.0, description="hostname:b")])
+    assert call(db, targets("a", "b")).json()["rows"] == []
+    rows = call(db, targets("a", "b", include_incomplete="true")).json()["rows"]
+    assert sorted(r["layout"] for r in rows) == ["", "cachefit:1"]
+    loose = call(db, targets("a", "b", strict="false")).json()["rows"]
+    assert len(loose) == 1
+    assert "layout" in loose[0]["mismatch"]
+
+
+def test_strict_compares_cache_sized_runs_with_each_other() -> None:
+    db = make_db([row("a", iops=90000.0, description="hostname:a,cachefit:1"), row("b", iops=45000.0, description="hostname:b,cachefit:1")])
+    [compared] = call(db, targets("a", "b")).json()["rows"]
+    assert compared["layout"] == "cachefit:1"
+    assert compared["diff_pct"]["b"]["iops"] == -50.0
 
 
 def test_strict_keeps_client_counts_apart() -> None:

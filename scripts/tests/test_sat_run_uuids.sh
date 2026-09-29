@@ -22,6 +22,7 @@ done
 
 print_status() { :; }
 storage_summary() { echo "fs=stub"; }
+cache_summary() { echo "stub"; }
 reset_sat_results() { :; }
 build_description() { DESCRIPTION="run_uuid:${RUN_UUID}"; }
 saturation_loop() { echo "LOOP $1 $SAT_SYNC $RUN_UUID"; }

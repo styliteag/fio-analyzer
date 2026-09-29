@@ -12,7 +12,9 @@ trap 'rm -rf "$TMP"' EXIT
 
 FUNCS="fio_size_to_bytes bytes_to_mib_size sat_cap_active validate_sat_cap sat_step_size
 sat_drop_stale_prefill build_description data_file_base build_fio_target_args
-prefill_test_files remove_test_files run_fio_step"
+prefill_test_files remove_test_files run_fio_step apply_cachefit_tag cache_fit_apply
+cache_fit_check test_working_set_bytes host_cache_bytes cache_mul si_byte_count human_bytes
+cache_fit_text cache_size_bytes"
 SED_EXPR=""
 for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
 # shellcheck source=/dev/null
