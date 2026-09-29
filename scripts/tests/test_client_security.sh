@@ -13,7 +13,7 @@ TWO="$DIR/fixtures/fio_client_2clients.json"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-FUNCS="curl_auth_config upload_results check_credentials warn_default_credentials
+FUNCS="curl_auth_config upload_results upload_post upload_retryable check_credentials warn_default_credentials
 print_client_security_warning valid_port parse_clients parse_ramp_clients validate_client_config
 client_ssh_command client_setup_connections client_close_tunnels client_sanitize_name
 client_valid_json_object client_fetch_info client_extra_args_ini client_step_label

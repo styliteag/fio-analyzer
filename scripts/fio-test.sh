@@ -267,6 +267,9 @@ define_defaults() {
     # Retries for transient EAGAIN errors (io_uring can return EAGAIN at the end of a file)
     FIO_RETRY_MAX="${FIO_RETRY_MAX:-2}"
     FIO_RETRY_COUNT=0
+    # Upload retries while the server is unreachable or restarting (delay doubles, max 60 s)
+    UPLOAD_RETRY_MAX="${UPLOAD_RETRY_MAX:-5}"
+    UPLOAD_RETRY_DELAY="${UPLOAD_RETRY_DELAY:-10}"
     # Retries of the current test (uploaded as description tag retried:N), one line per
     # retried fio run for the summaries, job parameters/kernel override for the warning
     FIO_TEST_RETRIES=0
@@ -823,6 +826,14 @@ validate_advanced_options() {
     if ! [[ "$FIO_RETRY_MAX" =~ ^[0-9]+$ ]] || [ "${#FIO_RETRY_MAX}" -gt 2 ] || [ "$FIO_RETRY_MAX" -gt 10 ]; then
         print_warning "FIO_RETRY_MAX must be a number from 0 to 10 (got '$FIO_RETRY_MAX'), using 2"
         FIO_RETRY_MAX=2
+    fi
+    if ! [[ "$UPLOAD_RETRY_MAX" =~ ^[0-9]+$ ]] || [ "${#UPLOAD_RETRY_MAX}" -gt 2 ] || [ "$UPLOAD_RETRY_MAX" -gt 20 ]; then
+        print_warning "UPLOAD_RETRY_MAX must be a number from 0 to 20 (got '$UPLOAD_RETRY_MAX'), using 5"
+        UPLOAD_RETRY_MAX=5
+    fi
+    if ! [[ "$UPLOAD_RETRY_DELAY" =~ ^[0-9]+$ ]] || [ "${#UPLOAD_RETRY_DELAY}" -gt 2 ] || [ "$UPLOAD_RETRY_DELAY" -lt 1 ] || [ "$UPLOAD_RETRY_DELAY" -gt 60 ]; then
+        print_warning "UPLOAD_RETRY_DELAY must be 1 to 60 seconds (got '$UPLOAD_RETRY_DELAY'), using 10"
+        UPLOAD_RETRY_DELAY=10
     fi
 
     FIO_EXTRA_ARGS_ARR=()
@@ -2358,7 +2369,39 @@ upload_results() {
         extra_fields+=(--form-string "storage_info=$STORAGE_INFO")
     fi
 
-    response=$(curl -s -w "%{http_code}" \
+    local attempt=0 delay=${UPLOAD_RETRY_DELAY:-10}
+    while :; do
+        response=$(upload_post "$json_file" "$description" "${extra_fields[@]}")
+
+        http_code="${response: -3}"
+        response_body="${response%???}"
+        # Printed to the terminal: no escape sequences from the server
+        response_body=${response_body//[[:cntrl:]]/}
+
+        if [ "$http_code" = 200 ]; then
+            print_success "Upload successful: $test_name"
+            echo "Response: $response_body"
+            return 0
+        fi
+        if [ "$attempt" -ge "${UPLOAD_RETRY_MAX:-5}" ] || ! upload_retryable "$http_code"; then
+            print_error "Upload failed: $test_name (HTTP $http_code)"
+            echo "Response: $response_body"
+            return 1
+        fi
+        attempt=$((attempt + 1))
+        print_warning "Upload of $test_name failed (HTTP $http_code), retry ${attempt}/${UPLOAD_RETRY_MAX:-5} in ${delay}s"
+        sleep "$delay"
+        delay=$((delay * 2 > 60 ? 60 : delay * 2))
+    done
+}
+
+# POST one result to the import API; prints the response body followed by the HTTP code.
+# upload_post <json_file> <description> [extra curl form args...]
+upload_post() {
+    local json_file=$1 description=$2
+    shift 2
+    curl -s -w "%{http_code}" \
+        --connect-timeout 10 --max-time 300 \
         -X POST \
         -K <(curl_auth_config) \
         -F "file=@$json_file" \
@@ -2370,22 +2413,17 @@ upload_results() {
         --form-string "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --form-string "config_uuid=$CONFIG_UUID" \
         --form-string "run_uuid=$RUN_UUID" \
-        "${extra_fields[@]}" \
-        "$BACKEND_URL/api/import")
-    
-    http_code="${response: -3}"
-    response_body="${response%???}"
-    # Printed to the terminal: no escape sequences from the server
-    response_body=${response_body//[[:cntrl:]]/}
-    
-    if [ "$http_code" -eq 200 ]; then
-        print_success "Upload successful: $test_name"
-        echo "Response: $response_body"
-    else
-        print_error "Upload failed: $test_name (HTTP $http_code)"
-        echo "Response: $response_body"
-        return 1
-    fi
+        "$@" \
+        "$BACKEND_URL/api/import"
+}
+
+# True for HTTP codes of a server that is briefly unreachable or restarting (000 = no
+# connection, 404 while the proxy has no backend yet); client errors are never retried
+upload_retryable() {
+    case "$1" in
+        000 | 404 | 408 | 429 | 502 | 503 | 504) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 # Function to cleanup test files

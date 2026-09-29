@@ -11,7 +11,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 # shellcheck source=/dev/null
-source <(sed -n '/^upload_results()/,/^}/p' "$SCRIPT")
+source <(sed -n '/^upload_post()/,/^}/p; /^upload_results()/,/^}/p' "$SCRIPT")
 declare -F upload_results >/dev/null || { echo "upload_results not found in $SCRIPT"; exit 1; }
 
 print_status() { :; }

@@ -12,7 +12,7 @@ trap 'rm -rf "$TMP"' EXIT
 # shellcheck source=/dev/null
 FUNCS="transient_fio_error_line is_transient_fio_error run_fio_with_retry retry_clean_text
 fio_retry_params fio_retry_kernel print_retry_log print_retry_summary upload_description
-upload_results run_fio_test"
+upload_results upload_post upload_retryable run_fio_test"
 SED_EXPR=""
 for f in $FUNCS; do SED_EXPR+="/^${f}()/,/^}/p;"; done
 # shellcheck source=/dev/null
