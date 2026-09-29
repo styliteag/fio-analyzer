@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Bind Docker Compose HTTP to localhost so remote access requires an HTTPS reverse proxy. Allow multipart uploads up to the 50 MiB file limit plus form overhead, reject larger requests before parsing, and upgrade the vulnerable multipart parser.
+
 ### Added
 - 
 

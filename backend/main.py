@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from config.settings import settings
 from database.connection import close_database, init_database
 from routers import compare, dashboard, import_log, imports, ramp, raw_data, saturation, test_runs, time_series, users, utils_router
+from utils.import_body_limit import ImportBodyLimitMiddleware
 from utils.logging import log_error, log_info, setup_logging
 
 # Setup logging
@@ -189,6 +190,9 @@ async def log_requests(request: Request, call_next):
             {"request_id": request_id, "process_time": f"{process_time:.4f}s"},
         )
         raise
+
+
+app.add_middleware(ImportBodyLimitMiddleware)
 
 
 # Include routers with descriptive tags

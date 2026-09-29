@@ -5,7 +5,7 @@ This directory contains Docker configuration for production deployment in a sing
 ## Architecture
 
 ```
-Internet -> Single Container (Port 80) -> Nginx -> Frontend (Static) + Backend (Port 8000)
+Internet -> HTTPS reverse proxy -> 127.0.0.1:80 -> Container nginx -> Frontend + Backend
 ```
 
 - **Single Container**: Consolidated architecture with nginx and FastAPI
@@ -14,6 +14,14 @@ Internet -> Single Container (Port 80) -> Nginx -> Frontend (Static) + Backend (
 - **Backend**: Python FastAPI server with authentication
 - **Database**: SQLite with persistent volume
 - **Authentication**: Role-based access control with external user management
+
+Both Compose files bind HTTP to the host's loopback interface only. Local access remains
+available at `http://localhost/`; for remote access, configure an HTTPS reverse proxy
+on the host to forward to `http://127.0.0.1:80`. Do not expose port 80 publicly:
+the application sends HTTP Basic credentials on every API request. If the proxy runs
+in another container, connect it over a private Docker network rather than publishing
+the app's HTTP port externally. The production Compose file uses a registry image;
+publish an updated image to include the multipart dependency and upload-limit fixes.
 
 ## Quick Start
 
@@ -274,4 +282,4 @@ export DOCKER_NAMESPACE=mycompany
 - [ ] Review security settings
 - [ ] Test file upload limits
 - [ ] Push images to registry
-- [ ] Test deployment from registry 
+- [ ] Test deployment from registry

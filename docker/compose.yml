@@ -7,7 +7,7 @@ services:
       tags:
         - fio-analyzer_app
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"  # Put an HTTPS reverse proxy in front for remote access
     volumes:      
       - ./data/backend/db:/app/db
       - ./data/backend/uploads:/app/uploads
@@ -40,4 +40,4 @@ services:
 
 networks:
   fio-network:
-    driver: bridge 
+    driver: bridge

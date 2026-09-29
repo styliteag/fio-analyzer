@@ -84,7 +84,9 @@ docker compose up --build
 docker compose -f compose.prod.yml up -d
 ```
 
-The application will be available at `http://localhost:80`.
+The application will be available locally at `http://localhost:80`. Both Compose
+files bind only to `127.0.0.1`; remote access requires an HTTPS reverse proxy
+(see [Docker deployment](docker/README.md)).
 
 #### Authentication Setup
 ```bash
