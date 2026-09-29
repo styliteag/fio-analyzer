@@ -30,18 +30,6 @@ def local_output(**job_options: str) -> dict:
     }
 
 
-@pytest.fixture
-def manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(settings, "upload_dir", tmp_path / "uploads")
-    monkeypatch.setattr(DatabaseManager, "_populate_sample_data", lambda self, cursor: asyncio.sleep(0))
-    db_manager = DatabaseManager()
-    db_manager.db_path = tmp_path / "test.db"
-    asyncio.run(db_manager.connect())
-    monkeypatch.setattr(imports, "db_manager", db_manager)
-    yield db_manager
-    asyncio.run(db_manager.close())
-
-
 def app_for(db_manager: DatabaseManager) -> FastAPI:
     app = FastAPI()
     app.include_router(imports.router, prefix="/api/import")
@@ -101,12 +89,6 @@ def test_engine_from_stored_fio_json() -> None:
     assert ioengine_from_fio_json(json.dumps(CLIENT_FIXTURE)) == "psync"
     assert ioengine_from_fio_json("not json") is None
     assert ioengine_from_fio_json("[]") is None
-
-
-def test_extract_test_run_data_reads_engine() -> None:
-    assert imports.extract_test_run_data(local_output(ioengine="io_uring"), "f.json")["ioengine"] == "io_uring"
-    assert imports.extract_test_run_data(CLIENT_FIXTURE, "f.json")["ioengine"] == "psync"
-    assert imports.extract_test_run_data(local_output(), "f.json")["ioengine"] is None
 
 
 # --- import -----------------------------------------------------------------

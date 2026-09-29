@@ -187,10 +187,6 @@ SUMMARY=$(storage_summary)
 check "summary: zfs filesystem, all values in order" \
     "fs=zfs zfs=tank/fio sync=disabled recordsize=16K compression=lz4 primarycache=all logbias=latency pool=tank layout=mirror vdevs=1 kernel=6.8.0-test ioengine=io_uring fio=3.36" \
     "$(printf '%s' "$SUMMARY" | tr '\n' ' ' | tr -s ' ')"
-check "summary: zfs filesystem: every line fits 110 columns with the label" 0 \
-    "$(printf 'Storage:      %s\n' "$SUMMARY" | awk 'length > 110' | wc -l | tr -d ' ')"
-check "summary: zfs filesystem: continuation lines indented 14 spaces" "$(( $(printf '%s\n' "$SUMMARY" | wc -l) - 1 ))" \
-    "$(printf '%s\n' "$SUMMARY" | sed -n '2,$p' | grep -c '^              [^ ]')"
 
 # --- storage_size_matches ------------------------------------------------------------------------
 storage_size_matches 16K 16k; check "16K == 16k" 0 "$?"

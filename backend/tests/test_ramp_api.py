@@ -7,7 +7,7 @@ import zipfile
 
 import httpx
 from fastapi import FastAPI
-from test_client_import import FIXTURE, STORAGE, manager, single_client_output, upload  # noqa: F401 (manager is a fixture)
+from test_client_import import FIXTURE, STORAGE, single_client_output, upload
 
 from auth.middleware import User, require_viewer
 from database.connection import DatabaseManager, get_db
@@ -35,7 +35,7 @@ def upload_ramp(db_manager: DatabaseManager) -> None:
     assert upload(db_manager, FIXTURE, description="clients:2,ramp:1", **common).status_code == 200
 
 
-def test_list_ramps(manager: DatabaseManager) -> None:  # noqa: F811
+def test_list_ramps(manager: DatabaseManager) -> None:
     upload_ramp(manager)
     ramps = get(manager, "/api/ramp/runs").json()
     assert len(ramps) == 1
@@ -46,7 +46,7 @@ def test_list_ramps(manager: DatabaseManager) -> None:  # noqa: F811
     assert get(manager, "/api/ramp/runs?hostname=other").json() == []
 
 
-def test_ramp_details_include_clients_and_storage(manager: DatabaseManager) -> None:  # noqa: F811
+def test_ramp_details_include_clients_and_storage(manager: DatabaseManager) -> None:
     upload_ramp(manager)
     detail = get(manager, "/api/ramp/runs/ramp-1").json()
     assert [step["clients"] for step in detail["steps"]] == [1, 2]
@@ -56,7 +56,7 @@ def test_ramp_details_include_clients_and_storage(manager: DatabaseManager) -> N
     assert two["clients_detail"][1]["storage_info"]["fs_type"] == "xfs"
 
 
-def test_ramp_summary(manager: DatabaseManager) -> None:  # noqa: F811
+def test_ramp_summary(manager: DatabaseManager) -> None:
     upload_ramp(manager)
     summary = get(manager, "/api/ramp/runs/ramp-1/summary?threshold_ms=1").json()
     assert summary["threshold_ms"] == 1
@@ -66,18 +66,18 @@ def test_ramp_summary(manager: DatabaseManager) -> None:  # noqa: F811
     assert summary["steps"][1]["fairness"] > 0.99
 
 
-def test_unknown_ramp_is_404_and_bad_threshold_is_422(manager: DatabaseManager) -> None:  # noqa: F811
+def test_unknown_ramp_is_404_and_bad_threshold_is_422(manager: DatabaseManager) -> None:
     assert get(manager, "/api/ramp/runs/nope").status_code == 404
     assert get(manager, "/api/ramp/runs/nope/summary").status_code == 404
     upload_ramp(manager)
     assert get(manager, "/api/ramp/runs/ramp-1/summary?threshold_ms=0").status_code == 422
 
 
-def test_requires_authentication(manager: DatabaseManager) -> None:  # noqa: F811
+def test_requires_authentication(manager: DatabaseManager) -> None:
     assert get(manager, "/api/ramp/runs", viewer=False).status_code in (401, 403)
 
 
-def test_ramp_zip_contains_every_step(manager: DatabaseManager) -> None:  # noqa: F811
+def test_ramp_zip_contains_every_step(manager: DatabaseManager) -> None:
     upload_ramp(manager)
     response = get(manager, "/api/raw/ramps/ramp-1")
     assert response.status_code == 200

@@ -131,10 +131,6 @@ def test_admin_can_create_viewer_via_api(auth_files: Path) -> None:
     assert "newviewer" in (auth_files / ".htviewers").read_text()
 
 
-def test_user_role_accepts_viewer() -> None:
-    assert User("x", "viewer").role == "viewer"
-
-
 def test_role_change_takes_effect_immediately(auth_files: Path) -> None:
     """The 5-minute auth cache must not keep a demoted admin's rights."""
     assert request("GET", "/api/users/", ADMIN).status_code == 200

@@ -4,7 +4,7 @@ import asyncio
 
 import httpx
 from fastapi import FastAPI
-from test_client_import import FIXTURE, manager, single_client_output, upload  # noqa: F401 (manager is a fixture)
+from test_client_import import FIXTURE, single_client_output, upload
 
 from auth.middleware import User, require_viewer
 from database.connection import DatabaseManager, get_db
@@ -26,7 +26,7 @@ def history(db_manager: DatabaseManager) -> list:
     return response.json()["data"]
 
 
-def test_history_rows_carry_clients_and_num_jobs(manager: DatabaseManager) -> None:  # noqa: F811
+def test_history_rows_carry_clients_and_num_jobs(manager: DatabaseManager) -> None:
     assert upload(manager, single_client_output(), ramp_uuid="ramp-1").status_code == 200
     assert upload(manager, FIXTURE, ramp_uuid="ramp-1").status_code == 200
     rows = history(manager)

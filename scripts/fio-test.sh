@@ -2631,12 +2631,6 @@ sat_r_get() {
     eval "echo \"\${SAT_R${pi}_${field}[\$idx]}\""
 }
 
-# Get length of a result array: sat_r_len <pi> <field>
-sat_r_len() {
-    local pi=$1 field=$2
-    eval "echo \${#SAT_R${pi}_${field}[@]}"
-}
-
 # Reset saturation result arrays (called between block size runs)
 reset_sat_results() {
     SAT_RESULTS_STEP=()
@@ -4138,12 +4132,6 @@ client_step_complete() {
         [ "$(grep -cxF -- "${CLIENT_KEY[$i]}" <<< "$keys")" = 1 ] || return 1
     done
     return 0
-}
-
-# Total IOPS (read + write) of a step: the "All clients" entry, or the only client
-client_step_iops() {
-    jq -r '((.client_stats | map(select(.jobname == "All clients")) | .[0]) // .client_stats[0])
-        | ((.read.iops // 0) + (.write.iops // 0)) + 0.5 | floor' "$1" 2>/dev/null
 }
 
 # Print IOPS, bandwidth and P95 latency of a step

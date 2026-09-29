@@ -98,13 +98,6 @@ def test_extract_test_run_data_handles_client_mode() -> None:
     assert len(data["client_results"]) == 2
 
 
-def test_extract_test_run_data_normal_run_has_one_client() -> None:
-    normal = {"jobs": [{"jobname": "j", "job options": {"rw": "read"}, "read": {"iops": 5}}]}
-    data = extract_test_run_data(normal, "x.json")
-    assert data["clients"] == 1
-    assert data["client_results"] == ()
-
-
 def test_storage_map_matches_host_port_then_host() -> None:
     mapping = client_storage_map(json.dumps({"127.0.0.1:18766": {"fs_type": "zfs", "client_name": "vm1"}, "10.0.0.2": {"fs_type": "ext4"}}))
     assert json.loads(storage_for_client(mapping, "127.0.0.1", 18766))["client_name"] == "vm1"

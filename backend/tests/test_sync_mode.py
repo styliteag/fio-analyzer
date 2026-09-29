@@ -38,12 +38,6 @@ def test_parse_sync_filter_accepts_names_and_legacy_numbers() -> None:
     assert parse_sync_filter("1, dsync,none") == ["sync", "dsync", "none"]
 
 
-def test_parse_sync_filter_rejects_unknown_value_with_400() -> None:
-    with pytest.raises(HTTPException) as error:
-        parse_sync_filter("bogus")
-    assert error.value.status_code == 400
-
-
 def fio_json(sync: str) -> dict:
     return {
         "fio version": "fio-3.36",

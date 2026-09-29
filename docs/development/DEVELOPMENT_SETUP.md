@@ -108,7 +108,8 @@ npm run build
 ### Backend Testing
 ```bash
 cd backend
-python test_api.py  # Quick API test
+uv run pytest -q                    # all backend tests
+uv run pytest -q tests/test_app.py  # quick check: app imports and mounts every router
 ```
 
 ### Frontend Testing

@@ -29,18 +29,6 @@ def single_client_output() -> dict:
     return data
 
 
-@pytest.fixture
-def manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(settings, "upload_dir", tmp_path / "uploads")
-    monkeypatch.setattr(DatabaseManager, "_populate_sample_data", lambda self, cursor: asyncio.sleep(0))
-    db_manager = DatabaseManager()
-    db_manager.db_path = tmp_path / "test.db"
-    asyncio.run(db_manager.connect())
-    monkeypatch.setattr(imports, "db_manager", db_manager)
-    yield db_manager
-    asyncio.run(db_manager.close())
-
-
 def upload(db_manager: DatabaseManager, fio_output: dict, **fields: str) -> httpx.Response:
     app = FastAPI()
     app.include_router(imports.router, prefix="/api/import")

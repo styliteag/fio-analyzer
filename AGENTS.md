@@ -51,7 +51,7 @@ Update `CHANGELOG.md` in every commit, because releases are cut from the `[Unrel
 - Use semantic versioning format
 
 ## Testing Guidelines
-- Backend: `pytest` available via `uv run pytest`. Quick smoke: `cd backend && make check` or `python3 test_api.py`.
+- Backend: `pytest` available via `uv run pytest`. Quick smoke: `cd backend && make check` or `uv run pytest -q tests/test_app.py`.
 - Test names: `test_*.py` in `backend/`. Add focused unit tests for routers and utils.
 - Frontend E2E: Playwright specs in `frontend/e2e/` run against the running dev stack (`./start-frontend-backend.sh`). Run `cd frontend && E2E_USER=<admin> E2E_PASSWORD=<pw> npm run test:e2e`. Optional: `E2E_UPLOADER_USER`/`E2E_UPLOADER_PASSWORD` for the uploader-role test, `PW_CHANNEL=chrome` to use local Chrome instead of `npx playwright install`.
 

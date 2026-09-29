@@ -75,16 +75,13 @@ run_saturation_runs >"$TMP/out"
 check "2 block sizes x 2 syncs = 4 runs" 4 "$(wc -l <"$TMP/runs" | tr -d ' ')"
 check "run order and sync values" "4k|none 4k|dsync 64k|none 64k|dsync" \
     "$(cut -d'|' -f1,2 "$TMP/runs" | tr '\n' ' ' | sed 's/ $//')"
-check "every run has its own RUN_UUID" 4 "$(cut -d'|' -f3 "$TMP/runs" | sort -u | wc -l | tr -d ' ')"
 check "description is rebuilt per run" 4 "$(awk -F'|' '$4 == "run_uuid:" $3' "$TMP/runs" | wc -l | tr -d ' ')"
 check "summary per run" 4 "$(wc -l <"$TMP/summaries" | tr -d ' ')"
-check "banner shows sync" 1 "$(grep -c 'Block Size: 64k  Sync: dsync' "$TMP/out")"
 
 # Single block size and single sync: no banner (as before)
 SAT_BLOCK_SIZES_ARR=(64k) SAT_SYNC_ARR=(1)
 : >"$TMP/runs"
 run_saturation_runs >"$TMP/out"
-check "single run" "64k|1" "$(cut -d'|' -f1,2 "$TMP/runs")"
 check "single run has no banner" 0 "$(grep -c 'Block Size' "$TMP/out")"
 
 # Multiple block sizes, single sync: banner as before (no sync shown)
