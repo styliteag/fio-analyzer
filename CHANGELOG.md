@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- 
+
+## [0.14.0] - 2026-10-01
+
 ### Security
 - **Browser sessions instead of stored passwords**: the web interface stored `username:password` (Base64) in `localStorage` and sent it with every request, so any script on the page, and anyone with access to the browser profile, could read the reusable password. Now `POST /api/auth/login` checks the password once and sets an `HttpOnly`, `SameSite=Strict` session cookie (`Secure` over HTTPS) that is valid for 48 hours (`SESSION_LIFETIME_HOURS`); `POST /api/auth/logout` ends it. The server stores only a SHA-256 hash of the session token. A session also ends as soon as the user's password or role changes or the user is removed. Cookie-authenticated writes need the header `X-Requested-With: fio-analyzer` (CSRF protection). Credentials left in `localStorage` by older versions are deleted on the next page load; users log in once more. Upload scripts (`fio-test.sh`) keep using HTTP Basic. Hardening from the security review: the session gets exactly the role the password was verified for (a username listed in two role files can no longer turn a viewer password into an admin session), logging in again ends the previous session, 10 failed logins for one username from one address within 5 minutes lead to HTTP 429 (browser login and HTTP Basic count together, so Basic auth is no way around it), unknown usernames cost the same bcrypt time as known ones, the login check runs outside the event loop, and sessions use their own database connection. `manage_users.py add` refuses a username that exists in another role file, and the backend logs a warning at startup for existing duplicates. The Compose files set `CORS_ORIGINS` empty and pass `COOKIE_SECURE` and `SESSION_LIFETIME_HOURS` through.
 - **CORS limited to configured origins**: the API allowed every origin together with credentials, so any website could read API responses in a logged-in browser. Only the origins in `CORS_ORIGINS` are allowed now (default: the Vite dev server); production serves frontend and API from one origin and needs none.
