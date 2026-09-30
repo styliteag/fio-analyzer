@@ -49,7 +49,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return db
 
 
-def get(db: sqlite3.Connection, path: str, user: User | None = User("px1", "viewer")) -> httpx.Response:
+def get(db: sqlite3.Connection, path: str, user: User | None = User("viewer", "viewer")) -> httpx.Response:
     app = FastAPI()
     app.include_router(raw_data.router, prefix="/api/raw")
     app.dependency_overrides[get_db] = lambda: db

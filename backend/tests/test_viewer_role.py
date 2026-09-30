@@ -28,14 +28,14 @@ def auth_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(settings, "htviewers_path", tmp_path / ".htviewers")
     write_htpasswd(tmp_path / ".htpasswd", "boss", "pw-admin")
     write_htpasswd(tmp_path / ".htuploaders", "robot", "pw-upload")
-    write_htpasswd(tmp_path / ".htviewers", "px1", "pw-view")
+    write_htpasswd(tmp_path / ".htviewers", "viewer", "pw-view")
     authentication._auth_cache.clear()
     return tmp_path
 
 
 def test_viewer_role_is_resolved_from_htviewers(auth_files: Path) -> None:
-    assert authentication.get_user_role("px1", "pw-view") == "viewer"
-    assert authentication.get_user_role("px1", "wrong") is None
+    assert authentication.get_user_role("viewer", "pw-view") == "viewer"
+    assert authentication.get_user_role("viewer", "wrong") is None
     assert authentication.get_user_role("boss", "pw-admin") == "admin"
     assert authentication.get_user_role("robot", "pw-upload") == "uploader"
 
@@ -73,7 +73,7 @@ def request(method: str, path: str, auth: tuple[str, str] | None) -> httpx.Respo
     return asyncio.run(call())
 
 
-VIEWER = ("px1", "pw-view")
+VIEWER = ("viewer", "pw-view")
 UPLOADER = ("robot", "pw-upload")
 ADMIN = ("boss", "pw-admin")
 
@@ -115,7 +115,7 @@ def test_anonymous_gets_401(auth_files: Path) -> None:
 
 def test_me_reports_viewer_role(auth_files: Path) -> None:
     response = request("GET", "/api/users/me", VIEWER)
-    assert response.json() == {"username": "px1", "role": "viewer"}
+    assert response.json() == {"username": "viewer", "role": "viewer"}
 
 
 def test_admin_can_create_viewer_via_api(auth_files: Path) -> None:

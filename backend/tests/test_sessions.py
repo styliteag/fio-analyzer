@@ -46,7 +46,7 @@ def call(app: FastAPI, method: str, path: str, cookie: Optional[str] = None, hea
     return asyncio.run(run())
 
 
-def login(app: FastAPI, username: str = "px1", password: str = "pw-view", headers: Optional[Dict[str, str]] = None) -> httpx.Response:
+def login(app: FastAPI, username: str = "viewer", password: str = "pw-view", headers: Optional[Dict[str, str]] = None) -> httpx.Response:
     return call(app, "POST", "/api/auth/login", json={"username": username, "password": password}, headers={**CSRF, **(headers or {})})
 
 
@@ -57,7 +57,7 @@ def session_cookie(response: httpx.Response) -> str:
 def test_login_sets_httponly_strict_cookie_for_48_hours(auth_files: Path, db: sqlite3.Connection) -> None:  # noqa: F811
     response = login(build_app(db))
     assert response.status_code == 200, response.text
-    assert response.json()["username"] == "px1"
+    assert response.json()["username"] == "viewer"
     assert response.json()["role"] == "viewer"
     header = response.headers["set-cookie"].lower()
     assert "httponly" in header
@@ -84,7 +84,7 @@ def test_cookie_authenticates_and_only_a_hash_is_stored(auth_files: Path, db: sq
     cookie = session_cookie(login(app))
     me = call(app, "GET", "/api/users/me", cookie=cookie)
     assert me.status_code == 200
-    assert me.json() == {"username": "px1", "role": "viewer"}
+    assert me.json() == {"username": "viewer", "role": "viewer"}
     stored = [row[0] for row in db.execute("SELECT token_hash FROM sessions")]
     assert len(stored) == 1 and cookie not in stored[0]
 
@@ -100,7 +100,7 @@ def test_unknown_or_expired_cookie_is_401(auth_files: Path, db: sqlite3.Connecti
 def test_password_change_ends_the_session(auth_files: Path, db: sqlite3.Connection) -> None:  # noqa: F811
     app = build_app(db)
     cookie = session_cookie(login(app))
-    write_htpasswd(auth_files / ".htviewers", "px1", "new-password")
+    write_htpasswd(auth_files / ".htviewers", "viewer", "new-password")
     assert call(app, "GET", "/api/users/me", cookie=cookie).status_code == 401
 
 
@@ -142,8 +142,8 @@ def test_lifetime_comes_from_settings(auth_files: Path, db: sqlite3.Connection, 
 
 
 def test_duplicate_username_gets_the_role_its_password_proves(auth_files: Path, db: sqlite3.Connection) -> None:  # noqa: F811
-    # "px1" also exists as admin with another password; the viewer password must not open an admin session
-    write_htpasswd(auth_files / ".htpasswd", "px1", "pw-admin-px1")
+    # "viewer" also exists as admin with another password; the viewer password must not open an admin session
+    write_htpasswd(auth_files / ".htpasswd", "viewer", "pw-admin-viewer")
     app = build_app(db)
     response = login(app)
     assert response.json()["role"] == "viewer"
@@ -153,7 +153,7 @@ def test_duplicate_username_gets_the_role_its_password_proves(auth_files: Path, 
 def test_login_again_ends_the_previous_session(auth_files: Path, db: sqlite3.Connection) -> None:  # noqa: F811
     app = build_app(db)
     old = session_cookie(login(app))
-    fresh = call(app, "POST", "/api/auth/login", cookie=old, json={"username": "px1", "password": "pw-view"}, headers=CSRF)
+    fresh = call(app, "POST", "/api/auth/login", cookie=old, json={"username": "viewer", "password": "pw-view"}, headers=CSRF)
     assert fresh.status_code == 200
     assert call(app, "GET", "/api/users/me", cookie=old).status_code == 401
     assert call(app, "GET", "/api/users/me", cookie=session_cookie(fresh)).status_code == 200
@@ -171,7 +171,7 @@ def test_basic_auth_guesses_share_the_login_throttle(auth_files: Path, db: sqlit
     app = build_app(db)
 
     async def basic(password: str) -> int:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test", auth=("px1", password)) as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test", auth=("viewer", password)) as client:
             return (await client.get("/api/users/me")).status_code
 
     codes = [asyncio.run(basic(f"wrong-{i}")) for i in range(sessions.MAX_FAILED_LOGINS + 1)]

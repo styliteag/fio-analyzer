@@ -7,8 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- 
+### Changed
+- **Tests**: the read-only test user is called `viewer` instead of `px1`, matching the role names; `px1` stays only as a hostname in test data.
 
 ## [0.14.0] - 2026-10-01
 

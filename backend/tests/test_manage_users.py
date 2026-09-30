@@ -14,15 +14,15 @@ import manage_users  # noqa: E402
 
 def test_add_refuses_a_username_of_another_role(auth_files: Path) -> None:  # noqa: F811
     with pytest.raises(SystemExit):
-        manage_users.add_user("px1", "pw", settings.htpasswd_path)  # px1 is a viewer
-    assert "px1" not in settings.htpasswd_path.read_text()
+        manage_users.add_user("viewer", "pw", settings.htpasswd_path)  # "viewer" is in .htviewers
+    assert "viewer" not in settings.htpasswd_path.read_text()
 
 
 def test_add_to_the_same_file_changes_the_password(auth_files: Path) -> None:  # noqa: F811
     before = settings.htviewers_path.read_text()
-    manage_users.add_user("px1", "new-pw", settings.htviewers_path)
+    manage_users.add_user("viewer", "new-pw", settings.htviewers_path)
     after = settings.htviewers_path.read_text()
-    assert after.count("px1:") == 1 and after != before
+    assert after.count("viewer:") == 1 and after != before
 
 
 def test_duplicate_usernames_are_reported(auth_files: Path) -> None:  # noqa: F811
@@ -30,4 +30,4 @@ def test_duplicate_usernames_are_reported(auth_files: Path) -> None:  # noqa: F8
 
     assert duplicate_usernames() == {}
     (settings.htpasswd_path).write_text(settings.htpasswd_path.read_text() + settings.htviewers_path.read_text())
-    assert duplicate_usernames() == {"px1": ["admin", "viewer"]}
+    assert duplicate_usernames() == {"viewer": ["admin", "viewer"]}

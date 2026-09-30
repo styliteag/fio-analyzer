@@ -15,7 +15,7 @@ def history(db_manager: DatabaseManager) -> list:
     app = FastAPI()
     app.include_router(time_series.router, prefix="/api/time-series")
     app.dependency_overrides[get_db] = lambda: db_manager.connection
-    app.dependency_overrides[require_viewer] = lambda: User("px1", "viewer")
+    app.dependency_overrides[require_viewer] = lambda: User("viewer", "viewer")
 
     async def call() -> httpx.Response:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:

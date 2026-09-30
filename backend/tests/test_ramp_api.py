@@ -20,7 +20,7 @@ def get(db_manager: DatabaseManager, path: str, viewer: bool = True) -> httpx.Re
     app.include_router(raw_data.router, prefix="/api/raw")
     app.dependency_overrides[get_db] = lambda: db_manager.connection
     if viewer:
-        app.dependency_overrides[require_viewer] = lambda: User("px1", "viewer")
+        app.dependency_overrides[require_viewer] = lambda: User("viewer", "viewer")
 
     async def call() -> httpx.Response:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:

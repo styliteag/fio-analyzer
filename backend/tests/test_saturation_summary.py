@@ -50,7 +50,7 @@ def get(db: sqlite3.Connection, path: str) -> httpx.Response:
     app = FastAPI()
     app.include_router(saturation.router, prefix="/api/saturation")
     app.dependency_overrides[get_db] = lambda: db
-    app.dependency_overrides[require_viewer] = lambda: User("px1", "viewer")
+    app.dependency_overrides[require_viewer] = lambda: User("viewer", "viewer")
 
     async def call() -> httpx.Response:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -156,7 +156,7 @@ def saturation_data(threshold: float | None, query: str = "") -> dict:
     app = FastAPI()
     app.include_router(test_runs.router, prefix="/api/test-runs")
     app.dependency_overrides[get_db] = lambda: db
-    app.dependency_overrides[require_viewer] = lambda: User("px1", "viewer")
+    app.dependency_overrides[require_viewer] = lambda: User("viewer", "viewer")
 
     async def call() -> httpx.Response:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
