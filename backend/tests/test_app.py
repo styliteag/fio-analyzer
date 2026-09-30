@@ -24,4 +24,5 @@ EXPECTED_ROUTES = (
 
 @pytest.mark.parametrize("path", EXPECTED_ROUTES)
 def test_app_mounts_router(path: str) -> None:
-    assert path in {route.path for route in app.routes}
+    # The OpenAPI schema is the public route list; app.routes changed shape in FastAPI 0.14x
+    assert path in app.openapi()["paths"]

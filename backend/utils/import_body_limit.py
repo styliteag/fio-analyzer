@@ -29,13 +29,15 @@ class ImportBodyLimitMiddleware:
                 pass
 
         received = 0
+        too_large = False
 
         async def limited_receive():
-            nonlocal received
+            nonlocal received, too_large
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
                 if received > limit:
+                    too_large = True
                     raise _BodyTooLarge
             return message
 
@@ -46,10 +48,15 @@ class ImportBodyLimitMiddleware:
         async def buffer_send(message):
             pending.append(message)
 
+        # The flag decides, not the exception: middlewares and FastAPI may wrap or convert
+        # it (an ExceptionGroup from BaseHTTPMiddleware, "error parsing the body" as 400)
         try:
             await self.app(scope, limited_receive, buffer_send)
-        except _BodyTooLarge:
+        except Exception:
+            if not too_large:
+                raise
+        if too_large:
             await JSONResponse({"error": "File too large"}, status_code=413)(scope, receive, send)
-        else:
-            for message in pending:
-                await send(message)
+            return
+        for message in pending:
+            await send(message)

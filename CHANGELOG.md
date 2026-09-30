@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Backend dependencies upgraded** (66 known vulnerabilities in the locked production dependencies, now 0 according to `pip-audit`): FastAPI 0.104.1 → 0.142.2, Starlette 0.27.0 → 1.7.0 (several multipart and form parsing advisories), python-multipart 0.0.18 → 0.0.32 (six advisories after 0.0.18), uvicorn 0.24.0 → 0.54.0. `python-jose` is removed: nothing imported it, and it pulled in the vulnerable `ecdsa`, `pyasn1` and `cryptography`. `pyproject.toml` now sets minimum versions as security floors; `uv.lock` and `requirements.txt` hold the exact versions. `bcrypt` stays at 4.1.1, because bcrypt 5 rejects passwords longer than 72 bytes instead of truncating them.
+- **Upload size limit with the new FastAPI**: FastAPI now answers any error while parsing a form with HTTP 400, so a streamed upload above the size limit got 400 instead of 413. The limit now decides by the number of bytes received, independent of how the framework reports the aborted read.
+
 ### Fixed
 - Bind Docker Compose HTTP to localhost so remote access requires an HTTPS reverse proxy. Allow multipart uploads up to the 50 MiB file limit plus form overhead, reject larger requests before parsing, and upgrade the vulnerable multipart parser.
 
