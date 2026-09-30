@@ -22,7 +22,14 @@ def hash_password(password: str) -> str:
 
 
 def add_user(username: str, password: str, file_path: Path):
-    """Add user to htpasswd file"""
+    """Add user to htpasswd file (or change the password of a user already in it)"""
+    # One username must have one role: a second file would make logins ambiguous
+    role_files = (settings.htpasswd_path, settings.htuploaders_path, settings.htviewers_path)
+    for other in role_files:
+        if Path(other) != Path(file_path) and username in (parse_htpasswd(other) or {}):
+            print(f"Error: user '{username}' already exists in {other}; remove it there first")
+            sys.exit(1)
+
     hashed_password = hash_password(password)
 
     # Read existing users

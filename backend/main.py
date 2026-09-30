@@ -15,11 +15,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from auth.authentication import duplicate_usernames
 from config.settings import settings
 from database.connection import close_database, init_database
+from routers import auth as auth_router
 from routers import compare, dashboard, import_log, imports, ramp, raw_data, saturation, test_runs, time_series, users, utils_router
 from utils.import_body_limit import ImportBodyLimitMiddleware
-from utils.logging import log_error, log_info, setup_logging
+from utils.logging import log_error, log_info, log_warning, setup_logging
 
 # Setup logging
 setup_logging()
@@ -42,6 +44,13 @@ async def lifespan(app: FastAPI):
 
     # Initialize database
     await init_database()
+
+    duplicates = duplicate_usernames()
+    if duplicates:
+        log_warning(
+            "Usernames in more than one role file: each login gets the role its password matches; keep one entry per user",
+            {"users": duplicates},
+        )
 
     yield
 
@@ -131,9 +140,10 @@ For detailed examples and testing, visit the interactive documentation below.
 )
 
 # Add CORS middleware
+# Explicit origins only: with credentials, "*" would let any website read API responses
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -291,6 +301,7 @@ app.include_router(
         500: {"description": "Internal server error"},
     },
 )
+app.include_router(auth_router.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(
     users.router,
     tags=["User Management"],

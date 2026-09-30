@@ -6,6 +6,7 @@ import sqlite3
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
+from auth.sessions import ensure_sessions_table
 from config.settings import settings
 from database.client_migration import migrate_clients
 from database.import_log import ensure_import_log_table
@@ -29,6 +30,9 @@ class DatabaseManager:
     def __init__(self):
         self.db_path = settings.db_path
         self._connection: Optional[sqlite3.Connection] = None
+        # Sessions get their own connection: their commits must never include half-finished
+        # writes that another request made on the shared main connection
+        self._session_connection: Optional[sqlite3.Connection] = None
 
     async def connect(self):
         """Initialize database connection"""
@@ -43,6 +47,7 @@ class DatabaseManager:
                 {"db_path": str(self.db_path)},
             )
             await self._init_schema()
+            self._session_connection = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=10)
 
         except Exception as e:
             log_error("Error opening database", e, {"db_path": str(self.db_path)})
@@ -50,10 +55,18 @@ class DatabaseManager:
 
     async def close(self):
         """Close database connection"""
+        if self._session_connection:
+            self._session_connection.close()
+            self._session_connection = None
         if self._connection:
             self._connection.close()
             self._connection = None
             log_info("Database connection closed")
+
+    @property
+    def session_connection(self) -> Optional[sqlite3.Connection]:
+        """Connection of the session store; None before connect()"""
+        return self._session_connection
 
     @property
     def connection(self) -> sqlite3.Connection:
@@ -476,6 +489,9 @@ class DatabaseManager:
         # Migration 10: fio I/O engine per run (strict compare key), backfilled from storage_info/uploads
         migrate_ioengine(cursor)
 
+        # Migration 11: browser sessions (hashed tokens of the HttpOnly login cookie)
+        ensure_sessions_table(cursor)
+
         self.connection.commit()
 
     async def _populate_sample_data(self, cursor: sqlite3.Cursor):
@@ -663,6 +679,11 @@ async def close_database():
 def get_db() -> sqlite3.Connection:
     """Get database connection (FastAPI dependency)"""
     return db_manager.connection
+
+
+def get_optional_db() -> Optional[sqlite3.Connection]:
+    """Session store connection, or None before startup (auth dependency: Basic auth needs no database)"""
+    return db_manager.session_connection
 
 
 @asynccontextmanager

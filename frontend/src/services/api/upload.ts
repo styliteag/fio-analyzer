@@ -1,5 +1,5 @@
 // Upload API service
-import { apiUpload } from './base';
+import { apiUpload, sessionFetch } from './base';
 
 export interface UploadMetadata {
     drive_model: string;
@@ -148,7 +148,7 @@ export const bulkImportFioData = async (
     options: BulkImportOptions = {},
     abortSignal?: AbortSignal
 ): Promise<BulkImportResponse> => {
-    const response = await fetch('/api/import/bulk', {
+    const response = await sessionFetch(`${import.meta.env.VITE_API_URL || ''}/api/import/bulk`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

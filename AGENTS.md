@@ -83,6 +83,7 @@ Update `CHANGELOG.md` in every commit, because releases are cut from the `[Unrel
 - Uploaders: can upload FIO results only. Stored in `backend/.htuploaders`.
 - Viewers: read-only access to all data and raw JSON downloads, no uploads or changes. Stored in `backend/.htviewers`.
 - Backend guards: `require_viewer` (admin or viewer) for read endpoints, `require_admin` for changes, `require_uploader` for imports. Authenticated users without the role get 403, never 401 (the frontend logs out on 401).
+- Browser login uses sessions: `POST /api/auth/login` checks the password once and sets the HttpOnly `fio_session` cookie (48 h, `SESSION_LIFETIME_HOURS`); `POST /api/auth/logout` ends it. The frontend never stores the password: use `sessionFetch`/`authenticatedFetch` from `services/api/base.ts`, which send the cookie and the CSRF header `X-Requested-With: fio-analyzer` (required for cookie-authenticated writes). Scripts keep HTTP Basic.
 - Manage users: `cd backend && uv run python scripts/manage_users.py add --username <u> --password <p> [--uploader|--viewer]` (use `list`/`remove` accordingly, e.g. `list --viewer`, `remove --username <u> --uploader`).
 
 ## Database
@@ -191,6 +192,7 @@ docker build \
   - `GET /api/compare?target=…&target=…`
   - `GET /api/import-log/runs/{run_uuid}`, `GET /api/import-log/`
   - `GET /api/raw/test-runs/{id}`, `GET /api/raw/runs/{run_uuid}` (ZIP)
+- Auth (browser session): `POST /api/auth/login`, `POST /api/auth/logout`
 - Users:
   - `GET /api/users/`, `GET /api/users/me`, `POST /api/users/`
   - `GET /api/users/{username}`, `PUT /api/users/{username}`, `DELETE /api/users/{username}`

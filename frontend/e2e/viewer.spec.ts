@@ -28,8 +28,8 @@ test.describe('viewer role (read-only)', () => {
     test('is not logged out when the API refuses a write', async ({ page }) => {
         await login(page, viewer!);
         const status = await page.evaluate(async () => {
-            const { credentials } = JSON.parse(localStorage.getItem('fio-auth') ?? '{}');
-            const response = await fetch('/api/test-runs/1', { method: 'DELETE', headers: { Authorization: `Basic ${credentials}` } });
+            // The session cookie authenticates; the CSRF header is what the app sends on writes
+            const response = await fetch('/api/test-runs/1', { method: 'DELETE', headers: { 'X-Requested-With': 'fio-analyzer' } });
             return response.status;
         });
         expect(status).toBe(403);

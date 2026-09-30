@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from auth.sessions import clear_failed_logins
 from config.settings import settings
 from database.connection import DatabaseManager
 from routers import imports
@@ -20,3 +21,11 @@ def manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(imports, "db_manager", db_manager)
     yield db_manager
     asyncio.run(db_manager.close())
+
+
+@pytest.fixture(autouse=True)
+def _fresh_login_throttle():
+    """Failed logins of one test must not throttle the next one."""
+    clear_failed_logins()
+    yield
+    clear_failed_logins()

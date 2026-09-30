@@ -4,9 +4,10 @@ Authentication system with htpasswd support
 
 import base64
 import hashlib
+import threading
 import time
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import bcrypt
 
@@ -16,6 +17,17 @@ from utils.logging import log_debug, log_error, log_warning
 # Authentication cache (username_hash -> (role, timestamp))
 _auth_cache: Dict[str, Tuple[str, float]] = {}
 _cache_duration = 300  # 5 minutes cache
+_MAX_CACHE_ENTRIES = 1000
+_cache_lock = threading.Lock()
+_dummy_hash: Optional[bytes] = None
+
+
+def _burn_bcrypt(password: str) -> None:
+    """A bcrypt check with the cost of a real one (hash created on first use)."""
+    global _dummy_hash
+    if _dummy_hash is None:
+        _dummy_hash = bcrypt.hashpw(b"fio-analyzer-dummy", bcrypt.gensalt())
+    bcrypt.checkpw(password.encode("utf-8")[:72], _dummy_hash)
 
 
 def _role_files_version() -> str:
@@ -36,7 +48,8 @@ def _get_cache_key(username: str, password: str) -> str:
 
 def clear_auth_cache() -> None:
     """Forget cached roles, e.g. after users or roles changed."""
-    _auth_cache.clear()
+    with _cache_lock:
+        _auth_cache.clear()
 
 
 def parse_htpasswd(file_path: Path) -> Optional[Dict[str, str]]:
@@ -150,28 +163,38 @@ def is_viewer_user(username: str, password: str) -> bool:
     return is_valid
 
 
+def _cached_role(cache_key: str, now: float) -> Tuple[bool, Optional[str]]:
+    """(hit, role) from the cache; expired entries are dropped."""
+    with _cache_lock:
+        entry = _auth_cache.get(cache_key)
+        if entry is None:
+            return False, None
+        role, timestamp = entry
+        if now - timestamp < _cache_duration:
+            return True, role
+        _auth_cache.pop(cache_key, None)
+        return False, None
+
+
+def _store_role(cache_key: str, role: Optional[str], now: float) -> None:
+    # Bounded: drop expired entries, and everything if it is still too large
+    with _cache_lock:
+        _auth_cache[cache_key] = (role, now)
+        if len(_auth_cache) > _MAX_CACHE_ENTRIES:
+            for key in [k for k, (_, ts) in _auth_cache.items() if now - ts > _cache_duration]:
+                del _auth_cache[key]
+            if len(_auth_cache) > _MAX_CACHE_ENTRIES:
+                _auth_cache.clear()
+
+
 def get_user_role(username: str, password: str) -> Optional[str]:
-    """Get user role with caching"""
+    """Get user role with caching (the cache is shared by threadpool requests: locked)"""
     cache_key = _get_cache_key(username, password)
     current_time = time.time()
-
-    # Check cache first
-    if cache_key in _auth_cache:
-        role, timestamp = _auth_cache[cache_key]
-        if current_time - timestamp < _cache_duration:
-            log_debug(
-                "Authentication cache hit",
-                {
-                    "username": username,
-                    "role": role,
-                    "cache_age": current_time - timestamp,
-                },
-            )
-            return role
-        else:
-            # Cache expired, remove it
-            del _auth_cache[cache_key]
-            log_debug("Authentication cache expired", {"username": username})
+    hit, cached = _cached_role(cache_key, current_time)
+    if hit:
+        log_debug("Authentication cache hit", {"username": username, "role": cached})
+        return cached
 
     # Cache miss - do actual authentication
     log_debug("Authentication cache miss", {"username": username})
@@ -183,17 +206,33 @@ def get_user_role(username: str, password: str) -> Optional[str]:
     elif is_viewer_user(username, password):
         role = "viewer"
 
+    if role is None and not any(role_password_hash(username, r) for r in ROLE_FILES):
+        # Unknown user: spend a bcrypt check anyway, so the response time does not reveal it
+        _burn_bcrypt(password)
+
     # Cache the result (even if None, to avoid repeated bcrypt calls for invalid users)
-    _auth_cache[cache_key] = (role, current_time)
-
-    # Clean old cache entries periodically (simple cleanup)
-    if len(_auth_cache) > 100:  # Arbitrary limit
-        expired_keys = [k for k, (_, ts) in _auth_cache.items() if current_time - ts > _cache_duration]
-        for key in expired_keys:
-            del _auth_cache[key]
-        log_debug("Cleaned expired auth cache entries", {"removed": len(expired_keys)})
-
+    _store_role(cache_key, role, current_time)
     return role
+
+
+ROLE_FILES = {"admin": "htpasswd_path", "uploader": "htuploaders_path", "viewer": "htviewers_path"}
+
+
+def role_password_hash(username: str, role: str) -> Optional[str]:
+    """Password hash of a user in one role's file (None if the user is not in it)."""
+    attribute = ROLE_FILES.get(role)
+    if attribute is None:
+        return None
+    return (parse_htpasswd(getattr(settings, attribute)) or {}).get(username)
+
+
+def duplicate_usernames() -> Dict[str, List[str]]:
+    """Usernames found in more than one role file, with their roles (logged at startup)."""
+    roles: Dict[str, List[str]] = {}
+    for role, attribute in ROLE_FILES.items():
+        for username in parse_htpasswd(getattr(settings, attribute)) or {}:
+            roles.setdefault(username, []).append(role)
+    return {username: found for username, found in roles.items() if len(found) > 1}
 
 
 def parse_auth_header(auth_header: str) -> Optional[Tuple[str, str]]:

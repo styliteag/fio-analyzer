@@ -7,6 +7,18 @@
   },
   "endpoints": [
     {
+      "method": "POST",
+      "path": "//login",
+      "auth": "none",
+      "summary": "Log In"
+    },
+    {
+      "method": "POST",
+      "path": "//logout",
+      "auth": "auth",
+      "summary": "Log Out"
+    },
+    {
       "method": "GET",
       "path": "/api/compare",
       "auth": "none",

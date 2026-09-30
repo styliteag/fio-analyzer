@@ -19,6 +19,7 @@ EXPECTED_ROUTES = (
     "/api/import-log/",
     "/api/raw/runs/{run_uuid}",
     "/api/users/me",
+    "/api/auth/login",
 )
 
 

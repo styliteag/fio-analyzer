@@ -20,6 +20,14 @@ class Settings:
         self.htpasswd_path = self.base_dir / ".htpasswd"
         self.htuploaders_path = self.base_dir / ".htuploaders"
         self.htviewers_path = self.base_dir / ".htviewers"  # read-only users
+        # Browser sessions (HttpOnly cookie after one password check at login)
+        self.session_lifetime_hours = int(os.getenv("SESSION_LIFETIME_HOURS", "48"))
+        # auto = Secure when the request arrived over HTTPS (also via X-Forwarded-Proto)
+        self.cookie_secure = os.getenv("COOKIE_SECURE", "auto").lower()
+        # Browser origins allowed to call the API with the session cookie (comma-separated).
+        # Production serves frontend and API from one origin and needs none; the defaults cover
+        # the Vite dev server when VITE_API_URL points straight at the backend.
+        self.cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o.strip()]
 
         # Server configuration
         self.port = int(os.getenv("PORT", "8000"))

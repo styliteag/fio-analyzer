@@ -8,6 +8,13 @@ services:
         - fio-analyzer_app
     ports:
       - "127.0.0.1:80:80"  # Put an HTTPS reverse proxy in front for remote access
+    environment:
+      # Frontend and API share one origin here: no cross-origin callers with the session cookie
+      CORS_ORIGINS: ""
+      # auto = Secure cookie when the HTTPS proxy sends X-Forwarded-Proto: https.
+      # Set "true" behind HTTPS if the proxy does not send that header.
+      COOKIE_SECURE: ${COOKIE_SECURE:-auto}
+      SESSION_LIFETIME_HOURS: ${SESSION_LIFETIME_HOURS:-48}
     volumes:      
       - ./data/backend/db:/app/db
       - ./data/backend/uploads:/app/uploads

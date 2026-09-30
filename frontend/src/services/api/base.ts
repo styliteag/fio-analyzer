@@ -10,51 +10,58 @@ export interface ApiResponse<T = unknown> {
     status: number;
 }
 
-// Get stored authentication credentials
-const getAuthHeaders = (): HeadersInit => {
-    const storedAuth = localStorage.getItem("fio-auth");
-    if (storedAuth) {
-        try {
-            const { credentials } = JSON.parse(storedAuth);
-            return {
-                Authorization: `Basic ${credentials}`,
-                "Content-Type": "application/json",
-                Accept: "application/json",
-            };
-        } catch {
-            // If parsing fails, remove invalid auth data
-            localStorage.removeItem("fio-auth");
-        }
-    }
-    return {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-    };
+// Browser session: the backend sets an HttpOnly cookie at login (POST /api/auth/login);
+// the password is never stored here. Cookie-authenticated writes need the CSRF header.
+export const CSRF_HEADERS = { "X-Requested-With": "fio-analyzer" } as const;
+const LEGACY_AUTH_KEY = "fio-auth"; // pre-session builds stored Basic credentials here
+
+let signedIn = false;
+
+/** Called by AuthContext; a 401 only reloads the app while a user is signed in (no reload loop) */
+export const setSignedIn = (value: boolean): void => {
+    signedIn = value;
 };
+
+/** Remove Basic credentials that older builds kept in localStorage */
+export const forgetLegacyCredentials = (): void => {
+    try {
+        localStorage.removeItem(LEGACY_AUTH_KEY);
+    } catch {
+        // storage unavailable: nothing stored either
+    }
+};
+
+/** Session expired or revoked: back to the login page */
+export const handleUnauthorized = (): void => {
+    if (!signedIn) return;
+    signedIn = false;
+    window.location.reload();
+};
+
+/** fetch() with the session cookie and the CSRF header */
+export const sessionFetch = (url: string, options: RequestInit = {}): Promise<Response> =>
+    fetch(url, {
+        ...options,
+        credentials: "include",
+        headers: { ...CSRF_HEADERS, ...options.headers },
+    });
 
 // Authenticated fetch wrapper with AbortSignal support
 export const authenticatedFetch = async (
     endpoint: string,
     options: RequestInit = {},
 ): Promise<Response> => {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const headers = {
-        ...getAuthHeaders(),
-        ...options.headers,
-    };
-
-    const response = await fetch(url, {
+    const response = await sessionFetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
-        headers,
-        // Pass through AbortSignal if provided
-        signal: options.signal,
+        headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            ...options.headers,
+        },
     });
 
-    // If we get 401, the auth is invalid - clear it
     if (response.status === 401) {
-        localStorage.removeItem("fio-auth");
-        // Reload the page to trigger re-authentication
-        window.location.reload();
+        handleUnauthorized();
     }
 
     return response;
@@ -159,28 +166,14 @@ export const apiUpload = async (
     signal?: AbortSignal,
 ): Promise<ApiResponse> => {
     try {
-        const storedAuth = localStorage.getItem("fio-auth");
-        const headers: HeadersInit = {};
-        
-        if (storedAuth) {
-            try {
-                const { credentials } = JSON.parse(storedAuth);
-                headers.Authorization = `Basic ${credentials}`;
-            } catch {
-                localStorage.removeItem("fio-auth");
-            }
-        }
-
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        const response = await sessionFetch(`${API_BASE_URL}${endpoint}`, {
             method: "POST",
-            headers,
             body: formData,
             signal, // Add AbortSignal support
         });
 
         if (response.status === 401) {
-            localStorage.removeItem("fio-auth");
-            window.location.reload();
+            handleUnauthorized();
         }
 
         if (!response.ok) {

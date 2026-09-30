@@ -125,7 +125,7 @@ def test_stats_route_requires_authentication(populated_db: sqlite3.Connection) -
 
 def test_stats_route_rejects_uploader_role(populated_db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
     """Runs the real require_viewer check with an authenticated uploader (no read access)."""
-    monkeypatch.setattr("auth.middleware.get_current_user", lambda request: User("uploader", "uploader"))
+    monkeypatch.setattr("auth.middleware.get_current_user", lambda request, db=None: User("uploader", "uploader"))
 
     response = get_stats(populated_db, User("uploader", "uploader"), override_auth=False)
 

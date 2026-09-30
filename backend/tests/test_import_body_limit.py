@@ -46,3 +46,25 @@ def test_small_import_still_checks_authentication(monkeypatch):
 
     response = asyncio.run(call())
     assert response.status_code == 401
+
+
+def test_unrelated_errors_still_propagate_below_the_limit():
+    from utils.import_body_limit import ImportBodyLimitMiddleware
+
+    async def failing_app(scope, receive, send):
+        await receive()
+        raise RuntimeError("boom")
+
+    async def receive():
+        return {"type": "http.request", "body": b"{}", "more_body": False}
+
+    async def send(message):
+        raise AssertionError("nothing must be sent")
+
+    scope = {"type": "http", "method": "POST", "path": "/api/import/", "headers": []}
+    try:
+        asyncio.run(ImportBodyLimitMiddleware(failing_app)(scope, receive, send))
+    except RuntimeError as error:
+        assert str(error) == "boom"
+    else:
+        raise AssertionError("RuntimeError was swallowed")

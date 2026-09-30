@@ -1,6 +1,7 @@
 /**
  * User management API service
  */
+import { sessionFetch } from './base';
 
 /** admin: full access, uploader: upload only, viewer: read-only */
 export type UserRole = 'admin' | 'uploader' | 'viewer';
@@ -26,20 +27,9 @@ export interface CurrentUser {
 	role: UserRole;
 }
 
-/**
- * Get authentication headers for API requests
- */
-function getAuthHeaders(): Headers {
-	const storedAuth = localStorage.getItem('fio-auth');
-	if (!storedAuth) {
-		throw new Error('Not authenticated');
-	}
-
-	const { credentials } = JSON.parse(storedAuth);
-	const headers = new Headers();
-	headers.append('Authorization', `Basic ${credentials}`);
-	headers.append('Content-Type', 'application/json');
-	return headers;
+/** JSON headers; the session cookie and CSRF header come from sessionFetch */
+function jsonHeaders(): HeadersInit {
+	return { 'Content-Type': 'application/json' };
 }
 
 /**
@@ -58,8 +48,8 @@ async function handleResponse<T>(response: Response): Promise<T> {
  */
 export async function getUsers(): Promise<User[]> {
 	const apiUrl = import.meta.env.VITE_API_URL || "";
-	const response = await fetch(`${apiUrl}/api/users/`, {
-		headers: getAuthHeaders(),
+	const response = await sessionFetch(`${apiUrl}/api/users/`, {
+		headers: jsonHeaders(),
 	});
 	return handleResponse<User[]>(response);
 }
@@ -69,8 +59,8 @@ export async function getUsers(): Promise<User[]> {
  */
 export async function getCurrentUser(): Promise<CurrentUser> {
 	const apiUrl = import.meta.env.VITE_API_URL || "";
-	const response = await fetch(`${apiUrl}/api/users/me`, {
-		headers: getAuthHeaders(),
+	const response = await sessionFetch(`${apiUrl}/api/users/me`, {
+		headers: jsonHeaders(),
 	});
 	return handleResponse<CurrentUser>(response);
 }
@@ -80,8 +70,8 @@ export async function getCurrentUser(): Promise<CurrentUser> {
  */
 export async function getUser(username: string): Promise<User> {
 	const apiUrl = import.meta.env.VITE_API_URL || "";
-	const response = await fetch(`${apiUrl}/api/users/${encodeURIComponent(username)}`, {
-		headers: getAuthHeaders(),
+	const response = await sessionFetch(`${apiUrl}/api/users/${encodeURIComponent(username)}`, {
+		headers: jsonHeaders(),
 	});
 	return handleResponse<User>(response);
 }
@@ -91,9 +81,9 @@ export async function getUser(username: string): Promise<User> {
  */
 export async function createUser(userData: UserCreate): Promise<User> {
 	const apiUrl = import.meta.env.VITE_API_URL || "";
-	const response = await fetch(`${apiUrl}/api/users/`, {
+	const response = await sessionFetch(`${apiUrl}/api/users/`, {
 		method: 'POST',
-		headers: getAuthHeaders(),
+		headers: jsonHeaders(),
 		body: JSON.stringify(userData),
 	});
 	return handleResponse<User>(response);
@@ -104,9 +94,9 @@ export async function createUser(userData: UserCreate): Promise<User> {
  */
 export async function updateUser(username: string, userData: UserUpdate): Promise<User> {
 	const apiUrl = import.meta.env.VITE_API_URL || "";
-	const response = await fetch(`${apiUrl}/api/users/${encodeURIComponent(username)}`, {
+	const response = await sessionFetch(`${apiUrl}/api/users/${encodeURIComponent(username)}`, {
 		method: 'PUT',
-		headers: getAuthHeaders(),
+		headers: jsonHeaders(),
 		body: JSON.stringify(userData),
 	});
 	return handleResponse<User>(response);
@@ -117,9 +107,9 @@ export async function updateUser(username: string, userData: UserUpdate): Promis
  */
 export async function deleteUser(username: string): Promise<{ message: string }> {
 	const apiUrl = import.meta.env.VITE_API_URL || "";
-	const response = await fetch(`${apiUrl}/api/users/${encodeURIComponent(username)}`, {
+	const response = await sessionFetch(`${apiUrl}/api/users/${encodeURIComponent(username)}`, {
 		method: 'DELETE',
-		headers: getAuthHeaders(),
+		headers: jsonHeaders(),
 	});
 	return handleResponse<{ message: string }>(response);
 }

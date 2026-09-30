@@ -18,10 +18,32 @@ Internet -> HTTPS reverse proxy -> 127.0.0.1:80 -> Container nginx -> Frontend +
 Both Compose files bind HTTP to the host's loopback interface only. Local access remains
 available at `http://localhost/`; for remote access, configure an HTTPS reverse proxy
 on the host to forward to `http://127.0.0.1:80`. Do not expose port 80 publicly:
-the application sends HTTP Basic credentials on every API request. If the proxy runs
+the browser session cookie and the HTTP Basic credentials of upload scripts travel in
+every API request. The proxy must send `X-Forwarded-Proto: https`, so the backend marks
+the session cookie `Secure` (or set `COOKIE_SECURE=true` for the backend). If the proxy runs
 in another container, connect it over a private Docker network rather than publishing
 the app's HTTP port externally. The production Compose file uses a registry image;
 publish an updated image to include the multipart dependency and upload-limit fixes.
+
+### Browser sessions
+
+The web interface checks the password once at login (`POST /api/auth/login`) and then uses
+an `HttpOnly`, `SameSite=Strict` session cookie; the browser never stores the password.
+Backend settings (environment variables):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SESSION_LIFETIME_HOURS` | `48` | Absolute session lifetime; log in again afterwards |
+| `COOKIE_SECURE` | `auto` | `auto` = `Secure` when the request came over HTTPS (also via `X-Forwarded-Proto`); `true`/`false` to force. **Set `true` for every HTTPS deployment**, so a proxy without the header cannot downgrade the cookie |
+| `CORS_ORIGINS` | dev: `http://localhost:5173,http://127.0.0.1:5173`; Compose: empty | Browser origins that may call the API with the cookie; production serves one origin and needs none |
+
+A session ends early on logout, and as soon as the user's password or role changes or the
+user is removed. Logging in again ends the previous session. After 10 failed logins for
+one username from one address (browser login and HTTP Basic together), further attempts
+get HTTP 429 for 5 minutes. Behind the HTTPS proxy all clients may share one address; the
+limit then works per username, and wrong guesses can lock that user out for 5 minutes. Keep each
+username in one role file only (`manage_users.py add` refuses duplicates; the backend logs
+a warning at startup if it finds any). Upload scripts (`fio-test.sh`) keep using HTTP Basic.
 
 ## Quick Start
 

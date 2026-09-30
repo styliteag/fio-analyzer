@@ -1,16 +1,26 @@
 """
 Authentication middleware for FastAPI
+
+A request authenticates with HTTP Basic (scripts such as fio-test.sh) or with the browser
+session cookie set by POST /api/auth/login. Cookie-authenticated writes must carry the CSRF
+header. Authenticated users without the needed role get 403, never 401: clients log out on 401.
 """
 
-from typing import Optional
+import sqlite3
+from typing import Optional, Sequence
 
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBasic
 
 from auth.authentication import get_user_role, parse_auth_header
+from auth.sessions import COOKIE_NAME, CSRF_HEADER, CSRF_VALUE, clear_failed_logins, session_user, try_login_attempt
+from database.connection import get_optional_db
 from utils.logging import log_debug, log_info
 
 security = HTTPBasic()
+
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+READ_ROLES = ("admin", "viewer")
 
 
 class User:
@@ -22,217 +32,77 @@ class User:
         self.role = role
 
 
-def get_current_user(request: Request) -> Optional[User]:
-    """Get current user from request"""
-    request_id = getattr(request.state, "request_id", "unknown")
+def _request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", "unknown")
 
-    # Log all headers for debugging
-    log_debug(
-        "Auth check - all headers",
-        {
-            "request_id": request_id,
-            "headers": {k: ("<redacted>" if k.lower() == "authorization" else v) for k, v in request.headers.items()},
-        },
-    )
 
-    auth_header = request.headers.get("authorization")
-    log_debug(
-        "Auth check - authorization header",
-        {
-            "request_id": request_id,
-            "auth_header_present": auth_header is not None,
-            "auth_header_value": (auth_header[:20] + "..." if auth_header and len(auth_header) > 20 else auth_header),
-        },
-    )
-
-    if not auth_header:
-        log_debug("Auth check - no authorization header", {"request_id": request_id})
-        return None
-
+def _basic_user(request: Request, auth_header: str) -> Optional[User]:
     credentials = parse_auth_header(auth_header)
     if not credentials:
-        log_debug(
-            "Auth check - failed to parse auth header",
-            {"request_id": request_id, "auth_header_prefix": auth_header.split(" ", 1)[0]},
-        )
+        log_debug("Auth check - failed to parse auth header", {"request_id": _request_id(request), "auth_header_prefix": auth_header.split(" ", 1)[0]})
         return None
-
     username, password = credentials
-    log_debug(
-        "Auth check - parsed credentials",
-        {
-            "request_id": request_id,
-            "username": username,
-            "password_length": len(password) if password else 0,
-        },
-    )
-
+    # Same throttle as the browser login: Basic auth must not allow unlimited password guesses
+    throttle_key = f"{request.client.host if request.client else 'unknown'}|{username}"
+    if not try_login_attempt(throttle_key):
+        raise HTTPException(status_code=429, detail="Too many failed logins, try again in a few minutes")
     role = get_user_role(username, password)
-    log_debug(
-        "Auth check - role lookup result",
-        {"request_id": request_id, "username": username, "role": role},
-    )
-
-    if role:
-        log_debug(
-            "Auth check - user authenticated successfully",
-            {"request_id": request_id, "username": username, "role": role},
-        )
-        return User(username, role)
-
-    log_debug(
-        "Auth check - authentication failed",
-        {
-            "request_id": request_id,
-            "username": username,
-            "reason": "invalid_credentials",
-        },
-    )
-    return None
+    log_debug("Auth check - basic", {"request_id": _request_id(request), "username": username, "role": role})
+    if not role:
+        return None
+    clear_failed_logins(throttle_key)
+    return User(username, role)
 
 
-def require_auth(request: Request) -> User:
-    """Require any valid user (admin or uploader)"""
-    user = get_current_user(request)
+def _session_user(request: Request, db: Optional[sqlite3.Connection]) -> Optional[User]:
+    token = request.cookies.get(COOKIE_NAME)
+    if not token or db is None:
+        return None
+    found = session_user(db, token)
+    if found is None:
+        log_debug("Auth check - invalid or expired session", {"request_id": _request_id(request)})
+        return None
+    if request.method not in SAFE_METHODS and request.headers.get(CSRF_HEADER) != CSRF_VALUE:
+        log_info("Cookie-authenticated write without CSRF header", {"request_id": _request_id(request), "username": found[0]})
+        raise HTTPException(status_code=403, detail="Missing CSRF header")
+    return User(*found)
 
+
+def get_current_user(request: Request, db: Optional[sqlite3.Connection] = None) -> Optional[User]:
+    """User from the Authorization header (Basic) or, without one, from the session cookie"""
+    auth_header = request.headers.get("authorization")
+    if auth_header:
+        return _basic_user(request, auth_header)
+    return _session_user(request, db)
+
+
+def _require(request: Request, db: Optional[sqlite3.Connection], roles: Optional[Sequence[str]], denied: str) -> User:
+    user = get_current_user(request, db)
     if not user:
-        log_debug(
-            "Authentication denied - no valid credentials",
-            {
-                "request_id": getattr(request.state, "request_id", "unknown"),
-                "ip": request.client.host if request.client else "unknown",
-                "user_agent": request.headers.get("user-agent", "unknown"),
-            },
-        )
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required",
-        )
-
-    log_debug(
-        "Authentication successful",
-        {
-            "request_id": getattr(request.state, "request_id", "unknown"),
-            "username": user.username,
-            "role": user.role,
-            "ip": request.client.host if request.client else "unknown",
-        },
-    )
-
-    return user
-
-
-def require_admin(request: Request) -> User:
-    """Require admin access"""
-    user = get_current_user(request)
-
-    if not user:
-        log_debug(
-            "Admin access denied - no auth header",
-            {
-                "request_id": getattr(request.state, "request_id", "unknown"),
-                "ip": request.client.host if request.client else "unknown",
-                "user_agent": request.headers.get("user-agent", "unknown"),
-            },
-        )
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required",
-        )
-
-    if user.role != "admin":
-        log_info(
-            "Admin access denied - insufficient privileges",
-            {
-                "request_id": getattr(request.state, "request_id", "unknown"),
-                "username": user.username,
-                "role": user.role,
-                "ip": request.client.host if request.client else "unknown",
-            },
-        )
-        # 403 (not 401): the user is authenticated, and clients log out on 401
-        raise HTTPException(
-            status_code=403,
-            detail="Admin access required",
-        )
-
-    log_info(
-        "Admin access granted",
-        {
-            "request_id": getattr(request.state, "request_id", "unknown"),
-            "username": user.username,
-            "ip": request.client.host if request.client else "unknown",
-        },
-    )
-
-    return user
-
-
-def require_uploader(request: Request) -> User:
-    """Require upload access (admin or uploader users)"""
-    user = get_current_user(request)
-
-    if not user:
-        log_debug(
-            "Upload access denied - no auth header",
-            {
-                "request_id": getattr(request.state, "request_id", "unknown"),
-                "ip": request.client.host if request.client else "unknown",
-                "user_agent": request.headers.get("user-agent", "unknown"),
-            },
-        )
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required",
-        )
-
-    if user.role not in ["admin", "uploader"]:
-        log_info(
-            "Upload access denied - insufficient privileges",
-            {
-                "request_id": getattr(request.state, "request_id", "unknown"),
-                "username": user.username,
-                "role": user.role,
-                "ip": request.client.host if request.client else "unknown",
-            },
-        )
-        raise HTTPException(
-            status_code=403,
-            detail="Upload access required",
-        )
-
-    log_info(
-        "Upload access granted",
-        {
-            "request_id": getattr(request.state, "request_id", "unknown"),
-            "username": user.username,
-            "role": user.role,
-            "ip": request.client.host if request.client else "unknown",
-        },
-    )
-
-    return user
-
-
-READ_ROLES = ("admin", "viewer")
-
-
-def require_viewer(request: Request) -> User:
-    """Require read access (admin or read-only viewer users)"""
-    user = get_current_user(request)
-
-    if not user:
+        log_debug("Access denied - no valid credentials", {"request_id": _request_id(request), "ip": request.client.host if request.client else "unknown"})
         raise HTTPException(status_code=401, detail="Authentication required")
-
-    if user.role not in READ_ROLES:
-        log_info(
-            "Read access denied - insufficient privileges",
-            {
-                "request_id": getattr(request.state, "request_id", "unknown"),
-                "username": user.username,
-                "role": user.role,
-            },
-        )
-        raise HTTPException(status_code=403, detail="Read access required")
-
+    if roles is not None and user.role not in roles:
+        log_info("Access denied - insufficient privileges", {"request_id": _request_id(request), "username": user.username, "role": user.role})
+        # 403 (not 401): the user is authenticated, and clients log out on 401
+        raise HTTPException(status_code=403, detail=denied)
     return user
+
+
+def require_auth(request: Request, db: Optional[sqlite3.Connection] = Depends(get_optional_db)) -> User:
+    """Require any valid user"""
+    return _require(request, db, None, "")
+
+
+def require_admin(request: Request, db: Optional[sqlite3.Connection] = Depends(get_optional_db)) -> User:
+    """Require admin access"""
+    return _require(request, db, ("admin",), "Admin access required")
+
+
+def require_uploader(request: Request, db: Optional[sqlite3.Connection] = Depends(get_optional_db)) -> User:
+    """Require upload access (admin or uploader users)"""
+    return _require(request, db, ("admin", "uploader"), "Upload access required")
+
+
+def require_viewer(request: Request, db: Optional[sqlite3.Connection] = Depends(get_optional_db)) -> User:
+    """Require read access (admin or read-only viewer users)"""
+    return _require(request, db, READ_ROLES, "Read access required")

@@ -163,7 +163,7 @@ For local development with separate frontend/backend:
    
    **Option B - Using traditional pip**:
    ```bash
-   pip install fastapi uvicorn python-multipart bcrypt python-jose
+   pip install -r requirements.txt
    ```
 
 4. **Run the Backend Server**:
